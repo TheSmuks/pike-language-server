@@ -2,20 +2,8 @@
 
 ## Current Phase
 
-**Phase 2: VSCode Extension + Tree-sitter** — In verification. Phase 3 entry pending review.
+**Phase 3: Per-file Symbol Table** — Complete. Phase 4 entry pending review.
 
-### Phase 2 Verification Status
-
-| Item | Status |
-|------|--------|
-| 1. JSON-RPC serialization round-trip | Confirmed — real Content-Length + JSON envelope on wire |
-| 1. Unicode round-trip test | Added — 2 tests (string literals, identifiers) |
-| 2. Layer-2 phase commitment | Decision 0007 — deferred to Phase 5 |
-| 3. Test failure message quality | Confirmed — file, symbol kind, name, actual set shown |
-| 4. Test suite performance | Optimized — 227 tests in 500ms (2.2ms avg) |
-| 5. LSP-vs-pike structural comparison | Confirmed — decision 0008 documents 5 structural diffs (enums, inheritance, error files, cross-file, class members) |
-
-## Phase Status
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
@@ -109,6 +97,38 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 4. Documented strict/non-strict handling in decision 0005.
 
 ## Completed Phase History
+### Phase 3: Per-file Symbol Table (2026-04-27)
+
+**Deliverables:**
+- `server/src/features/symbolTable.ts` — Symbol table builder, scope-aware resolver, definition/reference query API
+- `server/src/server.ts` — Updated: definitionProvider + referencesProvider wired, symbol table cache (lazy rebuild)
+- `harness/introspect.pike` — Extended: class body member extraction via indices(instance)
+- `tests/lsp/definition.test.ts` — 110 Layer 1 definition tests
+- `tests/lsp/references.test.ts` — 29 Layer 1 references tests
+- `docs/known-limitations.md` — Upstream limitation tracking (tree-sitter-pike#1 resolved)
+- `decisions/0009-symbol-resolution.md` — Symbol table architecture, scope rules, gaps
+
+**Symbol table architecture:**
+- Immutable snapshot pattern: build new table per parse-tree change, never mutate
+- 10-level scope hierarchy: lambda → file scope
+- Inheritance wiring: post-build pass resolves inherit declarations to inherited class scopes
+- Cache invalidation: lazy rebuild on next request after didChange
+
+**Resolution coverage:**
+- identifier_expr: scope chain walk (innermost → outermost) — 30/33 resolved on class-single-inherit.pike
+- scope_expr (::): inherit specifier → inherited scope → member
+- this_expr: resolve to enclosing class declaration
+- type references: id_type → class/enum/typedef lookup
+- arrow access (obj->member): collected but not yet resolved through variable types
+
+**Test suite:** 544 tests, 0 failures, 5079 assertions
+- Phase 1 + 2 tests: 405 (regression suite)
+- Phase 3 definition tests: 110
+- Phase 3 references tests: 29
+
+**Upstream fix integrated:**
+- tree-sitter-pike#1 (Unicode identifiers) fixed in 28a8ae8, WASM rebuilt (302KB)
+- docs/known-limitations.md updated, tests updated
 
 ### Phase 2: VSCode Extension + Tree-sitter (2026-04-26)
 
