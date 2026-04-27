@@ -39,7 +39,8 @@ Pike 8.0.1116 provides no structured (JSON, AST, or machine-readable) output mod
 
 ### Format Specification
 
-All compiler diagnostics are emitted to **stderr** as human-readable text. There is no JSON mode, no structured output option, and no machine-readable format.
+All compiler diagnostics are emitted to **stderr** as human-readable text by default. However, **structured output is available programmatically** via `compile_string` with a custom `CompilationHandler` (see §3b below).
+
 
 **Error format:**
 ```
@@ -85,17 +86,74 @@ This is printed when a file compiles successfully but has no `main()` — and th
 
 ### Parsing Strategy for LSP
 
+**Preferred: use `CompilationHandler` (§3b).** Invoke `compile_string` with a custom handler via a Pike introspection script. The handler produces structured JSON. No regex parsing needed.
+
+**Fallback: stderr text parsing (§3a).** If the handler approach is unavailable, parse stderr:
+
 1. Read stderr line by line.
 2. Match `^(.+):(\d+):(?:Warning: )?(.+)$` for primary diagnostics.
 3. If the next line matches `^\1:\2:Expected: (.+)\.$`, capture expected type.
 4. If the next line matches `^\1:\2:Got     : (.+)\.$`, capture actual type.
 5. Ignore the `Pike: Failed to compile script.` sentinel.
 6. Map to LSP `Diagnostic` with `range` set to the reported line, severity based on presence of `Warning:`.
-
 ### Stability
 
 The format has been unchanged since at least Pike 7.8. It is stable across Pike versions and unlikely to change. However, it is not formally documented as a stable interface — it is simply the existing compiler output.
 
+### §3b. Structured Output via CompilationHandler (Verified)
+
+The stderr text format is **not the only option**. Pike's `compile_string(source, filename, handler)` accepts a custom `CompilationHandler` object that receives errors as structured callbacks:
+
+```pike
+object handler = class {
+  array diagnostics = ({});
+  void compile_error(string file, int line, string msg) {
+    diagnostics += ({ (["file": file, "line": line, "message": msg]) });
+  }
+  void compile_warning(string file, int line, string msg) {
+    diagnostics += ({ (["file": file, "line": line, "message": msg, "severity": "warning"]) });
+  }
+}();
+
+mixed err = catch {
+  program p = compile_string("#pragma strict_types\n" + source, filepath, handler);
+};
+// handler->diagnostics is now a structured array
+```
+
+Combined with `Standards.JSON.encode()`, a Pike script can emit JSON diagnostics:
+
+```json
+{"diagnostics":[{"line":2,"message":"Bad type in assignment.","file":"test.pike"},{"line":2,"message":"Expected: int.","file":"test.pike"}]}
+```
+
+**Key properties:**
+- Same data as stderr output — handler receives identical file, line, and message strings
+- No column information (handler receives line only, same as stderr)
+- `CompilationHandler` is a documented stable API in Pike's reference manual
+- Error categorization still requires message text matching ("Bad type in assignment", "Undefined identifier", etc.)
+- Works with `#pragma strict_types` prepended to source
+
+### §3c. Type Information via AutoDoc (Verified)
+
+`Tools.AutoDoc.PikeExtractor` extracts type information from Pike source as XML:
+
+```bash
+pike -x extract_autodoc <file.pike>  # produces <file.pike>.xml
+```
+
+XML output includes:
+- Method return types: `<returntype><int/></returntype>`
+- Method argument types: `<argument name='a'><type><int/></type></argument>`
+- Generic types: `<array><valuetype><string/></valuetype></array>`, `<mapping><indextype><string/></indextype><valuetype><int/></valuetype></mapping>`
+- Inheritance: `<inherit name='Foo'><classname>Foo</classname></inherit>`
+- Source positions: `<source-position file='file.pike' first-line='5'/>`
+
+**Critical limitation: only for members with `//!` doc comments.** Undocumented members (variables and methods without a preceding `//! Doc` comment) are invisible to AutoDoc.
+
+### §3d. Error Format Stability
+
+Only Pike 8.0.1116 is installed on this system. The `CompilationHandler` interface (`compile_error(string, int, string)`) is documented in Pike's official reference manual and is part of the stable API. Error message strings ("Bad type in assignment.", "Expected:", "Got:") are embedded in the C compiler source (`src/program.c`) and have not changed across the Pike 8.0.x series. The stderr text format `<file>:<line>:<message>` has been unchanged since at least Pike 7.8. The `LONG_PIKE_ERRORS`/`SHORT_PIKE_ERRORS` environment variables control path length but not format structure.
 ## 4. Built-in Tools (`pike -x`)
 
 | Tool | Description | LSP Relevance |
