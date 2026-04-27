@@ -1,0 +1,10 @@
+{
+  "name": "pike-language-server-integration-tests",
+  "private": true,
+  "scripts": {
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@vscode/test-electron": "^2.4.1"
+  }
+}

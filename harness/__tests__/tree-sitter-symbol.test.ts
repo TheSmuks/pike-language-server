@@ -1,6 +1,10 @@
 /**
- * Phase 2 tests: verify that the LSP server's documentSymbol output
- * matches Pike's ground truth from the harness snapshots.
+ * Tree-sitter–level unit tests for symbol extraction.
+ *
+ * These tests exercise the parser and getDocumentSymbols / getParseDiagnostics
+ * functions directly, without the LSP protocol layer.
+ *
+ * For LSP protocol-level tests, see tests/lsp/documentSymbol.test.ts.
  *
  * Test categories:
  * 1. Symbol comparison — tree-sitter output vs Pike snapshots

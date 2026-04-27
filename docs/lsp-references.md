@@ -142,3 +142,52 @@ Most of gopls (and rust-analyzer, and clangd) is solving problems Pike doesn't h
 - Telemetry, web UIs, profiling endpoints — out of scope
 
 Don't read these LSPs cover-to-cover. Pull out the specific patterns when the corresponding problem comes up. Most of the codebases are 10-100x larger than what this Pike LSP needs to be.
+
+
+## Testing Strategies for the Pike LSP
+
+The Pike LSP uses three layers of testing with different cost/coverage trade-offs.
+
+### Layer 1: Protocol-level tests (`tests/lsp/`)
+
+- In-process LSP server with PassThrough streams
+- Real JSON-RPC messages, real tree-sitter parsing
+- Ground truth: harness snapshots from Phase 1
+- Fast: milliseconds per test
+- Run on every commit
+- Catches: logic bugs in LSP server, parser regressions, symbol extraction errors
+- Pattern: gopls `internal/lsp/regtest`
+
+### Layer 2: VSCode integration tests (`tests/integration/`)
+
+- Real VSCode process with extension loaded via `@vscode/test-electron`
+- Ground truth: VSCode behaves correctly
+- Slow: seconds per test
+- Run before each release
+- Catches: extension wiring bugs, activation failures, transport issues
+- 5–15 tests for the entire project
+
+### Layer 3: Manual smoke tests (`MANUAL_SMOKE_TESTS.md`)
+
+- Human verifies UX: highlighting, completion timing, hover rendering
+- Run once before significant releases
+- 10–15 items max
+- Catches: UX issues with no programmatic ground truth
+
+### Why three layers
+
+Without Layer 1, testing depends on Layer 2 which is slow and brittle. Without Layer 2, integration bugs ship to users. Without Layer 3, the LSP is correct but might feel wrong.
+
+The proportion: many Layer 1 tests, few Layer 2 tests, rare Layer 3 manual checks.
+
+### How Layer 1 works
+
+```typescript
+// In-process: two PassThrough streams connect client and server
+const { client, openDoc } = await createTestServer();
+const uri = openDoc('file:///test.pike', source);
+const symbols = await client.sendRequest('textDocument/documentSymbol', { textDocument: { uri } });
+// Compare symbols against harness snapshot
+```
+
+No subprocess, no stdio, no VSCode. The test framework IS the editor.

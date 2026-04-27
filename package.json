@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "test": "bun test",
+    "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
     "typecheck": "tsc --noEmit",
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
@@ -17,10 +18,11 @@
     "@types/vscode": "^1.85.0"
   },
   "dependencies": {
-    "web-tree-sitter": "^0.26.8",
+    "vscode-jsonrpc": "^8.2.1",
+    "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.0",
     "vscode-languageserver-textdocument": "^1.0.12",
-    "vscode-languageclient": "^9.0.1"
+    "web-tree-sitter": "^0.26.8"
   },
   "engines": {
     "vscode": "^1.85.0"

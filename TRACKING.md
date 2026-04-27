@@ -102,20 +102,31 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 ### Phase 2: VSCode Extension + Tree-sitter (2026-04-26)
 
 **Deliverables:**
-- `server/src/server.ts` — LSP server with stdio transport, documentSymbol handler
+- `server/src/server.ts` — LSP server with stdio transport, documentSymbol handler, testable factory
 - `server/src/parser.ts` — Tree-sitter WASM initialization and parse cache
 - `server/src/features/documentSymbol.ts` — Declaration extraction from parse tree
 - `server/src/features/diagnostics.ts` — ERROR node → LSP diagnostic conversion
 - `server/tree-sitter-pike.wasm` — Compiled Pike grammar (290KB)
 - `client/extension.ts` — VSCode extension activating on .pike/.pmod/.mmod
 - `harness/introspect.pike` — Extended with symbol extraction (indices/values/typeof)
-- `harness/__tests__/document-symbol.test.ts` — 108 LSP tests
+- `tests/lsp/` — Protocol-level LSP tests (Layer 1)
+- `tests/integration/` — VSCode integration test stubs (Layer 2)
+- `MANUAL_SMOKE_TESTS.md` — Manual UX checklist (Layer 3)
+- `docs/lsp-references.md` — LSP architecture reference + testing strategies
 - `decisions/0006-lsp-server-architecture.md` — Server architecture decision
-- `docs/lsp-references.md` — LSP architecture reference patterns
 
-**Test suite:** 178 tests, 0 failures, 1256 assertions
+**Three-layer test infrastructure:**
+- Layer 1 (protocol-level): 227 tests in tests/lsp/ — in-process PassThrough transport
+- Layer 2 (VSCode integration): 3 test stubs in tests/integration/ — run before releases
+- Layer 3 (manual): 3 items in MANUAL_SMOKE_TESTS.md — run before releases
+- Tree-sitter unit tests: 108 tests in harness/__tests__/tree-sitter-symbol.test.ts
+
+**Test suite:** 403 tests, 0 failures, 4306 assertions
 - Phase 1 tests: 70 (harness + canary + canonicalizer)
-- Phase 2 tests: 108 (symbol comparison, parse error, performance, canary, determinism)
+- Phase 2 tree-sitter unit tests: 108 (renamed from document-symbol.test.ts)
+- Layer 1 LSP tests: 227 (documentSymbol, lifecycle, error-handling)
+- Layer 2 integration stubs: 3 todo
+- Layer 3 manual: 3 items
 
 ### Phase 1: Test Harness Scaffolding (2026-04-26)
 
