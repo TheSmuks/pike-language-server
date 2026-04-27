@@ -12,7 +12,7 @@
  */
 
 import { ModuleResolver, detectPikePaths, type PikePaths } from "./moduleResolver";
-import { buildSymbolTable, type SymbolTable } from "./symbolTable";
+import { buildSymbolTable, getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
 
 // ---------------------------------------------------------------------------
@@ -271,8 +271,144 @@ export class WorkspaceIndex {
     const result = this.resolver.resolveImport(importPath, fromPath);
     return result?.uri ?? null;
   }
+  // ---------------------------------------------------------------------------
+  // Cross-file resolution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Resolve a cross-file definition.
+   * Given a position in a file, attempt to find the definition across files.
+   * Returns the target URI and declaration, or null.
+   */
+  resolveCrossFileDefinition(uri: string, line: number, character: number): {
+    uri: string; decl: Declaration;
+  } | null {
+    const entry = this.files.get(uri);
+    if (!entry?.symbolTable) return null;
+
+    const table = entry.symbolTable;
+    // Check if the position is on an inherit declaration
+    for (const decl of table.declarations) {
+      if (decl.kind === "inherit") {
+        const nr = decl.nameRange;
+        if (nr.start.line === line && nr.end.line === line &&
+            character >= nr.start.character && character <= nr.end.character) {
+          return this.resolveInheritTarget(decl, uri);
+        }
+      }
+    }
+
+    // Check if a reference resolves to null (unresolved within file)
+    // This might be a cross-file reference through inheritance or import
+    for (const ref of table.references) {
+      if (ref.loc.line === line && ref.loc.character === character && ref.resolvesTo === null) {
+        return this.resolveUnresolvedReference(ref, table, uri);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Get all references to a declaration across the workspace.
+   * Extends single-file references with cross-file references.
+   */
+  getCrossFileReferences(uri: string, line: number, character: number): Array<{
+    uri: string; ref: Reference;
+  }> {
+    const results: Array<{ uri: string; ref: Reference }> = [];
+    const entry = this.files.get(uri);
+    if (!entry?.symbolTable) return results;
+
+    // First, get same-file references
+    const sameFileRefs = getReferencesTo(entry.symbolTable, line, character);
+    for (const ref of sameFileRefs) {
+      results.push({ uri, ref });
+    }
+
+    // Find the target declaration
+    let targetDecl = getDefinitionAt(entry.symbolTable, line, character);
+    if (!targetDecl) return results;
+
+    // Search other files for references to the same symbol
+    // (files that inherit from this file will have the symbol in their scope)
+    const dependents = this.getDependents(uri);
+    for (const depUri of dependents) {
+      const depEntry = this.files.get(depUri);
+      if (!depEntry?.symbolTable) continue;
+
+      for (const ref of depEntry.symbolTable.references) {
+        if (ref.name === targetDecl!.name && ref.resolvesTo !== null) {
+          results.push({ uri: depUri, ref });
+        }
+      }
+    }
+
+    return results;
+  }
 
   // ---------------------------------------------------------------------------
+  // Internal: cross-file resolution helpers
+  // ---------------------------------------------------------------------------
+
+  private resolveInheritTarget(decl: Declaration, fromUri: string): {
+    uri: string; decl: Declaration;
+  } | null {
+    const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
+    const targetUri = this.resolveInherit(decl.name, isStringLit, fromUri);
+    if (!targetUri) return null;
+
+    const targetEntry = this.files.get(targetUri);
+    if (!targetEntry?.symbolTable) return null;
+
+    // For string literal inherits, the target is the file itself
+    // Look for the first class or the file-level scope
+    if (isStringLit) {
+      // inherit "file.pike" brings all top-level symbols into scope
+      // Return the first class declaration if there is one, or null
+      for (const targetDecl of targetEntry.symbolTable.declarations) {
+        if (targetDecl.kind === "class") {
+          return { uri: targetUri, decl: targetDecl };
+        }
+      }
+    }
+
+    // For identifier inherits, look for a matching class
+    const inheritName = decl.alias ?? decl.name;
+    for (const targetDecl of targetEntry.symbolTable.declarations) {
+      if (targetDecl.name === inheritName) {
+        return { uri: targetUri, decl: targetDecl };
+      }
+    }
+
+    return null;
+  }
+
+  private resolveUnresolvedReference(
+    ref: Reference,
+    table: SymbolTable,
+    uri: string,
+  ): { uri: string; decl: Declaration } | null {
+    // Try to find the name through inheritance chains
+    for (const decl of table.declarations) {
+      if (decl.kind === "inherit") {
+        const target = this.resolveInheritTarget(decl, uri);
+        if (target) {
+          // Check if the target file has a declaration matching the reference name
+          const targetEntry = this.files.get(target.uri);
+          if (targetEntry?.symbolTable) {
+            for (const targetDecl of targetEntry.symbolTable.declarations) {
+              if (targetDecl.name === ref.name) {
+                return { uri: target.uri, decl: targetDecl };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
   // Internal helpers
   // ---------------------------------------------------------------------------
 

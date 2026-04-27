@@ -140,23 +140,43 @@ export function createPikeServer(connection: Connection): PikeServer {
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
+    // Try same-file resolution first
     const decl = getDefinitionAt(
       table,
       params.position.line,
       params.position.character,
     );
 
-    if (!decl) return null;
+    if (decl) {
+      const loc: LspLocation = {
+        uri: table.uri,
+        range: {
+          start: { line: decl.nameRange.start.line, character: decl.nameRange.start.character },
+          end: { line: decl.nameRange.end.line, character: decl.nameRange.end.character },
+        },
+      };
+      return loc;
+    }
 
-    const loc: LspLocation = {
-      uri: table.uri,
-      range: {
-        start: { line: decl.nameRange.start.line, character: decl.nameRange.start.character },
-        end: { line: decl.nameRange.end.line, character: decl.nameRange.end.character },
-      },
-    };
+    // Try cross-file resolution
+    const crossFile = index.resolveCrossFileDefinition(
+      params.textDocument.uri,
+      params.position.line,
+      params.position.character,
+    );
 
-    return loc;
+    if (crossFile) {
+      const loc: LspLocation = {
+        uri: crossFile.uri,
+        range: {
+          start: { line: crossFile.decl.nameRange.start.line, character: crossFile.decl.nameRange.start.character },
+          end: { line: crossFile.decl.nameRange.end.line, character: crossFile.decl.nameRange.end.character },
+        },
+      };
+      return loc;
+    }
+
+    return null;
   });
 
   // -----------------------------------------------------------------------
@@ -167,6 +187,24 @@ export function createPikeServer(connection: Connection): PikeServer {
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return [];
 
+    // Try cross-file references
+    const crossFileRefs = index.getCrossFileReferences(
+      params.textDocument.uri,
+      params.position.line,
+      params.position.character,
+    );
+
+    if (crossFileRefs.length > 0) {
+      return crossFileRefs.map(({ uri, ref }) => ({
+        uri,
+        range: {
+          start: { line: ref.loc.line, character: ref.loc.character },
+          end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+        },
+      }));
+    }
+
+    // Fallback to same-file references
     const refs = getReferencesTo(
       table,
       params.position.line,
