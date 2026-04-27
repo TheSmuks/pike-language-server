@@ -100,6 +100,7 @@ When an AI agent is working in this repository:
 7. **Preserve invariants.** If the codebase has patterns, follow them. Do not introduce a new pattern without removing the old one.
 8. **Clean up after yourself.** Remove unused imports, dead code, and temporary files.
 
+
 ## Operating Principles
 
 1. **Tests are ground truth.** Pike is the oracle. pike-ai-kb is the interface to the oracle. Every test derives expected output from pike.
@@ -108,6 +109,7 @@ When an AI agent is working in this repository:
 4. **The test harness can be wrong.** Audit it. Canary tests catch harness bugs.
 5. **Decisions go in decisions/.** Write the decision document before committing.
 6. **Check pike-ai-kb before generating Pike code.** The knowledge base is runtime-verified; agent priors on Pike are unreliable.
+7. **Consult docs/lsp-references.md before designing an LSP architectural pattern.** Other LSPs have solved most hard problems; understand their solutions before inventing your own.
 
 ## Conventions
 
