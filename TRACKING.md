@@ -5,12 +5,13 @@
 **Phase 3: Per-file Symbol Table** — Complete. Phase 4 entry pending review.
 
 
+
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
 | Phase 0: Investigation | Complete (verified) | Repo created, template read, pike-ai-kb reachable | docs, corpus, 4 decision documents |
 | Phase 1: Test Harness | **Complete (verified)** | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
 | Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
-| Phase 3: Per-file Symbol Table | Pending | Phase 2 complete | Same-file go-to-definition and find-references |
+| Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | Pending | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | Pending | Phase 4 complete | Diagnostics and hover from pike oracle |
 | Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
@@ -97,38 +98,64 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 4. Documented strict/non-strict handling in decision 0005.
 
 ## Completed Phase History
-### Phase 3: Per-file Symbol Table (2026-04-27)
+### Phase 3: Per-file Symbol Table (2026-04-27) — Verified
 
 **Deliverables:**
-- `server/src/features/symbolTable.ts` — Symbol table builder, scope-aware resolver, definition/reference query API
+- `server/src/features/symbolTable.ts` — Symbol table builder, scope-aware resolver, definition/reference query API (~1151 lines)
 - `server/src/server.ts` — Updated: definitionProvider + referencesProvider wired, symbol table cache (lazy rebuild)
 - `harness/introspect.pike` — Extended: class body member extraction via indices(instance)
 - `tests/lsp/definition.test.ts` — 110 Layer 1 definition tests
 - `tests/lsp/references.test.ts` — 29 Layer 1 references tests
-- `docs/known-limitations.md` — Upstream limitation tracking (tree-sitter-pike#1 resolved)
-- `decisions/0009-symbol-resolution.md` — Symbol table architecture, scope rules, gaps
+- `tests/lsp/edge-cases.test.ts` — 18 edge-case tests (scoping, shadowing, forward refs, lambda, inherit-rename)
+- `docs/known-limitations.md` — Upstream limitation tracking (tree-sitter-pike #1 resolved, #2/#3/#4 filed)
+- `decisions/0009-symbol-resolution.md` — Symbol table architecture, scope rules, cache invalidation policy, Pike-verified behaviors
+- 4 new corpus files: scope-for-catch, scope-shadow-params, class-forward-refs, class-inherit-rename
 
 **Symbol table architecture:**
 - Immutable snapshot pattern: build new table per parse-tree change, never mutate
 - 10-level scope hierarchy: lambda → file scope
 - Inheritance wiring: post-build pass resolves inherit declarations to inherited class scopes
-- Cache invalidation: lazy rebuild on next request after didChange
+- Cache invalidation: lazy rebuild on next request after didChange (explicit policy in 0009)
 
 **Resolution coverage:**
 - identifier_expr: scope chain walk (innermost → outermost) — 30/33 resolved on class-single-inherit.pike
-- scope_expr (::): inherit specifier → inherited scope → member
+- scope_expr (::): inherit specifier → inherited scope → member (including alias via inherit-with-rename)
 - this_expr: resolve to enclosing class declaration
 - type references: id_type → class/enum/typedef lookup
 - arrow access (obj->member): collected but not yet resolved through variable types
 
-**Test suite:** 544 tests, 0 failures, 5079 assertions
+**Bugs found and fixed:**
+- For-loop init declarations now register in for-scope (tree-sitter for_statement has no field names)
+- If-block consequence/alternative push their own block scope (variables no longer leak to enclosing)
+- Lambda scopes in variable initializers now discovered
+- Scope tie-breaking prefers deeper scopes when ranges are equal
+- Inherit-with-rename: alias stored, scope_access resolves through alias, go-to-def on both path and alias
+
+**Test suite:** 614 tests, 0 failures, 5680 assertions
 - Phase 1 + 2 tests: 405 (regression suite)
 - Phase 3 definition tests: 110
 - Phase 3 references tests: 29
+- Edge-case tests: 18
 
-**Upstream fix integrated:**
-- tree-sitter-pike#1 (Unicode identifiers) fixed in 28a8ae8, WASM rebuilt (302KB)
-- docs/known-limitations.md updated, tests updated
+**Upstream issues filed:**
+- tree-sitter-pike#1 (Unicode identifiers) — fixed in 28a8ae8, WASM rebuilt (302KB)
+- tree-sitter-pike#2 — Missing field names on for_statement children
+- tree-sitter-pike#3 — catch expression lost in assignment context
+- tree-sitter-pike#4 — No scope-introducing nodes for while/switch/plain blocks
+
+### Phase 3 Exit Verification
+
+Five verification items resolved:
+
+**Item 1: Pike-specific scoping** — All cases verified against Pike 8.0.1116. For-init, lambda capture, this/this_program confirmed correct. Catch block variables not tracked (tree-sitter-pike#3 limitation).
+
+**Item 2: Forward references** — Pike allows forward references within class scope. LSP 'flat class scope' policy matches Pike behavior. Mutual recursion works at file scope.
+
+**Item 3: Cache invalidation policy** — Decision 0009 updated with explicit policy: trigger (didChange), cached data (full SymbolTable per URI), rebuild timing (lazy), in-flight behavior (JSON-RPC ordering), lifecycle table.
+
+**Item 4: Class extraction audit** — All 8 valid corpus classes are instantiable with no-arg constructors. Phase 5 alternative documented (program introspection, compile_string stub, Tools.AutoDoc).
+
+**Item 5: Test depth** — 18 edge-case tests covering: parameter shadowing, block shadowing, class member shadowing, inherited member resolution, inherit-with-rename (3 tests), forward references, recursion, mutual recursion, for-loop scoping (2 tests), lambda capture, this, this_program, enum members.
 
 ### Phase 2: VSCode Extension + Tree-sitter (2026-04-26)
 
@@ -180,7 +207,11 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 
 ## Open Issues
 
-None.
+| Issue | Impact | Filed |
+|-------|--------|-------|
+| tree-sitter-pike#2: Missing field names on `for_statement` children | Must use positional child scanning instead of field-based API | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/2) |
+| tree-sitter-pike#3: `catch` expression lost in assignment context | Cannot create scopes for catch-block variables in `mixed err = catch { }` pattern | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/3) |
+| tree-sitter-pike#4: No scope-introducing nodes for while/switch/plain blocks | Variables in while/switch/do-while leak to enclosing scope | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/4) |
 
 ## Deferred Items
 
