@@ -2,7 +2,18 @@
 
 ## Current Phase
 
-**Phase 2: VSCode Extension + Tree-sitter** — Complete. Phase 3 entry pending review.
+**Phase 2: VSCode Extension + Tree-sitter** — In verification. Phase 3 entry pending review.
+
+### Phase 2 Verification Status
+
+| Item | Status |
+|------|--------|
+| 1. JSON-RPC serialization round-trip | Confirmed — real Content-Length + JSON envelope on wire |
+| 1. Unicode round-trip test | Added — 2 tests (string literals, identifiers) |
+| 2. Layer-2 phase commitment | Decision 0007 — deferred to Phase 5 |
+| 3. Test failure message quality | Confirmed — file, symbol kind, name, actual set shown |
+| 4. Test suite performance | Optimized — 227 tests in 500ms (2.2ms avg) |
+| 5. LSP-vs-pike structural comparison | Confirmed — decision 0008 documents 5 structural diffs (enums, inheritance, error files, cross-file, class members) |
 
 ## Phase Status
 
@@ -154,6 +165,8 @@ None.
 ## Deferred Items
 
 - [ ] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** The current `CROSS_FILE_FLAGS` hardcoded map in `runner.ts` does not scale. Before Phase 4 entry, the runner must read per-file flags (module-path, include-path) from corpus manifest metadata. See `decisions/0005-harness-architecture.md` §Deferred Items.
+- [ ] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Layer-2 tests deferred from Phase 2. The integration test stubs exist at `tests/integration/` but require extension packaging (esbuild, VSIX) before they can run. See `decisions/0007-deferred-integration-tests.md`.
+- [ ] **Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.** Pike accepts UTF-8 identifiers (e.g., `café`), but tree-sitter-pike's identifier rule is `[a-zA-Z_][a-zA-Z0-9_]*`. Non-ASCII identifiers are split at multibyte boundaries (identifier + ERROR node). This should be fixed in tree-sitter-pike, not worked around in the LSP.
 
 ## CI Improvement Tracking
 

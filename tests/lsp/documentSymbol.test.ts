@@ -51,7 +51,8 @@ async function createServer(): Promise<TestContext> {
     capabilities: {},
   });
   client.sendNotification("initialized", {});
-  await new Promise((r) => setTimeout(r, 50));
+  const { initParser: ensureReady } = await import("../../server/src/parser");
+  await ensureReady();
 
   return { client, server, c2s, s2c };
 }
@@ -250,7 +251,10 @@ describe.each(withSymbols)(
       const lspTopNames = topLevelNames(lspSymbols);
       for (const sym of readSnapshot(snapName)!.symbols) {
         if (sym.kind === "class" || sym.kind === "function") {
-          expect(lspTopNames.has(sym.name)).toBe(true);
+          expect(
+            lspTopNames.has(sym.name),
+            `${filename}: Pike ${sym.kind} "${sym.name}" not found in LSP symbols [${[...lspTopNames].join(", ")}]`,
+          ).toBe(true);
         }
       }
     });
@@ -258,7 +262,10 @@ describe.each(withSymbols)(
     test("every top-level LSP symbol name (non-Module/TypeParameter) exists in Pike snapshot", () => {
       const lspTopNames = topLevelNames(lspSymbols);
       for (const name of lspTopNames) {
-        expect(pikeNames.has(name)).toBe(true);
+        expect(
+          pikeNames.has(name),
+          `${filename}: LSP symbol "${name}" not found in Pike snapshot [${[...pikeNames].join(", ")}]`,
+        ).toBe(true);
       }
     });
   },

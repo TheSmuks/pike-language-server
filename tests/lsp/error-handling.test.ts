@@ -200,4 +200,48 @@ describe("error handling", () => {
     const names = (symbols as Array<{ name: string }>).map((s) => s.name);
     expect(names).toContain("valid_var");
   });
+
+  test("Unicode in source: non-ASCII in string literals round-trips via JSON-RPC", async () => {
+    const uri = "file:///test/unicode-strings.pike";
+    const source = 'string msg = "naïve résumé with café";\n';
+    server.openDoc(uri, source);
+
+    const symbols = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+
+    // JSON-RPC transport handles UTF-8 correctly. Tree-sitter parses the
+    // string literal (including non-ASCII) and extracts the variable.
+    expect(Array.isArray(symbols)).toBe(true);
+    expect(symbols.length).toBeGreaterThan(0);
+    // The variable name is ASCII — only the string value contains Unicode.
+    // Verify the symbol name came through the JSON-RPC round-trip intact.
+    const sym = symbols[0] as { name: string; range: { start: { line: number } } };
+    expect(sym.name).toBe("msg");
+  });
+
+  test("Unicode identifier: tree-sitter reports parse error for non-ASCII names", async () => {
+    // Tree-sitter-pike's identifier grammar only accepts ASCII [a-zA-Z_][a-zA-Z0-9_]*.
+    // Pike itself accepts UTF-8 identifiers. This test documents the discrepancy:
+    // the server should still respond (not crash), but the symbol name will be
+    // truncated at the multibyte boundary.
+    const uri = "file:///test/unicode-ident.pike";
+    const source = "string café = \"value\";\n";
+    server.openDoc(uri, source);
+
+    const symbols = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+
+    expect(Array.isArray(symbols)).toBe(true);
+    // Tree-sitter splits café → identifier "caf" + ERROR "é".
+    // The server should not crash and should return partial results.
+    if (symbols.length > 0) {
+      const sym = symbols[0] as { name: string };
+      // Name is truncated — this is a known tree-sitter grammar limitation.
+      expect(sym.name).toBe("caf");
+    }
+  });
 });

@@ -117,8 +117,11 @@ export async function createTestServer(): Promise<TestServer> {
   // The initialized notification triggers parser init
   client.sendNotification("initialized", {});
 
-  // Allow async handlers (onInitialized → initParser) to settle
-  await new Promise((resolve) => setTimeout(resolve, 50));
+  // Wait for onInitialized → initParser to complete.
+  // initParser is idempotent — call it directly to ensure readiness
+  // rather than relying on a timed sleep.
+  const { initParser: ensureReady } = await import("../../server/src/parser");
+  await ensureReady();
 
   return {
     client,
