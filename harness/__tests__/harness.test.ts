@@ -10,6 +10,7 @@ import {
   CORPUS_DIR,
   SNAPSHOTS_DIR,
   getRunnerOptionsForFile,
+  snapshotNameForFile,
 } from "../src/runner";
 import { readSnapshot, diffSnapshot, writeSnapshot } from "../src/snapshot";
 import { existsSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
@@ -26,7 +27,7 @@ describe("snapshot coverage", () => {
   test("every corpus file has a snapshot", () => {
     const missing: string[] = [];
     for (const f of corpusFiles) {
-      const name = f.replace(/\.(pike|pmod)$/, "");
+      const name = snapshotNameForFile(f);
       if (!existsSync(join(SNAPSHOTS_DIR, `${name}.json`))) {
         missing.push(f);
       }
@@ -49,7 +50,7 @@ describe("snapshot matches ground truth", () => {
   test.each(corpusFiles.map((f) => [f]))(
     "%s matches snapshot",
     (filename: string) => {
-      const name = filename.replace(/\.(pike|pmod)$/, "");
+      const name = snapshotNameForFile(filename);
       const expected = readSnapshot(name);
       const actual = results.get(filename);
 

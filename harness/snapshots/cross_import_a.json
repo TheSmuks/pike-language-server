@@ -1,0 +1,51 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross_import_a.pmod",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "LIBRARY_VERSION"
+    },
+    {
+      "kind": "function",
+      "line": 12,
+      "name": "format_name"
+    },
+    {
+      "kind": "function",
+      "line": 16,
+      "name": "count_words"
+    },
+    {
+      "kind": "class",
+      "line": 20,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "greet"
+        },
+        {
+          "kind": "variable",
+          "name": "greeting"
+        }
+      ],
+      "name": "Greeter"
+    },
+    {
+      "kind": "function",
+      "line": 26,
+      "name": "main"
+    }
+  ]
+}

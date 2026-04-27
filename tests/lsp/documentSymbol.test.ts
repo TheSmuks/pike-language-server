@@ -11,7 +11,7 @@ import {
 import { createConnection } from "vscode-languageserver/node";
 import { createPikeServer, type PikeServer } from "../../server/src/server";
 import { readSnapshot } from "../../harness/src/snapshot";
-import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
+import { listCorpusFiles, CORPUS_DIR, snapshotNameForFile } from "../../harness/src/runner";
 import type { DocumentSymbol } from "../../server/src/features/documentSymbol";
 import { SymbolKind } from "../../server/src/features/documentSymbol";
 
@@ -109,10 +109,6 @@ function readCorpusSource(filename: string): string {
   return readFileSync(join(CORPUS_DIR, filename), "utf-8");
 }
 
-/** Derive snapshot name from corpus filename (strip .pike/.pmod). */
-function snapshotName(filename: string): string {
-  return filename.replace(/\.(pike|pmod)$/, "");
-}
 
 /** Build a file URI for a corpus file. */
 function corpusUri(filename: string): string {
@@ -148,10 +144,10 @@ interface CorpusEntry {
 }
 
 const entries: CorpusEntry[] = corpusFiles.map((f) => {
-  const snap = readSnapshot(snapshotName(f));
+  const snap = readSnapshot(snapshotNameForFile(f));
   return {
     filename: f,
-    snapName: snapshotName(f),
+    snapName: snapshotNameForFile(f),
     hasSymbols: (snap?.symbols?.length ?? 0) > 0,
     isErrFile: (snap?.compilation?.exit_code ?? 0) !== 0,
   };

@@ -1,0 +1,19 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "category": "unknown",
+      "line": 11,
+      "message": "Module is neither mapping nor object",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/cross-import-b.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

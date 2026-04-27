@@ -1,0 +1,46 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross-inherit-simple-a.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "SPECIES"
+    },
+    {
+      "kind": "class",
+      "line": 10,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_name"
+        },
+        {
+          "kind": "function",
+          "name": "speak"
+        }
+      ],
+      "name": "Animal"
+    },
+    {
+      "kind": "function",
+      "line": 28,
+      "name": "describe"
+    },
+    {
+      "kind": "function",
+      "line": 32,
+      "name": "main"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross-inherit-rename-b.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "TYPE"
+    },
+    {
+      "kind": "class",
+      "line": 11,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "variable",
+          "name": "speed"
+        }
+      ],
+      "name": "Car"
+    },
+    {
+      "kind": "function",
+      "line": 24,
+      "name": "main"
+    }
+  ]
+}

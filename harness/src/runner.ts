@@ -41,9 +41,12 @@ export interface RunnerOptions {
 }
 
 // Cross-file corpus entries that need special flags.
+// TODO(Phase 4): Replace with manifest-driven per-file metadata (decision 0005 §Deferred Items).
 const CROSS_FILE_FLAGS: Record<string, RunnerOptions> = {
   "cross-lib-consumer.pike": { strict: true, includePath: "." },
   "cross-lib-user.pike": { strict: true, modulePath: "." },
+  "cross-import-b.pike": { strict: true, modulePath: "." },
+  "cross-pmod-user.pike": { strict: true, modulePath: "." },
 };
 
 // ---------------------------------------------------------------------------
@@ -126,9 +129,22 @@ export async function runIntrospect(
 // ---------------------------------------------------------------------------
 
 export function listCorpusFiles(): string[] {
-  return readdirSync(CORPUS_DIR)
-    .filter((f) => f.endsWith(".pike") || f.endsWith(".pmod"))
-    .sort();
+  const results: string[] = [];
+  const entries = readdirSync(CORPUS_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isFile() && (entry.name.endsWith(".pike") || entry.name.endsWith(".pmod"))) {
+      results.push(entry.name);
+    }
+    // .pmod directory modules are NOT listed individually.
+    // Pike resolves them as whole modules via -M path.
+    // Their contents are tested via cross-pmod-user.pike (consumer file).
+  }
+  return results.sort();
+}
+
+/** Derive a flat snapshot name from a corpus file path. */
+export function snapshotNameForFile(corpusFile: string): string {
+  return corpusFile.replace(/\.(pike|pmod)$/, "");
 }
 
 export function getRunnerOptionsForFile(filename: string): RunnerOptions {
@@ -163,7 +179,7 @@ async function generateSnapshots(): Promise<void> {
   for (const f of files) {
     const opts = getRunnerOptionsForFile(f);
     const result = await runIntrospect(`corpus/files/${f}`, opts);
-    const name = f.replace(/\.(pike|pmod)$/, "");
+    const name = snapshotNameForFile(f);
     writeSnapshot(name, result);
     generated++;
   }
@@ -176,7 +192,7 @@ async function verifySnapshots(): Promise<boolean> {
   let failures = 0;
 
   for (const f of files) {
-    const name = f.replace(/\.(pike|pmod)$/, "");
+    const name = snapshotNameForFile(f);
     const expected = readSnapshot(name);
 
     if (!expected) {

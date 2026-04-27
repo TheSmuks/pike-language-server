@@ -1,0 +1,28 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross-circular-a.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "func_a"
+    },
+    {
+      "kind": "function",
+      "line": 13,
+      "name": "label_a"
+    },
+    {
+      "kind": "function",
+      "line": 15,
+      "name": "main"
+    }
+  ]
+}

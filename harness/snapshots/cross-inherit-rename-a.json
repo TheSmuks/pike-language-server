@@ -1,0 +1,42 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross-inherit-rename-a.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "TYPE"
+    },
+    {
+      "kind": "class",
+      "line": 10,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        }
+      ],
+      "name": "Engine"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "efficiency"
+    },
+    {
+      "kind": "function",
+      "line": 26,
+      "name": "main"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross-inherit-chain-a.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 8,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "identify"
+        }
+      ],
+      "name": "Base"
+    },
+    {
+      "kind": "function",
+      "line": 20,
+      "name": "main"
+    }
+  ]
+}
