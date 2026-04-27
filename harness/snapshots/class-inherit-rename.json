@@ -1,0 +1,81 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "object | string(..)",
+      "line": 36,
+      "message": "Type mismatch in argument 2 to write.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "int | object",
+      "line": 37,
+      "message": "Type mismatch in argument 2 to write.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/class-inherit-rename.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "function",
+          "name": "get_value"
+        },
+        {
+          "kind": "variable",
+          "name": "label"
+        }
+      ],
+      "name": "Base"
+    },
+    {
+      "kind": "class",
+      "line": 19,
+      "members": [
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "function",
+          "name": "get_value"
+        },
+        {
+          "kind": "variable",
+          "name": "label"
+        },
+        {
+          "kind": "function",
+          "name": "value"
+        },
+        {
+          "kind": "function",
+          "name": "who"
+        }
+      ],
+      "name": "Derived"
+    },
+    {
+      "kind": "function",
+      "line": 34,
+      "name": "main"
+    }
+  ]
+}

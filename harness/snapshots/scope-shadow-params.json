@@ -1,0 +1,27 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/scope-shadow-params.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "x"
+    },
+    {
+      "kind": "function",
+      "line": 9,
+      "name": "add"
+    },
+    {
+      "kind": "function",
+      "line": 13,
+      "name": "main"
+    }
+  ]
+}

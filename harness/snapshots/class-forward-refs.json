@@ -1,0 +1,46 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "int | object",
+      "line": 24,
+      "message": "Type mismatch in argument 2 to write.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/class-forward-refs.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "compute"
+        },
+        {
+          "kind": "function",
+          "name": "get_factor"
+        },
+        {
+          "kind": "function",
+          "name": "multiply"
+        }
+      ],
+      "name": "Calculator"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "main"
+    }
+  ]
+}

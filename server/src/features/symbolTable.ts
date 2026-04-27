@@ -21,6 +21,8 @@ export interface Declaration {
   nameRange: Range;
   range: Range;
   scopeId: number;
+  /** For inherit declarations: local alias (e.g. 'creature' in 'inherit Animal : creature'). */
+  alias?: string;
 }
 
 export type DeclKind =
@@ -274,6 +276,10 @@ function collectDeclarations(node: Node, state: BuildState): void {
   // Handle declarations in current scope
   if (DECL_KIND_MAP[node.type]) {
     collectSimpleDecl(node, state);
+    // Still recurse into children to find nested lambdas in initializers
+    for (const child of node.children) {
+      collectDeclarations(child, state);
+    }
     return;
   }
 
@@ -388,14 +394,37 @@ function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
   pushScope(state, 'for', toRange(node));
 
-  const init = node.childForFieldName('initializer');
-  if (init) {
-    collectDeclarations(init, state);
+  // tree-sitter-pike does not assign field names to for_statement children
+  // Walk children directly for for_init_decl
+  for (const child of node.children) {
+    if (child.type === 'for_init_decl') {
+      // for_init_decl has structure: type? identifier = expr
+      // The identifier is the variable name, not in a named field
+      const scopeId = currentScopeId(state);
+      for (const sub of child.children) {
+        if (sub.type === 'identifier') {
+          addDeclaration(state, {
+            name: sub.text,
+            kind: 'variable',
+            nameRange: toRange(sub),
+            range: toRange(child),
+            scopeId,
+          });
+        }
+      }
+    }
   }
 
   const body = node.childForFieldName('body');
   if (body) {
     collectDeclarations(body, state);
+  } else {
+    // Fallback: look for block or expression_statement child
+    for (const child of node.children) {
+      if (child.type === 'block' || child.type === 'expression_statement') {
+        collectDeclarations(child, state);
+      }
+    }
   }
 
   popScope(state);
@@ -451,31 +480,35 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
 function collectIfStatement(node: Node, state: BuildState): void {
   // cond_decl (declaration in condition) creates a scope for consequence + alternative
   const condition = node.childForFieldName('condition');
+  let pushedCondScope = false;
   if (condition) {
     for (const child of condition.children) {
       if (child.type === 'cond_decl') {
         pushScope(state, 'if_cond', toRange(node));
         collectDeclarations(child, state);
+        pushedCondScope = true;
         break;
       }
     }
   }
 
+  // Consequence gets its own block scope
   const consequence = node.childForFieldName('consequence');
   if (consequence) {
+    pushScope(state, 'block', toRange(consequence));
     collectDeclarations(consequence, state);
+    popScope(state);
   }
 
+  // Alternative gets its own block scope
   const alternative = node.childForFieldName('alternative');
   if (alternative) {
+    pushScope(state, 'block', toRange(alternative));
     collectDeclarations(alternative, state);
+    popScope(state);
   }
 
-  // Check if we pushed a cond_decl scope
-  const currentScope = state.scopeMap.get(currentScopeId(state));
-  const fileScope = state.scopeMap.get(0);
-  if (fileScope && currentScope && currentScopeId(state) !== fileScope.id &&
-      currentScope.kind === 'if_cond') {
+  if (pushedCondScope) {
     popScope(state);
   }
 }
@@ -570,15 +603,18 @@ function collectInheritDecl(node: Node, state: BuildState): void {
   const aliasNode = node.childForFieldName('alias');
   const pathNode = node.childForFieldName('path');
 
-  const displayNode = aliasNode ?? pathNode;
-  if (!displayNode) return;
+  if (!pathNode) return;
 
+  // Name is the path (class to look up). Alias is the local rename.
+  // For `inherit Animal : creature`, name="Animal", alias="creature".
+  // For `inherit Animal`, name="Animal", no alias.
   addDeclaration(state, {
-    name: displayNode.text,
+    name: pathNode.text,
     kind: 'inherit',
-    nameRange: toRange(displayNode),
+    nameRange: toRange(pathNode),
     range: toRange(node),
     scopeId,
+    alias: aliasNode ? aliasNode.text : undefined,
   });
 }
 
@@ -588,6 +624,13 @@ function collectInheritDecl(node: Node, state: BuildState): void {
 
 function collectReferences(node: Node, state: BuildState): void {
   if (node.isError || node.isMissing) return;
+
+  // Skip reference collection inside inherit_decl — the inherit declaration
+  // itself represents the relationship; the path identifier should not be
+  // collected as a separate reference.
+  if (node.type === 'inherit_decl' || node.type === 'import_decl') {
+    return;
+  }
 
   switch (node.type) {
     case 'identifier_expr':
@@ -801,26 +844,31 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
     return null;
   }
 
-  // Identifier::name — resolve identifier to inherited class
+  // Identifier::name — resolve identifier to inherited class by alias or name
   const firstIdent = scopeNode.children.find(c => c.type === 'identifier');
   if (firstIdent) {
     const inheritName = firstIdent.text;
-    // Find the inherit declaration in the enclosing class scope
     const classScopeId = findEnclosingClassScopeId(refNode, state);
     if (classScopeId !== null) {
       const classScope = state.scopeMap.get(classScopeId)!;
-      // Find the inherited scope by inherit name
-      for (const inheritedId of classScope.inheritedScopes) {
-        const inheritedScope = state.scopeMap.get(inheritedId)!;
-        if (inheritedScope) {
-          // Check if any declaration in that scope matches the inherit name
-          // (The class name is declared in the parent scope, not the class scope itself)
-          const parentScope = state.scopeMap.get(inheritedScope.parentId!)!;
-          if (parentScope) {
-            for (const declId of parentScope.declarations) {
-              const decl = state.declMap.get(declId);
-              if (decl && decl.name === inheritName && decl.kind === 'class') {
-                return findDeclInScope(name, inheritedId, state);
+      // Find the inherit declaration matching this name (by alias or path name)
+      for (const declId of classScope.declarations) {
+        const decl = state.declMap.get(declId);
+        if (decl && decl.kind === 'inherit') {
+          const matches = decl.alias === inheritName || decl.name === inheritName;
+          if (matches) {
+            // Find the inherited scope that wireInheritance wired for this inherit
+            // by looking for a class declaration with name == decl.name
+            for (const inheritedId of classScope.inheritedScopes) {
+              const inheritedScope = state.scopeMap.get(inheritedId)!;
+              const parentScope = state.scopeMap.get(inheritedScope.parentId!)!;
+              if (parentScope) {
+                for (const parentDeclId of parentScope.declarations) {
+                  const parentDecl = state.declMap.get(parentDeclId);
+                  if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === decl.name) {
+                    return findDeclInScope(name, inheritedId, state);
+                  }
+                }
               }
             }
           }
@@ -861,13 +909,14 @@ function findScopeForNode(node: Node, state: BuildState): number | null {
   const nodeEnd = node.endPosition;
 
   // Find the innermost scope that contains the node
+  // When scopes have equal range size, prefer higher ID (deeper nesting)
   let bestScopeId: number | null = null;
   let bestSize = Infinity;
 
   for (const scope of state.scopes) {
     if (containsPosition(scope.range, nodeStart, nodeEnd)) {
       const size = rangeSize(scope.range);
-      if (size < bestSize) {
+      if (size < bestSize || (size === bestSize && scope.id > bestScopeId!)) {
         bestSize = size;
         bestScopeId = scope.id;
       }
@@ -953,10 +1002,49 @@ export function getDefinitionAt(
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
         character >= nr.start.character && character <= nr.end.character) {
+      // For inherit declarations, follow through to the target class
+      if (decl.kind === 'inherit') {
+        const target = resolveInheritToClass(decl, table);
+        if (target) return target;
+      }
       return decl;
     }
+    // For inherit declarations with alias, also check the alias position
+    if (decl.kind === 'inherit' && decl.alias) {
+      // The alias is in the range but after the nameRange
+      // Check if the position is within the declaration range and matches the alias text
+      if (decl.range.start.line === line && decl.range.end.line === line &&
+          character >= decl.range.start.character && character <= decl.range.end.character) {
+        // Verify it's actually on the alias by checking the source text
+        const target = resolveInheritToClass(decl, table);
+        if (target) return target;
+      }
+    }
   }
+  return null;
+}
 
+/**
+ * Resolve an inherit declaration to the target class declaration.
+ * Returns the class Declaration if found, null otherwise.
+ */
+function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declaration | null {
+  // Find the class scope that contains this inherit declaration
+  const classScope = table.scopes.find(s => s.id === decl.scopeId);
+  if (!classScope) return null;
+
+  // Find the inherited scope wired by wireInheritance
+  const parentScope = classScope.parentId !== null
+    ? table.scopes.find(s => s.id === classScope.parentId)
+    : null;
+  if (!parentScope) return null;
+
+  for (const parentDeclId of parentScope.declarations) {
+    const parentDecl = table.declarations.find(d => d?.id === parentDeclId);
+    if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === decl.name) {
+      return parentDecl;
+    }
+  }
   return null;
 }
 
