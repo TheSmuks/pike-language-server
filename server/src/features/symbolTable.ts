@@ -536,7 +536,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
     return;
   }
 
-  if (decl.type === 'inherit_decl') {
+  if (decl.type === 'inherit_decl' || decl.type === 'import_decl') {
     collectInheritDecl(decl, state);
     return;
   }
