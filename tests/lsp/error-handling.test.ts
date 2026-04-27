@@ -221,11 +221,9 @@ describe("error handling", () => {
     expect(sym.name).toBe("msg");
   });
 
-  test("Unicode identifier: tree-sitter reports parse error for non-ASCII names", async () => {
-    // Tree-sitter-pike's identifier grammar only accepts ASCII [a-zA-Z_][a-zA-Z0-9_]*.
-    // Pike itself accepts UTF-8 identifiers. This test documents the discrepancy:
-    // the server should still respond (not crash), but the symbol name will be
-    // truncated at the multibyte boundary.
+  test("Unicode identifier: non-ASCII names parse correctly and round-trip via JSON-RPC", async () => {
+    // UTF-8 identifiers are now supported by tree-sitter-pike (fix for issue #1).
+    // Verify the full Unicode identifier round-trips through JSON-RPC.
     const uri = "file:///test/unicode-ident.pike";
     const source = "string café = \"value\";\n";
     server.openDoc(uri, source);
@@ -236,12 +234,8 @@ describe("error handling", () => {
     )) as unknown[];
 
     expect(Array.isArray(symbols)).toBe(true);
-    // Tree-sitter splits café → identifier "caf" + ERROR "é".
-    // The server should not crash and should return partial results.
-    if (symbols.length > 0) {
-      const sym = symbols[0] as { name: string };
-      // Name is truncated — this is a known tree-sitter grammar limitation.
-      expect(sym.name).toBe("caf");
-    }
+    expect(symbols.length).toBeGreaterThan(0);
+    const sym = symbols[0] as { name: string };
+    expect(sym.name).toBe("café");
   });
 });

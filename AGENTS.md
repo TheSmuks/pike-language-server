@@ -110,6 +110,7 @@ When an AI agent is working in this repository:
 5. **Decisions go in decisions/.** Write the decision document before committing.
 6. **Check pike-ai-kb before generating Pike code.** The knowledge base is runtime-verified; agent priors on Pike are unreliable.
 7. **Consult docs/lsp-references.md before designing an LSP architectural pattern.** Other LSPs have solved most hard problems; understand their solutions before inventing your own.
+8. **File findings in dependency projects.** When work surfaces a bug or limitation in tree-sitter-pike or pike-ai-kb, don't work around it silently. File an issue against the dependency. The issue must include: (a) a minimal reproduction, (b) expected vs actual behavior, (c) a link back to the LSP test or finding that surfaced it. Add a TODO in the LSP code or an entry in docs/known-limitations.md referencing the upstream issue URL. When the upstream fix lands, remove the workaround.
 
 ## Conventions
 

@@ -166,7 +166,7 @@ None.
 
 - [ ] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** The current `CROSS_FILE_FLAGS` hardcoded map in `runner.ts` does not scale. Before Phase 4 entry, the runner must read per-file flags (module-path, include-path) from corpus manifest metadata. See `decisions/0005-harness-architecture.md` §Deferred Items.
 - [ ] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Layer-2 tests deferred from Phase 2. The integration test stubs exist at `tests/integration/` but require extension packaging (esbuild, VSIX) before they can run. See `decisions/0007-deferred-integration-tests.md`.
-- [ ] **Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.** Pike accepts UTF-8 identifiers (e.g., `café`), but tree-sitter-pike's identifier rule is `[a-zA-Z_][a-zA-Z0-9_]*`. Non-ASCII identifiers are split at multibyte boundaries (identifier + ERROR node). This should be fixed in tree-sitter-pike, not worked around in the LSP.
+- [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
 
 ## CI Improvement Tracking
 
