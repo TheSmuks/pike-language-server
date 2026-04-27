@@ -3,7 +3,7 @@
  */
 
 import { resolve, relative, join } from "node:path";
-import { readdirSync, existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { readdirSync, existsSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import type { IntrospectionResult } from "./types";
 import { readSnapshot, writeSnapshot, diffSnapshot } from "./snapshot";
 
@@ -40,14 +40,24 @@ export interface RunnerOptions {
   includePath?: string;
 }
 
-// Cross-file corpus entries that need special flags.
-// TODO(Phase 4): Replace with manifest-driven per-file metadata (decision 0005 §Deferred Items).
-const CROSS_FILE_FLAGS: Record<string, RunnerOptions> = {
-  "cross-lib-consumer.pike": { strict: true, includePath: "." },
-  "cross-lib-user.pike": { strict: true, modulePath: "." },
-  "cross-import-b.pike": { strict: true, modulePath: "." },
-  "cross-pmod-user.pike": { strict: true, modulePath: "." },
-};
+// Per-file compilation metadata from corpus/corpus.json.
+// Replaces the former CROSS_FILE_FLAGS hardcoded map (decision 0005 §Deferred Items).
+interface CorpusManifest {
+  files: Record<string, RunnerOptions>;
+}
+
+function loadCorpusManifest(): Record<string, RunnerOptions> {
+  const manifestPath = join(PROJECT_ROOT, "corpus", "corpus.json");
+  if (!existsSync(manifestPath)) return {};
+  try {
+    const raw = JSON.parse(readFileSync(manifestPath, "utf-8"));
+    return (raw as CorpusManifest).files ?? {};
+  } catch {
+    return {};
+  }
+}
+
+const CORPUS_MANIFEST = loadCorpusManifest();
 
 // ---------------------------------------------------------------------------
 // Core: run introspect.pike on a single file
@@ -149,7 +159,7 @@ export function snapshotNameForFile(corpusFile: string): string {
 
 export function getRunnerOptionsForFile(filename: string): RunnerOptions {
   const base: RunnerOptions = { strict: false };
-  const extra = CROSS_FILE_FLAGS[filename];
+  const extra = CORPUS_MANIFEST[filename];
   return extra ? { ...base, ...extra } : base;
 }
 

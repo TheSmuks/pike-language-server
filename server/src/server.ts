@@ -27,12 +27,11 @@ import { initParser, parse } from "./parser";
 import { getDocumentSymbols } from "./features/documentSymbol";
 import { getParseDiagnostics } from "./features/diagnostics";
 import {
-  buildSymbolTable,
-  wireInheritance,
   getDefinitionAt,
   getReferencesTo,
   type SymbolTable,
 } from "./features/symbolTable";
+import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 
 // ---------------------------------------------------------------------------
 // Server factory — reusable for production and tests
@@ -41,6 +40,7 @@ import {
 export interface PikeServer {
   connection: Connection;
   documents: TextDocuments<TextDocument>;
+  index: WorkspaceIndex;
 }
 
 /**
@@ -50,28 +50,25 @@ export interface PikeServer {
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
 
-  // Track document versions for cache invalidation.
-  const versionCache = new Map<string, number>();
-
-  // Symbol table cache — invalidated on document change, rebuilt lazily.
-  const symbolTableCache = new Map<string, SymbolTable>();
+  // Workspace index — initialized in onInitialize with the workspace root.
+  // Starts with a placeholder path; overwritten when the client sends init.
+  let index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
 
   /**
    * Get or build the symbol table for a document.
-   * Lazy rebuild: only computed when requested, cached until document changes.
+   * Uses the workspace index for lazy rebuild.
    */
   function getSymbolTable(uri: string): SymbolTable | null {
-    const cached = symbolTableCache.get(uri);
-    if (cached) return cached;
+    const entry = index.getFile(uri);
+    if (entry?.symbolTable) return entry.symbolTable;
 
     const doc = documents.get(uri);
     if (!doc) return null;
 
     try {
       const tree = parse(doc.getText());
-      const table = buildSymbolTable(tree, uri, doc.version);
-      symbolTableCache.set(uri, table);
-      return table;
+      index.upsertFile(uri, doc.version, tree, doc.getText(), ModificationSource.DidChange);
+      return index.getSymbolTable(uri);
     } catch (err) {
       connection.console.error(
         `symbolTable build failed: ${(err as Error).message}`,
@@ -84,18 +81,20 @@ export function createPikeServer(connection: Connection): PikeServer {
   // Initialization
   // -----------------------------------------------------------------------
 
-  connection.onInitialize(
-    (_params: InitializeParams): InitializeResult => {
-      return {
-        capabilities: {
-          textDocumentSync: TextDocumentSyncKind.Full,
-          documentSymbolProvider: true,
-          definitionProvider: true,
-          referencesProvider: true,
-        },
-      };
-    },
-  );
+  connection.onInitialize((params: InitializeParams) => {
+    const rootUri = params.rootUri ?? params.rootPath ?? "";
+    const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
+    index = new WorkspaceIndex({ workspaceRoot: rootPath });
+
+    return {
+      capabilities: {
+        textDocumentSync: TextDocumentSyncKind.Full,
+        documentSymbolProvider: true,
+        definitionProvider: true,
+        referencesProvider: true,
+      },
+    } satisfies InitializeResult;
+  });
 
   connection.onInitialized(async () => {
     try {
@@ -188,8 +187,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   // -----------------------------------------------------------------------
 
   connection.onShutdown(() => {
-    symbolTableCache.clear();
-    versionCache.clear();
+    index.clear();
   });
 
   // -----------------------------------------------------------------------
@@ -198,15 +196,20 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.onDidChangeContent(async (event) => {
     const doc = event.document;
-    const prevVersion = versionCache.get(doc.uri) ?? -1;
-    if (doc.version <= prevVersion) return;
-    versionCache.set(doc.uri, doc.version);
-
-    // Invalidate symbol table cache
-    symbolTableCache.delete(doc.uri);
 
     try {
       const tree = parse(doc.getText());
+
+      // Update workspace index, invalidating dependents
+      const invalidated = index.invalidateWithDependents(doc.uri);
+      index.upsertFile(doc.uri, doc.version, tree, doc.getText(), ModificationSource.DidChange);
+
+      if (invalidated.length > 1) {
+        connection.console.log(
+          `Invalidated ${invalidated.length} files (change in ${doc.uri})`,
+        );
+      }
+
       connection.sendDiagnostics({
         uri: doc.uri,
         diagnostics: getParseDiagnostics(tree),
@@ -219,8 +222,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   documents.onDidClose((event) => {
-    versionCache.delete(event.document.uri);
-    symbolTableCache.delete(event.document.uri);
+    index.removeFile(event.document.uri);
     connection.sendDiagnostics({
       uri: event.document.uri,
       diagnostics: [],
@@ -229,7 +231,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.listen(connection);
 
-  return { connection, documents };
+  return { connection, documents, index };
 }
 
 // ---------------------------------------------------------------------------

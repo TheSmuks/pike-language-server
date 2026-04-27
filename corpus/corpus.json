@@ -1,0 +1,22 @@
+{
+  "$schema": "corpus-manifest",
+  "description": "Per-file compilation metadata for the Pike LSP test harness.",
+  "files": {
+    "cross-lib-consumer.pike": {
+      "strict": true,
+      "includePath": "."
+    },
+    "cross-lib-user.pike": {
+      "strict": true,
+      "modulePath": "."
+    },
+    "cross-import-b.pike": {
+      "strict": true,
+      "modulePath": "."
+    },
+    "cross-pmod-user.pike": {
+      "strict": true,
+      "modulePath": "."
+    }
+  }
+}
