@@ -32,5 +32,6 @@
   ],
   "error": null,
   "file": "corpus/files/err-undef-var.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": []
 }

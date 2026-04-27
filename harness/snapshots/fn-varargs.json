@@ -7,5 +7,32 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/fn-varargs.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 4,
+      "name": "join_strings"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "sum_ints"
+    },
+    {
+      "kind": "function",
+      "line": 16,
+      "name": "first_of"
+    },
+    {
+      "kind": "function",
+      "line": 21,
+      "name": "count_args"
+    },
+    {
+      "kind": "function",
+      "line": 25,
+      "name": "main"
+    }
+  ]
 }

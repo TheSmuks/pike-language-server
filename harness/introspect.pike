@@ -45,6 +45,7 @@ int main(int argc, array(string) argv) {
       "compilation": ([ "exit_code": 1, "strict_types": strict ? Val.true : Val.false ]),
       "diagnostics": ({}),
       "autodoc": Val.null,
+      "symbols": ({}),
       "error": "No file path provided"
     ]);
     write("%s\n", Standards.JSON.encode(result));
@@ -63,6 +64,7 @@ int main(int argc, array(string) argv) {
       "compilation": ([ "exit_code": 1, "strict_types": strict ? Val.true : Val.false ]),
       "diagnostics": ({}),
       "autodoc": Val.null,
+      "symbols": ({}),
       "error": sprintf("Could not read file: %O", filepath)
     ]);
     write("%s\n", Standards.JSON.encode(result));
@@ -87,8 +89,9 @@ int main(int argc, array(string) argv) {
 
   // Compile
   int exit_code = 0;
+  program compiled_prog;
   mixed compile_err = catch {
-    program p = compile_string(source, filepath, handler);
+    compiled_prog = compile_string(source, filepath, handler);
   };
   if (compile_err) {
     exit_code = 1;
@@ -123,12 +126,84 @@ int main(int argc, array(string) argv) {
   // Build diagnostics
   array diagnostics = normalize_diagnostics(handler->errors, handler->warnings);
 
+
+  // Extract symbols from compiled program
+  array symbols = ({});
+  mixed sym_err = catch {
+    if (compiled_prog) {
+      object instance = compiled_prog();
+      array(string) names = sort(indices(instance));
+      array(mapping) tmp = ({});
+
+      foreach(names, string name) {
+        // Access value via indexing operator (not values()) for correct type predicates
+        mixed val = instance[name];
+
+        // Get definition location via Program.defined(program, name)
+        // Returns "file:line" for functions/classes, just "file" for variables
+        string def_loc;
+        mixed loc_err = catch {
+          def_loc = Program.defined(compiled_prog, name);
+        };
+
+        // Skip symbols not defined in this file (inherited/implicit)
+        if (!def_loc || !has_prefix(def_loc, filepath)) continue;
+
+        // Skip underscore-prefixed names
+        if (has_prefix(name, "_")) continue;
+
+        mapping sym = ([ "name": name ]);
+
+        // Extract line number from location string
+        string loc_file;
+        int loc_line;
+        if (sscanf(def_loc, "%s:%d", loc_file, loc_line) == 2) {
+          sym["line"] = loc_line;
+        }
+
+        // Classify symbol kind using type predicates on indexed value
+        if (programp(val)) {
+          // A program value defined in this file with a line -> class
+          if (sym->line) {
+            sym["kind"] = "class";
+          } else {
+            sym["kind"] = "variable";
+          }
+        } else if (functionp(val)) {
+          sym["kind"] = "function";
+        } else if (intp(val) || stringp(val) || floatp(val) ||
+                   arrayp(val) || mappingp(val) || multisetp(val)) {
+          sym["kind"] = "variable";
+        } else if (objectp(val)) {
+          sym["kind"] = "variable";
+        } else {
+          sym["kind"] = "unknown";
+        }
+
+        tmp += ({ sym });
+      }
+
+      // Sort by line number (symbols without line go first), then by name
+      sort(tmp->name, tmp);  // pre-sort by name for stable secondary sort
+      array line_keys = allocate(sizeof(tmp));
+      for (int k = 0; k < sizeof(tmp); k++) {
+        line_keys[k] = zero_type(tmp[k]->line) ? 0 : tmp[k]->line;
+      }
+      sort(line_keys, tmp);
+      symbols = tmp;
+    }
+  };
+  if (sym_err) {
+    // Symbol extraction failed — leave symbols empty
+    symbols = ({});
+  }
   mapping result = ([
     "file": filepath,
     "pike_version": get_pike_version(),
     "compilation": ([ "exit_code": exit_code, "strict_types": strict ? Val.true : Val.false ]),
     "diagnostics": diagnostics,
     "autodoc": autodoc,
+    "symbols": symbols,
     "error": Val.null
   ]);
 

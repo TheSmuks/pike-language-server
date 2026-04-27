@@ -30,5 +30,6 @@
   ],
   "error": null,
   "file": "corpus/files/err-arity-create.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": []
 }

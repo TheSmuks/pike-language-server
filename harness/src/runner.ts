@@ -62,10 +62,10 @@ export async function runIntrospect(
       compilation: { exit_code: -1, strict_types: opts.strict ?? false },
       diagnostics: [],
       autodoc: null,
+      symbols: [],
       error: `File not found: ${corpusFile}`,
     };
   }
-
   const args: string[] = [];
   if (opts.strict) args.push("--strict");
   if (opts.modulePath) {
@@ -96,6 +96,7 @@ export async function runIntrospect(
       compilation: { exit_code: exitCode, strict_types: opts.strict ?? false },
       diagnostics: [],
       autodoc: null,
+      symbols: [],
       error: stderr.trim() || `pike exited with code ${exitCode}`,
     };
   }
@@ -114,6 +115,7 @@ export async function runIntrospect(
       compilation: { exit_code: exitCode, strict_types: opts.strict ?? false },
       diagnostics: [],
       autodoc: null,
+      symbols: [],
       error: `JSON parse error: ${(e as Error).message}\nRaw output:\n${stdout.slice(0, 500)}`,
     };
   }

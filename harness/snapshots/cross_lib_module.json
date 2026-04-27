@@ -7,5 +7,26 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/cross_lib_module.pmod",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "MODULE_VERSION"
+    },
+    {
+      "kind": "function",
+      "line": 6,
+      "name": "greet"
+    },
+    {
+      "kind": "function",
+      "line": 10,
+      "name": "factorial"
+    },
+    {
+      "kind": "class",
+      "line": 15,
+      "name": "Calculator"
+    }
+  ]
 }

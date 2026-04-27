@@ -68,6 +68,11 @@ export function writeSnapshot(name: string, data: IntrospectionResult): void {
 /** Fields that are informational and excluded from comparison. */
 const EXCLUDED_DIFF_FIELDS = new Set(["pike_version"]);
 
+// Helper to access arbitrary properties on a typed object
+function getField(obj: IntrospectionResult, key: string): unknown {
+  return (obj as unknown as Record<string, unknown>)[key];
+}
+
 /**
  * Compare two introspection results. Returns null if identical, or an array
  * of per-field diffs. Comparison is recursive with canonical key ordering.
@@ -83,15 +88,15 @@ export function diffSnapshot(
 
   // Gather the union of all top-level keys (minus excluded)
   const allKeys = new Set([
-    ...Object.keys(actual as Record<string, unknown>),
-    ...Object.keys(expected as Record<string, unknown>),
+    ...Object.keys(actual),
+    ...Object.keys(expected),
   ]);
 
   for (const key of allKeys) {
     if (EXCLUDED_DIFF_FIELDS.has(key)) continue;
 
-    const actualVal = (actual as Record<string, unknown>)[key];
-    const expectedVal = (expected as Record<string, unknown>)[key];
+    const actualVal = getField(actual, key);
+    const expectedVal = getField(expected, key);
 
     const actualCanon = canonicalStringify(actualVal);
     const expectedCanon = canonicalStringify(expectedVal);

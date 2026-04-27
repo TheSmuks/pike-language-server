@@ -21,6 +21,12 @@ export interface CompilationResult {
   strict_types: boolean;
 }
 
+export interface SymbolInfo {
+  name: string;
+  kind: string;
+  line?: number;
+}
+
 /**
  * Core fields from the Pike introspection script.
  * Additional fields may be added by future phases (symbols, types, etc.)
@@ -33,10 +39,7 @@ export interface IntrospectionResult {
   diagnostics: Diagnostic[];
   autodoc: string | null;
   error: string | null;
-  // Future phases will add:
-  // symbols?: SymbolInfo[];
-  // types?: TypeResolution[];
-  // [key: string]: unknown;  // Generic extensibility
+  symbols: SymbolInfo[];
 }
 
 export interface SnapshotDiff {

@@ -20,5 +20,12 @@
   ],
   "error": null,
   "file": "corpus/files/import-stdlib.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 9,
+      "name": "main"
+    }
+  ]
 }

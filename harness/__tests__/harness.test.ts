@@ -142,6 +142,7 @@ describe("snapshot schema validation", () => {
       expect(snap).toHaveProperty("compilation");
       expect(snap).toHaveProperty("diagnostics");
       expect(snap).toHaveProperty("autodoc");
+      expect(snap).toHaveProperty("symbols");
       expect(snap).toHaveProperty("error");
 
       expect(typeof snap.file).toBe("string");

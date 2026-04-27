@@ -7,5 +7,27 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/class-multi-inherit.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 4,
+      "name": "A"
+    },
+    {
+      "kind": "class",
+      "line": 9,
+      "name": "B"
+    },
+    {
+      "kind": "class",
+      "line": 14,
+      "name": "C"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "main"
+    }
+  ]
 }

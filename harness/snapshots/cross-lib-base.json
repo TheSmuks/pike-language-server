@@ -7,5 +7,31 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/cross-lib-base.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "VERSION"
+    },
+    {
+      "kind": "class",
+      "line": 8,
+      "name": "Formatter"
+    },
+    {
+      "kind": "function",
+      "line": 26,
+      "name": "parse_int"
+    },
+    {
+      "kind": "function",
+      "line": 30,
+      "name": "reverse_string"
+    },
+    {
+      "kind": "function",
+      "line": 36,
+      "name": "main"
+    }
+  ]
 }

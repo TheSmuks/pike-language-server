@@ -50,5 +50,12 @@
   ],
   "error": null,
   "file": "corpus/files/fn-lambda.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 7,
+      "name": "main"
+    }
+  ]
 }

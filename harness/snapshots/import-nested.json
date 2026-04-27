@@ -7,5 +7,12 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/import-nested.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 4,
+      "name": "main"
+    }
+  ]
 }

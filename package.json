@@ -13,6 +13,25 @@
   },
   "devDependencies": {
     "typescript": "^5.7.0",
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/vscode": "^1.85.0"
+  },
+  "dependencies": {
+    "web-tree-sitter": "^0.26.8",
+    "vscode-languageserver": "^9.0.0",
+    "vscode-languageserver-textdocument": "^1.0.12",
+    "vscode-languageclient": "^9.0.1"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "pike",
+        "extensions": [".pike", ".pmod", ".mmod"],
+        "aliases": ["Pike"]
+      }
+    ]
   }
 }

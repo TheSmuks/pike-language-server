@@ -44,5 +44,6 @@
   ],
   "error": null,
   "file": "corpus/files/err-syntax-basic.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": []
 }

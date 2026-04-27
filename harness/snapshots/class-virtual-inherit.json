@@ -7,5 +7,22 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/class-virtual-inherit.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 4,
+      "name": "Logger"
+    },
+    {
+      "kind": "class",
+      "line": 10,
+      "name": "Service"
+    },
+    {
+      "kind": "function",
+      "line": 20,
+      "name": "main"
+    }
+  ]
 }

@@ -26,5 +26,73 @@
   ],
   "error": null,
   "file": "corpus/files/enum-basic.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "BLUE"
+    },
+    {
+      "kind": "unknown",
+      "name": "Color"
+    },
+    {
+      "kind": "variable",
+      "name": "GREEN"
+    },
+    {
+      "kind": "variable",
+      "name": "RED"
+    },
+    {
+      "kind": "variable",
+      "name": "STATUS_ACTIVE"
+    },
+    {
+      "kind": "variable",
+      "name": "STATUS_CLOSED"
+    },
+    {
+      "kind": "variable",
+      "name": "STATUS_PENDING"
+    },
+    {
+      "kind": "variable",
+      "name": "STATUS_UNKNOWN"
+    },
+    {
+      "kind": "unknown",
+      "name": "Status"
+    },
+    {
+      "kind": "variable",
+      "name": "TOK_EOF"
+    },
+    {
+      "kind": "variable",
+      "name": "TOK_IDENT"
+    },
+    {
+      "kind": "variable",
+      "name": "TOK_NUMBER"
+    },
+    {
+      "kind": "variable",
+      "name": "TOK_STRING"
+    },
+    {
+      "kind": "unknown",
+      "name": "TokenKind"
+    },
+    {
+      "kind": "function",
+      "line": 30,
+      "name": "color_name"
+    },
+    {
+      "kind": "function",
+      "line": 39,
+      "name": "main"
+    }
+  ]
 }

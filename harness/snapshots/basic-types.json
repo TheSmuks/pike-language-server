@@ -80,5 +80,25 @@
   ],
   "error": null,
   "file": "corpus/files/basic-types.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "obj"
+    },
+    {
+      "kind": "variable",
+      "name": "p"
+    },
+    {
+      "kind": "function",
+      "line": 7,
+      "name": "main"
+    },
+    {
+      "kind": "function",
+      "line": 44,
+      "name": "do_nothing"
+    }
+  ]
 }

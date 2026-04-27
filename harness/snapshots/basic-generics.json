@@ -44,5 +44,40 @@
   ],
   "error": null,
   "file": "corpus/files/basic-generics.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "doubler"
+    },
+    {
+      "kind": "variable",
+      "name": "ops"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "sum"
+    },
+    {
+      "kind": "function",
+      "line": 17,
+      "name": "lookup_int"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "has_tag"
+    },
+    {
+      "kind": "function",
+      "line": 30,
+      "name": "apply_fn"
+    },
+    {
+      "kind": "function",
+      "line": 40,
+      "name": "main"
+    }
+  ]
 }

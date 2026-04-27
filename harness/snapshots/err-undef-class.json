@@ -14,5 +14,6 @@
   ],
   "error": null,
   "file": "corpus/files/err-undef-class.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": []
 }

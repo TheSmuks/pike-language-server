@@ -7,5 +7,37 @@
   "diagnostics": [],
   "error": null,
   "file": "corpus/files/fn-callbacks.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 4,
+      "name": "apply_int"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "apply_transform"
+    },
+    {
+      "kind": "function",
+      "line": 12,
+      "name": "str_len"
+    },
+    {
+      "kind": "function",
+      "line": 16,
+      "name": "upper"
+    },
+    {
+      "kind": "function",
+      "line": 20,
+      "name": "do_callback"
+    },
+    {
+      "kind": "function",
+      "line": 24,
+      "name": "main"
+    }
+  ]
 }

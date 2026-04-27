@@ -44,5 +44,39 @@
   ],
   "error": null,
   "file": "corpus/files/fn-types.pike",
-  "pike_version": "8.0.1116"
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "name": "binop"
+    },
+    {
+      "kind": "function",
+      "name": "length_fn"
+    },
+    {
+      "kind": "function",
+      "name": "side_effect"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "add"
+    },
+    {
+      "kind": "function",
+      "line": 26,
+      "name": "map_ints"
+    },
+    {
+      "kind": "function",
+      "line": 35,
+      "name": "make_adder"
+    },
+    {
+      "kind": "function",
+      "line": 39,
+      "name": "main"
+    }
+  ]
 }
