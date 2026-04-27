@@ -16,6 +16,24 @@
     {
       "kind": "class",
       "line": 8,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "format"
+        },
+        {
+          "kind": "function",
+          "name": "get_prefix"
+        },
+        {
+          "kind": "function",
+          "name": "get_suffix"
+        }
+      ],
       "name": "Formatter"
     },
     {

@@ -12,16 +12,58 @@
     {
       "kind": "class",
       "line": 4,
+      "members": [
+        {
+          "kind": "function",
+          "name": "name"
+        },
+        {
+          "kind": "function",
+          "name": "value"
+        }
+      ],
       "name": "A"
     },
     {
       "kind": "class",
       "line": 9,
+      "members": [
+        {
+          "kind": "function",
+          "name": "label"
+        },
+        {
+          "kind": "function",
+          "name": "value"
+        }
+      ],
       "name": "B"
     },
     {
       "kind": "class",
       "line": 14,
+      "members": [
+        {
+          "kind": "function",
+          "name": "description"
+        },
+        {
+          "kind": "function",
+          "name": "label"
+        },
+        {
+          "kind": "function",
+          "name": "name"
+        },
+        {
+          "kind": "function",
+          "name": "sum"
+        },
+        {
+          "kind": "function",
+          "name": "value"
+        }
+      ],
       "name": "C"
     },
     {

@@ -49,11 +49,43 @@
     {
       "kind": "class",
       "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_secret"
+        },
+        {
+          "kind": "variable",
+          "name": "pub_name"
+        }
+      ],
       "name": "Visibility"
     },
     {
       "kind": "class",
       "line": 35,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_secret"
+        },
+        {
+          "kind": "variable",
+          "name": "pub_name"
+        },
+        {
+          "kind": "function",
+          "name": "test"
+        }
+      ],
       "name": "SubVisibility"
     },
     {

@@ -166,6 +166,29 @@ int main(int argc, array(string) argv) {
           // A program value defined in this file with a line -> class
           if (sym->line) {
             sym["kind"] = "class";
+            // Extract class body members
+            mixed member_err = catch {
+              object class_inst = val();
+              array(string) member_names = sort(indices(class_inst));
+              array(mapping) members = ({});
+              foreach(member_names, string mname) {
+                // Skip underscore-prefixed and auto-generated names
+                if (has_prefix(mname, "_")) continue;
+                mixed mval = class_inst[mname];
+                mapping msym = ([ "name": mname ]);
+                if (programp(mval)) {
+                  msym["kind"] = "class";
+                } else if (functionp(mval)) {
+                  msym["kind"] = "function";
+                } else {
+                  msym["kind"] = "variable";
+                }
+                members += ({ msym });
+              }
+              if (sizeof(members) > 0) {
+                sym["members"] = members;
+              }
+            };
           } else {
             sym["kind"] = "variable";
           }

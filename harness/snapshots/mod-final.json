@@ -12,11 +12,31 @@
     {
       "kind": "class",
       "line": 4,
+      "members": [
+        {
+          "kind": "function",
+          "name": "can_override"
+        },
+        {
+          "kind": "function",
+          "name": "cannot_override"
+        }
+      ],
       "name": "Base"
     },
     {
       "kind": "class",
       "line": 14,
+      "members": [
+        {
+          "kind": "function",
+          "name": "can_override"
+        },
+        {
+          "kind": "function",
+          "name": "cannot_override"
+        }
+      ],
       "name": "Child"
     },
     {

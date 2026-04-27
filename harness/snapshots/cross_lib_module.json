@@ -26,6 +26,20 @@
     {
       "kind": "class",
       "line": 15,
+      "members": [
+        {
+          "kind": "function",
+          "name": "add"
+        },
+        {
+          "kind": "function",
+          "name": "divide"
+        },
+        {
+          "kind": "function",
+          "name": "multiply"
+        }
+      ],
       "name": "Calculator"
     }
   ]

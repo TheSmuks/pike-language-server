@@ -25,6 +25,7 @@ export interface SymbolInfo {
   name: string;
   kind: string;
   line?: number;
+  members?: SymbolInfo[];
 }
 
 /**

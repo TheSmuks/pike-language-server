@@ -12,6 +12,28 @@
     {
       "kind": "class",
       "line": 4,
+      "members": [
+        {
+          "kind": "function",
+          "name": "add"
+        },
+        {
+          "kind": "variable",
+          "name": "buf"
+        },
+        {
+          "kind": "function",
+          "name": "build"
+        },
+        {
+          "kind": "function",
+          "name": "own_type"
+        },
+        {
+          "kind": "function",
+          "name": "self_ref"
+        }
+      ],
       "name": "Builder"
     },
     {

@@ -25,11 +25,35 @@
     {
       "kind": "class",
       "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_id"
+        }
+      ],
       "name": "Base"
     },
     {
       "kind": "class",
       "line": 19,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_id"
+        },
+        {
+          "kind": "function",
+          "name": "get_label"
+        }
+      ],
       "name": "Middle"
     },
     {
@@ -40,6 +64,12 @@
     {
       "kind": "class",
       "line": 51,
+      "members": [
+        {
+          "kind": "variable",
+          "name": "name"
+        }
+      ],
       "name": "Simple"
     },
     {

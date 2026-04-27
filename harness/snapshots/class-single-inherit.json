@@ -31,16 +31,66 @@
     {
       "kind": "class",
       "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "function",
+          "name": "get_name"
+        }
+      ],
       "name": "Animal"
     },
     {
       "kind": "class",
       "line": 25,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "function",
+          "name": "get_breed"
+        },
+        {
+          "kind": "function",
+          "name": "get_name"
+        }
+      ],
       "name": "Dog"
     },
     {
       "kind": "class",
       "line": 45,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "function",
+          "name": "get_breed"
+        },
+        {
+          "kind": "function",
+          "name": "get_name"
+        }
+      ],
       "name": "GuideDog"
     },
     {

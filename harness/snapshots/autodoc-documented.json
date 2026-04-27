@@ -12,6 +12,20 @@
     {
       "kind": "class",
       "line": 10,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_value"
+        },
+        {
+          "kind": "variable",
+          "name": "value"
+        }
+      ],
       "name": "DocumentedClass"
     },
     {

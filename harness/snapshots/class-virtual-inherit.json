@@ -12,11 +12,27 @@
     {
       "kind": "class",
       "line": 4,
+      "members": [
+        {
+          "kind": "function",
+          "name": "log"
+        }
+      ],
       "name": "Logger"
     },
     {
       "kind": "class",
       "line": 10,
+      "members": [
+        {
+          "kind": "function",
+          "name": "log"
+        },
+        {
+          "kind": "function",
+          "name": "run"
+        }
+      ],
       "name": "Service"
     },
     {

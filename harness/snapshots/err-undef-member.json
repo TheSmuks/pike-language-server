@@ -25,6 +25,16 @@
     {
       "kind": "class",
       "line": 8,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "x"
+        }
+      ],
       "name": "Foo"
     },
     {
