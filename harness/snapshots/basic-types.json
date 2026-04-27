@@ -1,0 +1,84 @@
+{
+  "file": "corpus/files/basic-types.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 10,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable count."
+    },
+    {
+      "line": 11,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable negative."
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable hex."
+    },
+    {
+      "line": 13,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable octal."
+    },
+    {
+      "line": 14,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable binary."
+    },
+    {
+      "line": 17,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable pi."
+    },
+    {
+      "line": 18,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable sci."
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable name."
+    },
+    {
+      "line": 22,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable empty."
+    },
+    {
+      "line": 23,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable multi."
+    },
+    {
+      "line": 34,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable z."
+    },
+    {
+      "line": 37,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable flag."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

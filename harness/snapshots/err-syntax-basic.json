@@ -1,0 +1,48 @@
+{
+  "file": "corpus/files/err-syntax-basic.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 16,
+      "severity": "error",
+      "category": "syntax_error",
+      "message": "syntax error, unexpected '}', expecting TOK_LEX_EOF or ';'"
+    },
+    {
+      "line": 16,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Missing ';'."
+    },
+    {
+      "line": 21,
+      "severity": "error",
+      "category": "unknown",
+      "message": "return is a reserved word."
+    },
+    {
+      "line": 21,
+      "severity": "error",
+      "category": "syntax_error",
+      "message": "syntax error, unexpected TOK_NUMBER"
+    },
+    {
+      "line": 21,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Missing ')'."
+    },
+    {
+      "line": 22,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Missing ';'."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

@@ -1,0 +1,24 @@
+{
+  "file": "corpus/files/err-undef-member.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 21,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable v."
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "category": "unknown",
+      "message": "An expression of type mixed cannot be assigned to a variable of type int."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

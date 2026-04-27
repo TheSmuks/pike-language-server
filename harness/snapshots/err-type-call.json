@@ -1,0 +1,52 @@
+{
+  "file": "corpus/files/err-type-call.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 20,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable msg."
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable val."
+    },
+    {
+      "line": 24,
+      "severity": "error",
+      "category": "bad_argument",
+      "message": "Bad argument 1 to double_it.",
+      "expected_type": "int",
+      "actual_type": "string(32..117)"
+    },
+    {
+      "line": 24,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable bad."
+    },
+    {
+      "line": 27,
+      "severity": "error",
+      "category": "bad_argument",
+      "message": "Bad argument 1 to greet.",
+      "expected_type": "string",
+      "actual_type": "int(42..42)"
+    },
+    {
+      "line": 27,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable bad2."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

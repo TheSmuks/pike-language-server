@@ -1,0 +1,96 @@
+{
+  "file": "corpus/files/basic-collections.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 11,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable strs."
+    },
+    {
+      "line": 12,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable mixed_arr."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable empty_ints."
+    },
+    {
+      "line": 16,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable zero_arr."
+    },
+    {
+      "line": 20,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable lookup."
+    },
+    {
+      "line": 21,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable empty_map."
+    },
+    {
+      "line": 24,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable tags."
+    },
+    {
+      "line": 25,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable ids."
+    },
+    {
+      "line": 26,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable empty_ms."
+    },
+    {
+      "line": 29,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable matrix."
+    },
+    {
+      "line": 30,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable data."
+    },
+    {
+      "line": 33,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable sz."
+    },
+    {
+      "line": 34,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable appended."
+    },
+    {
+      "line": 35,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable merged."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

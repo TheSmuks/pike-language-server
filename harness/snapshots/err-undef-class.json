@@ -1,0 +1,18 @@
+{
+  "file": "corpus/files/err-undef-class.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 10,
+      "severity": "error",
+      "category": "undefined_identifier",
+      "message": "Undefined identifier NonExistentClass."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

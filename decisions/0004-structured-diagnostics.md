@@ -105,3 +105,8 @@ The harness now has **three** ground-truth sources, not two:
 Only Pike 8.0.1116 is installed on this system. The `CompilationHandler` interface is documented in Pike's official reference manual and is part of the stable API. The error message strings ("Bad type in assignment.", "Expected:", "Got:") are embedded in the C compiler source (`src/program.c`) and have not changed across the Pike 8.0.x series. The `compile_error(string, int, string)` signature is stable.
 
 For the stderr text format specifically: the `<file>:<line>:<message>` format has been unchanged since at least Pike 7.8. The `LONG_PIKE_ERRORS`/`SHORT_PIKE_ERRORS` environment variables control path length but not format structure.
+
+
+## Cross-Version Stability Caveat
+
+Cross-version stability of Pike's diagnostic output is **asserted from API documentation**, not empirically tested, because only Pike 8.0.1116 was available during Phase 0. The harness CI should include a hook for testing against newer Pike releases when they ship: run canaries against pike X.Y.Z and confirm zero diff in snapshot format. This is not a Phase 1 deliverable but should be tracked as a CI improvement.

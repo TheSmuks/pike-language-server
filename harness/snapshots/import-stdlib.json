@@ -1,0 +1,24 @@
+{
+  "file": "corpus/files/import-stdlib.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 12,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable f."
+    },
+    {
+      "line": 15,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable bytes."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

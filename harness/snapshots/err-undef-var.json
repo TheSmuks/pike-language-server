@@ -1,0 +1,36 @@
+{
+  "file": "corpus/files/err-undef-var.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 12,
+      "severity": "error",
+      "category": "undefined_identifier",
+      "message": "Undefined identifier nonexistent_var."
+    },
+    {
+      "line": 12,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Assigning a void expression."
+    },
+    {
+      "line": 15,
+      "severity": "error",
+      "category": "undefined_identifier",
+      "message": "Undefined identifier undefined_function."
+    },
+    {
+      "line": 15,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Calling a void expression."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

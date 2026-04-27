@@ -1,0 +1,48 @@
+{
+  "file": "corpus/files/basic-generics.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 11,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable i."
+    },
+    {
+      "line": 43,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable total."
+    },
+    {
+      "line": 46,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable alice_score."
+    },
+    {
+      "line": 49,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable is_ready."
+    },
+    {
+      "line": 51,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable result."
+    },
+    {
+      "line": 52,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable negated."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

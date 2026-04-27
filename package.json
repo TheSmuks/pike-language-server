@@ -1,0 +1,18 @@
+{
+  "name": "pike-language-server",
+  "version": "0.1.0-alpha",
+  "description": "Tier-3 LSP implementation for Pike",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "test": "bun test",
+    "test:harness": "bun test harness/",
+    "typecheck": "tsc --noEmit",
+    "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
+    "harness:verify": "bun run harness/src/runner.ts --verify"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/bun": "latest"
+  }
+}

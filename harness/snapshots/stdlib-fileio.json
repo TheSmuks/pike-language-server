@@ -1,0 +1,30 @@
+{
+  "file": "corpus/files/stdlib-fileio.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 26,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable line."
+    },
+    {
+      "line": 34,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable whole."
+    },
+    {
+      "line": 39,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable exists."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

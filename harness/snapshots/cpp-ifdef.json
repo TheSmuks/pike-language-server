@@ -1,0 +1,36 @@
+{
+  "file": "corpus/files/cpp-ifdef.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 15,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable feature."
+    },
+    {
+      "line": 22,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable verbosity."
+    },
+    {
+      "line": 31,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable fallback."
+    },
+    {
+      "line": 39,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable detail."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

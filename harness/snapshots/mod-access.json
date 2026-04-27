@@ -1,0 +1,48 @@
+{
+  "file": "corpus/files/mod-access.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 20,
+      "severity": "warning",
+      "category": "unknown",
+      "message": "Keyword static is deprecated in favour of 'protected'."
+    },
+    {
+      "line": 41,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable n."
+    },
+    {
+      "line": 44,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable d."
+    },
+    {
+      "line": 47,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable s."
+    },
+    {
+      "line": 56,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable name."
+    },
+    {
+      "line": 57,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable secret."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

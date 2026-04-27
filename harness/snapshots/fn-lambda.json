@@ -1,0 +1,54 @@
+{
+  "file": "corpus/files/fn-lambda.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 18,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable add_offset."
+    },
+    {
+      "line": 23,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable logger."
+    },
+    {
+      "line": 27,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable squares."
+    },
+    {
+      "line": 32,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable compare_len."
+    },
+    {
+      "line": 42,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable msg."
+    },
+    {
+      "line": 50,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable c1."
+    },
+    {
+      "line": 51,
+      "severity": "warning",
+      "category": "unused_variable",
+      "message": "Unused local variable c2."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

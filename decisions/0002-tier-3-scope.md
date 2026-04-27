@@ -34,6 +34,7 @@ The LSP has three type information sources, each with a precise boundary:
 | Inheritance chain | XML: `<inherit name='Foo'><classname>Foo</classname></inherit>` | Same |
 | Generic type arguments | XML: `<array><valuetype><string/></valuetype></array>` | Same |
 
+**Caveat:** AutoDoc coverage in real Pike codebases varies widely. Some modules document every member with `//!` comments; others document almost nothing. The LSP's hover quality on third-party Pike code will track that variation. For undocumented code, Source C (source parser) is the only option, and it provides declared type text without semantic validation.
 **Boundary: stops at undocumented members.** AutoDoc only extracts members with `//!` doc comments. A variable declared as `int x;` without a preceding `//! Doc for x` is invisible to AutoDoc. In practice, many Pike projects do not document every member, so AutoDoc provides partial coverage at best.
 
 ### Source C: Source parser (via tree-sitter-pike)

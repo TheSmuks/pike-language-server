@@ -1,0 +1,34 @@
+{
+  "file": "corpus/files/err-arity-create.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 31,
+      "severity": "error",
+      "category": "wrong_arity",
+      "message": "Too many arguments to create (expected 1 arguments).",
+      "actual_type": "int"
+    },
+    {
+      "line": 37,
+      "severity": "error",
+      "category": "wrong_arity",
+      "message": "Too many arguments to Foo (expected 1 arguments).",
+      "actual_type": "int(2..2)"
+    },
+    {
+      "line": 40,
+      "severity": "error",
+      "category": "wrong_arity",
+      "message": "Too few arguments to Bar (got 1).",
+      "expected_type": "int",
+      "actual_type": "function(int, int, int : object(is err-arity-create.pike()->Bar))"
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

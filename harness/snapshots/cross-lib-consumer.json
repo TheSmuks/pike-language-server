@@ -1,0 +1,30 @@
+{
+  "file": "corpus/files/cross-lib-consumer.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 12,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Failed to index module cross_lib_base with 'Formatter'. (Module doesn't exist?)"
+    },
+    {
+      "line": 12,
+      "severity": "error",
+      "category": "unknown",
+      "message": "Illegal program pointer."
+    },
+    {
+      "line": 18,
+      "severity": "error",
+      "category": "undefined_identifier",
+      "message": "Undefined identifier Formatter."
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}

@@ -1,0 +1,20 @@
+{
+  "file": "corpus/files/err-type-return.pike",
+  "pike_version": "8.0.1116",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": true
+  },
+  "diagnostics": [
+    {
+      "line": 11,
+      "severity": "error",
+      "category": "wrong_return_type",
+      "message": "Wrong return type.",
+      "expected_type": "int",
+      "actual_type": "string(32..117)"
+    }
+  ],
+  "autodoc": null,
+  "error": null
+}
