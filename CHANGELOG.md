@@ -15,20 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Test harness: Pike introspection script (CompilationHandler + AutoDoc + JSON)
-- Test harness: TypeScript runner with --snapshot and --verify modes
-- Test harness: Generic snapshot manager with recursive canonical key ordering
-- Ground-truth snapshots for all 37 corpus files
-- 70 tests: 41 harness + 11 canary + 16 canonicalizer
-- Decision 0005: Harness architecture with strict/non-strict handling
-- Project setup: package.json, tsconfig.json, bun + TypeScript 5.x
-- Corpus: autodoc-documented.pike (AutoDoc XML extraction test)
-- Corpus: basic-nonstrict.pike (non-strict compilation test)
+- LSP server: stdio transport, documentSymbol handler, text document sync
+- Tree-sitter integration: WASM parser (web-tree-sitter@0.26.8) with parse cache
+- documentSymbol: 15 node type → SymbolKind mappings with nested class/enum support
+- Parse error handling: partial results + diagnostics on ERROR nodes
+- VSCode extension: activates on .pike/.pmod/.mmod files
+- Harness: symbol extraction via Pike program introspection (indices/values/typeof)
+- 108 LSP tests: symbol comparison, parse errors, performance, canaries, determinism
+- Decision 0006: LSP server architecture
+- docs/lsp-references.md: architecture patterns from gopls, rust-analyzer, clangd
+- Total test suite: 178 tests, 1256 assertions
 
 ### Fixed
 
-- AutoDoc extraction failed with absolute paths (extract_autodoc prepends ./)
-- Canonicalizer was field-specific; now handles arbitrary JSON shapes generically
-- Runner defaulted to strict:true for all files; now respects per-file pragma
+- snapshot.ts: type-safe generic diff (no more unsafe casts)
 
 ## [0.1.0-alpha] - 2026-04-26

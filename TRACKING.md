@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 1: Test Harness Scaffolding** — Complete, verified. Phase 2 entry pending review.
+**Phase 2: VSCode Extension + Tree-sitter** — Complete. Phase 3 entry pending review.
 
 ## Phase Status
 
@@ -10,7 +10,7 @@
 |-------|--------|-----------------|-----------------|
 | Phase 0: Investigation | Complete (verified) | Repo created, template read, pike-ai-kb reachable | docs, corpus, 4 decision documents |
 | Phase 1: Test Harness | **Complete (verified)** | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
-| Phase 2: VSCode Extension + Tree-sitter | Pending | Phase 1 complete | Extension installs, documentSymbol works |
+| Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
 | Phase 3: Per-file Symbol Table | Pending | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | Pending | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | Pending | Phase 4 complete | Diagnostics and hover from pike oracle |
@@ -98,6 +98,24 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 4. Documented strict/non-strict handling in decision 0005.
 
 ## Completed Phase History
+
+### Phase 2: VSCode Extension + Tree-sitter (2026-04-26)
+
+**Deliverables:**
+- `server/src/server.ts` — LSP server with stdio transport, documentSymbol handler
+- `server/src/parser.ts` — Tree-sitter WASM initialization and parse cache
+- `server/src/features/documentSymbol.ts` — Declaration extraction from parse tree
+- `server/src/features/diagnostics.ts` — ERROR node → LSP diagnostic conversion
+- `server/tree-sitter-pike.wasm` — Compiled Pike grammar (290KB)
+- `client/extension.ts` — VSCode extension activating on .pike/.pmod/.mmod
+- `harness/introspect.pike` — Extended with symbol extraction (indices/values/typeof)
+- `harness/__tests__/document-symbol.test.ts` — 108 LSP tests
+- `decisions/0006-lsp-server-architecture.md` — Server architecture decision
+- `docs/lsp-references.md` — LSP architecture reference patterns
+
+**Test suite:** 178 tests, 0 failures, 1256 assertions
+- Phase 1 tests: 70 (harness + canary + canonicalizer)
+- Phase 2 tests: 108 (symbol comparison, parse error, performance, canary, determinism)
 
 ### Phase 1: Test Harness Scaffolding (2026-04-26)
 
