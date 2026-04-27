@@ -1,96 +1,96 @@
 {
-  "file": "corpus/files/basic-collections.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
+      "category": "unused_variable",
+      "line": 10,
+      "message": "Unused local variable strs.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
       "line": 11,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable strs."
+      "message": "Unused local variable mixed_arr.",
+      "severity": "warning"
     },
     {
-      "line": 12,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable mixed_arr."
+      "line": 14,
+      "message": "Unused local variable empty_ints.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 15,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable empty_ints."
+      "message": "Unused local variable zero_arr.",
+      "severity": "warning"
     },
     {
-      "line": 16,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable zero_arr."
+      "line": 19,
+      "message": "Unused local variable lookup.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 20,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable lookup."
+      "message": "Unused local variable empty_map.",
+      "severity": "warning"
     },
     {
-      "line": 21,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable empty_map."
+      "line": 23,
+      "message": "Unused local variable tags.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 24,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable tags."
+      "message": "Unused local variable ids.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 25,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable ids."
+      "message": "Unused local variable empty_ms.",
+      "severity": "warning"
     },
     {
-      "line": 26,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable empty_ms."
+      "line": 28,
+      "message": "Unused local variable matrix.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 29,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable matrix."
+      "message": "Unused local variable data.",
+      "severity": "warning"
     },
     {
-      "line": 30,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable data."
+      "line": 32,
+      "message": "Unused local variable sz.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 33,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable sz."
+      "message": "Unused local variable appended.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
       "line": 34,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable appended."
-    },
-    {
-      "line": 35,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable merged."
+      "message": "Unused local variable merged.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/basic-collections.pike",
+  "pike_version": "8.0.1116"
 }

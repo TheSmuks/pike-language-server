@@ -1,24 +1,24 @@
 {
-  "file": "corpus/files/err-undef-member.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 21,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable v."
+      "line": 20,
+      "message": "Unused local variable v.",
+      "severity": "warning"
     },
     {
-      "line": 21,
-      "severity": "warning",
       "category": "unknown",
-      "message": "An expression of type mixed cannot be assigned to a variable of type int."
+      "line": 20,
+      "message": "An expression of type mixed cannot be assigned to a variable of type int.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-undef-member.pike",
+  "pike_version": "8.0.1116"
 }

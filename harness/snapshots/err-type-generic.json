@@ -1,68 +1,68 @@
 {
-  "file": "corpus/files/err-type-generic.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 11,
-      "severity": "error",
+      "actual_type": "array(string(103..116))",
       "category": "type_mismatch",
-      "message": "Bad type in assignment.",
       "expected_type": "array(int)",
-      "actual_type": "array(string(103..116))"
-    },
-    {
-      "line": 11,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable a."
-    },
-    {
-      "line": 14,
-      "severity": "error",
-      "category": "type_mismatch",
+      "line": 10,
       "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "category": "unused_variable",
+      "line": 10,
+      "message": "Unused local variable a.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mapping(int(1..1):int(2..2))",
+      "category": "type_mismatch",
       "expected_type": "mapping(string:int)",
-      "actual_type": "mapping(int(1..1):int(2..2))"
-    },
-    {
-      "line": 14,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable m."
-    },
-    {
-      "line": 17,
-      "severity": "error",
-      "category": "type_mismatch",
+      "line": 13,
       "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "category": "unused_variable",
+      "line": 13,
+      "message": "Unused local variable m.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "multiset(string(114..116))",
+      "category": "type_mismatch",
       "expected_type": "multiset(int)",
-      "actual_type": "multiset(string(114..116))"
-    },
-    {
-      "line": 17,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable ms."
-    },
-    {
-      "line": 20,
-      "severity": "error",
-      "category": "type_mismatch",
+      "line": 16,
       "message": "Bad type in assignment.",
-      "expected_type": "function(int : void)",
-      "actual_type": "function(string : zero)"
+      "severity": "error"
     },
     {
-      "line": 20,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable f."
+      "line": 16,
+      "message": "Unused local variable ms.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "function(string : zero)",
+      "category": "type_mismatch",
+      "expected_type": "function(int : void)",
+      "line": 19,
+      "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "category": "unused_variable",
+      "line": 19,
+      "message": "Unused local variable f.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-type-generic.pike",
+  "pike_version": "8.0.1116"
 }

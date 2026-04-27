@@ -1,48 +1,48 @@
 {
-  "file": "corpus/files/basic-generics.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 11,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable i."
+      "line": 10,
+      "message": "Unused local variable i.",
+      "severity": "warning"
     },
     {
-      "line": 43,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable total."
+      "line": 42,
+      "message": "Unused local variable total.",
+      "severity": "warning"
     },
     {
-      "line": 46,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable alice_score."
+      "line": 45,
+      "message": "Unused local variable alice_score.",
+      "severity": "warning"
     },
     {
-      "line": 49,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable is_ready."
+      "line": 48,
+      "message": "Unused local variable is_ready.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
+      "line": 50,
+      "message": "Unused local variable result.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
       "line": 51,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable result."
-    },
-    {
-      "line": 52,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable negated."
+      "message": "Unused local variable negated.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/basic-generics.pike",
+  "pike_version": "8.0.1116"
 }

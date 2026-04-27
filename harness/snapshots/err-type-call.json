@@ -1,52 +1,52 @@
 {
-  "file": "corpus/files/err-type-call.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
+      "category": "unused_variable",
+      "line": 19,
+      "message": "Unused local variable msg.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
       "line": 20,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable msg."
+      "message": "Unused local variable val.",
+      "severity": "warning"
     },
     {
-      "line": 21,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable val."
-    },
-    {
-      "line": 24,
-      "severity": "error",
+      "actual_type": "string(32..117)",
       "category": "bad_argument",
-      "message": "Bad argument 1 to double_it.",
       "expected_type": "int",
-      "actual_type": "string(32..117)"
+      "line": 23,
+      "message": "Bad argument 1 to double_it.",
+      "severity": "error"
     },
     {
-      "line": 24,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable bad."
+      "line": 23,
+      "message": "Unused local variable bad.",
+      "severity": "warning"
     },
     {
-      "line": 27,
-      "severity": "error",
+      "actual_type": "int(42..42)",
       "category": "bad_argument",
-      "message": "Bad argument 1 to greet.",
       "expected_type": "string",
-      "actual_type": "int(42..42)"
+      "line": 26,
+      "message": "Bad argument 1 to greet.",
+      "severity": "error"
     },
     {
-      "line": 27,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable bad2."
+      "line": 26,
+      "message": "Unused local variable bad2.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-type-call.pike",
+  "pike_version": "8.0.1116"
 }

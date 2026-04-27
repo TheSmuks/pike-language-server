@@ -1,0 +1,11 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='autodoc-documented'>\n<class name='DocumentedClass'><source-position file='corpus/files/autodoc-documented.pike' first-line='10'/><doc><text><p>A class that demonstrates AutoDoc documentation.\n This class has multiple doc lines.</p>\n</text></doc><docgroup homogen-name='value' homogen-type='variable'><doc><text><p>The value stored in this class.</p>\n</text></doc>\n<variable name='value'><source-position file='corpus/files/autodoc-documented.pike' first-line='12'/><type><int/></type></variable>\n</docgroup>\n<docgroup homogen-name='create' homogen-type='method'><doc><text><p>Create a new DocumentedClass with the given value.</p>\n</text><group><param name=\"v\"/><text><p>The initial value.</p>\n</text></group></doc>\n<method name='create'><source-position file='corpus/files/autodoc-documented.pike' first-line='17'/>\n<arguments><argument name='v'><type><int/></type></argument></arguments>\n<returntype><void/></returntype>\n</method>\n</docgroup>\n<docgroup homogen-name='get_value' homogen-type='method'><doc><text><p>Get the current value.</p>\n</text><group><returns/><text><p>The stored integer value.</p>\n</text></group></doc>\n<method name='get_value'><source-position file='corpus/files/autodoc-documented.pike' first-line='24'/>\n<arguments/>\n<returntype><int/></returntype>\n</method>\n</docgroup>\n</class>\n<docgroup homogen-name='documented_function' homogen-type='method'><doc><text><p>A documented standalone function.</p>\n</text><group><param name=\"x\"/><text><p>The input value.</p>\n</text></group><group><returns/><text><p>The doubled input.</p>\n</text></group></doc>\n<method name='documented_function'><source-position file='corpus/files/autodoc-documented.pike' first-line='34'/>\n<arguments><argument name='x'><type><int/></type></argument></arguments>\n<returntype><int/></returntype>\n</method>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/autodoc-documented.pike",
+  "pike_version": "8.0.1116"
+}

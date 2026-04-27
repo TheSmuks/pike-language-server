@@ -1,0 +1,52 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "actual_type": "string(32..116)",
+      "category": "type_mismatch",
+      "expected_type": "int",
+      "line": 13,
+      "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "int(42..42)",
+      "category": "type_mismatch",
+      "expected_type": "string",
+      "line": 14,
+      "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string(32..116)",
+      "category": "type_mismatch",
+      "expected_type": "float",
+      "line": 15,
+      "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string(103..119)",
+      "category": "bad_argument",
+      "expected_type": "int",
+      "line": 18,
+      "message": "Bad argument 1 to add.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string(101..121)",
+      "category": "bad_argument",
+      "expected_type": "int",
+      "line": 18,
+      "message": "Bad argument 2 to add.",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/basic-nonstrict.pike",
+  "pike_version": "8.0.1116"
+}

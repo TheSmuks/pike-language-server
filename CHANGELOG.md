@@ -17,10 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Test harness: Pike introspection script (CompilationHandler + AutoDoc + JSON)
 - Test harness: TypeScript runner with --snapshot and --verify modes
-- Test harness: Snapshot manager with canonical key ordering
-- Ground-truth snapshots for all 35 corpus files
-- 52 tests: 41 harness tests + 11 hand-verified canary tests
-- Decision 0005: Harness architecture
+- Test harness: Generic snapshot manager with recursive canonical key ordering
+- Ground-truth snapshots for all 37 corpus files
+- 70 tests: 41 harness + 11 canary + 16 canonicalizer
+- Decision 0005: Harness architecture with strict/non-strict handling
 - Project setup: package.json, tsconfig.json, bun + TypeScript 5.x
+- Corpus: autodoc-documented.pike (AutoDoc XML extraction test)
+- Corpus: basic-nonstrict.pike (non-strict compilation test)
+
+### Fixed
+
+- AutoDoc extraction failed with absolute paths (extract_autodoc prepends ./)
+- Canonicalizer was field-specific; now handles arbitrary JSON shapes generically
+- Runner defaulted to strict:true for all files; now respects per-file pragma
 
 ## [0.1.0-alpha] - 2026-04-26

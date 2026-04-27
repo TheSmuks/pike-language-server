@@ -1,18 +1,18 @@
 {
-  "file": "corpus/files/cross-lib-user.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
     "strict_types": true
   },
   "diagnostics": [
     {
-      "line": 7,
-      "severity": "error",
       "category": "undefined_identifier",
-      "message": "Undefined identifier cross_lib_module."
+      "line": 7,
+      "message": "Undefined identifier cross_lib_module.",
+      "severity": "error"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/cross-lib-user.pike",
+  "pike_version": "8.0.1116"
 }

@@ -34,6 +34,7 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 | 1 | `basic-types.pike` | All primitive types: int, float, string, void, mixed | P0 | Valid |
 | 2 | `basic-collections.pike` | Array, mapping, multiset literals with strict_types | P0 | Valid |
 | 3 | `basic-generics.pike` | `array(int)`, `mapping(string:int)`, `function(int:string)`, `multiset(string)` | P0 | Valid |
+| 4 | `basic-nonstrict.pike` | No `#pragma strict_types`: type errors silently accepted, no unused-variable warnings | P0 | Valid |
 
 ### Classes and Inheritance
 
@@ -93,6 +94,12 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 |---|------|------------|----------|--------|
 | 26 | `err-syntax-basic.pike` | Basic syntax errors: missing semicolons, unmatched braces | P0 | Error |
 
+### AutoDoc Documentation
+
+| # | File | Feature(s) | Priority | Status |
+|---|------|------------|----------|--------|
+| 36 | `autodoc-documented.pike` | `//!` doc comments, AutoDoc XML extraction, documented class + function | P0 | Valid |
+
 ### Modifier Combinations
 
 | # | File | Feature(s) | Priority | Status |
@@ -133,7 +140,7 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 
 | Category | Count | Valid | Error |
 |----------|-------|-------|-------|
-| Basic types | 3 | 3 | 0 |
+| Basic types | 4 | 4 | 0 |
 | Classes | 5 | 5 | 0 |
 | Functions | 4 | 4 | 0 |
 | Imports | 2 | 2 | 0 |
@@ -146,7 +153,8 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 | Stdlib | 1 | 1 | 0 |
 | Preprocessor | 1 | 1 | 0 |
 | Enums/consts | 1 | 1 | 0 |
-| **Total** | **35** | **23** | **12** |
+| AutoDoc | 1 | 1 | 0 |
+| **Total** | **37** | **25** | **12** |
 
 ## Planned but Not Yet Created (P1/P2)
 

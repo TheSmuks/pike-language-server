@@ -130,7 +130,7 @@ export function listCorpusFiles(): string[] {
 }
 
 export function getRunnerOptionsForFile(filename: string): RunnerOptions {
-  const base: RunnerOptions = { strict: true };
+  const base: RunnerOptions = { strict: false };
   const extra = CROSS_FILE_FLAGS[filename];
   return extra ? { ...base, ...extra } : base;
 }

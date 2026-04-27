@@ -95,15 +95,21 @@ int main(int argc, array(string) argv) {
   }
 
   // Extract AutoDoc (best-effort via pike -x extract_autodoc)
+  // extract_autodoc prepends ./ to its output path, so we must
+  // pass a relative path and construct xml_path accordingly.
   mixed autodoc = Val.null;
   mixed ad_err = catch {
-    // extract_autodoc writes to <filepath>.xml in current dir
-    string xml_path = filepath + ".xml";
-    string stamp_path = filepath + ".xml.stamp";
+    string rel = filepath;
+    string cwd = getcwd();
+    if (has_prefix(filepath, cwd + "/")) {
+      rel = filepath[sizeof(cwd) + 1..];
+    }
+    string xml_path = "./" + rel + ".xml";
+    string stamp_path = "./" + rel + ".xml.stamp";
     // Clean up any stale artifacts
     rm(xml_path);
     rm(stamp_path);
-    Process.run(({"pike", "-x", "extract_autodoc", filepath}));
+    Process.run(({"pike", "-x", "extract_autodoc", rel}));
     if (file_stat(xml_path)) {
       string raw = Stdio.read_file(xml_path);
       if (raw && sizeof(String.trim_all_whites(raw)) > 0) {

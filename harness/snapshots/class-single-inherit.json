@@ -1,30 +1,30 @@
 {
-  "file": "corpus/files/class-single-inherit.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
+      "category": "unused_variable",
+      "line": 62,
+      "message": "Unused local variable desc.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
       "line": 63,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable desc."
+      "message": "Unused local variable name.",
+      "severity": "warning"
     },
     {
-      "line": 64,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable name."
-    },
-    {
-      "line": 67,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable gd_desc."
+      "line": 66,
+      "message": "Unused local variable gd_desc.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/class-single-inherit.pike",
+  "pike_version": "8.0.1116"
 }

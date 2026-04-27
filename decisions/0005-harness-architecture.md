@@ -59,10 +59,21 @@ A single Pike script that:
 
 **Invocation:** `pike introspect.pike [--strict] [--module-path <path>] <file.pike>`
 
-- `--strict`: prepend `#pragma strict_types` to the source before compilation
+- `--strict`: prepend `#pragma strict_types` to the source before compilation (only if not already present)
 - `--module-path <path>`: add to `-M` module path for cross-file resolution
 - The script always emits JSON to stdout, even on compilation failure
 - stderr is captured separately (for any Pike runtime errors in the introspection script itself)
+
+### Strict vs Non-Strict Mode
+
+The harness handles both strict and non-strict compilation:
+
+- **Strict files** (e.g., `basic-types.pike`): contain `#pragma strict_types` in their source. The `--strict` flag is a no-op for these files because the pragma is already present. The runner defaults to `strict: false` — the pragma in the source drives the behavior.
+- **Non-strict files** (e.g., `basic-nonstrict.pike`): do not contain `#pragma strict_types`. Without the flag, Pike compiles in lenient mode where type errors are silently accepted and unused-variable warnings are suppressed.
+
+The runner's `getRunnerOptionsForFile` defaults to `strict: false`. Files that need strict mode must declare `#pragma strict_types` in their source. This ensures the snapshot metadata (`compilation.strict_types`) accurately reflects what the runner requested, not what the source contains.
+
+Behavioral difference verified: `basic-nonstrict.pike` produces 5 diagnostics without strict mode vs 9 with strict mode (the strict version adds 4 "Unused local variable" warnings).
 
 ### Layer 2: TypeScript Test Runner
 
@@ -140,3 +151,17 @@ What Phase 1's harness provides:
 - Snapshots are committed to git. They are test artifacts, not generated files.
 - The Pike introspection script is a critical piece of infrastructure — bugs in it propagate to all downstream tests.
 - Canaries are the safety net for the harness. If canaries fail, the harness itself is broken, not pike.
+
+## Deferred Items
+
+### Cross-file invocation: manifest-driven metadata (Phase 4 prerequisite)
+
+Phase 1 special-cases cross-file invocation by filename (`CROSS_FILE_FLAGS` in `runner.ts`). Two files need custom flags:
+- `cross-lib-consumer.pike` → `includePath: "."`
+- `cross-lib-user.pike` → `modulePath: "."`
+
+This approach does not scale. Phase 4's corpus will have significantly more cross-file tests, and the filename-based detection will multiply into unmaintainable special cases.
+
+**Phase 4 entry checkpoint requirement:** Replace `CROSS_FILE_FLAGS` with per-file metadata from `corpus/manifest.md` (or a separate `corpus/corpus.json` config file). Each corpus entry that requires cross-file flags must declare them in the manifest. The runner reads this metadata instead of hardcoding filenames.
+
+This work must be complete before Phase 4 entry is approved.

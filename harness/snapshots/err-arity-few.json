@@ -1,46 +1,46 @@
 {
-  "file": "corpus/files/err-arity-few.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 20,
-      "severity": "error",
+      "actual_type": "function(string, string : string)",
       "category": "wrong_arity",
-      "message": "Too few arguments to greet (got 1).",
       "expected_type": "string",
-      "actual_type": "function(string, string : string)"
+      "line": 19,
+      "message": "Too few arguments to greet (got 1).",
+      "severity": "error"
     },
     {
-      "line": 20,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable s."
+      "line": 19,
+      "message": "Unused local variable s.",
+      "severity": "warning"
     },
     {
-      "line": 23,
-      "severity": "error",
+      "actual_type": "function(int, int : int)",
       "category": "wrong_arity",
-      "message": "Too few arguments to add (got 0).",
       "expected_type": "int",
-      "actual_type": "function(int, int : int)"
+      "line": 22,
+      "message": "Too few arguments to add (got 0).",
+      "severity": "error"
     },
     {
-      "line": 23,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable n."
+      "line": 22,
+      "message": "Unused local variable n.",
+      "severity": "warning"
     },
     {
-      "line": 26,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable ok."
+      "line": 25,
+      "message": "Unused local variable ok.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-arity-few.pike",
+  "pike_version": "8.0.1116"
 }

@@ -1,34 +1,34 @@
 {
-  "file": "corpus/files/err-type-assign.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 13,
-      "severity": "error",
+      "actual_type": "string(32..116)",
       "category": "type_mismatch",
-      "message": "Bad type in assignment.",
       "expected_type": "int",
-      "actual_type": "string(32..116)"
-    },
-    {
-      "line": 15,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable s."
-    },
-    {
-      "line": 19,
-      "severity": "error",
-      "category": "type_mismatch",
+      "line": 12,
       "message": "Bad type in assignment.",
+      "severity": "error"
+    },
+    {
+      "category": "unused_variable",
+      "line": 14,
+      "message": "Unused local variable s.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "array(string(97..98))",
+      "category": "type_mismatch",
       "expected_type": "array(int)",
-      "actual_type": "array(string(97..98))"
+      "line": 18,
+      "message": "Bad type in assignment.",
+      "severity": "error"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-type-assign.pike",
+  "pike_version": "8.0.1116"
 }

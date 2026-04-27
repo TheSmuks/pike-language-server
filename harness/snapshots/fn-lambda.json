@@ -1,54 +1,54 @@
 {
-  "file": "corpus/files/fn-lambda.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 18,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable add_offset."
+      "line": 17,
+      "message": "Unused local variable add_offset.",
+      "severity": "warning"
     },
     {
-      "line": 23,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable logger."
+      "line": 22,
+      "message": "Unused local variable logger.",
+      "severity": "warning"
     },
     {
-      "line": 27,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable squares."
+      "line": 26,
+      "message": "Unused local variable squares.",
+      "severity": "warning"
     },
     {
-      "line": 32,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable compare_len."
+      "line": 31,
+      "message": "Unused local variable compare_len.",
+      "severity": "warning"
     },
     {
-      "line": 42,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable msg."
+      "line": 41,
+      "message": "Unused local variable msg.",
+      "severity": "warning"
     },
     {
+      "category": "unused_variable",
+      "line": 49,
+      "message": "Unused local variable c1.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
       "line": 50,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable c1."
-    },
-    {
-      "line": 51,
-      "severity": "warning",
-      "category": "unused_variable",
-      "message": "Unused local variable c2."
+      "message": "Unused local variable c2.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/fn-lambda.pike",
+  "pike_version": "8.0.1116"
 }

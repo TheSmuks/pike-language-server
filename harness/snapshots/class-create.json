@@ -1,24 +1,24 @@
 {
-  "file": "corpus/files/class-create.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 58,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable info."
+      "line": 57,
+      "message": "Unused local variable info.",
+      "severity": "warning"
     },
     {
-      "line": 61,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable n."
+      "line": 60,
+      "message": "Unused local variable n.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/class-create.pike",
+  "pike_version": "8.0.1116"
 }

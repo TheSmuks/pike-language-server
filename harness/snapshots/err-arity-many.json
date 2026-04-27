@@ -1,39 +1,39 @@
 {
-  "file": "corpus/files/err-arity-many.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 24,
-      "severity": "error",
+      "actual_type": "string(100..119)",
       "category": "wrong_arity",
+      "line": 23,
       "message": "Too many arguments to greet (expected 1 arguments).",
-      "actual_type": "string(100..119)"
+      "severity": "error"
     },
     {
-      "line": 27,
-      "severity": "error",
+      "actual_type": "int(3..3)",
       "category": "wrong_arity",
+      "line": 26,
       "message": "Too many arguments to add (expected 2 arguments).",
-      "actual_type": "int(3..3)"
+      "severity": "error"
     },
     {
-      "line": 30,
-      "severity": "error",
+      "actual_type": "int(2..2)",
       "category": "wrong_arity",
+      "line": 29,
       "message": "Too many arguments to Foo (expected 1 arguments).",
-      "actual_type": "int(2..2)"
+      "severity": "error"
     },
     {
-      "line": 30,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable f."
+      "line": 29,
+      "message": "Unused local variable f.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-arity-many.pike",
+  "pike_version": "8.0.1116"
 }

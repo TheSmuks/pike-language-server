@@ -1,48 +1,48 @@
 {
-  "file": "corpus/files/fn-types.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 29,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable i."
+      "line": 28,
+      "message": "Unused local variable i.",
+      "severity": "warning"
     },
     {
-      "line": 41,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable sum."
+      "line": 40,
+      "message": "Unused local variable sum.",
+      "severity": "warning"
     },
     {
-      "line": 43,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable len."
+      "line": 42,
+      "message": "Unused local variable len.",
+      "severity": "warning"
     },
     {
-      "line": 47,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable result."
+      "line": 46,
+      "message": "Unused local variable result.",
+      "severity": "warning"
     },
     {
-      "line": 50,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable doubled."
+      "line": 49,
+      "message": "Unused local variable doubled.",
+      "severity": "warning"
     },
     {
-      "line": 53,
-      "severity": "warning",
       "category": "unused_variable",
-      "message": "Unused local variable sub."
+      "line": 52,
+      "message": "Unused local variable sub.",
+      "severity": "warning"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/fn-types.pike",
+  "pike_version": "8.0.1116"
 }

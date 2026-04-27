@@ -77,10 +77,10 @@ describe("error corpus files", () => {
 
     const typeMismatches = byCategory(result, "type_mismatch");
     expect(typeMismatches.length).toBeGreaterThanOrEqual(2);
-    // Actual lines from Pike introspection (verified empirically)
+    // Lines from Pike without --strict (source has #pragma strict_types already)
     const lines = typeMismatches.map((d) => d.line);
-    expect(lines).toContain(13);
-    expect(lines).toContain(19);
+    expect(lines).toContain(12);
+    expect(lines).toContain(18);
   });
 
   test("err-undef-var.pike produces undefined_identifier diagnostics", async () => {

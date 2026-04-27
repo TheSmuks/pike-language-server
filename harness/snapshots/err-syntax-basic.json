@@ -1,48 +1,48 @@
 {
-  "file": "corpus/files/err-syntax-basic.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 1,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [
     {
-      "line": 16,
-      "severity": "error",
       "category": "syntax_error",
-      "message": "syntax error, unexpected '}', expecting TOK_LEX_EOF or ';'"
+      "line": 15,
+      "message": "syntax error, unexpected '}', expecting TOK_LEX_EOF or ';'",
+      "severity": "error"
     },
     {
-      "line": 16,
-      "severity": "error",
       "category": "unknown",
-      "message": "Missing ';'."
+      "line": 15,
+      "message": "Missing ';'.",
+      "severity": "error"
     },
     {
-      "line": 21,
-      "severity": "error",
       "category": "unknown",
-      "message": "return is a reserved word."
+      "line": 20,
+      "message": "return is a reserved word.",
+      "severity": "error"
     },
     {
-      "line": 21,
-      "severity": "error",
       "category": "syntax_error",
-      "message": "syntax error, unexpected TOK_NUMBER"
+      "line": 20,
+      "message": "syntax error, unexpected TOK_NUMBER",
+      "severity": "error"
     },
     {
+      "category": "unknown",
+      "line": 20,
+      "message": "Missing ')'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
       "line": 21,
-      "severity": "error",
-      "category": "unknown",
-      "message": "Missing ')'."
-    },
-    {
-      "line": 22,
-      "severity": "error",
-      "category": "unknown",
-      "message": "Missing ';'."
+      "message": "Missing ';'.",
+      "severity": "error"
     }
   ],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/err-syntax-basic.pike",
+  "pike_version": "8.0.1116"
 }

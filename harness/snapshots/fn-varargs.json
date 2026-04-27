@@ -1,11 +1,11 @@
 {
-  "file": "corpus/files/fn-varargs.pike",
-  "pike_version": "8.0.1116",
+  "autodoc": null,
   "compilation": {
     "exit_code": 0,
-    "strict_types": true
+    "strict_types": false
   },
   "diagnostics": [],
-  "autodoc": null,
-  "error": null
+  "error": null,
+  "file": "corpus/files/fn-varargs.pike",
+  "pike_version": "8.0.1116"
 }

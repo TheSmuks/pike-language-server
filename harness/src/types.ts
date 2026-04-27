@@ -1,6 +1,10 @@
 /**
  * Types for the Pike introspection harness.
  * Mirrors the JSON schema produced by harness/introspect.pike.
+ *
+ * IntrospectionResult is intentionally extensible — Phase 3+ will add
+ * `symbols`, `types`, and other fields. The snapshot canonicalizer
+ * and diff logic are generic and handle any top-level field.
  */
 
 export interface Diagnostic {
@@ -17,6 +21,11 @@ export interface CompilationResult {
   strict_types: boolean;
 }
 
+/**
+ * Core fields from the Pike introspection script.
+ * Additional fields may be added by future phases (symbols, types, etc.)
+ * and will be handled by the generic snapshot infrastructure.
+ */
 export interface IntrospectionResult {
   file: string;
   pike_version: string;
@@ -24,6 +33,10 @@ export interface IntrospectionResult {
   diagnostics: Diagnostic[];
   autodoc: string | null;
   error: string | null;
+  // Future phases will add:
+  // symbols?: SymbolInfo[];
+  // types?: TypeResolution[];
+  // [key: string]: unknown;  // Generic extensibility
 }
 
 export interface SnapshotDiff {
