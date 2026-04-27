@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 3: Per-file Symbol Table** — Complete. Phase 4 entry pending review.
+**Phase 4: Cross-File Resolution** — Complete.
 
 
 
@@ -12,7 +12,7 @@
 | Phase 1: Test Harness | **Complete (verified)** | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
 | Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
-| Phase 4: Cross-file Resolution | Pending | Phase 3 complete | Cross-file navigation, workspace index |
+| Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | Pending | Phase 4 complete | Diagnostics and hover from pike oracle |
 | Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
 
@@ -98,6 +98,52 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 4. Documented strict/non-strict handling in decision 0005.
 
 ## Completed Phase History
+### Phase 4: Cross-File Resolution (2026-04-27)
+
+**Deliverables:**
+- `server/src/features/moduleResolver.ts` — Pike's module resolution algorithm (~394 lines)
+- `server/src/features/workspaceIndex.ts` — In-memory per-file symbol table index (~484 lines)
+- `server/src/server.ts` — Updated: WorkspaceIndex integration, cross-file definition/references
+- `corpus/corpus.json` — Manifest-driven per-file compilation metadata
+- `harness/src/runner.ts` — Updated: manifest reader, shared snapshotNameForFile helper
+- `tests/lsp/moduleResolver.test.ts` — 21 ModuleResolver tests
+- `tests/lsp/workspaceIndex.test.ts` — 15 WorkspaceIndex tests
+- `tests/lsp/crossFile.test.ts` — 12 cross-file definition/reference/invalidation tests
+- `decisions/0010-cross-file-resolution.md` — Cross-file resolution architecture
+- 14 new corpus files covering cross-file patterns
+
+**ModuleResolver:**
+- Resolves module paths: Stdio.File, cross_import_a, cross_pmod_dir.helpers
+- Resolves inherit paths: string literal, identifier, dot-path, relative (.Foo)
+- Resolves import paths: Stdio, cross_pmod_dir
+- #pike version-aware search paths
+- Priority: .pmod directory > .pmod file > .pike file
+- Hyphen-to-underscore normalization
+- Caching with per-query invalidation
+
+**WorkspaceIndex:**
+- Per-file symbol table storage with forward/reverse dependency graphs
+- Invalidation propagation: file change → dependents invalidated
+- ModificationSource tracking (didOpen, didChange, didChangeWatchedFiles, etc.)
+- Cross-file definition resolution through inherit/import chains
+- Cross-file references across workspace files
+
+**Cross-file patterns tested:**
+- Simple cross-file inherit (string literal)
+- Inherit with rename (alias)
+- Three-file inherit chain
+- Module import (.pmod file)
+- Directory module (.pmod/ with module.pmod)
+- Stdlib module resolution
+- #pike 7.8 version directive detection
+- Incremental update and invalidation
+
+**Test suite:** 830 tests, 0 failures, 7359 assertions
+- Phase 1-3 tests: 782 (regression suite)
+- Phase 4 ModuleResolver tests: 21
+- Phase 4 WorkspaceIndex tests: 15
+- Phase 4 cross-file tests: 12
+
 ### Phase 3: Per-file Symbol Table (2026-04-27) — Verified
 
 **Deliverables:**
@@ -215,7 +261,7 @@ Five verification items resolved:
 
 ## Deferred Items
 
-- [ ] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** The current `CROSS_FILE_FLAGS` hardcoded map in `runner.ts` does not scale. Before Phase 4 entry, the runner must read per-file flags (module-path, include-path) from corpus manifest metadata. See `decisions/0005-harness-architecture.md` §Deferred Items.
+- [x] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** Done in Phase 4. `corpus/corpus.json` replaces `CROSS_FILE_FLAGS`. Runner reads per-file compilation flags from manifest.
 - [ ] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Layer-2 tests deferred from Phase 2. The integration test stubs exist at `tests/integration/` but require extension packaging (esbuild, VSIX) before they can run. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
 

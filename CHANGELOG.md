@@ -43,6 +43,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - snapshot.ts: type-safe generic diff (getField helper, no unsafe casts)
 
+## Phase 4: Cross-File Resolution - 2026-04-27
+
+### Added
+
+- ModuleResolver: Pike's module resolution algorithm in TypeScript
+  - Module path resolution: Stdio.File, cross_import_a, cross_pmod_dir.helpers
+  - Inherit path resolution: string literal, identifier, dot-path, relative (.Foo)
+  - Import path resolution: import Stdio, import cross_pmod_dir
+  - #pike version-aware search paths (e.g., #pike 7.8)
+  - Priority: .pmod directory > .pmod file > .pike file
+  - Hyphen-to-underscore normalization (Pike naming convention)
+  - Caching with per-query invalidation
+- WorkspaceIndex: in-memory per-file symbol table index
+  - Forward dependency graph (inherit/import targets)
+  - Reverse dependency graph (dependents) for invalidation
+  - Invalidation propagation: file change → dependents invalidated
+  - ModificationSource tracking (gopls pattern)
+  - Content hashing for cache validity
+  - #pike version detection from parse tree
+- Cross-file definition: resolve definitions across files through inherit/import chains
+- Cross-file references: find references to symbols across workspace files
+- Server integration: WorkspaceIndex replaces per-document cache
+- Manifest-driven metadata: corpus/corpus.json replaces hardcoded CROSS_FILE_FLAGS
+- import_decl now collected as declaration alongside inherit_decl
+- Decision 0010: Cross-file resolution architecture (workspace model, index, module resolution, invalidation)
+- 14 new cross-file corpus files covering inherit chains, import, pmod directories, stdlib, compat
+
+### Testing
+
+- ModuleResolver tests: 21 tests (module, inherit, import, #pike version, path detection)
+- WorkspaceIndex tests: 15 tests (indexing, dependencies, invalidation, version detection)
+- Cross-file definition/reference tests: 12 tests (simple inherit, rename, chain, import, incremental update)
+- Total test suite: 830 tests, 7359 assertions, 0 failures
+
 ## Phase 3: Per-file Symbol Table - 2026-04-27
 
 ### Added

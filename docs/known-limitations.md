@@ -41,3 +41,35 @@ When `catch { ... }` is used as the RHS of a local declaration assignment (`mixe
 **LSP impact**: Block scoping works for `if`/`for`/`foreach` (explicit handlers) but not for `while`/`switch`/`do-while`. Variables declared inside these blocks currently leak to the enclosing scope.
 
 **Workaround**: Add per-construct handlers similar to `collectIfStatement` for each remaining block-scoped statement type.
+
+## Cross-File Resolution Limitations (Phase 4)
+
+### No .so binary module resolution
+
+The ModuleResolver skips `.so` (compiled C module) files. System modules that are pure C (e.g., `_Stdio`, `__builtin`) cannot be resolved by path lookup. This affects completion and go-to-definition for low-level system types.
+
+**Mitigation**: Most commonly used stdlib modules (Stdio, Array, Mapping, etc.) are implemented in Pike (.pmod files) and resolve correctly. Pure C modules could be handled in a future phase via pike-ai-kb or a pre-built system module map.
+
+### No joinnode multi-path merge
+
+Pike's `joinnode` class merges symbols from multiple search paths when the same module name exists in multiple locations. The LSP uses first-match-wins instead. If a workspace contains a module with the same name as a system module, the workspace version takes precedence.
+
+**Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
+
+### No transitive invalidation
+
+When file A changes, the LSP invalidates A and its direct dependents (files that inherit/import A). It does NOT transitively invalidate files that depend on dependents. For example, if B inherits A and C inherits B, changing A invalidates B but not C.
+
+**Impact**: Low. C's symbol table references B's members, which are correct after B is re-indexed. C only sees stale state if it directly references A's symbols without going through B.
+
+### Import resolution is scoped to file-system paths
+
+Import resolution searches workspace and system module paths. It does not query Pike at runtime. Dynamic module behavior (modules that register symbols at compile time) is not captured.
+
+**Impact**: Low for standard Pike code. Dynamic modules are rare in user workspaces.
+
+### .pmod directory contents not individually introspected
+
+The harness lists `.pmod` directories as opaque modules, not recursing into their files. Directory modules are tested via consumer files (e.g., `cross-pmod-user.pike`), not by introspecting individual files inside the directory.
+
+**Impact**: The harness verifies that consumers correctly use directory module symbols, which is the meaningful test.
