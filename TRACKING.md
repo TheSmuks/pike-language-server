@@ -2,82 +2,100 @@
 
 ## Current Phase
 
-**Phase 0: Investigation** — Complete (verified). Phase 1 entry pending review.
+**Phase 1: Test Harness Scaffolding** — Complete. Phase 2 entry pending review.
 
 ## Phase Status
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
-| Phase 0: Investigation | **Complete (verified)** | Repo created, template read, pike-ai-kb reachable | docs/pike-interface.md, docs/existing-tooling.md, corpus/manifest.md, 3+ decision documents |
-| Phase 1: Test Harness Scaffolding | Pending | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
+| Phase 0: Investigation | Complete (verified) | Repo created, template read, pike-ai-kb reachable | docs, corpus, 4 decision documents |
+| Phase 1: Test Harness | **Complete** | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
 | Phase 2: VSCode Extension + Tree-sitter | Pending | Phase 1 complete | Extension installs, documentSymbol works |
 | Phase 3: Per-file Symbol Table | Pending | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | Pending | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | Pending | Phase 4 complete | Diagnostics and hover from pike oracle |
 | Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
 
-## Phase 0 Exit Checkpoint — Verified
+## Phase 1 Exit Checkpoint — Verified
+
+### Exit Criteria
+
+- [x] **harness/ directory with harness code** — introspect.pike + TypeScript runner + snapshot manager
+- [x] **harness/snapshots/ with ground-truth for every corpus file** — 35/35 snapshots
+- [x] **harness verify produces zero diffs** — `bun run harness:verify` → "All 35 snapshots verified"
+- [x] **5-10 canary tests, hand-verified, running in CI** — 11 canary tests across 4 categories
+- [x] **Decision 0004 expanded with CompilationHandler finding** — includes cross-version caveat
+- [x] **All five phase 1 tests pass:**
+  - [x] Every corpus file has a snapshot (35/35)
+  - [x] All canaries pass (11/11)
+  - [x] Two consecutive runs produce identical output (3/3 deterministic files)
+  - [x] Modifying a corpus file produces a diff (mutation detection works)
+  - [x] Deliberately breaking harness makes canaries fail (removing snapshot → fail, breaking script → 5/11 fail)
+
+### Test Suite Summary
+
+```
+52 tests, 0 failures, 468 assertions, 15 seconds
+- harness.test.ts: 41 tests (coverage, ground truth, determinism, mutation, schema)
+- canary.test.ts: 11 tests (valid files, error files, deliberately broken, structure)
+```
 
 ### Deliverables
 
-- [x] `docs/pike-interface.md` — 382 lines, 10+ sections, specific examples from live testing. **Updated with §3b (CompilationHandler), §3c (AutoDoc), §3d (error format stability).**
-- [x] `docs/existing-tooling.md` — 145 lines, 12 entries documented with source URLs
-- [x] `corpus/manifest.md` — 35 committed files (23 valid, 12 error), 21 planned P1/P2 entries
-- [x] `corpus/files/` — **35 files** covering 13 language feature categories, all verified against pike
-- [x] `decisions/0001-pike-as-oracle.md` — pike as oracle, alternatives considered
-- [x] `decisions/0002-tier-3-scope.md` — tier-3 scope with precise type-resolution boundary (revised)
-- [x] `decisions/0003-pike-ai-kb-integration.md` — pike-ai-kb usage strategy with fallback
-- [x] `decisions/0004-structured-diagnostics.md` — CompilationHandler + AutoDoc discovery
+| Component | Path | Lines | Purpose |
+|-----------|------|-------|---------|
+| Pike introspection script | `harness/introspect.pike` | ~120 | CompilationHandler + AutoDoc → JSON |
+| TypeScript types | `harness/src/types.ts` | ~30 | IntrospectionResult, Diagnostic interfaces |
+| TypeScript runner | `harness/src/runner.ts` | ~170 | Subprocess invocation, CLI modes |
+| Snapshot manager | `harness/src/snapshot.ts` | ~130 | Read/write/diff with canonical ordering |
+| Harness tests | `harness/__tests__/harness.test.ts` | ~155 | 41 tests |
+| Canary tests | `harness/__tests__/canary.test.ts` | ~170 | 11 hand-verified tests |
+| Ground-truth snapshots | `harness/snapshots/` | 35 files | JSON from Pike 8.0.1116 |
+| Harness architecture | `decisions/0005-harness-architecture.md` | ~120 | Design decision |
 
-### Verification Checks (2026-04-26)
+### Key Decisions
 
-**Check 1: Class-member typing boundary — Corrected.**
-- Decision 0002 was revised to include a precise three-source type-resolution boundary table
-- Sources: A (pike runtime), B (AutoDoc), C (source parser)
-- Gap explicitly stated: undocumented object members require source parsing only
-- Harness now knows what ground truth to capture per feature
+- **Decision 0005**: Harness architecture — two-layer system (Pike script + TypeScript runner), canonical JSON for stable comparison, 11 canaries as integrity checks.
 
-**Check 2: Structured output investigation — New finding.**
-- `compile_string(source, filename, handler)` with custom `CompilationHandler` captures structured diagnostics (file, line, message) — no stderr parsing needed
-- `Tools.AutoDoc.PikeExtractor` extracts type information as XML for documented members
-- `Standards.JSON.encode` enables JSON output from Pike scripts
-- Error format stability: `CompilationHandler` is documented stable API; only Pike 8.0.1116 available for testing; error message strings unchanged across 8.0.x series
-- **This changes the harness design**: use CompilationHandler instead of stderr parsing
-- Decision 0004 created to document this discovery
+### Design Decisions for Verification Review
 
-**Check 3: Corpus size — Corrected.**
-- Expanded from 19 to 35 files (target was 30-50)
-- 23 valid / 12 error = 34% error rate (appropriate for harness robustness)
-- 2 cross-file pairs (cross-lib-base + consumer, cross_lib_module + user)
-- All files verified against pike 8.0.1116
-- Manifest updated to reflect actual committed files
+These are assumptions the harness makes that verification should scrutinize:
 
-### Key Findings
+1. **Diagnostics are the only ground truth captured.** The harness does not capture symbol information or type resolution from pike — only compile-time diagnostics and AutoDoc XML. Phase 2+ will add new ground-truth sources.
 
-1. **Pike has structured output via CompilationHandler** — `compile_string` with custom handler produces structured diagnostics. No stderr parsing needed for the harness.
-2. **AutoDoc extracts type information as XML** — covers documented members with full generic types. Only works for `//!` documented members.
-3. **Diagnostics are fully achievable** via handler JSON output.
-4. **Type information is partially available.** Three sources: runtime typeof() (locals/expressions), AutoDoc (documented members), source parsing (all declarations).
-5. **pike-ai-kb covers stdlib completion, hover, and syntax checking.** Does not cover cross-file navigation or project symbol indexing.
-6. **The `typeof() → mixed` limitation for object members is the fundamental constraint.** Source parsing is the only option for undocumented members.
-7. **Project is feasible as scoped.** No pause required at Phase 0.
+2. **AutoDoc is captured but not compared structurally.** AutoDoc XML is stored in snapshots as a raw string. The harness does not parse or diff the XML — it only checks that the string matches. Future phases may need structured AutoDoc comparison.
+
+3. **Cross-file test invocation is special-cased.** `cross-lib-user.pike` needs `--module-path .` and `cross-lib-consumer.pike` needs `--include-path .`. The runner detects these by filename pattern. This is fragile — if more cross-file tests are added, the detection needs updating.
+
+4. **Snapshot format stability depends on Pike's JSON output ordering.** Pike's `Standards.JSON.encode` uses mapping iteration order, which is not guaranteed stable. The TypeScript canonicalizer reorders keys for comparison. If Pike changes its mapping implementation, the canonicalizer should still work — but this was a source of test flakiness during development.
+
+5. **The `--strict` flag is used for all files.** This means `#pragma strict_types` is prepended to files that already have it (no-op, since the script checks for existing pragma). Files without it get strict checking even if they weren't designed for it — but all corpus files were written with strict_types awareness.
 
 ## Completed Phase History
+
+### Phase 1: Test Harness Scaffolding (2026-04-26)
+
+**Deliverables:**
+- `harness/introspect.pike` — Pike introspection script (CompilationHandler + AutoDoc)
+- `harness/src/` — TypeScript runner, snapshot manager, types
+- `harness/__tests__/` — 52 tests (41 harness + 11 canary)
+- `harness/snapshots/` — 35 ground-truth JSON snapshots
+- `decisions/0005-harness-architecture.md` — Harness architecture decision
+- `package.json`, `tsconfig.json` — Project setup with bun + TypeScript 5.x
 
 ### Phase 0: Investigation (2026-04-26)
 
 **Deliverables:**
-- `docs/pike-interface.md` — Pike 8.0.1116 interface reference (10+ sections)
+- `docs/pike-interface.md` — Pike 8.0.1116 interface reference
 - `docs/existing-tooling.md` — Survey of 12 existing Pike tooling projects
 - `corpus/manifest.md` — 35 committed + 21 planned corpus entries
 - `corpus/files/` — 35 Pike files covering 13 language feature categories
-- `decisions/0001-pike-as-oracle.md` — Use pike as oracle for diagnostics and types
-- `decisions/0002-tier-3-scope.md` — Tier-3 scope with precise type-resolution boundary
-- `decisions/0003-pike-ai-kb-integration.md` — pike-ai-kb usage strategy with fallback
-- `decisions/0004-structured-diagnostics.md` — CompilationHandler + AutoDoc structured output
-
-**Decisions:** 4 ADRs
+- `decisions/0001` through `decisions/0004` — Architecture decisions
 
 ## Open Issues
 
 None.
+
+## CI Improvement Tracking
+
+- [ ] Add cross-version Pike snapshot testing hook (from decision 0004 caveat)
