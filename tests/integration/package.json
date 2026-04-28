@@ -1,8 +1,9 @@
 {
   "name": "pike-language-server-integration-tests",
   "private": true,
+  "type": "module",
   "scripts": {
-    "test": "bun test"
+    "test": "bun run run-tests.ts"
   },
   "devDependencies": {
     "@vscode/test-electron": "^2.4.1"

@@ -1,0 +1,25 @@
+{
+  "name": "pike-language-server",
+  "displayName": "Pike Language Server",
+  "description": "Tier-3 LSP implementation for Pike",
+  "version": "0.1.0-alpha",
+  "publisher": "thesmuks",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages"],
+  "activationEvents": [
+    "onLanguage:pike"
+  ],
+  "main": "./client/dist/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "pike",
+        "extensions": [".pike", ".pmod", ".mmod"],
+        "aliases": ["Pike"]
+      }
+    ]
+  },
+  "dependencies": {}
+}

@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
+    "build:extension": "esbuild server/src/server.ts --bundle --outfile=server/dist/server.js --platform=node --target=node22 --format=esm --sourcemap --external:vscode --external:vscode-* && esbuild client/extension.ts --bundle --outfile=client/dist/extension.js --platform=node --target=node22 --format=esm --sourcemap --external:vscode",
     "test": "bun test",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
+    "test:integration": "cd tests/integration && npm test",
     "typecheck": "tsc --noEmit",
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
     "harness:verify": "bun run harness/src/runner.ts --verify",
@@ -15,9 +17,10 @@
     "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
     "@types/bun": "latest",
-    "@types/vscode": "^1.85.0"
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.7.0"
   },
   "dependencies": {
     "vscode-jsonrpc": "^8.2.1",
