@@ -2,7 +2,8 @@
 
 ## Current Phase
 
-**Phase 5: Types and Diagnostics** — AutoDoc redesigned with PikeExtractor XML boundary. 915 tests passing.
+**Phase 6: Refinement** — P1 completion and P2 real-time diagnostics delivered. 959 tests passing.
+
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
@@ -12,7 +13,7 @@
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
-| Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
+| Phase 6+: Refinement | **In progress** | Phase 5 complete | Completion, real-time diagnostics, rename, code actions |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -96,6 +97,20 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 4. Documented strict/non-strict handling in decision 0005.
 
 ## Completed Phase History
+
+## Phase 6 Progress
+
+### P1: Completion — Complete
+Decision 0012. Tree-sitter-first completion provider. 19 tests.
+
+### P2: Real-time Diagnostics — Complete
+Decision 0013. DiagnosticManager with debouncing, supersession, priority, cross-file propagation. 15 tests.
+
+### P3: Rename — Deferred (Decision 0002 §12)
+Pike has no rename support. Tree-sitter-only rename limited to same-file. Deferral stands.
+
+### P4: Code Actions — Deferred (Decision 0002 §13)
+
 ### Phase 4: Cross-File Resolution (2026-04-27)
 
 **Deliverables:**
