@@ -2,7 +2,7 @@
  * Pike Language Server — main entry point.
  *
  * Communicates over stdio. Provides documentSymbol, definition, references,
- * hover, completion, and diagnostics (parse errors + Pike compilation).
+ * hover, completion, rename, and diagnostics (parse errors + Pike compilation).
  *
  * Architecture:
  * - `createPikeServer(connection)` — wires all handlers onto a connection.
@@ -41,6 +41,12 @@ import {
 import { getCompletions, type CompletionContext } from "./features/completion";
 import { resolveType, resolveMemberAccess, type TypeResolutionContext } from "./features/typeResolver";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
+import {
+  getRenameLocations,
+  buildWorkspaceEdit,
+  prepareRename,
+  validateRenameName,
+} from "./features/rename";
 import { PikeWorker } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
 import {
@@ -192,6 +198,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         documentSymbolProvider: true,
         definitionProvider: true,
         referencesProvider: true,
+        renameProvider: { prepareProvider: true },
         hoverProvider: true,
         completionProvider: {
           triggerCharacters: ['.', '>', ':'],
@@ -326,6 +333,54 @@ export function createPikeServer(connection: Connection): PikeServer {
       },
     }));
   });
+
+  // -----------------------------------------------------------------------
+  // textDocument/rename (decision 0016)
+  // -----------------------------------------------------------------------
+
+  connection.onPrepareRename(async (params) => {
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const result = prepareRename(table, params.position.line, params.position.character);
+    if (!result) return null;
+
+    return {
+      range: {
+        start: { line: result.line, character: result.character },
+        end: { line: result.line, character: result.character + result.length },
+      },
+      placeholder: result.name,
+    };
+  });
+
+  connection.onRenameRequest(async (params) => {
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    // Validate new name
+    const validationError = validateRenameName(params.newName);
+    if (validationError) {
+      // LSP spec: return null or throw. We return null — client shows error UI.
+      return null;
+    }
+
+    const renameResult = getRenameLocations(
+      table,
+      params.textDocument.uri,
+      params.position.line,
+      params.position.character,
+      index,
+    );
+
+    if (!renameResult) return null;
+
+    // Don't rename if old name equals new name
+    if (renameResult.oldName === params.newName) return null;
+
+    return buildWorkspaceEdit(renameResult.locations, params.newName);
+  });
+
 
   // -----------------------------------------------------------------------
   // textDocument/hover (decision 0002: three-source routing)
