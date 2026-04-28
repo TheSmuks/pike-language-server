@@ -60,6 +60,50 @@ interface PikeCacheEntry {
 
 const pikeCache = new Map<string, PikeCacheEntry>();
 
+// LRU cache eviction: 50 entries max, 25MB total
+const CACHE_MAX_ENTRIES = 50;
+const CACHE_MAX_BYTES = 25 * 1024 * 1024;
+let cacheTotalBytes = 0;
+
+function cacheSet(uri: string, entry: PikeCacheEntry): void {
+  // Evict if at capacity
+  if (pikeCache.size >= CACHE_MAX_ENTRIES) {
+    cacheEvictOldest();
+  }
+  // Check byte budget
+  const entrySize = JSON.stringify(entry).length;
+  while (cacheTotalBytes + entrySize > CACHE_MAX_BYTES && pikeCache.size > 0) {
+    cacheEvictOldest();
+  }
+  // Remove old entry if overwriting
+  const old = pikeCache.get(uri);
+  if (old) cacheTotalBytes -= JSON.stringify(old).length;
+  pikeCache.set(uri, entry);
+  cacheTotalBytes += entrySize;
+}
+
+function cacheEvictOldest(): void {
+  // Find the oldest entry (smallest timestamp)
+  let oldestKey: string | null = null;
+  let oldestTime = Infinity;
+  for (const [key, entry] of pikeCache) {
+    if (entry.timestamp < oldestTime) {
+      oldestTime = entry.timestamp;
+      oldestKey = key;
+    }
+  }
+  if (oldestKey) {
+    const old = pikeCache.get(oldestKey);
+    if (old) cacheTotalBytes -= JSON.stringify(old).length;
+    pikeCache.delete(oldestKey);
+  }
+}
+
+function cacheClear(): void {
+  pikeCache.clear();
+  cacheTotalBytes = 0;
+}
+
 function computeContentHash(source: string): string {
   return createHash("sha256").update(source).digest("hex");
 }
@@ -433,8 +477,24 @@ export function createPikeServer(connection: Connection): PikeServer {
     try {
       const result = await worker.diagnose(source, filepath);
       
-      // Update cache
-      pikeCache.set(doc.uri, {
+      // Handle timeout — surface as diagnostic to user
+      if (result.timedOut) {
+        const parseDiags = getParseDiagnostics(parse(source));
+        const timeoutDiag: Diagnostic = {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          severity: DiagnosticSeverity.Warning,
+          source: "pike-lsp",
+          message: "Compilation timed out, will retry on next save.",
+        };
+        connection.sendDiagnostics({
+          uri: doc.uri,
+          diagnostics: [...parseDiags, timeoutDiag],
+        });
+        return;
+      }
+
+      // Update cache (LRU eviction handled by cacheSet)
+      cacheSet(doc.uri, {
         contentHash,
         diagnostics: result.diagnostics,
         timestamp: Date.now(),
@@ -496,7 +556,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   connection.onShutdown(() => {
     index.clear();
-    pikeCache.clear();
+    cacheClear();
     worker.stop();
   });
 

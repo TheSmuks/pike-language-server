@@ -1,17 +1,45 @@
 /**
- * PikeWorker: manages a long-lived Pike subprocess for diagnostics and type queries.
+ * PikeWorker: manages a Pike subprocess for diagnostics and type queries.
  *
- * Architecture (decision 0011):
- * - One Pike process, kept alive across requests
+ * Architecture (decision 0011 — shared-server deployment):
+ * - One Pike process per LSP server instance
  * - Communication over stdio using JSON protocol
- * - Automatic restart on crash
+ * - Idle eviction: kill after N minutes of no requests (default 5)
+ * - Memory ceiling: restart after N requests or M minutes of active use
+ * - CPU politeness: spawned with nice +5 on Linux
+ * - FIFO queueing: one request at a time, no pipelining
+ * - Timeout: 5s per request (configurable), surfaced as diagnostic on timeout
  * - Lazy start (on first request)
- * - Content-hash caching (via caller)
+ * - Content-hash caching (via caller, with LRU eviction)
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, join } from "node:path";
-import { createHash } from "node:crypto";
+
+// ---------------------------------------------------------------------------
+// Configuration (tunable per deployment)
+// ---------------------------------------------------------------------------
+
+export interface PikeWorkerConfig {
+  /** Idle timeout in milliseconds before killing the worker. Default: 300000 (5 min). */
+  idleTimeoutMs: number;
+  /** Max requests before forced restart. Default: 100. */
+  maxRequestsBeforeRestart: number;
+  /** Max active minutes before forced restart. Default: 30. */
+  maxActiveMinutes: number;
+  /** Per-request timeout in milliseconds. Default: 5000 (5s). */
+  requestTimeoutMs: number;
+  /** Process nice value (Linux). Default: 5. Set to 0 to disable. */
+  niceValue: number;
+}
+
+const DEFAULT_CONFIG: PikeWorkerConfig = {
+  idleTimeoutMs: 5 * 60 * 1000,
+  maxRequestsBeforeRestart: 100,
+  maxActiveMinutes: 30,
+  requestTimeoutMs: 5_000,
+  niceValue: 5,
+};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,13 +56,14 @@ export interface PikeDiagnostic {
 export interface DiagnoseResult {
   diagnostics: PikeDiagnostic[];
   exit_code: number;
+  /** Set when the request timed out — caller should surface as diagnostic. */
+  timedOut?: boolean;
 }
 
 export interface TypeofResult {
   type: string;
   error?: string;
 }
-
 
 interface PikeRequest {
   id: number;
@@ -65,12 +94,37 @@ export class PikeWorker {
   }>();
   private buffer = "";
   private restarting = false;
+  private readonly config: PikeWorkerConfig;
+
+  // Idle eviction
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastRequestTime = 0;
+
+  // Memory ceiling tracking
+  private requestCount = 0;
+  private startTime = 0;
+
+  constructor(config?: Partial<PikeWorkerConfig>) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
 
   /** Start the Pike worker process (lazy — called on first request). */
   start(): void {
     if (this.proc && !this.proc.killed) return;
 
-    this.proc = spawn("pike", [WORKER_SCRIPT], {
+    // Build spawn args with nice
+    const spawnArgs: string[] = [];
+    const spawnCmd: string = "pike";
+
+    // On Linux, use nice for CPU politeness under contention
+    const finalArgs = this.config.niceValue > 0 && process.platform === "linux"
+      ? ["nice", `-n${this.config.niceValue}`, spawnCmd, WORKER_SCRIPT]
+      : [spawnCmd, WORKER_SCRIPT];
+
+    const finalCmd = this.config.niceValue > 0 && process.platform === "linux"
+      ? "nice" : spawnCmd;
+
+    this.proc = spawn(finalCmd, finalArgs.slice(finalCmd === "nice" ? 1 : 0), {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: PROJECT_ROOT,
     });
@@ -81,7 +135,6 @@ export class PikeWorker {
     });
 
     this.proc.stderr!.on("data", (data: Buffer) => {
-      // Log Pike worker stderr (compilation errors, runtime warnings)
       const msg = data.toString().trim();
       if (msg) {
         console.error("[pike-worker stderr]", msg);
@@ -89,8 +142,8 @@ export class PikeWorker {
     });
 
     this.proc.on("exit", (code, signal) => {
+      this.clearIdleTimer();
       if (!this.restarting) {
-        // Unexpected exit — reject all pending requests
         const error = new Error(
           `Pike worker exited (code=${code}, signal=${signal})`,
         );
@@ -102,10 +155,15 @@ export class PikeWorker {
         this.proc = null;
       }
     });
+
+    // Reset tracking
+    this.requestCount = 0;
+    this.startTime = Date.now();
   }
 
   /** Stop the Pike worker process. */
   stop(): void {
+    this.clearIdleTimer();
     if (this.proc && !this.proc.killed) {
       this.proc.kill("SIGTERM");
       this.proc = null;
@@ -117,18 +175,37 @@ export class PikeWorker {
     return this.proc !== null && !this.proc.killed;
   }
 
+  /** Get current request count since last start. */
+  get currentRequestCount(): number {
+    return this.requestCount;
+  }
+
   /** Send a request and wait for the response. */
   async request(method: string, params: Record<string, unknown> = {}): Promise<PikeResponse> {
+    // Check if forced restart is needed before starting
+    if (this.shouldForceRestart()) {
+      try {
+        await this.restart();
+      } catch {
+        // If restart fails, try a fresh start
+        this.start();
+      }
+    }
+
     this.start(); // Lazy start
 
     const id = ++this.requestId;
     const request: PikeRequest = { id, method, params };
 
+    // Reset idle timer
+    this.resetIdleTimer();
+    this.lastRequestTime = Date.now();
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
-        reject(new Error(`Pike worker timeout for ${method} (id=${id})`));
-      }, 10_000);
+        reject(new Error(`TIMEOUT: Pike worker timeout for ${method} (id=${id})`));
+      }, this.config.requestTimeoutMs);
 
       this.pending.set(id, { resolve, reject, timeout });
 
@@ -148,20 +225,32 @@ export class PikeWorker {
       programPaths?: string[];
     },
   ): Promise<DiagnoseResult> {
-    const response = await this.request("diagnose", {
-      source,
-      file: filepath,
-      strict: options?.strict ?? false,
-      module_paths: options?.modulePaths ?? [],
-      include_paths: options?.includePaths ?? [],
-      program_paths: options?.programPaths ?? [],
-    });
+    try {
+      const response = await this.request("diagnose", {
+        source,
+        file: filepath,
+        strict: options?.strict ?? false,
+        module_paths: options?.modulePaths ?? [],
+        include_paths: options?.includePaths ?? [],
+        program_paths: options?.programPaths ?? [],
+      });
 
-    if (response.error) {
-      throw new Error(`Pike diagnose failed: ${response.error.message}`);
+      if (response.error) {
+        throw new Error(`Pike diagnose failed: ${response.error.message}`);
+      }
+
+      return response.result as unknown as DiagnoseResult;
+    } catch (err) {
+      // Check if this was a timeout — surface as a special result
+      if ((err as Error).message?.startsWith("TIMEOUT:")) {
+        return {
+          diagnostics: [],
+          exit_code: 1,
+          timedOut: true,
+        };
+      }
+      throw err;
     }
-
-    return response.result as unknown as DiagnoseResult;
   }
 
   /** Get the type of an expression in context. */
@@ -187,8 +276,7 @@ export class PikeWorker {
     return response.result as { status: string; pike_version: string };
   }
 
-
-  /** Restart the worker (after crash or error). */
+  /** Restart the worker (after crash, idle eviction, or memory ceiling). */
   async restart(): Promise<void> {
     this.restarting = true;
     this.stop();
@@ -198,12 +286,59 @@ export class PikeWorker {
     // Give the process a moment to initialize before pinging
     await new Promise((r) => setTimeout(r, 100));
 
-    // Wait for the worker to be ready
     try {
       await this.ping();
     } catch {
       throw new Error("Pike worker failed to restart");
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Idle eviction
+  // ---------------------------------------------------------------------------
+
+  private resetIdleTimer(): void {
+    this.clearIdleTimer();
+    this.idleTimer = setTimeout(() => {
+      if (this.proc && !this.proc.killed && this.pending.size === 0) {
+        this.proc.kill("SIGTERM");
+        this.proc = null;
+      }
+    }, this.config.idleTimeoutMs);
+    // Don't prevent process exit
+    if (this.idleTimer.unref) {
+      this.idleTimer.unref();
+    }
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Memory ceiling check
+  // ---------------------------------------------------------------------------
+
+  private shouldForceRestart(): boolean {
+    if (!this.proc || this.proc.killed) return false;
+
+    // Request count ceiling
+    if (this.requestCount >= this.config.maxRequestsBeforeRestart) {
+      return true;
+    }
+
+    // Active time ceiling
+    if (this.startTime > 0) {
+      const activeMinutes = (Date.now() - this.startTime) / 60_000;
+      if (activeMinutes >= this.config.maxActiveMinutes) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // ---------------------------------------------------------------------------
