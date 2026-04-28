@@ -260,42 +260,136 @@ The deployment environment is SSH on a shared Linux server with limited resource
 
 Hover never involves the Pike worker — it's parse-tree driven (autodoc) or tree-sitter driven (fallback). Hover latency is sub-millisecond.
 
-## 7. AutoDoc Routing (revised from extract_autodoc approach)
+## 7. AutoDoc Routing (revised — PikeExtractor XML boundary)
 
-### Decision: Parse-tree driven for workspace, pike-ai-kb for stdlib
+### Decision: PikeExtractor for source-to-XML, TypeScript for XML-to-markdown
 
-**Chosen**: Extract //! comments directly from source text. No subprocess calls. No file I/O.
+The right boundary is XML, not Pike comments. The TypeScript code never parses `//!` syntax directly; it parses the XML that PikeExtractor produces.
+
+**Why this boundary:**
+- No reimplementation of Pike's autodoc comment syntax in TypeScript
+- Bounded input format (XML conforming to the documented schema)
+- Existing XML parsing libraries handle the parsing layer
+- The transform from XML to markdown is a switch statement on element names
+
+**Chosen:**
+1. Source-to-XML happens in Pike worker via `Tools.AutoDoc.PikeExtractor.extractNamespace()`
+2. XML-to-markdown happens in TypeScript renderer (`autodocRenderer.ts`)
+3. Stdlib index is pre-computed at build time using the same renderer
+4. The renderer covers every tag in the autodoc.xml spec
 
 **Alternatives rejected:**
 
 | Alternative | Cost |
 |-------------|------|
-| `pike -x extract_autodoc` per hover request | File I/O + subprocess per request defeats worker architecture. Deployment-hostile on shared servers. |
-| XML parsing of extract_autodoc output | Adds XML parser dependency for data already available in source. |
+| Parse `//!` comments in TypeScript | Reimplements Pike's comment syntax parser. Fragile — two sources of truth for the same format. |
+| `pike -x extract_autodoc` per hover request | File I/O + subprocess per request. Deployment-hostile on shared servers. |
+| XML parsing of extract_autodoc output without renderer | Correct but incomplete — need a renderer anyway for hover. |
+
+### Architecture
+
+```
+                    Pike Worker
+                    ┌─────────────────────────────────┐
+  Source text ────▶ │ PikeExtractor.extractNamespace() │
+                    └──────────┬──────────────────────┘
+                               │ XML string
+                               ▼
+                    ┌─────────────────────────────────┐
+                    │ Content-hash cache (LRU, 50/25MB)│
+                    └──────────┬──────────────────────┘
+                               │
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+         Cache Hit        Cache Miss      No Docs
+              │                │                │
+              │         Pike worker          Tree-sitter
+              │         .autodoc()            fallback
+              │                │                │
+              ▼                ▼                ▼
+        ┌──────────────────────────────┐   Bare
+        │  autodocRenderer.ts          │   signature
+        │  parseXml → findDocGroup →   │
+        │  renderAutodoc → Markdown    │
+        └──────────────────────────────┘
+```
 
 ### Hover routing (final)
 
 ```
-Resolve identifier → declaration (existing phase 3+4)
-  → Has //! comments? → Parse-tree AutoDoc → markdown signature
-  → Is stdlib? → pike-ai-kb pike-signature → markdown signature (Phase 6)
-  → Neither → Tree-sitter declared type → bare signature
+Resolve identifier → declaration (phase 3+4)
+  → Workspace declaration:
+    → Get file's XML from cache (or worker.autodoc on cache miss)
+    → Walk XML to find the declaration's docgroup
+    → Render that element to MarkupContent
+    → If no documentation in XML: fall through to bare declared type
+  → Stdlib declaration:
+    → Hash-table lookup in stdlib index (pre-computed at build time)
+    → If found: return cached MarkupContent
+    → If not found: fall back to pike-ai-kb query (Phase 6+)
+  → Fall-through: tree-sitter's bare declared type
 ```
+
+### Pike worker autodoc method
+
+- **Input:** source string
+- **Output:** XML string from `PikeExtractor.extractNamespace(source, filename, "predef", FLAG_KEEP_GOING)`
+- **Caching:** Content-hash keyed, same LRU eviction as diagnostics
+- **Cold path:** One worker call per file content change (~0.5ms)
+- **Hot path:** Cache hit + XML walk + markdown render (~0.3ms per symbol)
+
+### TypeScript renderer
+
+- **Module:** `src/features/autodocRenderer.ts`
+- **Input:** Parsed XML (DOM-like tree) + symbol name
+- **Output:** `RenderedAutodoc { markdown: string, signature: string }`
+- **Every tag** in the autodoc.xml schema has a case in the switch:
+  - Structural: `<method>`, `<param>`, `<returntype>`, `<variable>`, `<class>`, `<module>` → markdown headers/lists
+  - Inline: `<p>`, `<code>`, `<i>`, `<b>` → standard markdown equivalents
+  - Block: `<mapping>`, `<array>`, `<dl>` → markdown tables/lists
+  - Examples: `<example>` → markdown code blocks
+  - Cross-references: `<ref>` → plain text in v1, LSP locations in v2
+  - Rare markup: plain text fallback that preserves content
+
+### Stdlib index
+
+- **Build:** `scripts/build-stdlib-index.ts` runs PikeExtractor over Pike's stdlib
+- **Output:** `server/src/data/stdlib-autodoc.json` — hash table keyed on FQN
+- **Size:** 1.39 MB, 5,471 symbols
+- **Limitation:** C-level builtins (`write`, `arrayp`, etc.) are not in Pike source files — not indexed
+- **Resolution:** pike-ai-kb `pike-signature` tool as fallback for unindexed stdlib symbols (Phase 6+)
 
 ### AutoDoc coverage on corpus
 
-| File | Declarations | AutoDoc | Coverage |
-|------|-------------|---------|----------|
-| autodoc-documented.pike | 7 | 7 | 100% |
-| All other corpus files | 538 | 0 | 0% |
-| **Total** | **545** | **7** | **1%** |
+| File | Documented docgroups |
+|------|---------------------|
+| autodoc-documented.pike | 4 |
+| compat-pike78.pike | 1 |
+| All other corpus files | 0 |
+| **Total** | **5** |
 
-The corpus is designed to exercise language features, not documentation. Production codebases with //! conventions will have higher coverage.
+The corpus is designed to exercise language features, not documentation. Production codebases with `//!` conventions will have higher coverage.
+
+### Performance
+
+| Operation | Cold | Warm |
+|-----------|------|------|
+| PikeExtractor (in-process) | 0.58ms | 0.48ms |
+| XML rendering (TypeScript) | 0.29ms/symbol | 0.29ms/symbol |
+| Stdlib lookup (hash table) | — | <0.01ms |
+| Worker restart | 150ms | — |
+
+Hover hot path (cache hit): ~0.3ms per symbol. No Pike worker involvement.
+Hover cold path (cache miss): worker.autodoc() ~0.5ms + render ~0.3ms = ~0.8ms total.
 
 ## Consequences (updated)
 
-- The Pike worker subprocess is for diagnostics only. Hover routes around it entirely.
-- AutoDoc extraction is parse-tree driven: no subprocess, no file I/O, sub-millisecond.
+- The Pike worker handles both diagnostics AND autodoc extraction (cached).
+- Hover never calls the worker on the hot path — it reads from the XML cache.
+- AutoDoc extraction is PikeExtractor-driven: source-to-XML in Pike, XML-to-markdown in TypeScript.
+- The XML boundary means TypeScript never reimplements Pike's `//!` syntax.
+- Stdlib index ships with the LSP at build time — 5,471 symbols, 1.39 MB.
+- C-level builtins are not indexed — pike-ai-kb provides fallback in Phase 6+.
 - Shared-server policies compound correctly: N users × idle eviction = only active workers consume memory.
 - The LRU cache cap prevents per-user memory growth across multiple VSCode windows.
 - Timeout-as-diagnostic surfaces information to users rather than silently dropping results.

@@ -8,11 +8,11 @@
 //   Response: {"id": 1, "result": {...}}
 //   Error:    {"id": 1, "error": {"code": -1, "message": "..."}}
 //
-// Methods:
 //   diagnose  — Compile a file and return diagnostics
 //   typeof    — Evaluate typeof() on an expression
 //   signature — Get function/method signature
 //   ping      — Health check
+//   autodoc   — Extract AutoDoc XML from Pike source
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -194,6 +194,25 @@ mapping handle_typeof(mapping params) {
 }
 
 // ---------------------------------------------------------------------------
+// Method: autodoc
+// ---------------------------------------------------------------------------
+
+mapping handle_autodoc(mapping params) {
+  string source = params["source"] || "";
+  string filepath = params["file"] || "<autodoc>";
+
+  mixed err = catch {
+    object ns = Tools.AutoDoc.PikeExtractor.extractNamespace(
+      source, filepath, "predef", Tools.AutoDoc.FLAG_KEEP_GOING);
+    if (ns) {
+      return ([ "xml": ns->xml() ]);
+    }
+    return ([ "xml": "" ]);
+  };
+
+  return ([ "xml": "", "error": sprintf("autodoc failed: %O", err) ]);
+}
+
 // Main loop: read requests from stdin, dispatch, write responses
 // ---------------------------------------------------------------------------
 
@@ -223,6 +242,9 @@ int main() {
         response = ([ "id": id, "result": result ]);
       } else if (method == "typeof") {
         mapping result = handle_typeof(params);
+        response = ([ "id": id, "result": result ]);
+      } else if (method == "autodoc") {
+        mapping result = handle_autodoc(params);
         response = ([ "id": id, "result": result ]);
       } else {
         response = ([

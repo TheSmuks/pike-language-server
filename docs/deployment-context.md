@@ -74,11 +74,21 @@ Cache limits are in `server.ts`:
 
 Cold path = first request after idle/launch. Warm path = steady state.
 
+### Diagnostics
+
 | Operation | Cold | Warm p50 | Warm p95 |
 |-----------|------|----------|----------|
 | Diagnose | 49.5ms | 0.13ms | 0.32ms |
-| Hover (autodoc) | 0.005ms | 0.005ms | 0.005ms |
 | Worker restart | 150ms | — | — |
 
-Hover never involves the Pike worker. Hover latency is constant regardless of
-server load or compilation state.
+### Hover (AutoDoc)
+
+| Operation | Cold | Warm |
+|-----------|------|------|
+| PikeExtractor (in-process) | 0.58ms | 0.48ms |
+| XML rendering (TypeScript) | 0.29ms/symbol | 0.29ms/symbol |
+| Stdlib lookup (hash table) | — | <0.01ms |
+| Hover hot path (cache hit) | — | ~0.3ms/symbol |
+
+Hover hot path never calls the Pike worker — it reads from the XML cache.
+Hover cold path calls worker.autodoc() once per file content change, then caches.

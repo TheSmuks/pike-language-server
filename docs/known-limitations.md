@@ -98,20 +98,22 @@ Hover uses tree-sitter declarations for type information. The `typeof` method in
 
 **Impact**: Hover shows declared types, not inferred types. A variable declared as `mixed` shows `mixed` even if Pike would infer a more specific type.
 
-### Stdlib hover not connected to Pike signatures
+### Stdlib hover: C-level builtins not indexed
 
-The three-tier hover routing (decision 0011 §7) reserves stdlib symbol hover for pike-ai-kb's `pike-signature` tool, but this path is not yet implemented. Stdlib symbols return null hover.
+The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
 
-**Phase to fix**: Phase 6 (pike-ai-kb integration).
+**Fallback path**: pike-ai-kb `pike-signature` tool (Phase 6+).
 
-### File watching requires editor support
+**Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
 
-The server relies entirely on editor-pushed change notifications (didChange, didSave, didClose). No server-side file watchers are used. This is correct for VSCode-over-SSH but may not work with LSP clients that don't push change notifications.
+### AutoDoc hover requires save for cache population
 
-**Impact**: Low for the primary deployment target (VSCode Remote-SSH).
+AutoDoc XML is extracted on `didSave` and cached. Before the first save of a file, hover falls through to tree-sitter (Tier 3). This means new files opened but never saved will not have AutoDoc hover.
+
+**Rationale**: The Pike worker extracts AutoDoc from source text (no file I/O needed), but the extraction is triggered by the save pipeline. Adding extraction on `didOpen` would require worker startup on file open.
 
 ### AutoDoc hover coverage depends on codebase conventions
 
-AutoDoc hover only works for symbols with `//!` doc comments. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
+AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
 
-**Corpus coverage**: 7/545 declarations (1%) — only `autodoc-documented.pike` has //! comments.
+**Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.

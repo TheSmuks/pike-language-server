@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 5: Types and Diagnostics** — Exit verification complete. Ready for Phase 6 entry.
+**Phase 5: Types and Diagnostics** — AutoDoc redesigned with PikeExtractor XML boundary. 915 tests passing.
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|

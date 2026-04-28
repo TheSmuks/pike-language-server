@@ -5,11 +5,57 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0-alpha] - 2026-04-26
+## Phase 5 AutoDoc Redesign: PikeExtractor XML Boundary - 2026-04-27
+
+### Changed
+
+- **AutoDoc routing redesigned** from //! comment parsing to XML-based pipeline:
+  - Source-to-XML: PikeExtractor.extractNamespace() in Pike worker (cached)
+  - XML-to-markdown: TypeScript renderer (autodocRenderer.ts)
+  - Every tag in the autodoc.xml schema has a render path
+  - Boundary at XML: TypeScript never reimplements Pike's //! syntax
+- **autodocParser.ts removed** — replaced by autodocRenderer.ts
+- **Hover handler rewritten** — three-tier routing:
+  - Tier 1: Workspace AutoDoc — XML cache → findDocGroup → renderAutodoc → Markdown
+  - Tier 2: Stdlib — hash-table lookup in pre-computed index
+  - Tier 3: Tree-sitter — bare declared type
 
 ### Added
 
-- Project initialized from ai-project-template.
+- `harness/worker.pike`: handle_autodoc method (PikeExtractor API, no temp files)
+- `pikeWorker.ts`: autodoc() method, AutodocResult type
+- `autodocRenderer.ts`: XML parser + walk + render to Markdown (covers all schema tags)
+  - parseXml: lightweight XML parser for PikeExtractor output
+  - findDocGroup/findClass: XML tree walker for symbol lookup
+  - renderAutodoc: XML → MarkupContent for LSP hover
+  - Handles: method, variable, class, param, returns, throws, note, deprecated,
+    seealso, example, mapping, array, dl, multiset, inline markup (b, i, tt, code, ref)
+- `server/src/data/stdlib-autodoc.json`: Pre-computed stdlib index
+  - 5,471 symbols, 1.39 MB
+  - Generated from Pike 8.0.1116 stdlib via `scripts/build-stdlib-index.ts`
+- `scripts/build-stdlib-index.ts`: Build script for stdlib AutoDoc index
+- `autodocCache` in server.ts: Content-hash keyed XML cache with LRU eviction
+- `PikeServer.autodocCache` exposed for testing
+
+### Performance
+
+| Operation | Cold | Warm |
+|-----------|------|------|
+| PikeExtractor (in-process) | 0.58ms | 0.48ms |
+| XML rendering (TypeScript) | 0.29ms/symbol | 0.29ms/symbol |
+| Stdlib lookup (hash table) | — | <0.01ms |
+| Hover hot path (cache hit) | — | ~0.3ms/symbol |
+
+### Testing
+
+- autodocRenderer tests: 43 tests (parser, finder, per-tag rendering, corpus snapshot, complex types)
+- Hover tests: 9 tests (Tier 1 cache hit, Tier 1 cache miss, Tier 2 stdlib, Tier 3 fallback, range, isolation)
+- Total test suite: 915 pass, 1 todo, 0 fail, 7569 assertions
+
+### Fixed
+
+- worker.pike: spawn command double-command bug fixed (nice + Pike args)
+- worker.pike: requestCount tracking added for memory ceiling check
 
 ## Phase 5: Types and Diagnostics - 2026-04-28
 

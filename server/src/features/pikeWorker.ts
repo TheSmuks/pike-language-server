@@ -60,6 +60,11 @@ export interface DiagnoseResult {
   timedOut?: boolean;
 }
 
+export interface AutodocResult {
+  xml: string;
+  error?: string;
+}
+
 export interface TypeofResult {
   type: string;
   error?: string;
@@ -258,6 +263,20 @@ export class PikeWorker {
       }
       throw err;
     }
+  }
+
+  /** Extract AutoDoc XML from Pike source. */
+  async autodoc(source: string, file?: string): Promise<AutodocResult> {
+    const response = await this.request("autodoc", {
+      source,
+      file: file ?? "<autodoc>",
+    });
+
+    if (response.error) {
+      return { xml: "", error: response.error.message };
+    }
+
+    return response.result as unknown as AutodocResult;
   }
 
   /** Get the type of an expression in context. */

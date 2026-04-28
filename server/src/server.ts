@@ -38,11 +38,8 @@ import {
 } from "./features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
-import {
-  extractAutodocLines,
-  parseAutodocLines,
-  renderAutodocMarkdown,
-} from "./features/autodocParser";
+import { renderAutodoc } from "./features/autodocRenderer";
+import stdlibAutodocIndex from "./data/stdlib-autodoc.json";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -59,6 +56,8 @@ interface PikeCacheEntry {
 }
 
 const pikeCache = new Map<string, PikeCacheEntry>();
+
+const autodocCache = new Map<string, { xml: string; hash: string; timestamp: number }>();
 
 // LRU cache eviction: 50 entries max, 25MB total
 const CACHE_MAX_ENTRIES = 50;
@@ -96,11 +95,13 @@ function cacheEvictOldest(): void {
     const old = pikeCache.get(oldestKey);
     if (old) cacheTotalBytes -= JSON.stringify(old).length;
     pikeCache.delete(oldestKey);
+    autodocCache.delete(oldestKey);
   }
 }
 
 function cacheClear(): void {
   pikeCache.clear();
+  autodocCache.clear();
   cacheTotalBytes = 0;
 }
 
@@ -117,6 +118,8 @@ export interface PikeServer {
   documents: TextDocuments<TextDocument>;
   index: WorkspaceIndex;
   worker: PikeWorker;
+  /** AutoDoc XML cache — exposed for testing. Keyed by URI. */
+  autodocCache: Map<string, { xml: string; hash: string; timestamp: number }>;
 }
 
 /**
@@ -306,6 +309,16 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/hover (decision 0002: three-source routing)
   // -----------------------------------------------------------------------
 
+  // -----------------------------------------------------------------------
+  // textDocument/hover (three-tier routing per decision 0011 §7)
+  //
+  // Tier 1: Workspace AutoDoc — XML from PikeExtractor (cached)
+  // Tier 2: Stdlib — pre-computed index (hash lookup)
+  // Tier 3: Tree-sitter — bare declared type
+  // -----------------------------------------------------------------------
+
+  const stdlibIndex = stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>;
+
   connection.onHover(async (params) => {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
@@ -394,19 +407,36 @@ export function createPikeServer(connection: Connection): PikeServer {
     const signature = declLine.trim().replace(/;$/, "");
     const formattedSig = formatSignature(decl.kind, decl.name, signature);
 
-    // Tier 1: Workspace AutoDoc — extract //! comments preceding declaration
-    const autodocLines = extractAutodocLines(lines, decl.range.start.line);
-    const autodoc = parseAutodocLines(autodocLines);
-    if (autodoc) {
-      const markdown = renderAutodocMarkdown(autodoc, formattedSig);
-      return {
-        name: decl.name,
-        signature: formattedSig,
-        documentation: markdown,
-        line: decl.nameRange.start.line,
-        character: decl.nameRange.start.character,
-        isAutodoc: true,
-      };
+    // Tier 1: Workspace AutoDoc — check XML cache, render from XML
+    const cachedAutodoc = autodocCache.get(uri);
+    if (cachedAutodoc?.xml) {
+      const rendered = renderAutodoc(cachedAutodoc.xml, decl.name, formattedSig);
+      if (rendered) {
+        return {
+          name: decl.name,
+          signature: rendered.signature || formattedSig,
+          documentation: rendered.markdown,
+          line: decl.nameRange.start.line,
+          character: decl.nameRange.start.character,
+          isAutodoc: true,
+        };
+      }
+    }
+
+    // Tier 2: Stdlib — hash-table lookup in pre-computed index
+    // Try various FQN patterns: predef.Name, predef.Module.Name, etc.
+    for (const fqn of buildStdlibLookupKeys(decl.name)) {
+      const entry = stdlibIndex[fqn];
+      if (entry) {
+        return {
+          name: decl.name,
+          signature: entry.signature,
+          documentation: entry.markdown,
+          line: decl.nameRange.start.line,
+          character: decl.nameRange.start.character,
+          isAutodoc: true,
+        };
+      }
     }
 
     // Tier 3: Fall through to tree-sitter declared type
@@ -419,27 +449,20 @@ export function createPikeServer(connection: Connection): PikeServer {
     };
   }
 
-  /** Format a declaration kind + name + signature into hover text. */
-  function formatSignature(kind: string, name: string, rawSignature: string): string {
-    switch (kind) {
-      case "function":
-        // Extract just the function declaration line
-        return rawSignature;
-      case "class":
-        return rawSignature;
-      case "variable":
-      case "parameter":
-        return rawSignature;
-      case "constant":
-        return rawSignature;
-      case "inherit":
-        return rawSignature;
-      default:
-        return rawSignature;
-    }
+  /** Build candidate lookup keys for stdlib index. */
+  function buildStdlibLookupKeys(name: string): string[] {
+    return [
+      `predef.${name}`,
+      // Could add module-qualified keys in the future when we track
+      // the import context of the symbol
+    ];
   }
 
-  /** Get document source by URI. */
+  /** Format a declaration kind + name + signature into hover text. */
+  function formatSignature(kind: string, name: string, rawSignature: string): string {
+    return rawSignature;
+  }
+
   function getSource(uri: string): string | null {
     const doc = documents.get(uri);
     return doc ? doc.getText() : null;
@@ -504,6 +527,21 @@ export function createPikeServer(connection: Connection): PikeServer {
       const parseDiags = getParseDiagnostics(parse(source));
       const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics);
       connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+
+      // Extract AutoDoc XML alongside diagnostics
+      const autodocHash = computeContentHash(source);
+      const cachedAutodoc = autodocCache.get(doc.uri);
+      if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
+        worker.autodoc(source, filepath).then(result => {
+          if (result.xml) {
+            if (autodocCache.size >= CACHE_MAX_ENTRIES) {
+              cacheEvictOldest();
+            }
+            autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
+          }
+        }).catch(() => {}); // Non-critical: autodoc failure doesn't block
+      }
+
     } catch (err) {
       connection.console.error(
         `Pike diagnose failed for ${doc.uri}: ${(err as Error).message}`,
@@ -602,7 +640,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.listen(connection);
 
-  return { connection, documents, index, worker };
+  return { connection, documents, index, worker, autodocCache };
 }
 
 // ---------------------------------------------------------------------------
