@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 1,016 tests, 0 failures, 8,785 assertions, 27 files
+- **Test suite:** 1,043 tests, 0 failures, 8,861 assertions, 28 files
 
 ## Phase History
 
@@ -22,6 +22,7 @@
 | 5: Types and Diagnostics | Exit verified | 917 | PikeWorker, diagnostics, three-tier hover, shared-server hardening |
 | 6: Refinement | **Complete (verified)** | 979 | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred. |
 | 7: Type Resolution + Import Tracking | **Complete** | 1,016 | resolveType/resolveMemberAccess, DeclKind 'import', 37 new tests |
+| 8: Rename | **In progress** | 1,043 | textDocument/rename, textDocument/prepareRename, 27 new tests |
 
 ## LSP Feature Completeness
 
@@ -33,7 +34,7 @@
 | hover | **Implemented** | Three-tier: workspace AutoDoc → stdlib index (5,505) → predef builtins (283) → tree-sitter fallback |
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
-| rename | **Not implemented** | Deferred: type inference + import tracking now delivered (Phase 7). Remaining gap: untyped variable inference + cross-file scope verification. Re-evaluate for Phase 8. |
+| rename | **Implemented** | textDocument/rename + prepareRename. Scope-aware, cross-file via WorkspaceIndex. Keyword validation. Decision 0016. |
 | code actions | **Not implemented** | Decision 0002 §13: out of scope |
 | formatting | Not planned | — |
 | signature help | Not planned | — |
@@ -99,7 +100,7 @@
 - 4 integration tests
 - Harness: 37 ground-truth snapshots, 11 canary tests
 
-## Decisions (16 ADRs)
+## Decisions (17 ADRs)
 
 | # | Title | Key Decision |
 |---|-------|-------------|
@@ -119,6 +120,7 @@
 | 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
 | 0014 | Type Resolution | Pure-function resolveType/resolveMemberAccess, depth-limited chain, no worker |
 | 0015 | Import Tracking | DeclKind 'import', extractDependencies for imports, cross-file propagation |
+| 0016 | Rename | textDocument/rename via existing reference resolution, scope-aware, keyword validation |
 ## Corpus
 
 37 committed files across 14 categories, 21 planned:

@@ -2,6 +2,13 @@
 
 ### Added
 
+- `textDocument/rename` — workspace-wide symbol renaming with cross-file support (decision 0016)
+  - Scope-aware: only renames the same symbol, not homonyms in different scopes
+  - Cross-file: uses WorkspaceIndex to enumerate references across dependent files
+  - `textDocument/prepareRename` returns range and placeholder for rename UI
+  - Pike keyword validation prevents renaming to reserved words
+  - Renames variables, parameters, functions, classes, and class members
+
 - Type resolution system (decision 0014)
   - `server/src/features/typeResolver.ts` — pure-function `resolveType()` and `resolveMemberAccess()`
   - Resolution chain: same-file class → qualified type → cross-file via inherit/import → stdlib
