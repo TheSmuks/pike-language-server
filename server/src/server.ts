@@ -377,8 +377,10 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/didSave — Pike diagnostic pipeline (decision 0011)
   // -----------------------------------------------------------------------
 
-  if (typeof connection.onDidSave === "function") {
-    connection.onDidSave(async (params) => { 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof (connection as any).onDidSave === "function") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (connection as any).onDidSave(async (params: { textDocument: { uri: string } }) => {
       const doc = documents.get(params.textDocument.uri);
       if (!doc) return;
 
