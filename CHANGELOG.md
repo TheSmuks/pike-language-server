@@ -16,6 +16,7 @@
 - `resolveTypeMembers()` in completion.ts replaced with `resolveMemberAccess()` calls
   - Cross-file member completion via workspace index
   - Inherited member completion through type resolution
+- Stdlib qualified type resolution: `resolveQualifiedType` falls through to stdlib index for types like `Stdio.File`
 
 ### Changed
 

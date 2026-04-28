@@ -1,6 +1,6 @@
-# State of the Project — Phase 6 Exit
+# State of the Project — Phase 7 Exit
 
-> Audit date: 2026-04-28. Updated after Phase 6 P2 verification.
+> Audit date: 2026-04-28. Updated after Phase 7 completion.
 
 ## Project Identity
 
@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 979 tests, 0 failures, 8,697 assertions, 24 files
+- **Test suite:** 1,016 tests, 0 failures, 8,785 assertions, 27 files
 
 ## Phase History
 
@@ -21,6 +21,7 @@
 | 4: Cross-file Resolution | Complete | 830 | ModuleResolver, WorkspaceIndex, 48 new tests |
 | 5: Types and Diagnostics | Exit verified | 917 | PikeWorker, diagnostics, three-tier hover, shared-server hardening |
 | 6: Refinement | **Complete (verified)** | 979 | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred. |
+| 7: Type Resolution + Import Tracking | **Complete** | 1,016 | resolveType/resolveMemberAccess, DeclKind 'import', 37 new tests |
 
 ## LSP Feature Completeness
 
@@ -32,7 +33,7 @@
 | hover | **Implemented** | Three-tier: workspace AutoDoc → stdlib index (5,505) → predef builtins (283) → tree-sitter fallback |
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
-| rename | **Not implemented** | Deferred: resolver-driven approach scoped at ~600 LOC but blocked on type inference + import tracking. Re-evaluate after Phase 7+. |
+| rename | **Not implemented** | Deferred: type inference + import tracking now delivered (Phase 7). Remaining gap: untyped variable inference + cross-file scope verification. Re-evaluate for Phase 8. |
 | code actions | **Not implemented** | Decision 0002 §13: out of scope |
 | formatting | Not planned | — |
 | signature help | Not planned | — |
@@ -88,14 +89,14 @@
 ## Test Infrastructure
 
 **Three layers:**
-- Layer 1: Protocol-level (PassThrough transport, in-process) — 1,004 tests
+- Layer 1: Protocol-level (PassThrough transport, in-process) — 1,011 tests
 - Layer 2: VSCode integration (@vscode/test-electron) — 3 tests
 - Layer 3: Manual smoke tests — 3 items
 
-**Test files (26):**
-- 18 LSP protocol test files
+**Test files (27):**
+- 19 LSP protocol test files
 - 4 harness test files (harness, canary, canonicalizer, tree-sitter-symbol)
-- 3 integration tests
+- 4 integration tests
 - Harness: 37 ground-truth snapshots, 11 canary tests
 
 ## Decisions (16 ADRs)
@@ -118,24 +119,6 @@
 | 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
 | 0014 | Type Resolution | Pure-function resolveType/resolveMemberAccess, depth-limited chain, no worker |
 | 0015 | Import Tracking | DeclKind 'import', extractDependencies for imports, cross-file propagation |
-## Decisions (14 ADRs)
-
-| # | Title | Key Decision |
-|---|-------|-------------|
-| 0001 | Pike as Oracle | Use Pike compiler as oracle for diagnostics, types, symbols |
-| 0002 | Tier-3 Scope | Three-source resolution boundary; rename/code actions out of scope |
-| 0003 | pike-ai-kb Integration | MCP tools first, direct invocation fallback |
-| 0004 | Structured Diagnostics | compile_string + custom CompilationHandler, not stderr parsing |
-| 0005 | Harness Architecture | Two-layer: Pike script + TypeScript runner, canonical JSON |
-| 0006 | LSP Server Architecture | stdio transport, tree-sitter WASM, parse-error-recovery |
-| 0007 | Integration Tests | @vscode/test-electron, esbuild packaging |
-| 0008 | Symbol Comparison | Three symbol sources, comparison strategy |
-| 0009 | Symbol Resolution | 10-level scope hierarchy, two-pass build, cache invalidation |
-| 0010 | Cross-File Resolution | Workspace model, ModuleResolver, dependency graph |
-| 0011 | Types, Diagnostics, Hover | Subprocess lifecycle, three-tier hover, shared-server policies |
-| 0012 | Completion | Tree-sitter-first completion, unqualified + dot/arrow/scope access, stdlib prefix index |
-| 0013 | Real-time Diagnostics | Per-file debouncing (500ms), supersession, priority queue, cross-file propagation, three modes |
-| 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
 ## Corpus
 
 37 committed files across 14 categories, 21 planned:
