@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 6: Refinement** — P1 completion and P2 real-time diagnostics delivered. 959 tests passing.
+**Phase 6: Refinement** — Complete (verified). P1 completion, P2 real-time diagnostics delivered. P3 rename deferred. 979 tests passing.
 
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
@@ -13,7 +13,7 @@
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
-| Phase 6+: Refinement | **In progress** | Phase 5 complete | Completion, real-time diagnostics, rename, code actions |
+| Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred (type inference prerequisite). |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -98,18 +98,41 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 
 ## Completed Phase History
 
-## Phase 6 Progress
+## Phase 6 — Complete (Verified)
 
-### P1: Completion — Complete
-Decision 0012. Tree-sitter-first completion provider. 19 tests.
+### P1: Completion
+Decision 0012. Tree-sitter-first completion provider. Three resolution paths (unqualified, dot/arrow, scope). 19 tests.
 
-### P2: Real-time Diagnostics — Complete
+### P2: Real-time Diagnostics
 Decision 0013. DiagnosticManager with debouncing, supersession, priority, cross-file propagation. 15 tests.
 
-### P3: Rename — Deferred (Decision 0002 §12)
-Pike has no rename support. Tree-sitter-only rename limited to same-file. Deferral stands.
+### P3: Rename — Deferred
+Resolver-driven approach scoped at ~600 LOC but depends on arrow/dot access type inference and import dependency tracking, neither of which exist yet. Deferral rationale updated in `decisions/0013-verification.md` §V6.
 
 ### P4: Code Actions — Deferred (Decision 0002 §13)
+
+### Phase 6 Verification (2026-04-28)
+
+**Bugs found and fixed:**
+- `connection.onDidSave` was never registered (dead code). Switched to `documents.onDidSave`.
+- Post-teardown `sendDiagnostics` calls logged errors. Added `disposed` guards.
+
+**Measurements:**
+| Item | Result |
+|------|--------|
+| V1: 50 rapid didChange | ≤ 3 diagnose invocations (target: ≤ 3) |
+| V1: 200ms-gap typing | ≤ 2 diagnose invocations |
+| V2: Hover latency (idle) | < 100ms (tree-sitter only) |
+| V2: Hover latency (during diagnose) | < 100ms (unaffected) |
+| V5: Parse diagnostic latency | ~50ms |
+| V5: Supersession (error+fix) | ≤ 1 Pike diagnose for final content |
+
+**Findings (not bugs):**
+1. Priority queue scope: DiagnosticManager's priority queue controls only its own dispatch. Hover/completion bypass it.
+2. Cross-file propagation: code correct, but dependency graph empty in in-process tests (ModuleResolver needs files on disk). Layer-2 integration test needed.
+3. Rename deferred: resolver-driven approach exists (~600 LOC) but needs type inference + import tracking first.
+
+**Test suite at exit:** 979 tests, 0 failures, 8,697 assertions, 24 files.
 
 ### Phase 4: Cross-File Resolution (2026-04-27)
 
@@ -278,6 +301,8 @@ Five verification items resolved:
 - [x] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** Done. `resolve.pike` introspects cross-file resolution via `master()->resolv()` and `cast_to_program()`. 7 resolution snapshots. 5 oracle tests comparing LSP against Pike.
 - [x] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Done. Extension packaging with esbuild, 3 integration tests running inside VSCode extension host. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
+- [ ] **Rename feature:** Resolver-driven workspace-wide rename scoped at ~600 LOC. Blocked on arrow/dot access type inference and import dependency tracking. Re-evaluate after Phase 7+. See `decisions/0013-verification.md` §V6.
+- [ ] **Cross-file propagation integration test:** `propagateToDependents` code correct but untested with real workspace files (ModuleResolver needs on-disk files). Requires layer-2 VSCode integration test.
 
 ## Oracle Gaps
 

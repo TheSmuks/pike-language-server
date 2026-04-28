@@ -1,6 +1,6 @@
-# State of the Project — Phase 6 Entry
+# State of the Project — Phase 6 Exit
 
-> Audit date: 2026-04-27. Consolidates actual project state across all six phases.
+> Audit date: 2026-04-28. Updated after Phase 6 P2 verification.
 
 ## Project Identity
 
@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 959 tests, 0 failures, 8,674 assertions, 23 files
+- **Test suite:** 979 tests, 0 failures, 8,697 assertions, 24 files
 
 ## Phase History
 
@@ -20,7 +20,7 @@
 | 3: Per-file Symbol Table | Complete (verified) | 614 | go-to-def, find-refs, 10-level scope hierarchy |
 | 4: Cross-file Resolution | Complete | 830 | ModuleResolver, WorkspaceIndex, 48 new tests |
 | 5: Types and Diagnostics | Exit verified | 917 | PikeWorker, diagnostics, three-tier hover, shared-server hardening |
-| 6: Refinement | **In progress** | — | P1: Completion ✓. P2: Real-time diagnostics ✓. P3/P4: Deferred. |
+| 6: Refinement | **Complete (verified)** | 979 | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred. |
 
 ## LSP Feature Completeness
 
@@ -32,7 +32,7 @@
 | hover | **Implemented** | Three-tier: workspace AutoDoc → stdlib index (5,505) → predef builtins (283) → tree-sitter fallback |
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
-| rename | **Not implemented** | Decision 0002 §12: out of scope (Pike has no rename support) |
+| rename | **Not implemented** | Deferred: resolver-driven approach scoped at ~600 LOC but blocked on type inference + import tracking. Re-evaluate after Phase 7+. |
 | code actions | **Not implemented** | Decision 0002 §13: out of scope |
 | formatting | Not planned | — |
 | signature help | Not planned | — |
@@ -88,17 +88,17 @@
 ## Test Infrastructure
 
 **Three layers:**
-- Layer 1: Protocol-level (PassThrough transport, in-process) — 956 tests
+- Layer 1: Protocol-level (PassThrough transport, in-process) — 976 tests
 - Layer 2: VSCode integration (@vscode/test-electron) — 3 tests
 - Layer 3: Manual smoke tests — 3 items
 
-**Test files (23):**
+**Test files (24):**
 - 16 LSP protocol test files
 - 4 harness test files (harness, canary, canonicalizer, tree-sitter-symbol)
 - 3 integration tests
 - Harness: 37 ground-truth snapshots, 11 canary tests
 
-## Decisions (11 ADRs)
+## Decisions (14 ADRs)
 
 | # | Title | Key Decision |
 |---|-------|-------------|
@@ -114,7 +114,8 @@
 | 0010 | Cross-File Resolution | Workspace model, ModuleResolver, dependency graph |
 | 0011 | Types, Diagnostics, Hover | Subprocess lifecycle, three-tier hover, shared-server policies |
 | 0012 | Completion | Tree-sitter-first completion, unqualified + dot/arrow/scope access, stdlib prefix index |
-
+| 0013 | Real-time Diagnostics | Per-file debouncing (500ms), supersession, priority queue, cross-file propagation, three modes |
+| 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
 ## Corpus
 
 37 committed files across 14 categories, 21 planned:
