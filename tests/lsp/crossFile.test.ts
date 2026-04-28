@@ -162,8 +162,8 @@ describe("Cross-file definition — module import", () => {
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();
 
-    // import_decl is stored as kind='inherit' in the symbol table (DECL_KIND_MAP)
-    const importDecl = tableB!.declarations.find(d => d.kind === "inherit");
+    // import_decl is now stored as kind='import' in the symbol table
+    const importDecl = tableB!.declarations.find(d => d.kind === "import");
     expect(importDecl).toBeDefined();
   });
 });

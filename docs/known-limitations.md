@@ -107,6 +107,8 @@ Hover uses tree-sitter declarations for type information. The `typeof` method in
 
 **Impact**: Hover shows declared types, not inferred types. A variable declared as `mixed` shows `mixed` even if Pike would infer a more specific type.
 
+**Phase 7 update**: Arrow/dot access hover now uses `resolveMemberAccess()` to resolve through declared types. Variables with explicit type annotations (`Animal a;`) resolve to class members. Variables typed as `mixed` still show `mixed`.
+
 ### Stdlib hover: C-level builtins not indexed
 
 The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
@@ -128,3 +130,19 @@ AutoDoc XML is extracted on `didSave` and cached. Before the first save of a fil
 AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
 
 **Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.
+
+## Phase 7: Type Resolution Limitations
+
+### Type resolution requires explicit type annotations
+
+Type resolution only works for variables and parameters with explicit type annotations (`Animal a;`). Variables declared without types (`a;`) or typed as `mixed` cannot be resolved to specific classes.
+
+**Impact**: Arrow/dot member completion and go-to-definition only work for explicitly typed variables. This covers the common Pike pattern of `ClassName var;` but misses dynamically typed variables.
+
+### Type resolution is same-file only for direct class lookup
+
+`resolveType()` finds classes in the same file first, then falls through to cross-file resolution and stdlib. But cross-file resolution depends on the WorkspaceIndex having the target file indexed. If the target file hasn't been opened or changed since indexing, the resolution may return null.
+
+### No inference through function return types
+
+If a function returns `Animal`, calling `f()->speak()` cannot resolve `speak` because the return type is not tracked. Only direct declared types on variables and parameters are used.

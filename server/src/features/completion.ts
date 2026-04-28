@@ -24,7 +24,7 @@ import {
   findClassScopeAt,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-
+import { resolveType } from "./typeResolver";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -468,7 +468,7 @@ function completeUnqualified(
   }
 
   // 2. Imported symbols (cross-file)
-  const importDecls = table.declarations.filter(d => d.kind === "inherit");
+  const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
   for (const importDecl of importDecls) {
     const targetUri = ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
     if (!targetUri) continue;
@@ -678,7 +678,7 @@ function completeScopeAccess(
       // Find the inherit declaration
       for (const declId of classScope.declarations) {
         const decl = table.declarations.find(d => d?.id === declId);
-        if (decl && decl.kind === "inherit" && (decl.name === inheritName || decl.alias === inheritName)) {
+        if (decl && (decl.kind === "inherit" || decl.kind === "import") && (decl.name === inheritName || decl.alias === inheritName)) {
           // Resolve to target
           const targetUri = ctx.index.resolveInherit(decl.name, false, ctx.uri);
           if (targetUri) {
@@ -761,6 +761,7 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   typedef: CompletionItemKind.TypeParameter,
   parameter: CompletionItemKind.Variable,
   inherit: CompletionItemKind.Class,
+  import: CompletionItemKind.Module,
 };
 
 /** Primitive Pike types that can never resolve to a class with members. */
@@ -834,21 +835,31 @@ function resolveTypeMembers(
     const typeName = decl.declaredType;
     // Skip primitive types that can never have members
     if (!PRIMITIVE_TYPES.has(typeName)) {
-      // Find a class declaration with this name in the file's symbol table
-      const classDecl = table.declarations.find(d =>
-        d.kind === "class" && d.name === typeName,
-      );
-      if (classDecl) {
-        // Find the class body scope — it's a child scope of the scope
-        // containing the class declaration, with matching range overlap.
-        const classScope = table.scopes.find(s =>
-          s.kind === "class" && s.parentId === classDecl.scopeId &&
-          rangeContains(s.range, classDecl.nameRange.start),
+      // Use typeResolver for same-file, cross-file, and qualified type resolution
+      const result = resolveType(typeName, {
+        table,
+        uri: ctx.uri,
+        index: ctx.index,
+        stdlibIndex: ctx.stdlibIndex,
+      });
+      if (result?.decl.kind === "class") {
+        const ownerTable = result.table;
+        // Find the class body scope — it's a child of the scope containing the class declaration
+        const classScope = ownerTable.scopes.find(s =>
+          s.kind === "class" && s.parentId === result.decl.scopeId &&
+          rangeContains(s.range, result.decl.nameRange.start),
         );
         if (classScope) {
-          const classDecls = getDeclarationsInScope(table, classScope.id);
+          const classDecls = getDeclarationsInScope(ownerTable, classScope.id);
           for (const cd of classDecls) {
             items.push(declToCompletionItem(cd, 5));
+          }
+          // Include inherited members
+          for (const inheritedId of classScope.inheritedScopes) {
+            const inheritedDecls = getDeclarationsInScope(ownerTable, inheritedId);
+            for (const cd of inheritedDecls) {
+              items.push(declToCompletionItem(cd, 5));
+            }
           }
         }
       }
@@ -861,6 +872,7 @@ function resolveTypeMembers(
 function containsDecl(scope: { declarations: number[] }, decl: Declaration): boolean {
   return scope.declarations.includes(decl.id);
 }
+
 
 /** Check if a position is within a range (inclusive start, exclusive end). */
 function rangeContains(range: Range, pos: { line: number; character: number }): boolean {
