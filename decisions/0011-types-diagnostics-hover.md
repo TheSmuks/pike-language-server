@@ -358,6 +358,7 @@ Resolve identifier → declaration (phase 3+4)
 - **Size:** 1.39 MB, 5,471 symbols
 - **Limitation:** C-level builtins (`write`, `arrayp`, etc.) are not in Pike source files — not indexed
 - **Resolution:** pike-ai-kb `pike-signature` tool as fallback for unindexed stdlib symbols (Phase 6+)
+- **Temporary workaround:** `predef-builtin-index.json` (283 symbols) covers C-level builtins via Pike's `_typeof()` output. This index is a stopgap pending [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11), which will add `all_constants()` fallback to `pikeResolvePreamble()`. When that fix ships, evaluate removing the predef index in favor of kb queries.
 
 ### AutoDoc coverage on corpus
 

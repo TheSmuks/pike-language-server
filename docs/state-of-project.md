@@ -129,22 +129,76 @@ The server runs in a shared environment with multiple concurrent users. This con
 2. **Cold-path latency**: 29-58ms for typical stdlib files. Naive real-time on every keystroke would saturate the worker.
 3. **User experience**: Save-only diagnostics feel slow. Completion is the primary UX gap.
 
-### Proposed priority order
+### Risk profile: completion vs. diagnostics
+
+Two competing principles for ordering:
+
+1. **Ship the higher-value thing first**: Completion is the most-requested LSP feature. Users notice its absence immediately. Diagnostics that arrive on save are mildly slow but still useful.
+
+2. **Ship the easier-to-get-right thing first**: Wrong completions are actively harmful — users learn to ignore the completion list and may disable it entirely ("cry wolf" degradation). Diagnostics that show up a second late are still correct when they arrive.
+
+**Assessment:** The risk asymmetry favors diagnostics-first in isolation. However, the "wrong completion" risk is mitigable:
+- Tree-sitter-only completions (local scope, declared types) are structurally correct — they show symbols that actually exist in scope.
+- The failure mode is *missing* completions (not showing a valid option), not *wrong* completions (showing something invalid).
+- Stdlib completions from the pre-built index are authoritative.
+- The Pike worker is not needed for the majority of completion scenarios (see walkthrough below).
+
+Missing completions are annoying but not trust-destroying. Wrong completions destroy trust. The design constraint is: **never suggest something that isn't a real symbol at the cursor position.** Tree-sitter symbol tables enforce this by construction.
+
+### Worker dependency walkthrough for completion
+
+Completion scenarios, ordered by frequency in typical Pike editing:
+
+| # | Scenario | Example | Tree-sitter alone? | Worker needed? | Estimated frequency |
+|---|----------|---------|-------------------|----------------|--------------------:|
+| 1 | Local/param in scope | `int x; x`↓ | Yes — symbol table scope walk | No | 30% |
+| 2 | Class member (declared type) | `Stdio.File f; f->`↓ | Yes — resolve declared type → class scope | No | 15% |
+| 3 | Inherited member | `f->read` (inherited from Stdio.File) | Yes — WorkspaceIndex resolves inherit chain | No | 10% |
+| 4 | Stdlib module member | `Stdio.`↓ | Yes — pre-built stdlib index (5,505 symbols) | No | 15% |
+| 5 | Predef builtin | `write`↓ | Yes — predef-builtin-index.json (283 symbols) | No | 5% |
+| 6 | Cross-file imported symbol | `import Foo; F`↓ | Yes — WorkspaceIndex resolves import | No | 10% |
+| 7 | Return type of stdlib method | `Stdio.read_file("...")->`↓ (string result) | Yes — stdlib index has return types | No | 5% |
+| 8 | Return type of user method (declared) | `int foo() { ... }; foo()`↓ | Yes — declared return type in symbol table | No | 3% |
+| 9 | Return type of user method (inferred/`mixed`) | `mixed bar() { ... }; bar()`↓ | Partial — shows `mixed`, can't enumerate members | Yes, for type narrowing | 5% |
+| 10 | Expression context (mid-expression) | `string s = `↓ | Partial — knows expected type, can filter | Yes, for non-trivial cases | 2% |
+
+**Summary:**
+- **~93% of completions** resolve from tree-sitter + pre-built indices + WorkspaceIndex. No worker dependency.
+- **~7% of completions** (inferred/mixed return types, complex expression context) would benefit from the worker but degrade gracefully (show declared `mixed` or skip member enumeration).
+- The FIFO queueing concern is not a practical problem for completion: the worker path is rare enough that queueing delays won't affect the completion experience.
+
+### Confirmed priority order
 
 | Priority | Feature | Rationale |
 |----------|---------|-----------|
-| **P1** | Completion | Highest user value. Symbol table already supports lookup; needs trigger characters, filtering, and LSP wiring. Latency-sensitive but can use tree-sitter-only results (fast) with Pike oracle enrichment (async). |
-| **P2** | Real-time diagnostics with debouncing | Save-only feels slow. Requires: debouncing (300-500ms), worker saturation protection (max 1 pending diagnostic request), fallback to tree-sitter-only on contention. Worker already supports this — needs server.ts wiring. |
-| **P3** | Rename | Decision 0002 §12 marks this as out of scope for Pike. Revisit only if deployment context demands it. Requires cross-file rename infrastructure (safe, already have references). |
-| **P4** | Code actions | Decision 0002 §13 marks this as out of scope. Low priority, low demand. |
+| **P1** | Completion | ~93% of requests resolve without worker. Tree-sitter symbol tables guarantee structural correctness (no invalid suggestions). Highest UX value. Failure mode is *missing* items, not *wrong* items. |
+| **P2** | Real-time diagnostics with debouncing | Save-only feels slow. Worker dependency is unavoidable but manageable with debouncing and saturation protection. Lower risk — wrong diagnostics are impossible (Pike is authoritative). |
+| **P3** | Rename | Re-evaluated below. Still deferred for Phase 6 initial scope but acknowledged as higher value in shared-codebase context. |
+| **P4** | Code actions | Decision 0002 §13 marks as out of scope. Low priority, low demand. |
+
+### Rename re-evaluation (Decision 0002 §12)
+
+Decision 0002 §12 deferred rename based on "Pike has no rename support." This decision was made during Phase 0 (investigation), before the SSH/shared-server deployment context was established.
+
+**Original reasoning:** Low demand, Pike has no built-in rename API, text-based heuristics required.
+
+**New context:** In a multi-coworker shared codebase, rename-across-files pays off proportionally to team size. The cost of manual rename scales with the number of call sites and the number of coworkers affected by inconsistent renames.
+
+**Current assessment:**
+- The LSP already has the infrastructure needed for rename: symbol table (scope-aware definitions), WorkspaceIndex (cross-file references), and ModuleResolver (cross-file symbol resolution).
+- The `references` provider already finds all references across the workspace.
+- A rename implementation would combine `references` output with workspace edits — no new resolution infrastructure needed.
+- The risk is correctness: Pike has no rename API, so the LSP must verify that a rename doesn't break semantics. For Pike's strong type system, most renames are safe if all references are found (which the existing `references` provider does).
+- The deferral is **still justified for Phase 6 initial scope** — completion and real-time diagnostics are higher priority for single-user and shared-server contexts alike. But the reasoning should not inherit from "low demand" without acknowledging that shared-codebase usage increases demand.
+- **Recommendation:** Revisit rename after P1 and P2 ship. The infrastructure is ready; the scope decision is about priority, not feasibility.
 
 ### Completion design considerations
 
 - **Trigger characters**: `.`, `>`, `:`, `(` (member access, arrow access, scope access, function args)
-- **Sources**: symbol table (local/param/class), workspace index (cross-file), stdlib index (pre-built)
+- **Sources**: symbol table (local/param/class), workspace index (cross-file), stdlib index (pre-built), predef index (pre-built)
 - **Filtering**: prefix match on identifier, ranked by proximity (local > class > inherited > imported > stdlib)
 - **Latency budget**: < 50ms for tree-sitter results (no worker), < 200ms for enriched results (worker async)
-- **Worker interaction**: completion does NOT block on the Pike worker. Tree-sitter-only results are sufficient for the first iteration.
+- **Worker interaction**: completion does NOT block on the Pike worker in the common case (~93%). Tree-sitter-only results are sufficient for the first iteration.
 
 ### Real-time diagnostics design considerations
 

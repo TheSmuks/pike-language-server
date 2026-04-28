@@ -114,6 +114,8 @@ The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins
 
 **Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
 
+**Current state**: `predef-builtin-index.json` (283 symbols) is a temporary workaround. When [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) ships its `all_constants()` fallback, evaluate removing the predef index in favor of kb queries.
+
 ### AutoDoc hover requires save for cache population
 
 AutoDoc XML is extracted on `didSave` and cached. Before the first save of a file, hover falls through to tree-sitter (Tier 3). This means new files opened but never saved will not have AutoDoc hover.
