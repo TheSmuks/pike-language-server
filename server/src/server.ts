@@ -21,8 +21,6 @@ import {
   Location as LspLocation,
   Range as LspRange,
   Position as LspPosition,
-  DiagnosticSeverity,
-  Diagnostic,
   Hover,
   MarkupKind,
   MarkupContent,
@@ -41,80 +39,18 @@ import {
 } from "./features/symbolTable";
 import { getCompletions, type CompletionContext } from "./features/completion";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
-import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
+import { PikeWorker } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
+import {
+  DiagnosticManager,
+  type DiagnosticMode,
+  type PikeCacheEntry,
+  computeContentHash,
+} from "./features/diagnosticManager";
 import stdlibAutodocIndex from "./data/stdlib-autodoc.json";
 import predefBuiltinIndex from "./data/predef-builtin-index.json";
 
 const predefBuiltins: Record<string, string> = predefBuiltinIndex as Record<string, string>;
-import { createHash } from "node:crypto";
-
-// ---------------------------------------------------------------------------
-// Content-hash caching for Pike diagnostics
-// ---------------------------------------------------------------------------
-
-interface PikeCacheEntry {
-  /** sha256 of the source content when this entry was computed. */
-  contentHash: string;
-  /** Pike diagnostics for this content. */
-  diagnostics: PikeDiagnostic[];
-  /** Timestamp when this entry was computed. */
-  timestamp: number;
-}
-
-const pikeCache = new Map<string, PikeCacheEntry>();
-
-const autodocCache = new Map<string, { xml: string; hash: string; timestamp: number }>();
-
-// LRU cache eviction: 50 entries max, 25MB total
-const CACHE_MAX_ENTRIES = 50;
-const CACHE_MAX_BYTES = 25 * 1024 * 1024;
-let cacheTotalBytes = 0;
-
-function cacheSet(uri: string, entry: PikeCacheEntry): void {
-  // Evict if at capacity
-  if (pikeCache.size >= CACHE_MAX_ENTRIES) {
-    cacheEvictOldest();
-  }
-  // Check byte budget
-  const entrySize = JSON.stringify(entry).length;
-  while (cacheTotalBytes + entrySize > CACHE_MAX_BYTES && pikeCache.size > 0) {
-    cacheEvictOldest();
-  }
-  // Remove old entry if overwriting
-  const old = pikeCache.get(uri);
-  if (old) cacheTotalBytes -= JSON.stringify(old).length;
-  pikeCache.set(uri, entry);
-  cacheTotalBytes += entrySize;
-}
-
-function cacheEvictOldest(): void {
-  // Find the oldest entry (smallest timestamp)
-  let oldestKey: string | null = null;
-  let oldestTime = Infinity;
-  for (const [key, entry] of pikeCache) {
-    if (entry.timestamp < oldestTime) {
-      oldestTime = entry.timestamp;
-      oldestKey = key;
-    }
-  }
-  if (oldestKey) {
-    const old = pikeCache.get(oldestKey);
-    if (old) cacheTotalBytes -= JSON.stringify(old).length;
-    pikeCache.delete(oldestKey);
-    autodocCache.delete(oldestKey);
-  }
-}
-
-function cacheClear(): void {
-  pikeCache.clear();
-  autodocCache.clear();
-  cacheTotalBytes = 0;
-}
-
-function computeContentHash(source: string): string {
-  return createHash("sha256").update(source).digest("hex");
-}
 
 // ---------------------------------------------------------------------------
 // Server factory — reusable for production and tests
@@ -127,6 +63,8 @@ export interface PikeServer {
   worker: PikeWorker;
   /** AutoDoc XML cache — exposed for testing. Keyed by URI. */
   autodocCache: Map<string, { xml: string; hash: string; timestamp: number }>;
+  /** Diagnostic manager — exposed for testing. */
+  diagnosticManager: DiagnosticManager;
 }
 
 /**
@@ -137,10 +75,69 @@ export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
   const worker = new PikeWorker();
 
+  // -----------------------------------------------------------------
+  // Caches (local to this server instance)
+  // -----------------------------------------------------------------
+
+  const pikeCache = new Map<string, PikeCacheEntry>();
+  const autodocCache = new Map<string, { xml: string; hash: string; timestamp: number }>();
+
+  // LRU cache eviction: 50 entries max, 25MB total
+  const CACHE_MAX_ENTRIES = 50;
+  const CACHE_MAX_BYTES = 25 * 1024 * 1024;
+  let cacheTotalBytes = 0;
+
+  function cacheSet(uri: string, entry: PikeCacheEntry): void {
+    if (pikeCache.size >= CACHE_MAX_ENTRIES) {
+      cacheEvictOldest();
+    }
+    const entrySize = JSON.stringify(entry).length;
+    while (cacheTotalBytes + entrySize > CACHE_MAX_BYTES && pikeCache.size > 0) {
+      cacheEvictOldest();
+    }
+    const old = pikeCache.get(uri);
+    if (old) cacheTotalBytes -= JSON.stringify(old).length;
+    pikeCache.set(uri, entry);
+    cacheTotalBytes += entrySize;
+  }
+
+  function cacheEvictOldest(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, entry] of pikeCache) {
+      if (entry.timestamp < oldestTime) {
+        oldestTime = entry.timestamp;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) {
+      const old = pikeCache.get(oldestKey);
+      if (old) cacheTotalBytes -= JSON.stringify(old).length;
+      pikeCache.delete(oldestKey);
+      autodocCache.delete(oldestKey);
+    }
+  }
+
+  function cacheClear(): void {
+    pikeCache.clear();
+    autodocCache.clear();
+    cacheTotalBytes = 0;
+  }
+
   // Workspace index — initialized in onInitialize with the workspace root.
   // Starts with a placeholder path; overwritten when the client sends init.
   let index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
 
+  // DiagnosticManager — handles debouncing, supersession, priority queueing.
+  // Mode defaults to realtime; can be overridden via initializationOptions.
+  const diagnosticManager = new DiagnosticManager({
+    worker,
+    documents,
+    connection,
+    index,
+    pikeCache,
+    cacheSet,
+  });
   /**
    * Get or build the symbol table for a document.
    * Uses the workspace index for lazy rebuild.
@@ -172,6 +169,16 @@ export function createPikeServer(connection: Connection): PikeServer {
     const rootUri = params.rootUri ?? params.rootPath ?? "";
     const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
     index = new WorkspaceIndex({ workspaceRoot: rootPath });
+    diagnosticManager.setIndex(index);
+
+    // Read diagnostic mode from initializationOptions
+    const initOpts = params.initializationOptions as { diagnosticMode?: string } | undefined;
+    if (initOpts?.diagnosticMode) {
+      const mode = initOpts.diagnosticMode;
+      if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
+        diagnosticManager.setDiagnosticMode(mode);
+      }
+    }
 
     return {
       capabilities: {
@@ -536,7 +543,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   // -----------------------------------------------------------------------
-  // textDocument/didSave — Pike diagnostic pipeline (decision 0011)
+  // textDocument/didSave — delegate to DiagnosticManager (decision 0013)
   // -----------------------------------------------------------------------
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -546,59 +553,15 @@ export function createPikeServer(connection: Connection): PikeServer {
       const doc = documents.get(params.textDocument.uri);
       if (!doc) return;
 
-    const source = doc.getText();
-    const contentHash = computeContentHash(source);
+      // Delegate to DiagnosticManager (handles cache, diagnose, publish)
+      await diagnosticManager.onDidSave(doc.uri);
 
-    // Check cache
-    const cached = pikeCache.get(doc.uri);
-    if (cached && cached.contentHash === contentHash) {
-      // Cache hit — republish cached diagnostics
-      const lspDiagnostics = mergeDiagnostics(
-        getParseDiagnostics(parse(source)),
-        cached.diagnostics,
-      );
-      connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
-      return;
-    }
-
-    // Extract filepath from URI
-    const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
-
-    try {
-      const result = await worker.diagnose(source, filepath);
-      
-      // Handle timeout — surface as diagnostic to user
-      if (result.timedOut) {
-        const parseDiags = getParseDiagnostics(parse(source));
-        const timeoutDiag: Diagnostic = {
-          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-          severity: DiagnosticSeverity.Warning,
-          source: "pike-lsp",
-          message: "Compilation timed out, will retry on next save.",
-        };
-        connection.sendDiagnostics({
-          uri: doc.uri,
-          diagnostics: [...parseDiags, timeoutDiag],
-        });
-        return;
-      }
-
-      // Update cache (LRU eviction handled by cacheSet)
-      cacheSet(doc.uri, {
-        contentHash,
-        diagnostics: result.diagnostics,
-        timestamp: Date.now(),
-      });
-
-      // Merge parse diagnostics with Pike diagnostics
-      const parseDiags = getParseDiagnostics(parse(source));
-      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics);
-      connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
-
-      // Extract AutoDoc XML alongside diagnostics
+      // Extract AutoDoc XML alongside diagnostics (non-critical)
+      const source = doc.getText();
       const autodocHash = computeContentHash(source);
       const cachedAutodoc = autodocCache.get(doc.uri);
       if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
+        const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
         worker.autodoc(source, filepath).then(result => {
           if (result.xml) {
             if (autodocCache.size >= CACHE_MAX_ENTRIES) {
@@ -606,60 +569,18 @@ export function createPikeServer(connection: Connection): PikeServer {
             }
             autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
           }
-        }).catch(() => {}); // Non-critical: autodoc failure doesn't block
+        }).catch(() => {}); // Non-critical
       }
-
-    } catch (err) {
-      connection.console.error(
-        `Pike diagnose failed for ${doc.uri}: ${(err as Error).message}`,
-      );
-      // On failure, keep only parse diagnostics
-      const parseDiags = getParseDiagnostics(parse(source));
-      connection.sendDiagnostics({ uri: doc.uri, diagnostics: parseDiags });
-    }
     });
   }
 
-  /** Merge parse diagnostics (tree-sitter) with Pike compilation diagnostics. */
-  function mergeDiagnostics(
-    parseDiags: Diagnostic[],
-    pikeDiags: PikeDiagnostic[],
-  ): Diagnostic[] {
-    const result = [...parseDiags];
-
-    for (const pd of pikeDiags) {
-      // Position mapping: Pike reports 1-based lines, LSP uses 0-based
-      const line = pd.line - 1;
-
-      let message = pd.message;
-      if (pd.expected_type) {
-        message += `\nExpected: ${pd.expected_type}`;
-      }
-      if (pd.actual_type) {
-        message += `\nGot: ${pd.actual_type}`;
-      }
-
-      result.push({
-        range: {
-          start: { line, character: 0 },
-          end: { line, character: 0 },
-        },
-        severity: pd.severity === "error"
-          ? DiagnosticSeverity.Error
-          : DiagnosticSeverity.Warning,
-        source: "pike",
-        message,
-      });
-    }
-
-    return result;
-  }
 
   // -----------------------------------------------------------------------
   // Shutdown
   // -----------------------------------------------------------------------
 
   connection.onShutdown(() => {
+    diagnosticManager.dispose();
     index.clear();
     cacheClear();
     worker.stop();
@@ -684,30 +605,26 @@ export function createPikeServer(connection: Connection): PikeServer {
           `Invalidated ${invalidated.length} files (change in ${doc.uri})`,
         );
       }
-
-      connection.sendDiagnostics({
-        uri: doc.uri,
-        diagnostics: getParseDiagnostics(tree),
-      });
     } catch (err) {
       connection.console.error(
         `parse failed: ${(err as Error).message}`,
       );
     }
+
+    // Delegate real-time diagnostics to DiagnosticManager
+    // (publishes parse diagnostics immediately, debounces Pike diagnostics)
+    diagnosticManager.onDidChange(doc.uri);
   });
 
   documents.onDidClose((event) => {
     index.removeFile(event.document.uri);
     pikeCache.delete(event.document.uri);
-    connection.sendDiagnostics({
-      uri: event.document.uri,
-      diagnostics: [],
-    });
+    diagnosticManager.onDidClose(event.document.uri);
   });
 
   documents.listen(connection);
 
-  return { connection, documents, index, worker, autodocCache };
+  return { connection, documents, index, worker, autodocCache, diagnosticManager };
 }
 
 // ---------------------------------------------------------------------------

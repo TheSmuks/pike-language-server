@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 917 tests, 0 failures, 7,578 assertions, 22 files
+- **Test suite:** 959 tests, 0 failures, 8,674 assertions, 23 files
 
 ## Phase History
 
@@ -20,7 +20,7 @@
 | 3: Per-file Symbol Table | Complete (verified) | 614 | go-to-def, find-refs, 10-level scope hierarchy |
 | 4: Cross-file Resolution | Complete | 830 | ModuleResolver, WorkspaceIndex, 48 new tests |
 | 5: Types and Diagnostics | Exit verified | 917 | PikeWorker, diagnostics, three-tier hover, shared-server hardening |
-| 6: Refinement | **Pending** | — | Completion, real-time diagnostics, rename, code actions |
+| 6: Refinement | **In progress** | — | P1: Completion ✓. P2: Real-time diagnostics ✓. P3/P4: Deferred. |
 
 ## LSP Feature Completeness
 
@@ -30,7 +30,7 @@
 | definition | **Implemented** | Same-file scope chain + cross-file inherit/import chains |
 | references | **Implemented** | Same-file + cross-file via WorkspaceIndex dependency graphs |
 | hover | **Implemented** | Three-tier: workspace AutoDoc → stdlib index (5,505) → predef builtins (283) → tree-sitter fallback |
-| diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (save-only). Content-hash cached. |
+| diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
 | rename | **Not implemented** | Decision 0002 §12: out of scope (Pike has no rename support) |
 | code actions | **Not implemented** | Decision 0002 §13: out of scope |
@@ -43,7 +43,7 @@
 
 **Three-source type resolution:**
 1. Tree-sitter (syntactic) — real-time, fast, partial
-2. Pike oracle (semantic) — save-triggered, subprocess, authoritative
+2. Pike oracle (semantic) — real-time debounced (500ms), subprocess, authoritative
 3. Pre-built indices — stdlib (5,505 symbols) + predef builtins (283 symbols)
 
 **Hover routing** (declForHover):
@@ -74,7 +74,7 @@
 - #4: No scope-introducing nodes for while/switch/plain blocks → variable leakage
 
 **Server:**
-- Diagnostics are save-only (no real-time/on-keystroke)
+- Diagnostics are real-time with 500ms debounce (configurable, decision 0013)
 - No column-level diagnostic positions (character: 0 always)
 - Hover shows declared types, not inferred types
 - AutoDoc hover requires save for cache population
@@ -88,11 +88,11 @@
 ## Test Infrastructure
 
 **Three layers:**
-- Layer 1: Protocol-level (PassThrough transport, in-process) — 914 tests
+- Layer 1: Protocol-level (PassThrough transport, in-process) — 956 tests
 - Layer 2: VSCode integration (@vscode/test-electron) — 3 tests
 - Layer 3: Manual smoke tests — 3 items
 
-**Test files (22):**
+**Test files (23):**
 - 16 LSP protocol test files
 - 4 harness test files (harness, canary, canonicalizer, tree-sitter-symbol)
 - 3 integration tests

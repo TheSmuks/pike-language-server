@@ -13,7 +13,15 @@
 - `symbolTable.ts`: `getDeclarationsInScope()` — enumerate declarations in a specific scope
 - `symbolTable.ts`: `findClassScopeAt()` — find enclosing class scope at a position
 - `completion.ts`: stdlib secondary index — prefix-grouped member enumeration
-- 19 completion tests (direct API + LSP protocol)
+- Real-time diagnostics with debouncing (decision 0013)
+  - `DiagnosticManager` — per-file debounce timers (500ms default, configurable)
+  - Supersession: version-gated dispatch prevents stale diagnoses
+  - Worker priority queue: diagnose defers to hover/completion
+  - Cross-file diagnostic propagation via dependency graph
+  - Three modes: `realtime` (default), `saveOnly`, `off`
+  - Staleness indication for long-running diagnose (2s)
+  - Configurable via `initializationOptions.diagnosticMode`
+- 15 new diagnostic tests (debounce, mode, lifecycle, caching, supersession, priority)
 
 ### Added
 
