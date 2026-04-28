@@ -204,8 +204,19 @@ function renderType(node: XmlNode): string {
   switch (node.tag) {
     case "type":
       return (node.children ?? []).map(renderType).join("");
-    case "int":
+    case "int": {
+      // Check for range constraints
+      const children = node.children ?? [];
+      const hasRange = children.some((c) => c.type === "element" && (c.tag === "min" || c.tag === "max"));
+      if (hasRange) {
+        const minEl = children.find((c) => c.type === "element" && c.tag === "min");
+        const maxEl = children.find((c) => c.type === "element" && c.tag === "max");
+        const minVal = minEl ? (minEl.children ?? []).map((c) => c.text?.trim() ?? "").join("") : "";
+        const maxVal = maxEl ? (maxEl.children ?? []).map((c) => c.text?.trim() ?? "").join("") : "";
+        if (minVal && maxVal) return `int(${minVal}..${maxVal})`;
+      }
       return "int";
+    }
     case "string":
       return "string";
     case "float":
@@ -215,6 +226,9 @@ function renderType(node: XmlNode): string {
     case "mixed":
       return "mixed";
     case "bool":
+      return "bool";
+    case "zero":
+      return "zero";
       return "bool";
     case "object": {
       const cls = node.attrs?.["class"] ?? node.children?.map(renderType).join("");
@@ -377,6 +391,11 @@ function renderInline(nodes: XmlNode[]): string {
         parts.push(renderInline(node.children ?? []));
         break;
 
+      // Pike expressions — render as inline code
+      case "expr":
+        parts.push(`\`${renderInline(node.children ?? [])}\``);
+        break;
+
       // Unknown inline element: render children as text
       default:
         parts.push(renderInline(node.children ?? []));
@@ -423,6 +442,25 @@ function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
           .join(" ");
         if (paramName.length > 0) {
           lines.push(`${prefix}- \`${paramName[0]}\` — ${desc || "(no description)"}`);
+        }
+        // Also render any block elements inside <text> (mixed, string, dl, etc.)
+        const blockChildren = textChildren.flatMap(
+          (tc) => (tc.children ?? []).filter(
+            (c) => c.type === "element" && c.tag !== "p"
+          ),
+        );
+        if (blockChildren.length > 0) {
+          lines.push(...renderBlocks(blockChildren, indent + 1));
+        }
+        // Also render direct block children of the group (not inside <text>)
+        const directBlocks = (node.children ?? []).filter(
+          (c) => c.type === "element" &&
+            c.tag !== "param" && c.tag !== "text" && c.tag !== "returns" &&
+            c.tag !== "throws" && c.tag !== "note" && c.tag !== "seealso" &&
+            c.tag !== "deprecated" && c.tag !== "example" && c.tag !== "bugs",
+        );
+        if (directBlocks.length > 0) {
+          lines.push(...renderBlocks(directBlocks, indent + 1));
         }
         break;
       }
@@ -597,6 +635,70 @@ function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
         break;
       }
 
+      // Mixed type (typed value list, like a type-tagged dl)
+      case "mixed": {
+        for (const child of node.children ?? []) {
+          if (child.type === "element" && child.tag === "group") {
+            const typeNodes = (child.children ?? []).filter(
+              (c) => c.type === "element" && c.tag === "type",
+            );
+            const typeStr = typeNodes.map(renderType).join(" | ");
+            const texts = (child.children ?? []).filter(
+              (c) => c.type === "element" && c.tag === "text",
+            );
+            const desc = texts
+              .flatMap((t) => (t.children ?? []).filter((c) => c.type === "element" && c.tag === "p"))
+              .map((p) => renderInline(p.children ?? []).trim())
+              .filter(Boolean)
+              .join(" ");
+            if (typeStr) {
+              lines.push(`${prefix}  - \`${typeStr}\` — ${desc}`);
+            }
+          }
+        }
+        break;
+      }
+
+      // String container (value list, like <mixed> but with <value> instead of <type>)
+      case "string": {
+        if (node.children && node.children.length > 0) {
+          // Check if this is a documentation container (has <group> children with <value>)
+          const hasValueGroups = (node.children ?? []).some(
+            (c) => c.type === "element" && c.tag === "group" &&
+              (c.children ?? []).some((gc) => gc.type === "element" && gc.tag === "value"),
+          );
+          if (hasValueGroups) {
+            for (const child of node.children ?? []) {
+              if (child.type === "element" && child.tag === "group") {
+                const values = (child.children ?? []).filter(
+                  (c) => c.type === "element" && c.tag === "value",
+                );
+                const valStr = values.map((v) => renderInline(v.children ?? []).trim()).join("");
+                const texts = (child.children ?? []).filter(
+                  (c) => c.type === "element" && c.tag === "text",
+                );
+                const desc = texts
+                  .flatMap((t) => (t.children ?? []).filter((c) => c.type === "element" && c.tag === "p"))
+                  .map((p) => renderInline(p.children ?? []).trim())
+                  .filter(Boolean)
+                  .join(" ");
+                if (valStr) {
+                  lines.push(`${prefix}  - \`${valStr}\` — ${desc}`);
+                }
+              }
+            }
+          }
+        }
+        break;
+      }
+
+      // Value element (inline)
+      case "value": {
+        const content = renderInline(node.children ?? []).trim();
+        if (content) lines.push(`${prefix}\`${content}\``);
+        break;
+      }
+
       // Section
       case "section": {
         const title = node.attrs?.["title"] ?? "";
@@ -615,12 +717,8 @@ function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
         for (const child of node.children ?? []) {
           if (child.type === "element") {
             if (child.tag === "text") {
-              // Summary text
-              const paragraphs = (child.children ?? [])
-                .filter((c) => c.type === "element" && c.tag === "p")
-                .map((p) => renderInline(p.children ?? []).trim())
-                .filter(Boolean);
-              lines.push(...paragraphs);
+              // Render all content inside <text>, not just paragraphs
+              lines.push(...renderBlocks([child], indent));
             } else if (child.tag === "group") {
               lines.push(...renderDocGroup(child));
             } else {
@@ -684,6 +782,13 @@ function renderDocGroup(group: XmlNode): string[] {
     case "param": {
       const name = markerEl.attrs?.["name"] ?? "";
       lines.push(`- \`${name}\` — ${desc || "(no description)"}`);
+      // Render block children from <text> (mixed, string, dl, etc.)
+      const blockChildren = textEls.flatMap(
+        (t) => (t.children ?? []).filter((c) => c.type === "element" && c.tag !== "p"),
+      );
+      if (blockChildren.length > 0) {
+        lines.push(...renderBlocks(blockChildren, 1));
+      }
       break;
     }
     case "returns":
@@ -754,7 +859,7 @@ export function renderAutodoc(
   if (!docGroup) return null;
 
   // Extract signature from the <method>, <variable>, <class>, etc. element
-  let signature = "";
+  const signatures: string[] = [];
   const docEl = (docGroup.children ?? []).find(
     (c) => c.type === "element" && c.tag === "doc",
   );
@@ -763,23 +868,26 @@ export function renderAutodoc(
     if (child.type === "element" && child.tag !== "doc" && child.tag !== "source-position") {
       const sig = renderSignature(child);
       if (sig) {
-        signature = sig;
-        break;
+        signatures.push(sig);
       }
     }
   }
 
-  if (!signature && fallbackSignature) {
-    signature = fallbackSignature;
+  // Use first signature as primary; show all overloads in header
+  if (signatures.length === 0 && fallbackSignature) {
+    signatures.push(fallbackSignature);
   }
+  const signature = signatures[0] ?? "";
 
   // Render documentation
   const parts: string[] = [];
 
-  // Signature header
-  if (signature) {
+  // Signature header — show all overloads
+  if (signatures.length > 0) {
     parts.push("```pike");
-    parts.push(signature);
+    for (const sig of signatures) {
+      parts.push(sig);
+    }
     parts.push("```");
   }
 

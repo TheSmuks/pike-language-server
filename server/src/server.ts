@@ -40,6 +40,9 @@ import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
 import stdlibAutodocIndex from "./data/stdlib-autodoc.json";
+import predefBuiltinIndex from "./data/predef-builtin-index.json";
+
+const predefBuiltins: Record<string, string> = predefBuiltinIndex as Record<string, string>;
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -437,6 +440,31 @@ export function createPikeServer(connection: Connection): PikeServer {
           isAutodoc: true,
         };
       }
+    }
+
+    // Tier 2b: Predef builtins (C-level functions) — type signature lookup
+    const builtinSig = predefBuiltins[decl.name];
+    if (builtinSig) {
+      // Clean up the raw type string for readability
+      let cleanSig = builtinSig
+        .replace(/^scope\(\d+,/, "")
+        .replace(/\)$/, ""); // Remove trailing scope paren
+      // Remove attribute annotations for cleaner display
+      cleanSig = cleanSig.replace(/__attribute__\("[^"]*",\s*/g, "");
+      // Take the first overload for brevity
+      const overloads = cleanSig.split(" | function");
+      if (overloads.length > 1) overloads[0] += ")";
+      const displaySig = overloads[0]
+        .replace(/^function\(/, "")
+        .replace(/\)$/, "");
+      return {
+        name: decl.name,
+        signature: `${decl.name}(${displaySig})`,
+        documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+        line: decl.nameRange.start.line,
+        character: decl.nameRange.start.character,
+        isAutodoc: true,
+      };
     }
 
     // Tier 3: Fall through to tree-sitter declared type
