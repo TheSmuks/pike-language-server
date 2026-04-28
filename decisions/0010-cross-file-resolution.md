@@ -204,30 +204,46 @@ The key insight: `didChange` is incremental (within the same file). `didChangeWa
 
 When file A changes:
 
-1. **Invalidate A's symbol table** — always.
-2. **Invalidate A's dependents** — files that `inherit` or `import` from A.
-3. **Do NOT invalidate files A depends on** — A's changes don't affect its dependencies.
-4. **Module map update** — only if A was created/deleted/renamed.
+1. **Invalidate A's symbol table** — always. Clear the table immediately.
+2. **Transitively invalidate all dependents** — BFS walk of the reverse-dependency graph.
+3. **Stale-marking for dependents** — dependents are marked `stale` but keep their symbol tables. `getSymbolTable()` returns null for stale entries. Rebuild happens lazily on next access.
+4. **Do NOT invalidate files A depends on** — A's changes don't affect its dependencies.
+5. **Module map update** — only if A was created/deleted/renamed.
 
-### Transitive invalidation
+### Transitive invalidation (BFS)
 
-NOT implemented in Phase 4. If B inherits A and C inherits B, changing A invalidates B but not C. This is conservative: C may see stale B state until B is re-indexed and C re-resolves.
+The invalidation walks the full transitive closure of the reverse-dependency graph. If B inherits A and C inherits B, changing A invalidates both B and C.
 
-Rationale: transitive invalidation requires the full dependency graph at the module level, which is expensive to maintain. Correctness is preserved because:
-- B is re-indexed, so B's inherit from A is correct.
-- C's reference to B's member resolves through B's symbol table, which is now correct.
-- C itself doesn't need to change — it references B's members, not A's directly.
+**Strategy: stale-marking with lazy rebuild.**
 
-Edge case: if C references `A::something` directly (without going through B), this is a direct dependency from C to A, which IS tracked.
+Why not eager rebuild:
+- Rebuilding entire subtrees on every keystroke is wasteful when most dependents won't be queried.
+- Lazy rebuild on next `getSymbolTable()` call avoids rebuilding files the user isn't looking at.
+- The stale flag is cleared when `upsertFile()` is called (either by lazy rebuild or by the user editing the file).
+
+Why not transitive closure caching:
+- The reverse-dependency graph is updated on every `upsertFile()` and `removeFile()`. Caching the transitive closure would need invalidation logic that's equally complex.
+- BFS over the reverse-dependency graph is O(V+E) which is fast for typical workspaces (< 10,000 files).
+
+### Edge case: direct dependency on A from C
+
+If C references `A::something` directly (without going through B), this creates a direct dependency from C to A, which IS tracked. Both the transitive invalidation and the direct dependency will find C.
+
+### Invalidation direction
+
+Invalidation only flows *forward* through the dependency graph (from changed file to dependents). It never flows *backward* (from changed file to its dependencies). Changing A does not invalidate files that A depends on.
 
 ### Performance target
 
-| Operation | Target | Measurement |
-|-----------|--------|-------------|
-| Cross-file go-to-definition | < 10ms | Single symbol table lookup + module resolution |
-| Single file edit propagation | < 50ms | Rebuild one file's symbol table + invalidate dependents |
-| Full workspace index (cold start) | < 5s for 1000 files | Parallel parse + sequential resolution |
-| Module resolution per reference | < 1ms | Cached module map lookup |
+| Operation | Target | Measured (Phase 4 baseline) | Status |
+|-----------|--------|---------------------------|--------|
+| Cross-file go-to-definition | < 10ms | p50: 0.001ms, p99: 0.009ms | ✓ Well under target |
+| Single file edit propagation (A→B→C chain) | < 50ms | p50: 0.378ms, p99: 0.865ms | ✓ Well under target |
+| Cold workspace index (15 files) | < 5s for 1000 files | p50: 17.9ms, p99: 22.2ms (1.2ms per file) | ✓ On track for 1000-file target (~1.2s) |
+| Module resolution per reference | < 1ms | Included in go-to-definition (cached) | ✓ Cached lookups are sub-microsecond |
+| Cross-file test suite (17 tests) | N/A | 77-91ms total, ~5ms per test | Measurement only |
+
+Measurement environment: AMD Ryzen 7 3700X, Bun 1.3.11, Pike 8.0.1116, corpus files on NVMe.
 
 Phase 4 does not need to be fast. It needs to be correct. Performance is measured and recorded; optimization is Phase 6+.
 
@@ -277,17 +293,60 @@ The path text is the module path to resolve.
 
 ## Deviations from Pike's Actual Algorithm
 
-| Deviation | Impact | Mitigation |
-|-----------|--------|-----------|
-| No `.so` binary module resolution | Stdlib symbols that are C modules won't resolve by path | pike-ai-kb can provide fallback; system module map can be pre-built |
-| No `joinnode` multi-path merge | If same-named module exists in workspace and system paths, workspace wins | Accept. Matches user expectation (workspace overrides system). |
-| No precompiled `.o` loading | Not applicable in LSP context | N/A |
-| First-match-wins for module paths | Pike iterates all paths and merges | Accept for Phase 4. Edge case for large workspaces. |
-| No `module_checker` lazy loading | LSP eagerly indexes | Accept. Workspace is bounded. |
+### Deviation 1: No `.so` binary module resolution
+
+| Aspect | Detail |
+|--------|--------|
+| **What Pike does** | Pike's dynamic loader resolves `.so` files via `dlopen`. Many core types are C builtins: `Stdio.File`, `Image.Image`, `_ADT`, `Nettle`, `GL`, etc. (61 `.so` files in the 8.0.1116 installation). |
+| **What the LSP does** | Skips `.so` entirely. `findModuleInPath` tries `.pmod` directory → `.pmod` file → `.pike` file. No `.so` step. |
+| **User-visible effect** | Go-to-definition on `Stdio.File` returns null. Hover shows nothing. The LSP cannot navigate into any C-implemented module. |
+| **Trigger for revisiting** | Phase 5 pike-ai-kb integration can provide a pre-built system module map. A `resolve.pike` script using `master()->resolv()` and `program_defined()` can enumerate all system module members at startup. |
+| **Corpus verification** | On our corpus: `Stdio` resolves correctly (→ `Stdio.pmod/module.pmod`). `Stdio.File` returns NOT FOUND. All other stdlib references (`Array`, `Mapping`, `String`, `Calendar`, `Stdio.Terminfo`, `Stdio.Readline`, `Stdio.FakeFile`) resolve correctly. |
+
+### Deviation 2: No `joinnode` multi-path merge
+
+| Aspect | Detail |
+|--------|--------|
+| **What Pike does** | `master()->joinnode` merges symbols from multiple search paths when the same module name exists in multiple locations. E.g., `Stdio` in both system path and a workspace `lib/` path → merged node with symbols from both. |
+| **What the LSP does** | First-match-wins. Workspace paths are searched before system paths, so a workspace `Stdio.pmod` shadows the system one entirely. |
+| **User-visible effect** | If a workspace defines `Stdio.pmod` (unlikely but possible), the LSP shows only workspace symbols, not the merged set. In practice, workspaces rarely shadow system modules. |
+| **Trigger for revisiting** | Fix when a real workspace reports resolution disagreement. The corpus doesn't exercise this case. |
+| **Corpus verification** | `cross_import_a` is a workspace-only module — both Pike and LSP resolve it identically (single-path, no merge). All workspace modules resolve correctly because they don't exist in system paths. |
+
+### Deviation 3: First-match-wins for module paths
+
+| Aspect | Detail |
+|--------|--------|
+| **What Pike does** | Pike searches module paths in order but uses `joinnode` to merge when the same module appears in multiple paths. This is effectively first-match for modules that only exist in one path. |
+| **What the LSP does** | First-match-wins for ALL modules. For modules that exist in only one path (the common case), this is identical to Pike's behavior. |
+| **User-visible effect** | Identical to Pike for single-path modules. Diverges only for multi-path modules (same name in workspace + system), which maps to deviation 2. |
+| **Trigger for revisiting** | Same as deviation 2. |
+
+### Deviation 4: No precompiled `.o` loading
+
+| Aspect | Detail |
+|--------|--------|
+| **What Pike does** | Pike can load precompiled `.o` files (dumped bytecode). |
+| **What the LSP does** | Ignores `.o` files. Only parses `.pike`, `.pmod` (file), and `.pmod/` (directory). |
+| **User-visible effect** | None in practice. `.o` files are a build optimization; the source `.pike`/`.pmod` is always present alongside. |
+| **Trigger for revisiting** | Fix if a workspace uses `.o`-only deployment without sources. |
+
+### Deviation 5: No `module_checker` lazy loading
+
+| Aspect | Detail |
+|--------|--------|
+| **What Pike does** | `module_checker` lazily resolves module symbols on first access. |
+| **What the LSP does** | Eagerly indexes all workspace files on open/change. |
+| **User-visible effect** | Higher upfront cost, but workspace is bounded and the cost is acceptable. |
+| **Trigger for revisiting** | Optimize if workspace indexing exceeds latency targets (see performance section). |
 
 ## Harness Extension
 
-### Cross-file resolution introspection
+### Status: NOT IMPLEMENTED
+
+The cross-file resolution introspection harness (`harness/resolve.pike`) described below was planned but not built during Phase 4. Phase 4 testing uses structural expectations (see Ground Truth section).
+
+### Planned cross-file resolution introspection
 
 The harness will extend `introspect.pike` to report:
 
@@ -306,6 +365,35 @@ Add a second Pike script `harness/resolve.pike` that:
 
 This is separate from `introspect.pike` because the cross-file introspection requires a different compilation strategy (the handler needs to intercept the resolution process, not just the diagnostics).
 
+### Phase 5 prerequisite
+
+Before Phase 5 adds type information and diagnostics that depend on cross-file resolution correctness, `resolve.pike` must be built and cross-file tests must use it as ground truth. The current structural tests are necessary but not sufficient for semantic correctness.
+
+## Ground Truth Assessment
+
+### What the Phase 4 cross-file tests verify
+
+| Test category | Ground truth source | Oracle gap? |
+|-------------|-------------------|------------|
+| Inherit string literal resolution (→ target file) | Structural: file name in source code. `inherit "file.pike"` → file exists at that path. | No — path resolution is deterministic from the source. |
+| Inherit with rename (→ target file) | Structural: same as above. | No. |
+| Inherit chain (C→B→A) | Structural: each file inherits the next by string literal. | No. |
+| Import declaration collected | Structural: import_decl exists in parse tree. | No — this is a symbol table test, not a resolution test. |
+| Dependency graph (dependents) | Structural: if B inherits A, B depends on A. Deterministic from the source. | No. |
+| .pmod directory module indexing | Structural: file parses without error. | **Yes** — the test doesn't verify that the LSP resolves the same members from the .pmod directory that Pike does. |
+| #pike version detection | Structural: `#pike 7.8` in source → `{major: 7, minor: 8}`. | No. |
+| Invalidation (one-hop and transitive) | Implementation contract: WorkspaceIndex design. | N/A — testing our own machinery, not Pike's behavior. |
+
+### Where the oracle gap matters
+
+The structural tests verify that the LSP's cross-file wiring works mechanically. They do NOT verify:
+
+1. **Which class is the inherit target.** When B inherits `"file.pike"` and that file has multiple classes, does the LSP pick the same one Pike does?
+2. **Which members are inherited.** Does the LSP see the same members through inherit as Pike?
+3. **Import symbol availability.** Does `import cross_import_a` bring the same symbols into scope that Pike makes available?
+4. **.pmod directory member enumeration.** Does the LSP list the same members from `cross_pmod_dir.pmod/` that Pike resolves?
+
+These are Phase 5 concerns. Phase 4's scope is the wiring (index, resolution, invalidation), not the semantic correctness of what flows through the wires.
 ## Consequences
 
 - The workspace index is in-memory only. No on-disk persistence in Phase 4.

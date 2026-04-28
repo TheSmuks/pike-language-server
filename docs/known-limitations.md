@@ -56,20 +56,25 @@ Pike's `joinnode` class merges symbols from multiple search paths when the same 
 
 **Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
 
-### No transitive invalidation
-
-When file A changes, the LSP invalidates A and its direct dependents (files that inherit/import A). It does NOT transitively invalidate files that depend on dependents. For example, if B inherits A and C inherits B, changing A invalidates B but not C.
-
-**Impact**: Low. C's symbol table references B's members, which are correct after B is re-indexed. C only sees stale state if it directly references A's symbols without going through B.
-
 ### Import resolution is scoped to file-system paths
 
 Import resolution searches workspace and system module paths. It does not query Pike at runtime. Dynamic module behavior (modules that register symbols at compile time) is not captured.
 
 **Impact**: Low for standard Pike code. Dynamic modules are rare in user workspaces.
 
-### .pmod directory contents not individually introspected
+### .pmod directory contents not individually introspected by harness
 
-The harness lists `.pmod` directories as opaque modules, not recursing into their files. Directory modules are tested via consumer files (e.g., `cross-pmod-user.pike`), not by introspecting individual files inside the directory.
+The harness has snapshots for file-based `.pmod` modules (`cross_import_a.pmod`, `cross_lib_module.pmod`) with full symbol extraction from Pike. However, directory-based `.pmod` modules (`cross_pmod_dir.pmod/`) are not individually introspected.
 
-**Impact**: The harness verifies that consumers correctly use directory module symbols, which is the meaningful test.
+**Corpus .pmod inventory:**
+- `cross_import_a.pmod` — FILE (26 lines). Harness snapshot: YES. Ground truth: Pike oracle.
+- `cross_lib_module.pmod` — FILE (22 lines). Harness snapshot: YES. Ground truth: Pike oracle.
+- `cross_pmod_dir.pmod/` — DIRECTORY (2 entries: `module.pmod`, `helpers.pike`). Harness snapshot: NO. Not introspected.
+- `cross_pmod_dir.pmod/module.pmod` — child of directory module. Harness snapshot: NO.
+- `cross_pmod_dir.pmod/helpers.pike` — child of directory module. Harness snapshot: NO.
+
+**What works:** File-based `.pmod` modules are fully tested via harness snapshots. The LSP's documentSymbol output for `cross_import_a.pmod` is compared against Pike's introspection.
+
+**What's missing:** Directory module member enumeration. The LSP's cross-file tests only verify that `cross-pmod-user.pike` indexes successfully. They don't verify that the LSP discovers the same members from `cross_pmod_dir.pmod/` that Pike resolves. This is a semantic correctness gap.
+
+**Phase 5 prerequisite:** Build `harness/resolve.pike` to introspect directory modules and cross-file member availability.

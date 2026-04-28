@@ -262,8 +262,20 @@ Five verification items resolved:
 ## Deferred Items
 
 - [x] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** Done in Phase 4. `corpus/corpus.json` replaces `CROSS_FILE_FLAGS`. Runner reads per-file compilation flags from manifest.
+- [ ] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** The current cross-file tests use structural expectations (file names, parse tree properties), not Pike oracle output. Before Phase 5 adds type-aware diagnostics, `resolve.pike` must introspect cross-file resolution from Pike's perspective. See `decisions/0010` §Ground Truth Assessment.
 - [ ] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Layer-2 tests deferred from Phase 2. The integration test stubs exist at `tests/integration/` but require extension packaging (esbuild, VSIX) before they can run. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
+
+## Oracle Gaps
+
+The project's principle is "Pike is the oracle." Phase 4 has gaps where ground truth is structural (not from Pike):
+
+| Area | Gap | Phase to fix |
+|------|-----|-------------|
+| Cross-file resolution targets | Tests verify file-level wiring (A→B) but not semantic correctness (which class, which members) | Phase 5 (`resolve.pike`) |
+| .pmod directory member enumeration | `cross_pmod_dir.pmod/` not introspected by harness; no ground truth for what members the directory exposes | Phase 5 (`resolve.pike`) |
+| Import symbol availability | `import cross_import_a` test only checks declaration exists, not which symbols become available | Phase 5 (`resolve.pike`) |
+| Module resolution for .so/builtins | `Stdio.File` and 60 other C-implemented modules return NOT FOUND | Phase 5+ (pike-ai-kb or pre-built system map) |
 
 ## CI Improvement Tracking
 

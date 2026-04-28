@@ -290,3 +290,88 @@ describe("Cross-file incremental update — invalidation", () => {
     expect(index.getDependents(uriA).size).toBe(0);
   });
 });
+
+describe("Cross-file incremental update — transitive invalidation", () => {
+  let index: WorkspaceIndex;
+  let uriA: string, uriB: string, uriC: string;
+
+  beforeAll(async () => {
+    await initParser();
+    index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    // Chain: C inherits B, B inherits A
+    indexFile(index, "cross-inherit-chain-a.pike");
+    indexFile(index, "cross-inherit-chain-b.pike");
+    indexFile(index, "cross-inherit-chain-c.pike");
+    uriA = corpusUri("cross-inherit-chain-a.pike");
+    uriB = corpusUri("cross-inherit-chain-b.pike");
+    uriC = corpusUri("cross-inherit-chain-c.pike");
+  });
+
+  test("dependency graph: A has B as dependent, B has C as dependent", () => {
+    expect(index.getDependents(uriA).has(uriB)).toBe(true);
+    expect(index.getDependents(uriB).has(uriC)).toBe(true);
+  });
+
+  test("invalidating A transitively invalidates B AND C", () => {
+    // All three have valid tables
+    expect(index.getSymbolTable(uriA)).not.toBeNull();
+    expect(index.getSymbolTable(uriB)).not.toBeNull();
+    expect(index.getSymbolTable(uriC)).not.toBeNull();
+
+    // Invalidate A — the root of the chain
+    const invalidated = index.invalidateWithDependents(uriA);
+
+    // A itself is invalidated
+    expect(invalidated).toContain(uriA);
+    // B (direct dependent of A) is invalidated
+    expect(invalidated).toContain(uriB);
+    // C (transitive dependent: C→B→A) is also invalidated
+    expect(invalidated).toContain(uriC);
+
+    // None of the tables are servable
+    expect(index.getSymbolTable(uriA)).toBeNull();
+    expect(index.getSymbolTable(uriB)).toBeNull();
+    expect(index.getSymbolTable(uriC)).toBeNull();
+  });
+
+  test("re-indexing B does not re-validate C (C remains stale)", () => {
+    // Re-index B with fresh content
+    const contentB = readCorpus("cross-inherit-chain-b.pike");
+    const treeB = parse(contentB);
+    index.upsertFile(uriB, 2, treeB, contentB, ModificationSource.DidChange);
+
+    // B is now valid (upsertFile clears stale)
+    expect(index.getSymbolTable(uriB)).not.toBeNull();
+
+    // C is still stale — it was not re-indexed
+    expect(index.getSymbolTable(uriC)).toBeNull();
+    expect(index.isStale(uriC)).toBe(true);
+  });
+
+  test("re-indexing C makes it valid again", () => {
+    const contentC = readCorpus("cross-inherit-chain-c.pike");
+    const treeC = parse(contentC);
+    index.upsertFile(uriC, 2, treeC, contentC, ModificationSource.DidChange);
+
+    expect(index.getSymbolTable(uriC)).not.toBeNull();
+    expect(index.isStale(uriC)).toBe(false);
+  });
+
+  test("invalidating B transitively invalidates C but NOT A", () => {
+    // Re-index all to clean state
+    indexFile(index, "cross-inherit-chain-a.pike");
+    indexFile(index, "cross-inherit-chain-b.pike");
+    indexFile(index, "cross-inherit-chain-c.pike");
+
+    const invalidated = index.invalidateWithDependents(uriB);
+
+    // B itself
+    expect(invalidated).toContain(uriB);
+    // C depends on B
+    expect(invalidated).toContain(uriC);
+    // A does NOT depend on B (B depends on A, not the other way)
+    expect(invalidated).not.toContain(uriA);
+    // A's table is still valid
+    expect(index.getSymbolTable(uriA)).not.toBeNull();
+  });
+});

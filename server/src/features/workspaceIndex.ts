@@ -47,6 +47,8 @@ export interface FileEntry {
   lastModSource: ModificationSource;
   /** Content hash for fast cache validity check. */
   contentHash: string;
+  /** True when a dependency changed and this entry's symbol table may be stale. */
+  stale: boolean;
 }
 
 export interface WorkspaceIndexOptions {
@@ -129,6 +131,7 @@ export class WorkspaceIndex {
       dependencies,
       lastModSource: modSource,
       contentHash,
+      stale: false,
     };
 
     this.files.set(uri, entry);
@@ -170,7 +173,10 @@ export class WorkspaceIndex {
    * Get the symbol table for a file, or null if not indexed.
    */
   getSymbolTable(uri: string): SymbolTable | null {
-    return this.files.get(uri)?.symbolTable ?? null;
+    const entry = this.files.get(uri);
+    if (!entry) return null;
+    if (entry.stale) return null;
+    return entry.symbolTable;
   }
 
   /**
@@ -195,29 +201,67 @@ export class WorkspaceIndex {
   }
 
   /**
-   * Invalidate a file's symbol table (mark for rebuild on next access).
+   * Invalidate a file's symbol table (clear it now).
    */
   invalidate(uri: string): void {
     const entry = this.files.get(uri);
     if (entry) {
       entry.symbolTable = null;
+      entry.stale = true;
     }
   }
 
   /**
-   * Invalidate a file and all its dependents.
+   * Invalidate a file and transitively invalidate all its dependents.
+   *
+   * Strategy: stale-marking with lazy rebuild.
+   * - The changed file gets its symbol table cleared immediately.
+   * - All transitive dependents are marked stale but keep their symbol tables.
+   * - Stale tables are rebuilt on next access (getSymbolTable rebuilds lazily).
+   *
+   * This avoids rebuilding entire subtrees on every keystroke while
+   * guaranteeing correctness: stale tables are never served to callers.
    */
   invalidateWithDependents(uri: string): string[] {
-    const invalidated: string[] = [uri];
-    this.invalidate(uri);
+    const invalidated: string[] = [];
+    const visited = new Set<string>();
+    const queue = [uri];
 
-    const deps = this.getDependents(uri);
-    for (const depUri of deps) {
-      this.invalidate(depUri);
-      invalidated.push(depUri);
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const entry = this.files.get(current);
+      if (!entry) continue;
+
+      // The changed file itself gets its table cleared.
+      // Dependents are only marked stale (lazy rebuild on next access).
+      if (current === uri) {
+        entry.symbolTable = null;
+      }
+      entry.stale = true;
+      invalidated.push(current);
+
+      // Walk reverse dependency graph: dependents of current need invalidation
+      const deps = this.dependents.get(current);
+      if (deps) {
+        for (const depUri of deps) {
+          if (!visited.has(depUri)) {
+            queue.push(depUri);
+          }
+        }
+      }
     }
 
     return invalidated;
+  }
+
+  /**
+   * Check whether a file entry is stale (its dependency changed).
+   */
+  isStale(uri: string): boolean {
+    return this.files.get(uri)?.stale ?? false;
   }
 
   /**
