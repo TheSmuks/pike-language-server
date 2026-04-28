@@ -6,6 +6,8 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { join } from "path";
+import { readFileSync } from "fs";
 import { initParser, parse } from "../../server/src/parser";
 import {
   buildSymbolTable,
@@ -18,7 +20,7 @@ import {
   resolveMemberAccess,
   type TypeResolutionContext,
 } from "../../server/src/features/typeResolver";
-import { WorkspaceIndex } from "../../server/src/features/workspaceIndex";
+import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 import stdlibAutodocIndex from "../../server/src/data/stdlib-autodoc.json";
 import { createTestServer, type TestServer } from "./helpers";
 import { resetCompletionCache } from "../../server/src/features/completion";
@@ -329,5 +331,149 @@ describe("Definition provider — arrow/dot access", () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveType — cross-file resolution
+// ---------------------------------------------------------------------------
+
+describe("resolveType — cross-file", () => {
+  const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+  let crossFileIndex: WorkspaceIndex;
+
+  function indexFile(name: string): void {
+    const uri = `file://${join(CORPUS_DIR, name)}`;
+    const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
+    const tree = parse(src);
+    crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+  }
+
+  beforeAll(async () => {
+    crossFileIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    indexFile("cross_import_a.pmod");
+    indexFile("cross-import-b.pike");
+  });
+
+  test("resolves class from imported module", () => {
+    const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
+    const tableB = crossFileIndex.getSymbolTable(uriB)!;
+    const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
+
+    const result = resolveType("Greeter", ctx);
+    expect(result).not.toBeNull();
+    expect(result!.decl.name).toBe("Greeter");
+    expect(result!.decl.kind).toBe("class");
+    expect(result!.uri).toContain("cross_import_a.pmod");
+  });
+
+  test("resolves qualified type cross_import_a.Greeter", () => {
+    const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
+    const tableB = crossFileIndex.getSymbolTable(uriB)!;
+    const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
+
+    const result = resolveType("cross_import_a.Greeter", ctx);
+    expect(result).not.toBeNull();
+    expect(result!.decl.name).toBe("Greeter");
+    expect(result!.decl.kind).toBe("class");
+  });
+
+  test("resolves member of imported module class through declared type", () => {
+    const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
+    const tableB = crossFileIndex.getSymbolTable(uriB)!;
+    const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
+
+    const varG = tableB.declarations.find(d => d.name === "g" && d.kind === "variable");
+    expect(varG).not.toBeUndefined();
+    expect(varG!.declaredType).toBe("Greeter");
+
+    const member = resolveMemberAccess("g", "greet", varG!, ctx);
+    expect(member).not.toBeNull();
+    expect(member!.name).toBe("greet");
+  });
+
+  test("resolves member of imported module class create method", () => {
+    const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
+    const tableB = crossFileIndex.getSymbolTable(uriB)!;
+    const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
+
+    const varG = tableB.declarations.find(d => d.name === "g" && d.kind === "variable");
+    const member = resolveMemberAccess("g", "create", varG!, ctx);
+    expect(member).not.toBeNull();
+    expect(member!.name).toBe("create");
+  });
+
+  test("returns null for unknown type in cross-file context", () => {
+    const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
+    const tableB = crossFileIndex.getSymbolTable(uriB)!;
+    const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
+
+    expect(resolveType("NonExistentClass", ctx)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveType — qualified and stdlib types
+// ---------------------------------------------------------------------------
+
+describe("resolveType — qualified types", () => {
+  const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+  let crossFileIndex: WorkspaceIndex;
+
+  function indexFile(name: string): void {
+    const uri = `file://${join(CORPUS_DIR, name)}`;
+    const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
+    const tree = parse(src);
+    crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+  }
+
+  beforeAll(() => {
+    crossFileIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    indexFile("cross_import_a.pmod");
+  });
+
+  test("resolves cross_import_a.Greeter as qualified type", () => {
+    const src = "void test() {}";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
+
+    const result = resolveType("cross_import_a.Greeter", ctx);
+    expect(result).not.toBeNull();
+    expect(result!.decl.name).toBe("Greeter");
+    expect(result!.decl.kind).toBe("class");
+  });
+
+  test("resolves Stdio.File as stdlib type", () => {
+    const src = "void test() {}";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const ctx = makeTypeCtx(table);
+
+    const result = resolveType("Stdio.File", ctx);
+    expect(result).not.toBeNull();
+    expect(result!.decl.name).toBe("File");
+    expect(result!.uri).toBe("stdlib://Stdio.File");
+  });
+
+  test("resolves Stdio.File as stdlib type via WorkspaceIndex context", () => {
+    const src = "void test() {}";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
+
+    // WorkspaceIndex does not have Stdio, so it falls through to stdlib index
+    const result = resolveType("Stdio.File", ctx);
+    expect(result).not.toBeNull();
+    expect(result!.decl.name).toBe("File");
+  });
+
+  test("returns null for non-existent qualified type", () => {
+    const src = "void test() {}";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const ctx = makeTypeCtx(table);
+
+    expect(resolveType("NonExistent.Module", ctx)).toBeNull();
   });
 });
