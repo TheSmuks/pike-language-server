@@ -131,18 +131,23 @@ These are documented in `MANUAL_SMOKE_TESTS.md` for Layer 3 verification.
 - ~600 LOC across 4 files (1 new: `rename.ts`, 1 new test file)
 - Reuses ~60% of Phase 4 infrastructure: `getReferencesTo()`, `getDefinitionAt()`, cross-file reference enumeration
 
-### Why defer
+### Why defer (Phase 6)
+
 1. **Arrow/dot access resolution is null.** `obj->method()` and `Module.function()` references always resolve to null. These are the most common rename targets. Without resolving them, rename would silently miss references.
-2. **Cross-file references are name-based** without scope-chain verification in dependents. Could rename unrelated identifiers with the same name.
-3. **Import tracking creates no dependency edges.** `import Stdio;` doesn't create a dependency, so references through imported modules aren't tracked.
+
+### Phase 7 progress on blockers
+
+1. **Arrow/dot access resolution now works for typed variables.** `resolveMemberAccess()` resolves `obj->method()` when `obj` has an explicit type annotation. This covers the `ClassName var;` pattern. Untyped variables (`mixed`) still resolve to null.
+2. **Cross-file references are still name-based** without scope-chain verification in dependents. Could rename unrelated identifiers with the same name.
+3. **Import dependency tracking now creates edges.** `import Stdio;` creates a dependency edge. References through imported modules are now tracked in the dependency graph.
 
 ### Updated rationale
 The third option (tree-sitter-driven workspace-wide rename using Phase 4's resolver) exists and is bounded scope (~600 LOC). However, its correctness depends on reference resolution completeness that Phase 4 doesn't yet provide. Specifically:
-- Arrow/dot access resolution requires type inference (deferred to a future phase)
-- Import dependency tracking is not implemented
+- ~~Arrow/dot access resolution requires type inference~~ **Phase 7 P1: Works for typed variables, not for `mixed`.**
+- ~~Import dependency tracking is not implemented~~ **Phase 7 P2: Implemented, import edges in dependency graph.**
 - Cross-file scope verification needs the dependency graph to be populated
 
-Defer rename to after type inference and import tracking are implemented. The Phase 4 infrastructure is sufficient for same-file rename today, but workspace-wide rename needs more resolver work.
+Rename should be re-evaluated now that Phase 7 has delivered type resolution and import tracking. The remaining gap is untyped variables and cross-file scope verification. Same-file rename for typed variables is feasible today.
 
 ## Summary of Findings
 
@@ -153,7 +158,7 @@ Defer rename to after type inference and import tracking are implemented. The Ph
 | Priority queue doesn't preempt hover/completion | **Architecture** | Document; not a bug (hover doesn't use worker) |
 | Dependency graph empty in test environment | **Infrastructure** | Add layer-2 integration test for cross-file propagation |
 | Cross-file propagation untested with real files | **Gap** | Requires layer-2 VSCode integration test |
-| Rename needs type inference + import tracking | **Scope** | Defer; updated rationale in decision |
+| Rename needs type inference + import tracking | **Partial progress** | Phase 7 P1+P2 delivered; untyped vars still a gap |
 
 ## Phase 6 P2 Status
 

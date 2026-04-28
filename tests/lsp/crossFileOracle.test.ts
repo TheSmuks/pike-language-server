@@ -110,9 +110,9 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
 
         const pikeTarget = resolution.target_file;
 
-        // Find the inherit declaration at the right line
+        // Find the inherit or import declaration at the right line
         const inheritDecl = table.declarations.find(
-          d => d.kind === "inherit" && d.nameRange.start.line === resolution.line - 1,
+          d => (d.kind === 'inherit' || d.kind === 'import') && d.nameRange.start.line === resolution.line - 1,
         );
 
         if (!inheritDecl) {
