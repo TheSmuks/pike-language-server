@@ -405,16 +405,21 @@ export class WorkspaceIndex {
     const targetEntry = this.files.get(targetUri);
     if (!targetEntry?.symbolTable) return null;
 
-    // For string literal inherits, the target is the file itself
-    // Look for the first class or the file-level scope
-    if (isStringLit) {
-      // inherit "file.pike" brings all top-level symbols into scope
-      // Return the first class declaration if there is one, or null
+    // For string literal inherits OR module (.pmod) identifier inherits,
+    // the target is the file/module itself. Return the first class or file scope.
+    if (isStringLit || targetUri.endsWith(".pmod")) {
+      // inherit "file.pike" / inherit module_name brings all top-level symbols into scope
+      // Return the first class declaration if there is one
       for (const targetDecl of targetEntry.symbolTable.declarations) {
         if (targetDecl.kind === "class") {
           return { uri: targetUri, decl: targetDecl };
         }
       }
+      // No class — return the first declaration as a representative target
+      if (targetEntry.symbolTable.declarations.length > 0) {
+        return { uri: targetUri, decl: targetEntry.symbolTable.declarations[0] };
+      }
+      return null;
     }
 
     // For identifier inherits, look for a matching class

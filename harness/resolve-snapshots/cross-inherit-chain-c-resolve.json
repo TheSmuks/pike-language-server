@@ -1,0 +1,62 @@
+{
+  "error": null,
+  "resolutions": [
+    {
+      "reference": "cross-inherit-chain-b.pike",
+      "alias": null,
+      "symbols": [
+        {
+          "defined_file": "corpus/files/cross-inherit-chain-a.pike",
+          "members": [
+            {
+              "kind": "function",
+              "name": "create"
+            },
+            {
+              "kind": "function",
+              "name": "identify"
+            }
+          ],
+          "kind": "class",
+          "line": 8,
+          "name": "Base"
+        },
+        {
+          "defined_file": "corpus/files/cross-inherit-chain-b.pike",
+          "members": [
+            {
+              "kind": "function",
+              "name": "create"
+            },
+            {
+              "kind": "function",
+              "name": "identify"
+            }
+          ],
+          "kind": "class",
+          "line": 11,
+          "name": "Middle"
+        },
+        {
+          "defined_file": "corpus/files/cross-inherit-chain-b.pike",
+          "kind": "function",
+          "line": 19,
+          "name": "main"
+        }
+      ],
+      "kind": "inherit",
+      "target_file": "corpus/files/cross-inherit-chain-b.pike",
+      "line": 9
+    },
+    {
+      "resolve_error": "NOT FOUND",
+      "reference": "Middle",
+      "alias": null,
+      "kind": "inherit",
+      "target_file": null,
+      "line": 12
+    }
+  ],
+  "pike_version": "8.0.1116",
+  "file": "corpus/files/cross-inherit-chain-c.pike"
+}

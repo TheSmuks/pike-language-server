@@ -1,0 +1,49 @@
+{
+  "error": null,
+  "file": "corpus/files/cross-inherit-rename-b.pike",
+  "pike_version": "8.0.1116",
+  "resolutions": [
+    {
+      "target_file": "corpus/files/cross-inherit-rename-a.pike",
+      "alias": "motor",
+      "line": 9,
+      "kind": "inherit",
+      "symbols": [
+        {
+          "line": 10,
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "kind": "class",
+          "members": [
+            {
+              "kind": "function",
+              "name": "create"
+            },
+            {
+              "kind": "function",
+              "name": "describe"
+            }
+          ],
+          "name": "Engine"
+        },
+        {
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "kind": "variable",
+          "name": "TYPE"
+        },
+        {
+          "line": 22,
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "kind": "function",
+          "name": "efficiency"
+        },
+        {
+          "line": 26,
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "kind": "function",
+          "name": "main"
+        }
+      ],
+      "reference": "cross-inherit-rename-a.pike"
+    }
+  ]
+}

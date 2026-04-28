@@ -1,0 +1,61 @@
+{
+  "pike_version": "8.0.1116",
+  "resolutions": [
+    {
+      "target_file": "corpus/files/cross-inherit-simple-a.pike",
+      "alias": null,
+      "line": 10,
+      "symbols": [
+        {
+          "line": 10,
+          "name": "Animal",
+          "members": [
+            {
+              "name": "create",
+              "kind": "function"
+            },
+            {
+              "name": "get_name",
+              "kind": "function"
+            },
+            {
+              "name": "speak",
+              "kind": "function"
+            }
+          ],
+          "kind": "class",
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+        },
+        {
+          "name": "SPECIES",
+          "kind": "variable",
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+        },
+        {
+          "line": 28,
+          "name": "describe",
+          "kind": "function",
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+        },
+        {
+          "line": 32,
+          "name": "main",
+          "kind": "function",
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+        }
+      ],
+      "reference": "cross-inherit-simple-a.pike",
+      "kind": "inherit"
+    },
+    {
+      "resolve_error": "NOT FOUND",
+      "target_file": null,
+      "alias": null,
+      "line": 13,
+      "reference": "Animal",
+      "kind": "inherit"
+    }
+  ],
+  "file": "corpus/files/cross-inherit-simple-b.pike",
+  "error": null
+}

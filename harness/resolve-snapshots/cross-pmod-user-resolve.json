@@ -1,0 +1,46 @@
+{
+  "resolutions": [
+    {
+      "symbols": [
+        {
+          "name": "MODULE_NAME",
+          "defined_file": "corpus/files/cross_pmod_dir.pmod/module.pmod",
+          "kind": "variable"
+        },
+        {
+          "name": "capitalize",
+          "defined_file": "corpus/files/cross_pmod_dir.pmod/module.pmod",
+          "kind": "function",
+          "line": 7
+        },
+        {
+          "name": "helpers",
+          "defined_file": "corpus/files/cross_pmod_dir.pmod/helpers.pike",
+          "members": [
+            {
+              "name": "add",
+              "kind": "function"
+            },
+            {
+              "name": "multiply",
+              "kind": "function"
+            }
+          ],
+          "kind": "class"
+        },
+        {
+          "name": "module",
+          "defined_file": "corpus/files/cross_pmod_dir.pmod/module.pmod",
+          "kind": "variable"
+        }
+      ],
+      "target_file": "corpus/files/cross_pmod_dir.pmod",
+      "reference": "cross_pmod_dir",
+      "kind": "import",
+      "line": 11
+    }
+  ],
+  "error": null,
+  "pike_version": "8.0.1116",
+  "file": "corpus/files/cross-pmod-user.pike"
+}

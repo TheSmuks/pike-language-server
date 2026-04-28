@@ -10,7 +10,9 @@
     "test:harness": "bun test harness/",
     "typecheck": "tsc --noEmit",
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
-    "harness:verify": "bun run harness/src/runner.ts --verify"
+    "harness:verify": "bun run harness/src/runner.ts --verify",
+    "harness:resolve-snapshot": "bun run harness/src/runner.ts --resolve-snapshot",
+    "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify"
   },
   "devDependencies": {
     "typescript": "^5.7.0",

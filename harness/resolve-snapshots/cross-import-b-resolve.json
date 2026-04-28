@@ -1,0 +1,58 @@
+{
+  "pike_version": "8.0.1116",
+  "error": null,
+  "resolutions": [
+    {
+      "line": 10,
+      "reference": "cross_import_a",
+      "target_file": "corpus/files/cross_import_a.pmod",
+      "symbols": [
+        {
+          "line": 20,
+          "name": "Greeter",
+          "defined_file": "corpus/files/cross_import_a.pmod",
+          "members": [
+            {
+              "name": "create",
+              "kind": "function"
+            },
+            {
+              "name": "greet",
+              "kind": "function"
+            },
+            {
+              "name": "greeting",
+              "kind": "variable"
+            }
+          ],
+          "kind": "class"
+        },
+        {
+          "name": "LIBRARY_VERSION",
+          "defined_file": "corpus/files/cross_import_a.pmod",
+          "kind": "variable"
+        },
+        {
+          "line": 16,
+          "name": "count_words",
+          "defined_file": "corpus/files/cross_import_a.pmod",
+          "kind": "function"
+        },
+        {
+          "line": 12,
+          "name": "format_name",
+          "defined_file": "corpus/files/cross_import_a.pmod",
+          "kind": "function"
+        },
+        {
+          "line": 26,
+          "name": "main",
+          "defined_file": "corpus/files/cross_import_a.pmod",
+          "kind": "function"
+        }
+      ],
+      "kind": "import"
+    }
+  ],
+  "file": "corpus/files/cross-import-b.pike"
+}
