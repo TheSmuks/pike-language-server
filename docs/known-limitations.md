@@ -88,12 +88,13 @@ The harness has snapshots for file-based `.pmod` modules (`cross_import_a.pmod`,
 **Phase 5 prerequisite:** Build `harness/resolve.pike` to introspect directory modules and cross-file member availability.
 ## Phase 5: Diagnostics and Hover Limitations
 
-### Diagnostics are save-only
+### Diagnostics are real-time with debouncing (Phase 6 P2)
 
-Diagnostics from the Pike compiler are only triggered on `textDocument/didSave`. Real-time diagnostics (on keystroke) are deferred to Phase 6.
+Diagnostics from the Pike compiler are triggered on `textDocument/didChange` (debounced at 500ms) and `textDocument/didSave` (immediate). Three modes: realtime, saveOnly, off. Decision 0013.
 
-**Rationale**: Save-triggered diagnostics are correct by construction — the file on disk matches what Pike compiles. Real-time diagnostics would require compiling unsaved buffer content with edge cases for preprocessor directives and includes.
+**Configuration**: `initializationOptions.diagnosticMode` in the `initialize` request. Default: `realtime`.
 
+**Verified**: 50 rapid didChange events produce ≤ 3 diagnose invocations. Hover latency unaffected during in-flight diagnose. See `decisions/0013-verification.md`.
 ### No column-level diagnostic positions
 
 Pike's CompilationHandler reports line numbers but not column positions. LSP diagnostics from Pike always have `character: 0`.
