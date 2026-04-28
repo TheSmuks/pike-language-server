@@ -36,8 +36,10 @@ import {
   getDefinitionAt,
   getReferencesTo,
   type SymbolTable,
+  type Declaration,
 } from "./features/symbolTable";
 import { getCompletions, type CompletionContext } from "./features/completion";
+import { resolveType, resolveMemberAccess, type TypeResolutionContext } from "./features/typeResolver";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { PikeWorker } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
@@ -277,6 +279,9 @@ export function createPikeServer(connection: Connection): PikeServer {
       };
       return loc;
     }
+    // Try arrow/dot access resolution (obj->member, Module.function)
+    const accessResult = resolveAccessDefinition(table, params.textDocument.uri, params.position.line, params.position.character);
+    if (accessResult) return accessResult;
 
     return null;
   });
@@ -360,11 +365,119 @@ export function createPikeServer(connection: Connection): PikeServer {
       if (crossFile) {
         return formatHover(declForHover(crossFile.decl, crossFile.uri));
       }
+
+      // Try arrow/dot access resolution for hover
+      const accessDecl = resolveAccessDeclaration(table, params.textDocument.uri, params.position.line, params.position.character);
+      if (accessDecl) {
+        return formatHover(declForHover(accessDecl.decl, accessDecl.uri));
+      }
+
       return null;
     }
 
     return formatHover(declForHover(decl, params.textDocument.uri));
   });
+
+  /** Shared core: resolve arrow/dot access to { decl, uri }. */
+  function resolveAccessCore(
+    table: SymbolTable,
+    uri: string,
+    line: number,
+    character: number,
+  ): { decl: Declaration; uri: string } | null {
+    const ref = table.references.find(
+      r => r.loc.line === line && r.loc.character === character &&
+        (r.kind === 'arrow_access' || r.kind === 'dot_access'),
+    );
+    if (!ref) {
+      return null;
+    }
+
+
+    const doc = documents.get(uri);
+    if (!doc) return null;
+    const tree = parse(doc.getText());
+    if (!tree) return null;
+
+    const node = tree.rootNode.descendantForPosition({ row: line, column: character });
+    if (!node) return null;
+
+    let postfixNode = node;
+    while (postfixNode.parent && postfixNode.type !== 'postfix_expr') {
+      postfixNode = postfixNode.parent;
+    }
+    if (postfixNode.type !== 'postfix_expr') return null;
+
+    const children = postfixNode.children;
+    let lhsNode = null;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      if ((child.type === '->' || child.type === '.' || child.type === '->?' || child.type === '?->') &&
+          i + 1 < children.length &&
+          children[i + 1].startPosition.row === node.startPosition.row &&
+          children[i + 1].startPosition.column === node.startPosition.column) {
+        lhsNode = children[i - 1];
+        break;
+      }
+    }
+    if (!lhsNode) {
+      return null;
+    }
+
+
+    const lhsName = lhsNode.text;
+    const lhsRef = table.references.find(
+      r => r.name === lhsName && r.resolvesTo !== null &&
+        r.loc.line === lhsNode.startPosition.row &&
+        r.loc.character === lhsNode.startPosition.column,
+    );
+    const lhsDecl = lhsRef
+      ? table.declarations.find(d => d?.id === lhsRef.resolvesTo) ?? null
+      : table.declarations.find(d => d.name === lhsName) ?? null;
+
+    if (!lhsDecl) {
+      return null;
+    }
+
+
+    const ctx: TypeResolutionContext = { table, uri, index, stdlibIndex };
+    const targetDecl = resolveMemberAccess(lhsName, ref.name, lhsDecl, ctx);
+    if (!targetDecl) return null;
+
+    const targetUri = table.declarations.includes(targetDecl) ? uri : findDeclUri(targetDecl) ?? uri;
+    return { decl: targetDecl, uri: targetUri };
+  }
+
+  /** Resolve arrow/dot access to a definition location. */
+  function resolveAccessDefinition(
+    table: SymbolTable, uri: string, line: number, character: number,
+  ): LspLocation | null {
+    const result = resolveAccessCore(table, uri, line, character);
+    if (!result) return null;
+    return {
+      uri: result.uri,
+      range: {
+        start: { line: result.decl.nameRange.start.line, character: result.decl.nameRange.start.character },
+        end: { line: result.decl.nameRange.end.line, character: result.decl.nameRange.end.character },
+      },
+    };
+  }
+
+  /** Resolve arrow/dot access to a declaration (for hover). */
+  function resolveAccessDeclaration(
+    table: SymbolTable, uri: string, line: number, character: number,
+  ): { decl: Declaration; uri: string } | null {
+    return resolveAccessCore(table, uri, line, character);
+  }
+
+  /** Find the URI of a declaration by searching the workspace index. */
+  function findDeclUri(targetDecl: Declaration): string | null {
+    for (const uri of index.getAllUris()) {
+      const t = index.getSymbolTable(uri);
+      if (t?.declarations.includes(targetDecl)) return uri;
+    }
+    return null;
+  }
 
   /** Format a declaration into a Hover response. */
   function formatHover(info: HoverInfo | null): Hover | null {

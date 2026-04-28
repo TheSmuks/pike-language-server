@@ -2,7 +2,8 @@
 
 ## Current Phase
 
-**Phase 6: Refinement** — Complete (verified). P1 completion, P2 real-time diagnostics delivered. P3 rename deferred. 979 tests passing.
+**Phase 7: Type Resolution + Import Tracking** — In progress. Type resolver (P1) delivered, import dependency tracking (P2) delivered. 1,007 tests passing.
+
 
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
@@ -14,6 +15,7 @@
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
 | Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred (type inference prerequisite). |
+| Phase 7: Type Resolution + Import Tracking | **In progress** | Phase 6 complete | P1: Type resolver ✓. P2: Import tracking ✓. |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -98,6 +100,34 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 
 ## Completed Phase History
 
+## Phase 7 — In Progress
+
+### P1: Type Resolution
+Decision 0014. Pure-function type resolver with `resolveType()` and `resolveMemberAccess()`. Resolution chain: same-file class → qualified type → cross-file via inherit/import → stdlib. Integrated into completion (replaces inline `resolveTypeMembers()`), definition (arrow/dot access), and hover providers. 20 type resolution tests.
+
+### P2: Import Dependency Tracking
+Decision 0015. `DeclKind 'import'` added to distinguish `import` from `inherit` declarations. `extractDependencies()` now includes import edges in the dependency graph. `propagateToDependents()` covers import dependents. 8 import dependency tests.
+
+### Changes
+- `server/src/features/typeResolver.ts` — New: `resolveType()`, `resolveMemberAccess()`, supporting helpers (~260 LOC)
+- `server/src/features/symbolTable.ts` — `DeclKind 'import'` added, `collectInheritDecl()` derives kind from node type
+- `server/src/features/completion.ts` — Inline `resolveTypeMembers()` replaced with `resolveMemberAccess()` calls; cross-file + inherited member completion
+- `server/src/features/workspaceIndex.ts` — `extractDependencies()` handles both `kind === 'inherit'` and `kind === 'import'`
+- `server/src/server.ts` — Arrow/dot access definition and hover resolution via `resolveAccessCore()`
+- `decisions/0014-type-resolution.md` — Type resolution architecture
+- `decisions/0015-import-tracking.md` — Import dependency tracking semantics
+- `tests/lsp/typeResolution.test.ts` — 20 tests
+- `tests/lsp/importDependencies.test.ts` — 8 tests
+
+### Bugs found and fixed
+- `findMemberInClass` used `containsDecl()` to find class scope — class declaration is in file scope, not class body scope. Fixed to use `parentId` + `posInRange`.
+- Same fix applied to `findMemberInInheritedScopes`.
+- `resolveMemberAccess` "class as LHS" path didn't check inherited scopes — added `findMemberInInheritedScopes` call.
+- `collectInheritDecl` hardcoded `kind: 'inherit'` — now derives from `node.type`.
+- Cross-file oracle test only matched `kind === 'inherit'` — updated to match both kinds.
+- Tree-sitter Node identity comparison (`===`) unreliable across `descendantForPosition` vs `children[i]` — changed to position comparison.
+
+### Test suite at current state: 1,007 tests, 0 failures, 8,762 assertions, 26 files.
 ## Phase 6 — Complete (Verified)
 
 ### P1: Completion
@@ -301,7 +331,7 @@ Five verification items resolved:
 - [x] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** Done. `resolve.pike` introspects cross-file resolution via `master()->resolv()` and `cast_to_program()`. 7 resolution snapshots. 5 oracle tests comparing LSP against Pike.
 - [x] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Done. Extension packaging with esbuild, 3 integration tests running inside VSCode extension host. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
-- [ ] **Rename feature:** Resolver-driven workspace-wide rename scoped at ~600 LOC. Blocked on arrow/dot access type inference and import dependency tracking. Re-evaluate after Phase 7+. See `decisions/0013-verification.md` §V6.
+- [ ] **Rename feature:** Resolver-driven workspace-wide rename scoped at ~600 LOC. Arrow/dot type inference now exists (Phase 7 P1). Import dependency tracking now exists (Phase 7 P2). Re-evaluate. See `decisions/0013-verification.md` §V6.
 - [ ] **Cross-file propagation integration test:** `propagateToDependents` code correct but untested with real workspace files (ModuleResolver needs on-disk files). Requires layer-2 VSCode integration test.
 
 ## Oracle Gaps
