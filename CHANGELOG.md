@@ -11,6 +11,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Project initialized from ai-project-template.
 
+## Phase 5: Types and Diagnostics - 2026-04-28
+
+### Added
+
+- Pike worker subprocess: long-lived Pike process for diagnostics and type queries
+  - JSON-over-stdio protocol: diagnose, typeof, ping methods
+  - CompilationHandler-based structured diagnostics (errors + warnings)
+  - Same normalization as harness introspect.pike (expected/actual type extraction)
+- PikeWorker TypeScript class: subprocess lifecycle management
+  - Lazy start, automatic crash recovery, timeout (10s), restart with readiness check
+  - Content-hash caching: sha256-keyed per-file cache, undo operations are free
+- Save-triggered diagnostic pipeline (decision 0011)
+  - didSave → Pike worker → structured diagnostics → merged with parse diagnostics
+  - Position mapping: Pike 1-based lines → LSP 0-based lines
+  - Diagnostic severity mapping: Pike error/warning → LSP Error/Warning
+- Hover handler: three-source routing per decision 0002
+  - Same-file: tree-sitter declaration → signature extraction
+  - Cross-file: WorkspaceIndex resolution → signature from target
+  - Stdlib: reserved for Pike runtime integration (Phase 6)
+- Decision 0011: Types, diagnostics, and hover architecture
+- harness/resolve.pike: cross-file resolution ground truth from Pike's perspective
+  - Parses inherit/import declarations, resolves via master()->resolv() and cast_to_program()
+  - Handles .pmod file modules, .pmod directory modules (joinnodes), .pike string-path inherits
+  - 7 resolution snapshots, 5 oracle tests comparing LSP vs Pike
+- Extension packaging: esbuild bundles for server and client
+  - Server bundle: ~203KB, Client bundle: ~768KB
+  - build:extension script in package.json
+- @vscode/test-electron integration tests (3 tests in VSCode extension host)
+  - Extension activates when .pike file opened
+  - documentSymbol returns symbols for corpus files
+  - Error recovery: malformed input doesn't crash
+- resolveInheritTarget fix: .pmod module identifier inherits (e.g., `inherit cross_lib_module`)
+
+### Fixed
+
+- resolveInheritTarget: .pmod file inherits treated like string literal inherits (was treated like class identifier)
+- Directory module normalization: LSP resolves `cross_pmod_dir` → `cross_pmod_dir.pmod/module.pmod`, Pike resolves to `cross_pmod_dir.pmod` — test normalizes these as equivalent
+
+### Testing
+
+- PikeWorker subprocess tests: 12 tests (lifecycle, diagnostics, concurrent requests)
+- Diagnostics pipeline tests: 7 tests (type errors, position mapping, content-hash caching)
+- Hover tests: 6 tests (function, variable, class, empty position, range, references)
+- Oracle tests: 5 tests comparing LSP vs Pike resolution
+- Integration tests: 3 tests running in VSCode extension host
+- Total test suite: 863 tests, 7446 assertions, 0 failures
 ## [Unreleased]
 
 ### Added

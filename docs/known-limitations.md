@@ -78,3 +78,28 @@ The harness has snapshots for file-based `.pmod` modules (`cross_import_a.pmod`,
 **What's missing:** Directory module member enumeration. The LSP's cross-file tests only verify that `cross-pmod-user.pike` indexes successfully. They don't verify that the LSP discovers the same members from `cross_pmod_dir.pmod/` that Pike resolves. This is a semantic correctness gap.
 
 **Phase 5 prerequisite:** Build `harness/resolve.pike` to introspect directory modules and cross-file member availability.
+## Phase 5: Diagnostics and Hover Limitations
+
+### Diagnostics are save-only
+
+Diagnostics from the Pike compiler are only triggered on `textDocument/didSave`. Real-time diagnostics (on keystroke) are deferred to Phase 6.
+
+**Rationale**: Save-triggered diagnostics are correct by construction — the file on disk matches what Pike compiles. Real-time diagnostics would require compiling unsaved buffer content with edge cases for preprocessor directives and includes.
+
+### No column-level diagnostic positions
+
+Pike's CompilationHandler reports line numbers but not column positions. LSP diagnostics from Pike always have `character: 0`.
+
+**Impact**: Underlines span the entire line rather than the specific token. Parse diagnostics (from tree-sitter) do have column-level positions.
+
+### Hover does not use Pike runtime for type inference
+
+Hover uses tree-sitter declarations for type information. The `typeof` method in the Pike worker is wired but not yet connected to hover responses.
+
+**Impact**: Hover shows declared types, not inferred types. A variable declared as `mixed` shows `mixed` even if Pike would infer a more specific type.
+
+### Stdlib hover not connected to Pike signatures
+
+The three-source routing table (decision 0002) reserves stdlib symbol hover for Pike runtime queries, but this path is not yet implemented. Stdlib symbols return null hover.
+
+**Phase to fix**: Phase 6 (pike-ai-kb integration or pre-built system map).

@@ -2,8 +2,7 @@
 
 ## Current Phase
 
-**Phase 4: Cross-File Resolution** — Complete.
-
+**Phase 5: Types and Diagnostics** — In Progress.
 
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
@@ -13,7 +12,7 @@
 | Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
-| Phase 5: Types and Diagnostics | Pending | Phase 4 complete | Diagnostics and hover from pike oracle |
+| Phase 5: Types and Diagnostics | **In Progress** | Phase 4 complete + resolve.pike + integration tests | Diagnostics and hover from pike oracle |
 | Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
 
 ## Phase 1 Exit Checkpoint — Verified
@@ -262,8 +261,8 @@ Five verification items resolved:
 ## Deferred Items
 
 - [x] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** Done in Phase 4. `corpus/corpus.json` replaces `CROSS_FILE_FLAGS`. Runner reads per-file compilation flags from manifest.
-- [ ] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** The current cross-file tests use structural expectations (file names, parse tree properties), not Pike oracle output. Before Phase 5 adds type-aware diagnostics, `resolve.pike` must introspect cross-file resolution from Pike's perspective. See `decisions/0010` §Ground Truth Assessment.
-- [ ] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Layer-2 tests deferred from Phase 2. The integration test stubs exist at `tests/integration/` but require extension packaging (esbuild, VSIX) before they can run. See `decisions/0007-deferred-integration-tests.md`.
+- [x] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** Done. `resolve.pike` introspects cross-file resolution via `master()->resolv()` and `cast_to_program()`. 7 resolution snapshots. 5 oracle tests comparing LSP against Pike.
+- [x] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Done. Extension packaging with esbuild, 3 integration tests running inside VSCode extension host. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
 
 ## Oracle Gaps

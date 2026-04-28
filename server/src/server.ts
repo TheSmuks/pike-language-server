@@ -2,7 +2,7 @@
  * Pike Language Server — main entry point.
  *
  * Communicates over stdio. Provides documentSymbol, definition, references,
- * and parse-error diagnostics.
+ * hover, and diagnostics (parse errors + Pike compilation).
  *
  * Architecture:
  * - `createPikeServer(connection)` — wires all handlers onto a connection.
@@ -21,6 +21,11 @@ import {
   Location as LspLocation,
   Range as LspRange,
   Position as LspPosition,
+  DiagnosticSeverity,
+  Diagnostic,
+  Hover,
+  MarkupKind,
+  MarkupContent,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initParser, parse } from "./parser";
@@ -32,6 +37,27 @@ import {
   type SymbolTable,
 } from "./features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
+import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
+import { createHash } from "node:crypto";
+
+// ---------------------------------------------------------------------------
+// Content-hash caching for Pike diagnostics
+// ---------------------------------------------------------------------------
+
+interface PikeCacheEntry {
+  /** sha256 of the source content when this entry was computed. */
+  contentHash: string;
+  /** Pike diagnostics for this content. */
+  diagnostics: PikeDiagnostic[];
+  /** Timestamp when this entry was computed. */
+  timestamp: number;
+}
+
+const pikeCache = new Map<string, PikeCacheEntry>();
+
+function computeContentHash(source: string): string {
+  return createHash("sha256").update(source).digest("hex");
+}
 
 // ---------------------------------------------------------------------------
 // Server factory — reusable for production and tests
@@ -41,6 +67,7 @@ export interface PikeServer {
   connection: Connection;
   documents: TextDocuments<TextDocument>;
   index: WorkspaceIndex;
+  worker: PikeWorker;
 }
 
 /**
@@ -49,6 +76,7 @@ export interface PikeServer {
  */
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
+  const worker = new PikeWorker();
 
   // Workspace index — initialized in onInitialize with the workspace root.
   // Starts with a placeholder path; overwritten when the client sends init.
@@ -88,10 +116,15 @@ export function createPikeServer(connection: Connection): PikeServer {
 
     return {
       capabilities: {
-        textDocumentSync: TextDocumentSyncKind.Full,
+        textDocumentSync: {
+          openClose: true,
+          change: TextDocumentSyncKind.Full,
+          save: { includeText: true },
+        },
         documentSymbolProvider: true,
         definitionProvider: true,
         referencesProvider: true,
+        hoverProvider: true,
       },
     } satisfies InitializeResult;
   });
@@ -221,11 +254,220 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   // -----------------------------------------------------------------------
+  // textDocument/hover (decision 0002: three-source routing)
+  // -----------------------------------------------------------------------
+
+  connection.onHover(async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    // Find the declaration at or containing this position
+    const decl = getDefinitionAt(
+      table,
+      params.position.line,
+      params.position.character,
+    );
+
+    if (!decl) {
+      // Try cross-file resolution for hover
+      const crossFile = index.resolveCrossFileDefinition(
+        params.textDocument.uri,
+        params.position.line,
+        params.position.character,
+      );
+      if (crossFile) {
+        return formatHover(declForHover(crossFile.decl, crossFile.uri));
+      }
+      return null;
+    }
+
+    return formatHover(declForHover(decl, params.textDocument.uri));
+  });
+
+  /** Format a declaration into a Hover response. */
+  function formatHover(info: HoverInfo | null): Hover | null {
+    if (!info) return null;
+
+    const parts: string[] = [];
+
+    // Code signature
+    parts.push("```pike");
+    parts.push(info.signature);
+    parts.push("```");
+
+    // Documentation
+    if (info.documentation) {
+      parts.push("");
+      parts.push(info.documentation);
+    }
+
+    const contents: MarkupContent = {
+      kind: MarkupKind.Markdown,
+      value: parts.join("\n"),
+    };
+
+    return {
+      contents,
+      range: {
+        start: { line: info.line, character: info.character },
+        end: { line: info.line, character: info.character + info.name.length },
+      },
+    };
+  }
+
+  interface HoverInfo {
+    name: string;
+    signature: string;
+    documentation: string;
+    line: number;
+    character: number;
+  }
+
+  /** Convert a Declaration to hover info. */
+  function declForHover(
+    decl: { name: string; kind: string; nameRange: { start: { line: number; character: number } }; range: { start: { line: number; character: number }; end: { line: number; character: number } } },
+    uri: string,
+  ): HoverInfo | null {
+    const source = getSource(uri) ?? documents.get(uri)?.getText() ?? "";
+    const lines = source.split("\n");
+
+    // Extract the full declaration line as the signature
+    const declLine = lines[decl.range.start.line] ?? "";
+    const signature = declLine.trim().replace(/;$/, "");
+
+    return {
+      name: decl.name,
+      signature: formatSignature(decl.kind, decl.name, signature),
+      documentation: "",
+      line: decl.nameRange.start.line,
+      character: decl.nameRange.start.character,
+    };
+  }
+
+  /** Format a declaration kind + name + signature into hover text. */
+  function formatSignature(kind: string, name: string, rawSignature: string): string {
+    switch (kind) {
+      case "function":
+        // Extract just the function declaration line
+        return rawSignature;
+      case "class":
+        return rawSignature;
+      case "variable":
+      case "parameter":
+        return rawSignature;
+      case "constant":
+        return rawSignature;
+      case "inherit":
+        return rawSignature;
+      default:
+        return rawSignature;
+    }
+  }
+
+  /** Get document source by URI. */
+  function getSource(uri: string): string | null {
+    const doc = documents.get(uri);
+    return doc ? doc.getText() : null;
+  }
+
+  // -----------------------------------------------------------------------
+  // textDocument/didSave — Pike diagnostic pipeline (decision 0011)
+  // -----------------------------------------------------------------------
+
+  if (typeof connection.onDidSave === "function") {
+    connection.onDidSave(async (params) => { 
+      const doc = documents.get(params.textDocument.uri);
+      if (!doc) return;
+
+    const source = doc.getText();
+    const contentHash = computeContentHash(source);
+
+    // Check cache
+    const cached = pikeCache.get(doc.uri);
+    if (cached && cached.contentHash === contentHash) {
+      // Cache hit — republish cached diagnostics
+      const lspDiagnostics = mergeDiagnostics(
+        getParseDiagnostics(parse(source)),
+        cached.diagnostics,
+      );
+      connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+      return;
+    }
+
+    // Extract filepath from URI
+    const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
+
+    try {
+      const result = await worker.diagnose(source, filepath);
+      
+      // Update cache
+      pikeCache.set(doc.uri, {
+        contentHash,
+        diagnostics: result.diagnostics,
+        timestamp: Date.now(),
+      });
+
+      // Merge parse diagnostics with Pike diagnostics
+      const parseDiags = getParseDiagnostics(parse(source));
+      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics);
+      connection.sendDiagnostics({ uri: doc.uri, diagnostics: lspDiagnostics });
+    } catch (err) {
+      connection.console.error(
+        `Pike diagnose failed for ${doc.uri}: ${(err as Error).message}`,
+      );
+      // On failure, keep only parse diagnostics
+      const parseDiags = getParseDiagnostics(parse(source));
+      connection.sendDiagnostics({ uri: doc.uri, diagnostics: parseDiags });
+    }
+    });
+  }
+
+  /** Merge parse diagnostics (tree-sitter) with Pike compilation diagnostics. */
+  function mergeDiagnostics(
+    parseDiags: Diagnostic[],
+    pikeDiags: PikeDiagnostic[],
+  ): Diagnostic[] {
+    const result = [...parseDiags];
+
+    for (const pd of pikeDiags) {
+      // Position mapping: Pike reports 1-based lines, LSP uses 0-based
+      const line = pd.line - 1;
+
+      let message = pd.message;
+      if (pd.expected_type) {
+        message += `\nExpected: ${pd.expected_type}`;
+      }
+      if (pd.actual_type) {
+        message += `\nGot: ${pd.actual_type}`;
+      }
+
+      result.push({
+        range: {
+          start: { line, character: 0 },
+          end: { line, character: 0 },
+        },
+        severity: pd.severity === "error"
+          ? DiagnosticSeverity.Error
+          : DiagnosticSeverity.Warning,
+        source: "pike",
+        message,
+      });
+    }
+
+    return result;
+  }
+
+  // -----------------------------------------------------------------------
   // Shutdown
   // -----------------------------------------------------------------------
 
   connection.onShutdown(() => {
     index.clear();
+    pikeCache.clear();
+    worker.stop();
   });
 
   // -----------------------------------------------------------------------
@@ -261,6 +503,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.onDidClose((event) => {
     index.removeFile(event.document.uri);
+    pikeCache.delete(event.document.uri);
     connection.sendDiagnostics({
       uri: event.document.uri,
       diagnostics: [],
@@ -269,7 +512,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.listen(connection);
 
-  return { connection, documents, index };
+  return { connection, documents, index, worker };
 }
 
 // ---------------------------------------------------------------------------

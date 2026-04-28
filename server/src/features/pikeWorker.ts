@@ -193,6 +193,9 @@ export class PikeWorker {
     this.start();
     this.restarting = false;
 
+    // Give the process a moment to initialize before pinging
+    await new Promise((r) => setTimeout(r, 100));
+
     // Wait for the worker to be ready
     try {
       await this.ping();
