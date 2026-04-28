@@ -173,3 +173,130 @@ Cache value: { diagnostics, symbols, timestamp }
 - Hover uses tree-sitter for workspace symbols and Pike for stdlib symbols. Both paths are tested.
 - The content-hash cache means undo operations are free (cache hit on reverted content).
 - Position mapping is trivial since Pike only reports line numbers (no columns).
+
+
+## 6. Shared-Server Deployment Policies
+
+The deployment environment is SSH on a shared Linux server with limited resources and multiple concurrent users. Per-user costs compound across coworkers.
+
+### 6a. Idle worker eviction
+
+**Policy**: Kill the Pike worker after 5 minutes of no requests. Restart on next request.
+
+**Rationale**: On a shared server, an idle worker is wasted memory. With 10 coworkers and only 3 actively coding, the server holds 3 Pike processes instead of 10.
+
+**Cost**: One cold-path latency hit (150ms) when the user returns from idle.
+
+**Configuration**: `idleTimeoutMs` (default: 300000)
+
+**Implementation**: `resetIdleTimer()` called on every request. Timer uses `unref()` to not prevent process exit.
+
+### 6b. Worker memory ceiling and reset
+
+**Policy**: Force restart after 100 requests or 30 minutes of continuous use, whichever comes first.
+
+**Rationale**: Pike's `compile_string` accumulates program state. A long-lived worker's memory grows unbounded. Periodic reset returns to clean baseline.
+
+**Cost**: One longer-latency request (the one that triggers restart). Subsequent requests are at clean baseline.
+
+**Configuration**: `maxRequestsBeforeRestart` (default: 100), `maxActiveMinutes` (default: 30)
+
+### 6c. Reduced timeout with timeout-as-diagnostic
+
+**Policy**: 5-second per-request timeout (configurable). On timeout, surface a warning diagnostic to the user.
+
+**Rationale**: On a shared server, 10s of Pike CPU during a slow compile blocks other coworkers. Shorter timeout improves fairness. The diagnostic informs the user why their diagnostics are stale.
+
+**Message**: "Compilation timed out, will retry on next save."
+
+**Configuration**: `requestTimeoutMs` (default: 5000)
+
+### 6d. File watching strategy
+
+**Policy**: Rely entirely on editor-pushed change notifications (didChange, didSave, didClose). No server-side file watchers.
+
+**Rationale**: On Linux shared servers, `fs.inotify.max_user_watches` is a finite resource shared across all coworkers. VSCode-over-SSH watches files on the remote side and pushes changes via the LSP protocol. The server doesn't need its own watchers.
+
+**Limitation**: Some LSP clients may not support `didChangeWatchedFiles`. The server already works without it — it relies on `didChange` for content updates.
+
+### 6e. Cache size cap
+
+**Policy**: LRU eviction at 50 entries or 25MB total, whichever comes first.
+
+**Rationale**: Per-user cost matters. A coworker with 5 VSCode windows shouldn't multiply this. The cap prevents memory growth from large files or many open documents.
+
+**Configuration**: `CACHE_MAX_ENTRIES` (default: 50), `CACHE_MAX_BYTES` (default: 25MB)
+
+### 6f. Concurrent request queueing
+
+**Policy**: FIFO. One request at a time through the Pike worker.
+
+**Rationale**: The Pike worker handles one stdio request at a time. When a diagnose is in flight and a hover arrives, the hover queues. This is the simplest correct model.
+
+**Phase 6 implication**: Real-time debouncing will need to be aware of this queue. If debounced diagnostics are in flight, hover will wait. The debounce interval (Phase 6) should be tuned to minimize queue contention.
+
+### 6g. CPU politeness
+
+**Policy**: Spawn Pike worker with `nice +5` on Linux.
+
+**Rationale**: Under CPU contention on a shared server, the Pike subprocess yields to other system processes (including other coworkers' editors). Editor responsiveness improves.
+
+**Fallback**: On non-Linux platforms, nice is not applied.
+
+**Configuration**: `niceValue` (default: 5, set to 0 to disable)
+
+### 6h. Cold/warm latency separation
+
+**Measured benchmarks** (single-user on development machine):
+
+| Operation | Cold | Warm p50 | Warm p95 |
+|-----------|------|----------|----------|
+| diagnose | 49.5ms | 0.13ms | 0.32ms |
+| hover (autodoc) | 0.005ms | 0.005ms | 0.005ms |
+| worker restart | 150ms | — | — |
+| post-restart diagnose | — | 0.3ms | — |
+
+**Cold path** is what the user feels on first save after opening a workspace or returning from idle. **Warm path** is steady-state editing.
+
+Hover never involves the Pike worker — it's parse-tree driven (autodoc) or tree-sitter driven (fallback). Hover latency is sub-millisecond.
+
+## 7. AutoDoc Routing (revised from extract_autodoc approach)
+
+### Decision: Parse-tree driven for workspace, pike-ai-kb for stdlib
+
+**Chosen**: Extract //! comments directly from source text. No subprocess calls. No file I/O.
+
+**Alternatives rejected:**
+
+| Alternative | Cost |
+|-------------|------|
+| `pike -x extract_autodoc` per hover request | File I/O + subprocess per request defeats worker architecture. Deployment-hostile on shared servers. |
+| XML parsing of extract_autodoc output | Adds XML parser dependency for data already available in source. |
+
+### Hover routing (final)
+
+```
+Resolve identifier → declaration (existing phase 3+4)
+  → Has //! comments? → Parse-tree AutoDoc → markdown signature
+  → Is stdlib? → pike-ai-kb pike-signature → markdown signature (Phase 6)
+  → Neither → Tree-sitter declared type → bare signature
+```
+
+### AutoDoc coverage on corpus
+
+| File | Declarations | AutoDoc | Coverage |
+|------|-------------|---------|----------|
+| autodoc-documented.pike | 7 | 7 | 100% |
+| All other corpus files | 538 | 0 | 0% |
+| **Total** | **545** | **7** | **1%** |
+
+The corpus is designed to exercise language features, not documentation. Production codebases with //! conventions will have higher coverage.
+
+## Consequences (updated)
+
+- The Pike worker subprocess is for diagnostics only. Hover routes around it entirely.
+- AutoDoc extraction is parse-tree driven: no subprocess, no file I/O, sub-millisecond.
+- Shared-server policies compound correctly: N users × idle eviction = only active workers consume memory.
+- The LRU cache cap prevents per-user memory growth across multiple VSCode windows.
+- Timeout-as-diagnostic surfaces information to users rather than silently dropping results.
+- Phase 6's debouncing must account for FIFO queueing through the Pike worker.

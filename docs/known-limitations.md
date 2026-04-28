@@ -100,6 +100,18 @@ Hover uses tree-sitter declarations for type information. The `typeof` method in
 
 ### Stdlib hover not connected to Pike signatures
 
-The three-source routing table (decision 0002) reserves stdlib symbol hover for Pike runtime queries, but this path is not yet implemented. Stdlib symbols return null hover.
+The three-tier hover routing (decision 0011 §7) reserves stdlib symbol hover for pike-ai-kb's `pike-signature` tool, but this path is not yet implemented. Stdlib symbols return null hover.
 
-**Phase to fix**: Phase 6 (pike-ai-kb integration or pre-built system map).
+**Phase to fix**: Phase 6 (pike-ai-kb integration).
+
+### File watching requires editor support
+
+The server relies entirely on editor-pushed change notifications (didChange, didSave, didClose). No server-side file watchers are used. This is correct for VSCode-over-SSH but may not work with LSP clients that don't push change notifications.
+
+**Impact**: Low for the primary deployment target (VSCode Remote-SSH).
+
+### AutoDoc hover coverage depends on codebase conventions
+
+AutoDoc hover only works for symbols with `//!` doc comments. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
+
+**Corpus coverage**: 7/545 declarations (1%) — only `autodoc-documented.pike` has //! comments.

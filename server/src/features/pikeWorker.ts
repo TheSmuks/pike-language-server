@@ -117,14 +117,18 @@ export class PikeWorker {
     const spawnCmd: string = "pike";
 
     // On Linux, use nice for CPU politeness under contention
-    const finalArgs = this.config.niceValue > 0 && process.platform === "linux"
-      ? ["nice", `-n${this.config.niceValue}`, spawnCmd, WORKER_SCRIPT]
-      : [spawnCmd, WORKER_SCRIPT];
+    let finalCmd: string;
+    let finalArgs: string[];
 
-    const finalCmd = this.config.niceValue > 0 && process.platform === "linux"
-      ? "nice" : spawnCmd;
+    if (this.config.niceValue > 0 && process.platform === "linux") {
+      finalCmd = "nice";
+      finalArgs = ["-n" + this.config.niceValue, "pike", WORKER_SCRIPT];
+    } else {
+      finalCmd = "pike";
+      finalArgs = [WORKER_SCRIPT];
+    }
 
-    this.proc = spawn(finalCmd, finalArgs.slice(finalCmd === "nice" ? 1 : 0), {
+    this.proc = spawn(finalCmd, finalArgs, {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: PROJECT_ROOT,
     });
@@ -193,6 +197,9 @@ export class PikeWorker {
     }
 
     this.start(); // Lazy start
+
+    // Track request count for memory ceiling
+    this.requestCount++;
 
     const id = ++this.requestId;
     const request: PikeRequest = { id, method, params };

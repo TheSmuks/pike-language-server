@@ -2,8 +2,7 @@
 
 ## Current Phase
 
-**Phase 5: Types and Diagnostics** — In Progress.
-
+**Phase 5: Types and Diagnostics** — Exit verification complete. Ready for Phase 6 entry.
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
@@ -12,7 +11,7 @@
 | Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
-| Phase 5: Types and Diagnostics | **In Progress** | Phase 4 complete + resolve.pike + integration tests | Diagnostics and hover from pike oracle |
+| Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
 | Phase 6+: Refinement | Pending | Phase 5 complete | Completion, rename, code actions |
 
 ## Phase 1 Exit Checkpoint — Verified

@@ -20,43 +20,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - CompilationHandler-based structured diagnostics (errors + warnings)
   - Same normalization as harness introspect.pike (expected/actual type extraction)
 - PikeWorker TypeScript class: subprocess lifecycle management
-  - Lazy start, automatic crash recovery, timeout (10s), restart with readiness check
-  - Content-hash caching: sha256-keyed per-file cache, undo operations are free
+  - Lazy start, automatic crash recovery, restart with readiness check
+  - Idle eviction: kill after 5 min idle (configurable), restart on next request
+  - Memory ceiling: forced restart after 100 requests or 30 min active use
+  - Timeout: 5s per request, surfaced as diagnostic on timeout
+  - CPU politeness: spawned with nice +5 on Linux
+  - FIFO queueing: one request at a time, documented
+  - All values configurable via PikeWorkerConfig
 - Save-triggered diagnostic pipeline (decision 0011)
   - didSave → Pike worker → structured diagnostics → merged with parse diagnostics
   - Position mapping: Pike 1-based lines → LSP 0-based lines
   - Diagnostic severity mapping: Pike error/warning → LSP Error/Warning
-- Hover handler: three-source routing per decision 0002
-  - Same-file: tree-sitter declaration → signature extraction
-  - Cross-file: WorkspaceIndex resolution → signature from target
-  - Stdlib: reserved for Pike runtime integration (Phase 6)
-- Decision 0011: Types, diagnostics, and hover architecture
+  - Timeout surfaced as warning diagnostic ("Compilation timed out, will retry on next save.")
+- LRU diagnostic cache: 50 entries / 25MB cap, oldest-first eviction
+  - Content-hash keyed per-file, undo operations are free
+- AutoDoc hover routing: parse-tree driven, no subprocess (decision 0011 §7)
+  - Tier 1: Workspace AutoDoc — //! comments extracted from source text
+  - Tier 2: Stdlib — reserved for pike-ai-kb pike-signature (Phase 6)
+  - Tier 3: Fall-through — tree-sitter declared type
+  - Supports: @param, @returns, @throws, @note, @deprecated, @seealso, etc.
+  - Hover coverage on corpus: 7/545 (1%) — corpus not designed for autodoc
+- Hover handler: three-tier routing per decision 0002
+  - Same-file: autodoc → tree-sitter
+  - Cross-file: WorkspaceIndex resolution → autodoc or tree-sitter
+  - Hover never involves the Pike worker — sub-millisecond latency
+- Decision 0011: Types, diagnostics, hover, shared-server policies
 - harness/resolve.pike: cross-file resolution ground truth from Pike's perspective
-  - Parses inherit/import declarations, resolves via master()->resolv() and cast_to_program()
-  - Handles .pmod file modules, .pmod directory modules (joinnodes), .pike string-path inherits
-  - 7 resolution snapshots, 5 oracle tests comparing LSP vs Pike
 - Extension packaging: esbuild bundles for server and client
-  - Server bundle: ~203KB, Client bundle: ~768KB
-  - build:extension script in package.json
 - @vscode/test-electron integration tests (3 tests in VSCode extension host)
-  - Extension activates when .pike file opened
-  - documentSymbol returns symbols for corpus files
-  - Error recovery: malformed input doesn't crash
-- resolveInheritTarget fix: .pmod module identifier inherits (e.g., `inherit cross_lib_module`)
+- docs/deployment-context.md: SSH/shared-server deployment context
 
 ### Fixed
 
-- resolveInheritTarget: .pmod file inherits treated like string literal inherits (was treated like class identifier)
-- Directory module normalization: LSP resolves `cross_pmod_dir` → `cross_pmod_dir.pmod/module.pmod`, Pike resolves to `cross_pmod_dir.pmod` — test normalizes these as equivalent
+- resolveInheritTarget: .pmod file inherits treated like string literal inherits
+- Directory module normalization: LSP and Pike resolve differently, test normalizes
+- Spawn command: fixed double-command bug in nice/ Pike worker spawn
+
+### Benchmarks
+
+| Operation | Cold | Warm p50 | Warm p95 |
+|-----------|------|----------|----------|
+| Diagnose | 49.5ms | 0.13ms | 0.32ms |
+| Hover (autodoc) | 0.005ms | 0.005ms | 0.005ms |
+| Worker restart | 150ms | — | — |
 
 ### Testing
 
-- PikeWorker subprocess tests: 12 tests (lifecycle, diagnostics, concurrent requests)
-- Diagnostics pipeline tests: 7 tests (type errors, position mapping, content-hash caching)
-- Hover tests: 6 tests (function, variable, class, empty position, range, references)
+- PikeWorker subprocess tests: 12 tests (lifecycle, diagnostics, concurrent)
+- Diagnostics pipeline tests: 7 tests (type errors, position mapping, caching)
+- Hover tests: 8 tests (autodoc, undocumented, empty, range, isolation)
+- Shared-server tests: 6 tests (idle eviction, memory ceiling, timeout-as-diagnostic, LRU)
 - Oracle tests: 5 tests comparing LSP vs Pike resolution
 - Integration tests: 3 tests running in VSCode extension host
-- Total test suite: 863 tests, 7446 assertions, 0 failures
+- Total test suite: 871 tests, 7478 assertions, 0 failures
 ## [Unreleased]
 
 ### Added
