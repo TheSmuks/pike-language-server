@@ -333,7 +333,7 @@ export class WorkspaceIndex {
     const table = entry.symbolTable;
     // Check if the position is on an inherit declaration
     for (const decl of table.declarations) {
-      if (decl.kind === "inherit") {
+      if (decl.kind === "inherit" || decl.kind === "import") {
         const nr = decl.nameRange;
         if (nr.start.line === line && nr.end.line === line &&
             character >= nr.start.character && character <= nr.end.character) {
@@ -440,7 +440,7 @@ export class WorkspaceIndex {
   ): { uri: string; decl: Declaration } | null {
     // Try to find the name through inheritance chains
     for (const decl of table.declarations) {
-      if (decl.kind === "inherit") {
+      if (decl.kind === "inherit" || decl.kind === "import") {
         const target = this.resolveInheritTarget(decl, uri);
         if (target) {
           // Check if the target file has a declaration matching the reference name
@@ -480,16 +480,17 @@ export class WorkspaceIndex {
     const deps = new Set<string>();
 
     for (const decl of table.declarations) {
-      if (decl.kind === "inherit") {
+      if (decl.kind === "inherit" || decl.kind === "import") {
         const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
-        const targetUri = this.resolveInherit(decl.name, isStringLit, currentUri);
+        // Imports and identifier inherits use resolveImport/resolveInherit respectively
+        const targetUri = isStringLit
+          ? this.resolveInherit(decl.name, true, currentUri)
+          : this.resolveImport(decl.name, currentUri) ?? this.resolveInherit(decl.name, false, currentUri);
         if (targetUri && targetUri !== currentUri) {
           deps.add(targetUri);
         }
       }
     }
-
-    // TODO: Extract import dependencies when import resolution is implemented
 
     return deps;
   }

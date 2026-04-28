@@ -88,16 +88,36 @@
 ## Test Infrastructure
 
 **Three layers:**
-- Layer 1: Protocol-level (PassThrough transport, in-process) — 976 tests
+- Layer 1: Protocol-level (PassThrough transport, in-process) — 1,004 tests
 - Layer 2: VSCode integration (@vscode/test-electron) — 3 tests
 - Layer 3: Manual smoke tests — 3 items
 
-**Test files (24):**
-- 16 LSP protocol test files
+**Test files (26):**
+- 18 LSP protocol test files
 - 4 harness test files (harness, canary, canonicalizer, tree-sitter-symbol)
 - 3 integration tests
 - Harness: 37 ground-truth snapshots, 11 canary tests
 
+## Decisions (16 ADRs)
+
+| # | Title | Key Decision |
+|---|-------|-------------|
+| 0001 | Pike as Oracle | Use Pike compiler as oracle for diagnostics, types, symbols |
+| 0002 | Tier-3 Scope | Three-source resolution boundary; rename/code actions out of scope |
+| 0003 | pike-ai-kb Integration | MCP tools first, direct invocation fallback |
+| 0004 | Structured Diagnostics | compile_string + custom CompilationHandler, not stderr parsing |
+| 0005 | Harness Architecture | Two-layer: Pike script + TypeScript runner, canonical JSON |
+| 0006 | LSP Server Architecture | stdio transport, tree-sitter WASM, parse-error-recovery |
+| 0007 | Integration Tests | @vscode/test-electron, esbuild packaging |
+| 0008 | Symbol Comparison | Three symbol sources, comparison strategy |
+| 0009 | Symbol Resolution | 10-level scope hierarchy, two-pass build, cache invalidation |
+| 0010 | Cross-File Resolution | Workspace model, ModuleResolver, dependency graph |
+| 0011 | Types, Diagnostics, Hover | Subprocess lifecycle, three-tier hover, shared-server policies |
+| 0012 | Completion | Tree-sitter-first completion, unqualified + dot/arrow/scope access, stdlib prefix index |
+| 0013 | Real-time Diagnostics | Per-file debouncing (500ms), supersession, priority queue, cross-file propagation, three modes |
+| 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
+| 0014 | Type Resolution | Pure-function resolveType/resolveMemberAccess, depth-limited chain, no worker |
+| 0015 | Import Tracking | DeclKind 'import', extractDependencies for imports, cross-file propagation |
 ## Decisions (14 ADRs)
 
 | # | Title | Key Decision |

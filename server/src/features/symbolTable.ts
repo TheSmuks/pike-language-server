@@ -36,7 +36,8 @@ export type DeclKind =
   | 'enum_member'
   | 'typedef'
   | 'parameter'
-  | 'inherit';
+  | 'inherit'
+  | 'import';
 
 export interface Reference {
   name: string;
@@ -220,7 +221,7 @@ const DECL_KIND_MAP: Record<string, DeclKind> = {
   constant_decl: 'constant',
   enum_decl: 'enum',
   enum_member: 'enum_member',
-  import_decl: 'inherit',
+  import_decl: 'import',
   inherit_decl: 'inherit',
   typedef_decl: 'typedef',
 };
@@ -615,9 +616,10 @@ function collectInheritDecl(node: Node, state: BuildState): void {
   // Name is the path (class to look up). Alias is the local rename.
   // For `inherit Animal : creature`, name="Animal", alias="creature".
   // For `inherit Animal`, name="Animal", no alias.
+  const kind = node.type === 'import_decl' ? 'import' : 'inherit';
   addDeclaration(state, {
     name: pathNode.text,
-    kind: 'inherit',
+    kind,
     nameRange: toRange(pathNode),
     range: toRange(node),
     scopeId,
@@ -1010,7 +1012,7 @@ export function getDefinitionAt(
     if (nr.start.line === line && nr.end.line === line &&
         character >= nr.start.character && character <= nr.end.character) {
       // For inherit declarations, follow through to the target class
-      if (decl.kind === 'inherit') {
+      if (decl.kind === 'inherit' || decl.kind === 'import') {
         const target = resolveInheritToClass(decl, table);
         if (target) return target;
       }
@@ -1197,7 +1199,7 @@ export function getSymbolsInScope(
       if (!decl) continue;
 
       // Skip inherit declarations
-      if (decl.kind === 'inherit') continue;
+      if (decl.kind === 'inherit' || decl.kind === 'import') continue;
 
       // For block/function scopes, only include declarations before the cursor
       if (scope.kind !== 'class' && scope.kind !== 'file' && decl.kind !== 'parameter') {
@@ -1221,7 +1223,7 @@ export function getSymbolsInScope(
         if (!inheritedScope) continue;
         for (const declId of inheritedScope.declarations) {
           const decl = table.declarations.find(d => d?.id === declId);
-          if (!decl || decl.kind === 'inherit') continue;
+          if (!decl || decl.kind === 'inherit' || decl.kind === 'import') continue;
           if (!seenNames.has(decl.name)) {
             seenNames.add(decl.name);
             results.push(decl);

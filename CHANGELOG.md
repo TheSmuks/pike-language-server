@@ -1,8 +1,28 @@
 ## [Unreleased]
 
+### Added
+
+- Type resolution system (decision 0014)
+  - `server/src/features/typeResolver.ts` — pure-function `resolveType()` and `resolveMemberAccess()`
+  - Resolution chain: same-file class → qualified type → cross-file via inherit/import → stdlib
+  - Depth limit 5 with graceful degradation to null
+- Arrow/dot access definition and hover resolution
+  - `textDocument/definition` now resolves `obj->member` and `obj.member` through type inference
+  - `textDocument/hover` provides member info for resolved arrow/dot accesses
+- Import dependency tracking (decision 0015)
+  - `DeclKind 'import'` distinguishes import from inherit declarations
+  - `extractDependencies()` includes import edges in dependency graph
+  - Cross-file diagnostic propagation covers import dependents
+- `resolveTypeMembers()` in completion.ts replaced with `resolveMemberAccess()` calls
+  - Cross-file member completion via workspace index
+  - Inherited member completion through type resolution
+
 ### Changed
 
-- Phase 6 closed with verification results. Updated tracking docs to reflect P2 verification outcome (979 tests, 2 bugs fixed, measurements confirmed).
+- `collectInheritDecl()` now derives `kind` from node type (`import_decl` → `'import'`, `inherit_decl` → `'inherit'`)
+- All consumers of `kind === 'inherit'` audited and updated to handle both kinds where appropriate
+- `findMemberInClass` and `findMemberInInheritedScopes` use `parentId` + position comparison instead of `containsDecl`
+
 
 ### Added
 
