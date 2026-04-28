@@ -28,6 +28,7 @@ import {
   MarkupContent,
   CompletionItem,
   CompletionList,
+  CancellationToken,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initParser, parse } from "./parser";
@@ -513,15 +514,19 @@ export function createPikeServer(connection: Connection): PikeServer {
     uri: "", // overridden per-request
   };
 
-  connection.onCompletion(async (params) => {
+  connection.onCompletion(async (params, token: CancellationToken) => {
+    // Check cancellation early — if a new keystroke already came in, bail
+    if (token.isCancellationRequested) return { isIncomplete: false, items: [] };
+
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return { isIncomplete: false, items: [] };
 
     const table = getSymbolTable(params.textDocument.uri);
-    if (!table) return { isIncomplete: false, items: [] };
+    if (!table || token.isCancellationRequested) return { isIncomplete: false, items: [] };
 
     try {
       const tree = parse(doc.getText());
+      if (token.isCancellationRequested) return { isIncomplete: false, items: [] };
       completionCtx.uri = params.textDocument.uri;
       return getCompletions(table, tree, params.position.line, params.position.character, completionCtx);
     } catch (err) {

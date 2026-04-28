@@ -15,6 +15,18 @@
 - `completion.ts`: stdlib secondary index — prefix-grouped member enumeration
 - 19 completion tests (direct API + LSP protocol)
 
+### Fixed
+
+- Operator symbols (backtick identifiers) no longer appear in completion suggestions
+  - Filtered out Pike operators (`>`, `==`, `->`, etc.) from predef builtin completions
+- Trailing dot/arrow completion now works (`Stdio.`\n, `a->`\n no longer falls through to unqualified)
+  - `findLhsBeforePosition()` handles ERROR nodes and anonymous operator tokens
+- Foreach loop variables (`idx`, `val`) now captured in symbol table
+  - Fixed `collectForeachStatement()`: `foreach_lvalues` is an unnamed child, not a field
+  - Fixed `collectForeachLvalues()`: identifiers are siblings of type nodes, not children
+- Completion handler checks `CancellationToken` at three boundaries for fast-typing cancellation
+- 8 additional tests: operator filtering, dot/arrow triggers, foreach variables, ranking, scope access
+
 ## Phase 5 AutoDoc Redesign: PikeExtractor XML Boundary - 2026-04-27
 # Changelog
 

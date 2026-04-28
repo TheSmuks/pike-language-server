@@ -290,48 +290,150 @@ function detectTriggerContext(
 
   // Check if the text right before the cursor is "->" or "::"
   // This handles the case where the tree hasn't been updated yet
+  // or where trailing expressions (e.g., 'Stdio.\n') produce ERROR nodes.
   const rootNode = tree.rootNode;
   const lineText = rootNode.text.split("\n")[line] ?? "";
-  if (character >= 2) {
-    const twoBefore = lineText.substring(character - 2, character);
-    if (twoBefore === "->") {
-      // Arrow access — find the expression before ->
-      // Try to find the node at position before the arrow
-      const beforePos = { row: line, column: character - 2 };
-      const beforeNode = rootNode.descendantForPosition(beforePos);
-      if (beforeNode && beforeNode.type !== "ERROR") {
-        return { type: "arrow", lhsNode: beforeNode };
-      }
-    }
-    if (twoBefore === "::") {
-      const beforePos = { row: line, column: character - 2 };
-      const beforeNode = rootNode.descendantForPosition(beforePos);
-      if (beforeNode) {
-        // The node before :: is the scope identifier (e.g., "Foo" in "Foo::")
-        return { type: "scope", scopeNode: beforeNode };
-      }
-    }
-  }
+
   if (character >= 1) {
     const oneBefore = lineText[character - 1];
+
+    // Dot access: 'Foo.' → find 'Foo' before the dot
     if (oneBefore === ".") {
-      const beforePos = { row: line, column: character - 1 };
-      const beforeNode = rootNode.descendantForPosition(beforePos);
-      if (beforeNode && beforeNode.type !== "ERROR") {
-        return { type: "dot", lhsNode: beforeNode };
-      }
+      const lhs = findLhsBeforePosition(rootNode, line, character - 1);
+      if (lhs) return { type: "dot", lhsNode: lhs };
     }
-    // '>' could be end of '->'
+
+    // Arrow access: '->' — check if preceding char is '-'
     if (oneBefore === ">" && character >= 2 && lineText[character - 2] === "-") {
-      const beforePos = { row: line, column: character - 2 };
-      const beforeNode = rootNode.descendantForPosition(beforePos);
-      if (beforeNode && beforeNode.type !== "ERROR") {
-        return { type: "arrow", lhsNode: beforeNode };
-      }
+      const lhs = findLhsBeforePosition(rootNode, line, character - 2);
+      if (lhs) return { type: "arrow", lhsNode: lhs };
+    }
+  }
+
+  if (character >= 2) {
+    const twoBefore = lineText.substring(character - 2, character);
+
+    // Arrow access: 'obj->'
+    if (twoBefore === "->") {
+      const lhs = findLhsBeforePosition(rootNode, line, character - 2);
+      if (lhs) return { type: "arrow", lhsNode: lhs };
+    }
+
+    // Scope access: 'Foo::'
+    if (twoBefore === "::") {
+      const lhs = findLhsBeforePosition(rootNode, line, character - 2);
+      if (lhs) return { type: "scope", scopeNode: lhs };
     }
   }
 
   return { type: "unqualified" };
+}
+
+/**
+ * Find the left-hand side identifier/expression before a trigger position.
+ * Handles ERROR nodes by walking children to find the last valid identifier.
+ */
+function findLhsBeforePosition(rootNode: Node, line: number, column: number): Node | null {
+  const pos = { row: line, column };
+  let node = rootNode.descendantForPosition(pos);
+
+  // If the node is an identifier, use it directly
+  if (node && (node.type === "identifier" || node.type === "identifier_expr")) {
+    return node;
+  }
+
+  // If the node is a postfix_expr, find the leftmost child that's an expression
+  if (node && node.type === "postfix_expr") {
+    return node.child(0);
+  }
+  // If the node is an anonymous operator token (e.g., '->', '.', '::'),
+  // look at the parent for context.
+  if (node && isOperatorToken(node.type)) {
+    // If parent is ERROR, use the ERROR handling below
+    if (node.parent?.type === "ERROR") {
+      node = node.parent;
+    } else if (node.parent?.type === "postfix_expr") {
+      // Valid postfix_expr: the identifier before the operator is a sibling
+      const siblings = node.parent.children;
+      const opIdx = siblings.indexOf(node);
+      if (opIdx > 0) {
+        const prev = siblings[opIdx - 1];
+        return findIdentifierInExpr(prev);
+      }
+    } else {
+      // Operator token with unknown parent — try fallback
+      if (column > 0) {
+        const fallbackPos = { row: line, column: column - 1 };
+        const fallback = rootNode.descendantForPosition(fallbackPos);
+        if (fallback) return findIdentifierInExpr(fallback);
+      }
+      return null;
+    }
+  }
+
+
+  // If the node is an ERROR, walk its children for the last valid identifier/expression
+  if (node && node.type === "ERROR") {
+    let best: Node | null = null;
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (child && (child.type === "identifier" || child.type === "identifier_expr" ||
+          child.type === "postfix_expr")) {
+        best = child;
+      }
+    }
+    if (best) {
+      if (best.type === "postfix_expr") return best.child(0);
+      return best;
+    }
+
+    // ERROR might be just the operator (e.g., '->') with the expression
+    // in a previous sibling. Check previous siblings.
+    if (node.parent) {
+      const siblings = node.parent.children;
+      const errorIdx = siblings.indexOf(node);
+      for (let i = errorIdx - 1; i >= 0; i--) {
+        const sib = siblings[i];
+        if (sib.type === "comma_expr" || sib.type === "expression_statement") {
+          // Drill into expression to find the identifier
+          return findIdentifierInExpr(sib);
+        }
+      }
+    }
+  }
+
+  // Fall back: try position one column before the trigger
+  if (column > 0) {
+    const fallbackPos = { row: line, column: column - 1 };
+    const fallback = rootNode.descendantForPosition(fallbackPos);
+    if (fallback && (fallback.type === "identifier" || fallback.type === "identifier_expr")) {
+      return fallback;
+    }
+    // The fallback node might be deep inside expression nesting — walk up
+    // to find an identifier
+    if (fallback) {
+      const ident = findIdentifierInExpr(fallback);
+      if (ident) return ident;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Drill into an expression node tree to find the leaf identifier.
+ * Pike expressions nest deeply (comma_expr → assign_expr → ... → postfix_expr → identifier).
+ */
+function findIdentifierInExpr(node: Node): Node | null {
+  if (node.type === "identifier" || node.type === "identifier_expr") {
+    return node;
+  }
+  // Check direct children first (deepest-nested is the leaf)
+  const child = node.child(node.childCount - 1);
+  if (child) {
+    return findIdentifierInExpr(child);
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -374,9 +476,11 @@ function completeUnqualified(
     }
   }
 
-  // 3. Predef builtins
+  // 3. Predef builtins (skip operator-like backtick identifiers)
   for (const name of Object.keys(ctx.predefBuiltins)) {
     if (seenNames.has(name)) continue;
+    // Skip Pike operator identifiers (backtick-prefixed, operators, brackets)
+    if (!isCompletableIdentifier(name)) continue;
     seenNames.add(name);
     items.push({
       label: name,
@@ -614,6 +718,29 @@ function completeScopeAccess(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Check if a node type is an anonymous operator token that triggers completion. */
+const OPERATOR_TOKENS = new Set(["->", "->?", "?->", ".", "::"]);
+function isOperatorToken(type: string): boolean {
+  return OPERATOR_TOKENS.has(type);
+}
+
+/**
+ * Check if a name is a valid completable identifier (not an operator).
+ * Filters out Pike backtick identifiers and operators like `>`, `==`, `->`, etc.
+ */
+function isCompletableIdentifier(name: string): boolean {
+  // Skip backtick identifiers (operators like `->`, `+`, `[]`)
+  if (name.startsWith("`")) return false;
+  // Skip pure operator tokens
+  if (/^[<>!=&|^~%/*+\-]+$/.test(name)) return false;
+  // Skip bracket-like tokens
+  if (/^[\[\](){}]+$/.test(name)) return false;
+  // Must start with a letter or underscore
+  if (!/^[a-zA-Z_]/.test(name)) return false;
+  return true;
+}
+
 
 const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   function: CompletionItemKind.Function,

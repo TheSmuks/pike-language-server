@@ -422,6 +422,167 @@ describe("textDocument/completion (LSP protocol)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Audit fixes: operator filtering, dot/arrow trigger, foreach variables
+// ---------------------------------------------------------------------------
+
+describe("Audit fixes", () => {
+  test("no operator symbols in completion list", () => {
+    const src = "void foo(int a) { }";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ops.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const result = getCompletions(table, tree, 0, 18, ctx);
+    const ops = result.items.filter(i =>
+      i.label.startsWith("`") ||
+      /^[<>!=&|^~%/*+-]+$/.test(i.label) ||
+      /^[\[\](){}]+$/.test(i.label)
+    );
+    expect(ops).toHaveLength(0);
+  });
+
+  test("Stdio. returns module members (not unqualified)", () => {
+    const src = 'void test() { Stdio.\n }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/stdio-dot.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const result = getCompletions(table, tree, 0, 20, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("File");
+    expect(labels).toContain("read_file");
+    expect(labels).toContain("stderr");
+    // Should NOT contain predef builtins like 'write' — this is a dot-access context
+    expect(labels).not.toContain("write");
+  });
+
+  test("Array. returns module members", () => {
+    const src = 'void test() { Array.\n }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/array-dot.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    // Cursor at char 20 (after the dot) — LSP sends position after trigger char
+    const result = getCompletions(table, tree, 0, 20, ctx);
+    const labels = completionLabels(result);
+
+    // Array module members from the stdlib index
+    expect(labels).toContain("reduce");
+    expect(labels).toContain("sort_array");
+    expect(labels).toContain("flatten");
+    // Should NOT contain predef builtins — this is a dot-access context
+    expect(labels).not.toContain("write");
+  });
+
+  test("foreach loop variables are visible in scope", () => {
+    const src = 'void test() { array(int) items = ({}); foreach(items; int idx; int val) { } }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/foreach.pike", 1);
+    wireInheritance(table);
+
+    // Cursor inside foreach body
+    const symbols = getSymbolsInScope(table, 0, 65);
+    const names = symbols.map(s => s.name);
+    expect(names).toContain("idx");
+    expect(names).toContain("val");
+    expect(names).toContain("items");
+  });
+
+  test("arrow access on trailing line does not fall through to unqualified", () => {
+    const src = 'void test() { mixed x = "hello"; x->\n }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/arrow-trail.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    // Cursor at char 36 (after '>')
+    const result = getCompletions(table, tree, 0, 36, ctx);
+    // mixed type has no known members — should return 0, not all builtins
+    expect(result.items.length).toBe(0);
+  });
+
+  test("scope access Base:: returns inherited members", () => {
+    const src = [
+      'class Base {',
+      '  void base_method() {}',
+      '}',
+      'class Child {',
+      '  inherit Base;',
+      '  void test() { Base:: }',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/scope-access.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const result = getCompletions(table, tree, 5, 25, ctx);
+    const labels = completionLabels(result);
+    expect(labels).toContain("base_method");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ranking
+// ---------------------------------------------------------------------------
+
+describe("Completion ranking", () => {
+  test("local scope symbols rank above predef builtins", () => {
+    const src = [
+      'int alpha = 1;',
+      'void foo(int param) {',
+      '  string local_var = "hi";',
+      '  // cursor',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ranking.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const result = getCompletions(table, tree, 3, 2, ctx);
+    const labels = completionLabels(result);
+
+    const localIdx = labels.indexOf("local_var");
+    const paramIdx = labels.indexOf("param");
+    const alphaIdx = labels.indexOf("alpha");
+    const writeIdx = labels.indexOf("write");
+    const stdioIdx = labels.indexOf("Stdio");
+
+    // Local scope before outer scope
+    expect(localIdx).toBeLessThan(alphaIdx);
+    // Outer scope before predef builtins
+    expect(alphaIdx).toBeLessThan(writeIdx);
+    // Predef builtins before stdlib modules
+    expect(writeIdx).toBeLessThan(stdioIdx);
+  });
+
+  test("ranking uses sortText with priority tiers", () => {
+    const src = 'void foo(int x) { }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/sort.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const result = getCompletions(table, tree, 0, 18, ctx);
+
+    // All items should have sortText
+    for (const item of result.items) {
+      expect(item.sortText).toBeDefined();
+    }
+
+    // Sort prefix pattern: 0000 = local, 0030 = predef, 0040 = stdlib
+    const prefixes = new Set(result.items.map(i => i.sortText!.substring(0, 4)));
+    expect(prefixes).toContain("0000");
+    expect(prefixes).toContain("0030");
+    expect(prefixes).toContain("0040");
+  });
+});
+// ---------------------------------------------------------------------------
 // Stdlib secondary index
 // ---------------------------------------------------------------------------
 

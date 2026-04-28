@@ -433,8 +433,15 @@ function collectForStatement(node: Node, state: BuildState): void {
 function collectForeachStatement(node: Node, state: BuildState): void {
   pushScope(state, 'foreach', toRange(node));
 
-  // foreach_lvalues contains the loop variables
-  const lvals = node.childForFieldName('lvalue');
+  // foreach_lvalues is an unnamed child — find it by type, not by field name
+  let lvals: Node | null = null;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child && child.type === 'foreach_lvalues') {
+      lvals = child;
+      break;
+    }
+  }
   if (lvals) {
     collectForeachLvalues(lvals, state);
   }
@@ -449,7 +456,9 @@ function collectForeachStatement(node: Node, state: BuildState): void {
 
 function collectForeachLvalues(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
-  // Walk children for typed identifier patterns: `int idx`, `mixed val`
+  // Walk children for identifiers. Structure is:
+  //   ';' type(key) identifier(key) ';' type(value) identifier(value)
+  // The identifiers are siblings of type nodes, not children of them.
   for (const child of node.children) {
     if (child.type === 'identifier') {
       addDeclaration(state, {
@@ -459,20 +468,6 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
         range: toRange(child),
         scopeId,
       });
-    } else if (child.type === 'type') {
-      // Typed lvalue: `int idx` — the identifier follows the type
-      // The structure varies; look for identifier children
-      for (const sub of child.children) {
-        if (sub.type === 'identifier') {
-          addDeclaration(state, {
-            name: sub.text,
-            kind: 'parameter',
-            nameRange: toRange(sub),
-            range: toRange(sub),
-            scopeId,
-          });
-        }
-      }
     }
   }
 }
