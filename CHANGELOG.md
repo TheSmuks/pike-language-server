@@ -1,5 +1,9 @@
 ## [Unreleased]
 
+### Changed
+
+- Phase 6 closed with verification results. Updated tracking docs to reflect P2 verification outcome (979 tests, 2 bugs fixed, measurements confirmed).
+
 ### Added
 
 - `textDocument/completion` — tree-sitter-first completion provider (decision 0012)
