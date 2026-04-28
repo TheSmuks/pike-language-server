@@ -22,6 +22,14 @@ When `catch { ... }` is used as the RHS of a local declaration assignment (`mixe
 
 **Workaround**: None. Consumers must treat catch blocks as opaque.
 
+### pike-ai-kb: pike-signature cannot resolve C-level predef builtins
+
+**Upstream issue**: [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11)
+
+The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which does not find C-level predef builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.). The fix requires adding an `all_constants()` fallback to `pikeResolvePreamble()` in `src/pike-helpers.ts`.
+
+**LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
+
 ### Missing field names on for_statement children
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#2](https://github.com/TheSmuks/tree-sitter-pike/issues/2)
@@ -102,7 +110,7 @@ Hover uses tree-sitter declarations for type information. The `typeof` method in
 
 The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
 
-**Fallback path**: pike-ai-kb `pike-signature` tool (Phase 6+).
+**Fallback path**: pike-ai-kb `pike-signature` tool — blocked on [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) (C-level predef resolution gap). The LSP's predef builtin index (283 symbols from runtime introspection) covers the gap for now.
 
 **Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
 

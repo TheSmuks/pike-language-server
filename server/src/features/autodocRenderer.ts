@@ -740,7 +740,17 @@ function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
         // These are empty marker elements inside <group>; content is in the following <text>
         break;
 
-      // Fallback: render children as text (plain-text fallback for rare tags)
+      // Code block (@code...@endcode)
+      case "code": {
+        const codeText = renderBlocks(node.children ?? [], indent);
+        if (codeText.length > 0) {
+          lines.push(`${prefix}\`\`\`pike`);
+          lines.push(...codeText);
+          lines.push(`${prefix}\`\`\``);
+        }
+        break;
+      }
+
       default: {
         const childText = renderInline(node.children ?? []).trim();
         if (childText) lines.push(prefix + childText);

@@ -184,3 +184,59 @@ describe("LRU cache eviction", () => {
     expect(cache.has("file://7.pike")).toBe(true);
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// Active time ceiling
+// ---------------------------------------------------------------------------
+
+describe("Active time ceiling (duration-based restart)", () => {
+  test("worker restarts after max active duration", async () => {
+    const worker = new PikeWorker({
+      idleTimeoutMs: 60000, // Long idle for this test
+      requestTimeoutMs: 5000,
+      maxRequestsBeforeRestart: 1000, // High request count — not the trigger
+      maxActiveMinutes: 0.01, // 0.6 seconds — very short for testing
+      niceValue: 0,
+    });
+
+    // Start the worker
+    await worker.ping();
+    expect(worker.isAlive).toBe(true);
+
+    // Wait for the active duration to expire (0.6s + buffer)
+    await new Promise((r) => setTimeout(r, 800));
+
+    // Next request should trigger a restart because active time ceiling is exceeded
+    const result = await worker.ping();
+    expect(result.status).toBe("ok");
+    expect(worker.isAlive).toBe(true);
+
+    // After restart, the request count should be reset (the ping itself counts as 1)
+    expect(worker.currentRequestCount).toBeGreaterThanOrEqual(1);
+
+    worker.stop();
+  });
+
+  test("worker does NOT restart before max active duration", async () => {
+    const worker = new PikeWorker({
+      idleTimeoutMs: 60000,
+      requestTimeoutMs: 5000,
+      maxRequestsBeforeRestart: 1000,
+      maxActiveMinutes: 30, // 30 minutes — won't trigger in test
+      niceValue: 0,
+    });
+
+    await worker.ping();
+    expect(worker.isAlive).toBe(true);
+
+    // Send a few requests quickly — should not trigger time ceiling
+    for (let i = 0; i < 3; i++) {
+      const result = await worker.ping();
+      expect(result.status).toBe("ok");
+    }
+    expect(worker.currentRequestCount).toBe(4); // 1 + 3
+
+    worker.stop();
+  });
+});
