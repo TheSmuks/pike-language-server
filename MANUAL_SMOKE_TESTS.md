@@ -27,3 +27,23 @@ behavior that resists automation. It is not a substitute for the automated suite
 - [ ] **Phase 2**: Syntax error appears in Problems panel
   - **Expected**: A file with deliberate syntax errors shows diagnostics in the Problems panel. The server does not crash or become unresponsive.
   - **How**: Create or open a file with a syntax error (e.g. missing semicolon, unmatched brace). Confirm a diagnostic appears in the Problems panel. Then fix the error and confirm the diagnostic clears.
+
+- [ ] **Phase 6 P2**: Real-time parse diagnostics
+  - **Expected**: Parse errors appear within 1 second of typing. No lag.
+  - **How**: Open a Pike file. Type `class { }` (syntax error). Confirm the error appears in < 1 second. Fix it to `class Foo { }`. Confirm the error clears.
+
+- [ ] **Phase 6 P2**: Supersession — no error flash
+  - **Expected**: Introducing then fixing an error within 1 second does not produce a Pike diagnostic flash. Parse diagnostics may flash (this is by design — they're free).
+  - **How**: In a clean file, type `class { }`, wait 200ms, fix to `class Foo { }`. Confirm no Pike compilation error appears briefly. Parse errors may appear and clear immediately.
+
+- [ ] **Phase 6 P2**: Continuous typing — no lag or flicker
+  - **Expected**: Typing continuously for 10 seconds does not cause editor lag, diagnostic flicker, or excessive CPU/memory usage.
+  - **How**: Open a Pike file. Type continuously (add comments, variables, functions) for 10 seconds. The editor should feel like editing a TypeScript file with a mature LSP.
+
+- [ ] **Phase 6 P2**: Cross-file propagation
+  - **Expected**: Editing a base class file causes inheriting files to show updated diagnostics.
+  - **How**: Open two files: `A.pike` defines `class A { void foo() {} }`. `B.pike` has `inherit "./A"; void test() { foo(); }`. Edit `A.pike` to remove `foo()`. Confirm `B.pike` shows an error without manually saving or switching tabs.
+
+- [ ] **Phase 6 P2**: saveOnly mode
+  - **Expected**: In saveOnly mode, typing does not trigger Pike diagnostics. Only Ctrl+S does.
+  - **How**: Configure `"pike.diagnosticMode": "saveOnly"` in VSCode settings. Open a Pike file with a type error. Confirm no error appears while typing. Press Ctrl+S. Confirm the error appears.

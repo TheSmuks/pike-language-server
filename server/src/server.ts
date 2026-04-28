@@ -546,33 +546,28 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/didSave — delegate to DiagnosticManager (decision 0013)
   // -----------------------------------------------------------------------
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (typeof (connection as any).onDidSave === "function") {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (connection as any).onDidSave(async (params: { textDocument: { uri: string } }) => {
-      const doc = documents.get(params.textDocument.uri);
-      if (!doc) return;
+  documents.onDidSave(async (event) => {
+    const doc = event.document;
 
-      // Delegate to DiagnosticManager (handles cache, diagnose, publish)
-      await diagnosticManager.onDidSave(doc.uri);
+    // Delegate to DiagnosticManager (handles cache, diagnose, publish)
+    await diagnosticManager.onDidSave(doc.uri);
 
-      // Extract AutoDoc XML alongside diagnostics (non-critical)
-      const source = doc.getText();
-      const autodocHash = computeContentHash(source);
-      const cachedAutodoc = autodocCache.get(doc.uri);
-      if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
-        const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
-        worker.autodoc(source, filepath).then(result => {
-          if (result.xml) {
-            if (autodocCache.size >= CACHE_MAX_ENTRIES) {
-              cacheEvictOldest();
-            }
-            autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
+    // Extract AutoDoc XML alongside diagnostics (non-critical)
+    const source = doc.getText();
+    const autodocHash = computeContentHash(source);
+    const cachedAutodoc = autodocCache.get(doc.uri);
+    if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
+      const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
+      worker.autodoc(source, filepath).then(result => {
+        if (result.xml) {
+          if (autodocCache.size >= CACHE_MAX_ENTRIES) {
+            cacheEvictOldest();
           }
-        }).catch(() => {}); // Non-critical
-      }
-    });
-  }
+          autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
+        }
+      }).catch(() => {}); // Non-critical
+    }
+  });
 
 
   // -----------------------------------------------------------------------

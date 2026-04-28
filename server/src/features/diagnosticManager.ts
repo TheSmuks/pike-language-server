@@ -148,10 +148,12 @@ export class DiagnosticManager {
     // Always publish parse diagnostics immediately (tree-sitter, no worker)
     try {
       const tree = parse(doc.getText());
-      this.connection.sendDiagnostics({
-        uri,
-        diagnostics: getParseDiagnostics(tree),
-      });
+      if (!this.disposed) {
+        this.connection.sendDiagnostics({
+          uri,
+          diagnostics: getParseDiagnostics(tree),
+        });
+      }
     } catch {
       // Parse failure — don't crash the manager
     }
@@ -201,7 +203,9 @@ export class DiagnosticManager {
       this.fileStates.delete(uri);
     }
 
-    this.connection.sendDiagnostics({ uri, diagnostics: [] });
+    if (!this.disposed) {
+      this.connection.sendDiagnostics({ uri, diagnostics: [] });
+    }
   }
 
   /** Dispose all timers. */
@@ -339,9 +343,11 @@ export class DiagnosticManager {
       this.propagateToDependents(uri);
     } catch (err) {
       this.clearStaleTimer(state);
-      this.connection.console.error(
-        `Pike diagnose failed for ${uri}: ${(err as Error).message}`,
-      );
+      if (!this.disposed) {
+        this.connection.console.error(
+          `Pike diagnose failed for ${uri}: ${(err as Error).message}`,
+        );
+      }
       // Keep only parse diagnostics
       const parseDiags = this.safeParseDiagnostics(source);
       this.publishDiagnostics(uri, parseDiags);
@@ -466,6 +472,7 @@ export class DiagnosticManager {
 
   /** Publish diagnostics and cache them for staleness overlay. */
   private publishDiagnostics(uri: string, diagnostics: Diagnostic[]): void {
+    if (this.disposed) return;
     const state = this.fileStates.get(uri);
     if (state) {
       state.lastDiagnostics = diagnostics;
