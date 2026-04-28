@@ -35,6 +35,7 @@ export interface TypeofResult {
   error?: string;
 }
 
+
 interface PikeRequest {
   id: number;
   method: string;
@@ -185,6 +186,7 @@ export class PikeWorker {
     }
     return response.result as { status: string; pike_version: string };
   }
+
 
   /** Restart the worker (after crash or error). */
   async restart(): Promise<void> {

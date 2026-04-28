@@ -38,6 +38,11 @@ import {
 } from "./features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
+import {
+  extractAutodocLines,
+  parseAutodocLines,
+  renderAutodocMarkdown,
+} from "./features/autodocParser";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
@@ -291,22 +296,26 @@ export function createPikeServer(connection: Connection): PikeServer {
   function formatHover(info: HoverInfo | null): Hover | null {
     if (!info) return null;
 
-    const parts: string[] = [];
-
-    // Code signature
-    parts.push("```pike");
-    parts.push(info.signature);
-    parts.push("```");
-
-    // Documentation
-    if (info.documentation) {
-      parts.push("");
-      parts.push(info.documentation);
+    let value: string;
+    if (info.isAutodoc && info.documentation) {
+      // Autodoc already rendered as full markdown with signature
+      value = info.documentation;
+    } else {
+      // Tier 3: bare tree-sitter signature
+      const parts: string[] = [];
+      parts.push("```pike");
+      parts.push(info.signature);
+      parts.push("```");
+      if (info.documentation) {
+        parts.push("");
+        parts.push(info.documentation);
+      }
+      value = parts.join("\n");
     }
 
     const contents: MarkupContent = {
       kind: MarkupKind.Markdown,
-      value: parts.join("\n"),
+      value,
     };
 
     return {
@@ -324,6 +333,8 @@ export function createPikeServer(connection: Connection): PikeServer {
     documentation: string;
     line: number;
     character: number;
+    /** If true, documentation is already full markdown (from autodoc). */
+    isAutodoc?: boolean;
   }
 
   /** Convert a Declaration to hover info. */
@@ -337,10 +348,27 @@ export function createPikeServer(connection: Connection): PikeServer {
     // Extract the full declaration line as the signature
     const declLine = lines[decl.range.start.line] ?? "";
     const signature = declLine.trim().replace(/;$/, "");
+    const formattedSig = formatSignature(decl.kind, decl.name, signature);
 
+    // Tier 1: Workspace AutoDoc — extract //! comments preceding declaration
+    const autodocLines = extractAutodocLines(lines, decl.range.start.line);
+    const autodoc = parseAutodocLines(autodocLines);
+    if (autodoc) {
+      const markdown = renderAutodocMarkdown(autodoc, formattedSig);
+      return {
+        name: decl.name,
+        signature: formattedSig,
+        documentation: markdown,
+        line: decl.nameRange.start.line,
+        character: decl.nameRange.start.character,
+        isAutodoc: true,
+      };
+    }
+
+    // Tier 3: Fall through to tree-sitter declared type
     return {
       name: decl.name,
-      signature: formatSignature(decl.kind, decl.name, signature),
+      signature: formattedSig,
       documentation: "",
       line: decl.nameRange.start.line,
       character: decl.nameRange.start.character,
