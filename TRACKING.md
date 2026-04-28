@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 7: Type Resolution + Import Tracking** — In progress. Type resolver (P1) delivered, import dependency tracking (P2) delivered. 1,007 tests passing.
+**Phase 7: Type Resolution + Import Tracking** — Complete. 1,016 tests passing.
 
 
 
@@ -15,7 +15,7 @@
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
 | Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred (type inference prerequisite). |
-| Phase 7: Type Resolution + Import Tracking | **In progress** | Phase 6 complete | P1: Type resolver ✓. P2: Import tracking ✓. |
+| Phase 7: Type Resolution + Import Tracking | **Complete** | Phase 6 complete | P1: Type resolver ✓. P2: Import tracking ✓. 37 new tests. |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -100,7 +100,7 @@ All 36 corpus files had `#pragma strict_types`. The harness had never exercised 
 
 ## Completed Phase History
 
-## Phase 7 — In Progress
+## Phase 7 — Complete
 
 ### P1: Type Resolution
 Decision 0014. Pure-function type resolver with `resolveType()` and `resolveMemberAccess()`. Resolution chain: same-file class → qualified type → cross-file via inherit/import → stdlib. Integrated into completion (replaces inline `resolveTypeMembers()`), definition (arrow/dot access), and hover providers. 20 type resolution tests.
@@ -116,7 +116,7 @@ Decision 0015. `DeclKind 'import'` added to distinguish `import` from `inherit` 
 - `server/src/server.ts` — Arrow/dot access definition and hover resolution via `resolveAccessCore()`
 - `decisions/0014-type-resolution.md` — Type resolution architecture
 - `decisions/0015-import-tracking.md` — Import dependency tracking semantics
-- `tests/lsp/typeResolution.test.ts` — 20 tests
+- `tests/lsp/typeResolution.test.ts` — 29 tests
 - `tests/lsp/importDependencies.test.ts` — 8 tests
 
 ### Bugs found and fixed
@@ -127,7 +127,7 @@ Decision 0015. `DeclKind 'import'` added to distinguish `import` from `inherit` 
 - Cross-file oracle test only matched `kind === 'inherit'` — updated to match both kinds.
 - Tree-sitter Node identity comparison (`===`) unreliable across `descendantForPosition` vs `children[i]` — changed to position comparison.
 
-### Test suite at current state: 1,007 tests, 0 failures, 8,762 assertions, 26 files.
+### Test suite at exit: 1,016 tests, 0 failures, 8,785 assertions, 27 files.
 ## Phase 6 — Complete (Verified)
 
 ### P1: Completion
