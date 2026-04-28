@@ -156,6 +156,27 @@ function resolveQualifiedType(
     }
   }
 
+  // Fallback: check stdlib index for predef.<typeName>
+  const stdlibKey = "predef." + typeName;
+  if (context.stdlibIndex[stdlibKey]) {
+    // Build a synthetic Declaration for the stdlib type
+    // so callers (e.g., completion) can enumerate members via the stdlib prefix index.
+    const lastSegment = segments[segments.length - 1];
+    const syntheticDecl: Declaration = {
+      id: -1,
+      name: lastSegment,
+      kind: "class",
+      nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      scopeId: -1,
+    };
+    return {
+      decl: syntheticDecl,
+      uri: `stdlib://${typeName}`,
+      table: { declarations: [], scopes: [], references: [], nextDeclId: 0, nextScopeId: 0, uri: `stdlib://${typeName}`, version: 0 } as unknown as import("./symbolTable").SymbolTable,
+    };
+  }
+
   return null;
 }
 
