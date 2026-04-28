@@ -18,6 +18,7 @@ import {
   type SymbolTable,
   type Declaration,
   type DeclKind,
+  type Range,
   getSymbolsInScope,
   getDeclarationsInScope,
   findClassScopeAt,
@@ -355,7 +356,10 @@ function findLhsBeforePosition(rootNode: Node, line: number, column: number): No
     } else if (node.parent?.type === "postfix_expr") {
       // Valid postfix_expr: the identifier before the operator is a sibling
       const siblings = node.parent.children;
-      const opIdx = siblings.indexOf(node);
+      let opIdx = -1;
+      for (let i = 0; i < siblings.length; i++) {
+        if (siblings[i].equals(node)) { opIdx = i; break; }
+      }
       if (opIdx > 0) {
         const prev = siblings[opIdx - 1];
         return findIdentifierInExpr(prev);
@@ -391,7 +395,12 @@ function findLhsBeforePosition(rootNode: Node, line: number, column: number): No
     // in a previous sibling. Check previous siblings.
     if (node.parent) {
       const siblings = node.parent.children;
-      const errorIdx = siblings.indexOf(node);
+      // Tree-sitter node wrappers are not reference-identical;
+      // use equals() to find the ERROR's index among siblings.
+      let errorIdx = -1;
+      for (let i = 0; i < siblings.length; i++) {
+        if (siblings[i].equals(node)) { errorIdx = i; break; }
+      }
       for (let i = errorIdx - 1; i >= 0; i--) {
         const sib = siblings[i];
         if (sib.type === "comma_expr" || sib.type === "expression_statement") {
@@ -754,6 +763,13 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   inherit: CompletionItemKind.Class,
 };
 
+/** Primitive Pike types that can never resolve to a class with members. */
+const PRIMITIVE_TYPES = new Set([
+  "void", "mixed", "zero", "int", "float", "string",
+  "array", "mapping", "multiset", "object", "function", "program",
+  "bool", "auto", "any",
+]);
+
 function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
   return {
     label: decl.name,
@@ -813,11 +829,30 @@ function resolveTypeMembers(
     }
   }
 
-  // If the declaration is a variable/parameter, check if we can find a class with its type name
-  if (decl.kind === "variable" || decl.kind === "parameter") {
-    // The variable's type would be in the source text — for v1, we don't
-    // have type annotation parsing in the symbol table. Return empty.
-    // This is the ~7% case from the design (inferred types).
+  // If the declaration is a variable/parameter, resolve its declared type
+  if ((decl.kind === "variable" || decl.kind === "parameter") && decl.declaredType) {
+    const typeName = decl.declaredType;
+    // Skip primitive types that can never have members
+    if (!PRIMITIVE_TYPES.has(typeName)) {
+      // Find a class declaration with this name in the file's symbol table
+      const classDecl = table.declarations.find(d =>
+        d.kind === "class" && d.name === typeName,
+      );
+      if (classDecl) {
+        // Find the class body scope — it's a child scope of the scope
+        // containing the class declaration, with matching range overlap.
+        const classScope = table.scopes.find(s =>
+          s.kind === "class" && s.parentId === classDecl.scopeId &&
+          rangeContains(s.range, classDecl.nameRange.start),
+        );
+        if (classScope) {
+          const classDecls = getDeclarationsInScope(table, classScope.id);
+          for (const cd of classDecls) {
+            items.push(declToCompletionItem(cd, 5));
+          }
+        }
+      }
+    }
   }
 
   return items;
@@ -825,6 +860,15 @@ function resolveTypeMembers(
 
 function containsDecl(scope: { declarations: number[] }, decl: Declaration): boolean {
   return scope.declarations.includes(decl.id);
+}
+
+/** Check if a position is within a range (inclusive start, exclusive end). */
+function rangeContains(range: Range, pos: { line: number; character: number }): boolean {
+  const { start, end } = range;
+  if (pos.line < start.line || pos.line > end.line) return false;
+  if (pos.line === start.line && pos.character < start.character) return false;
+  if (pos.line === end.line && pos.character > end.character) return false;
+  return true;
 }
 
 /**

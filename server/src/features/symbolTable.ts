@@ -23,6 +23,8 @@ export interface Declaration {
   scopeId: number;
   /** For inherit declarations: local alias (e.g. 'creature' in 'inherit Animal : creature'). */
   alias?: string;
+  /** For variables and parameters: the declared type annotation text, if present. */
+  declaredType?: string;
 }
 
 export type DeclKind =
@@ -103,6 +105,12 @@ function getNameText(node: Node): string | null {
 /** Get all identifier nodes from the `name` field (multi-name variable/constant decls). */
 function getNameNodes(node: Node): Node[] {
   return node.childrenForFieldName('name');
+}
+
+/** Extract the declared type text from a variable_decl or parameter node. */
+function extractTypeText(node: Node): string | undefined {
+  const typeNode = node.childForFieldName('type');
+  return typeNode?.text;
 }
 
 // ---------------------------------------------------------------------------
@@ -383,6 +391,7 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
           nameRange: toRange(nameNode),
           range: toRange(child),
           scopeId,
+          declaredType: extractTypeText(child),
         });
       }
     }
@@ -538,6 +547,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
 
   // Multi-name declarations (variable, constant)
   const nameNodes = getNameNodes(decl);
+  const typeText = extractTypeText(decl);
   if (nameNodes.length > 0) {
     for (const nameNode of nameNodes) {
       addDeclaration(state, {
@@ -546,6 +556,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         nameRange: toRange(nameNode),
         range: toRange(decl),
         scopeId,
+        declaredType: typeText,
       });
     }
   } else {
@@ -558,6 +569,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         nameRange: toRange(decl.childForFieldName('name')!),
         range: toRange(decl),
         scopeId,
+        declaredType: typeText,
       });
     }
   }

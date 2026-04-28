@@ -150,6 +150,7 @@ Handler follows the same flat pattern as hover/references.
 - The secondary stdlib index adds ~500KB to server memory, built once at startup.
 - Cross-file completion requires the target file to have been opened/indexed. Unindexed files produce no cross-file completions (graceful degradation).
 - `getSymbolsInScope` is a new general-purpose API that could also power improved hover context in the future.
+- Declared-type member completion is now supported: `Animal a; a->` resolves to Animal's class members, including inherited members. The symbol table populates `declaredType` from type annotations on variables and parameters.
 
 ## Worker dependency matrix
 
@@ -167,9 +168,15 @@ Handler follows the same flat pattern as hover/references.
 | Inferred-type member access (`mixed x; x->`) | No | **Not resolved** — no type information available | None (0 items) |
 | Expression return type (`foo()->`) | No | **Not resolved** — would need declared return type lookup | None (0 items) |
 
-**Summary:** Worker-dependent scenarios all return empty results in v1. The LSP never calls the worker for completion. This means declared-type member access (the `obj->member` pattern) is the most significant gap — users get 0 suggestions after `->` on typed variables. This is an honest answer ("we don't know the members") rather than a wrong one.
+**Summary:** Worker-dependent scenarios all return empty results in v1. The LSP never calls the worker for completion. Declared-type member access for locally-defined classes now works via symbol table type tracking. Remaining gaps: cross-file classes, qualified types (`Stdio.File`), and compound types (`array(Animal)`).
 
-**Future improvement:** Track type annotations in the symbol table (phase 6+). The `Declaration` type would gain an optional `declaredType` field. Then `resolveTypeMembers()` could look up the class scope by name. This requires no worker — just symbol table enhancement.
+**Implemented:** Type annotations are now tracked in the symbol table via `declaredType` on `Declaration`. The `resolveTypeMembers()` function resolves declared types to class scopes. This covers same-file classes with inheritance. No worker needed.
+
+**Remaining gaps:**
+- Cross-file class types (when the class is defined in another file, not yet indexed)
+- Qualified types like `Stdio.File` (would need WorkspaceIndex + stdlib prefix resolution)
+- Compound types like `array(Animal)` (would need inner type extraction)
+- Return type inference from function calls (`foo()->` where `foo` returns `Animal`)
 
 ## Ranking algorithm
 
@@ -229,6 +236,6 @@ This ensures that fast typing cancels stale completion requests before they prod
 
 | Gap | Positions affected | Behavior |
 |-----|-------------------|----------|
-| Declared type not tracked in symbol table | 2 | After `obj->` on typed variable, returns 0 items. User sees no suggestions. |
+| Declared type resolved for same-file classes | 2 | `Animal a; a->` now returns class members including inherited. Works for parameters too. |
 | Mixed type member access | 10 | After `mixed->`, returns 0 items. Correct — type is unknown. |
 | Scope resolution for nested module paths | — | `Stdio.File.read` requires chained prefix resolution. Currently resolves `Stdio.File` but not deeper paths in all cases. |

@@ -71,6 +71,10 @@ export interface TestServer {
   server: PikeServer;
   /** Open a text document on the server, returning the URI. */
   openDoc(uri: string, text: string, languageId?: string): string;
+  /** Client-to-server stream for raw message injection. */
+  c2s: PassThrough;
+  /** Server-to-client stream for raw response reading. */
+  s2c: PassThrough;
   /** Tear down both connections and streams. */
   teardown(): Promise<void>;
 }
@@ -126,6 +130,8 @@ export async function createTestServer(): Promise<TestServer> {
   return {
     client,
     server,
+    c2s,
+    s2c,
     openDoc(uri: string, text: string, languageId = "pike"): string {
       const version = nextDocVersion++;
       // Send didOpen through the client so TextDocuments picks it up

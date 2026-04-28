@@ -419,8 +419,99 @@ describe("textDocument/completion (LSP protocol)", () => {
       expect(typeof item.label).toBe("string");
     }
   });
-});
 
+  test("cancelled request returns empty via $/cancelRequest", async () => {
+    // This test creates a standalone server with raw JSON-RPC I/O
+    // to test that $/cancelRequest causes the completion handler to
+    // return empty early (via token.isCancellationRequested check).
+    //
+    // The shared test server's client reader consumes s2c, making it
+    // impossible to read raw responses. A standalone server avoids this.
+
+    const { PassThrough } = await import("node:stream");
+    const { StreamMessageReader, StreamMessageWriter } = await import("vscode-jsonrpc");
+    const { createConnection } = await import("vscode-languageserver/node");
+    const { createPikeServer } = await import("../../server/src/server");
+    const { initParser: ensureParser } = await import("../../server/src/parser");
+
+    const rawC2s = new PassThrough();
+    const rawS2c = new PassThrough();
+    const rawConn = createConnection(
+      new StreamMessageReader(rawC2s),
+      new StreamMessageWriter(rawS2c),
+    );
+    createPikeServer(rawConn);
+    rawConn.listen();
+
+    const writeRaw = (obj: object) => {
+      const body = JSON.stringify(obj);
+      rawC2s.write(`Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`);
+    };
+
+    const readRaw = (): Promise<any> => new Promise((resolve, reject) => {
+      let buf = "";
+      let bodyLen = 0;
+      const timeout = setTimeout(() => reject(new Error("raw response timeout")), 3000);
+      const onData = (chunk: Buffer) => {
+        buf += chunk.toString();
+        for (;;) {
+          if (!bodyLen) {
+            const idx = buf.indexOf("\r\n\r\n");
+            if (idx === -1) break;
+            const m = buf.substring(0, idx).match(/Content-Length: (\d+)/);
+            if (m) bodyLen = parseInt(m[1]);
+            buf = buf.substring(idx + 4);
+          }
+          if (bodyLen && buf.length >= bodyLen) {
+            const body = buf.substring(0, bodyLen);
+            buf = buf.substring(bodyLen);
+            bodyLen = 0;
+            clearTimeout(timeout);
+            rawS2c.removeListener("data", onData);
+            resolve(JSON.parse(body));
+            return;
+          }
+          break;
+        }
+      };
+      rawS2c.on("data", onData);
+    });
+
+    // Initialize
+    writeRaw({ jsonrpc: "2.0", id: 1, method: "initialize", params: { processId: null, rootUri: null, capabilities: {} } });
+    await readRaw();
+    writeRaw({ jsonrpc: "2.0", method: "initialized", params: {} });
+    await ensureParser();
+
+    // Open doc
+    writeRaw({ jsonrpc: "2.0", method: "textDocument/didOpen", params: {
+      textDocument: { uri: "file:///test/cancel-raw.pike", languageId: "pike", version: 1, text: "void foo(int x) { x }" },
+    }});
+    await new Promise(r => setTimeout(r, 50));
+
+    // Normal request: should return completions
+    writeRaw({ jsonrpc: "2.0", id: 10, method: "textDocument/completion", params: {
+      textDocument: { uri: "file:///test/cancel-raw.pike" }, position: { line: 0, character: 20 },
+    }});
+    const normal = await readRaw();
+    expect(normal.result.items.length).toBeGreaterThan(0);
+
+    // Cancelled request: send completion + cancel back-to-back before server reads
+    writeRaw({ jsonrpc: "2.0", id: 20, method: "textDocument/completion", params: {
+      textDocument: { uri: "file:///test/cancel-raw.pike" }, position: { line: 0, character: 20 },
+    }});
+    writeRaw({ jsonrpc: "2.0", method: "$/cancelRequest", params: { id: 20 } });
+    const cancelled = await readRaw();
+
+    // Handler returns empty via the first token.isCancellationRequested guard
+    expect(cancelled.id).toBe(20);
+    expect(cancelled.result.isIncomplete).toBe(false);
+    expect(cancelled.result.items).toHaveLength(0);
+
+    rawC2s.destroy();
+    rawS2c.destroy();
+  });
+});
 // ---------------------------------------------------------------------------
 // Audit fixes: operator filtering, dot/arrow trigger, foreach variables
 // ---------------------------------------------------------------------------
@@ -609,5 +700,97 @@ describe("stdlib secondary index", () => {
   test("stdlib index has expected entry count", () => {
     const stdlibKeys = Object.keys(stdlibAutodocIndex);
     expect(stdlibKeys.length).toBeGreaterThan(5400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Declared-type member completion
+// ---------------------------------------------------------------------------
+
+describe("Declared-type member completion", () => {
+  test("typed variable arrow access resolves class members", () => {
+    const src = 'class Animal { string name; int age; void speak() {} } void test() { Animal a = Animal(); a-> }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/typed-var.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const arrowIdx = src.indexOf('a->');
+    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("name");
+    expect(labels).toContain("age");
+    expect(labels).toContain("speak");
+    // Should NOT contain unqualified predef builtins
+    expect(labels).not.toContain("write");
+  });
+
+  test("typed parameter arrow access resolves class members", () => {
+    const src = 'class Dog { void bark() {} } void train(Dog d) { d-> }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/typed-param.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const arrowIdx = src.indexOf('d->');
+    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("bark");
+  });
+
+  test("inherited members appear in typed variable completion", () => {
+    const src = 'class Base { void base_method() {} } class Child { inherit Base; void child_method() {} } void test(Child c) { c-> }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/typed-inherit.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const arrowIdx = src.indexOf('c->');
+    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("child_method");
+    expect(labels).toContain("base_method");
+  });
+
+  test("primitive types produce no member completions", () => {
+    const src = 'void foo(string s, int i) { s-> }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/primitive.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const arrowIdx = src.indexOf('s->');
+    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    expect(result.items).toHaveLength(0);
+  });
+
+  test("mixed type produces no member completions", () => {
+    const src = 'void foo(mixed x) { x-> }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/mixed-type.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const arrowIdx = src.indexOf('x->');
+    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    expect(result.items).toHaveLength(0);
+  });
+
+  test("declaredType is populated in symbol table", () => {
+    const src = 'void foo(Animal a, string s) { int i = 0; }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/decl-types.pike", 1);
+    wireInheritance(table);
+
+    const aDecl = table.declarations.find(d => d.name === "a");
+    const sDecl = table.declarations.find(d => d.name === "s");
+    const iDecl = table.declarations.find(d => d.name === "i");
+
+    expect(aDecl?.declaredType).toBe("Animal");
+    expect(sDecl?.declaredType).toBe("string");
+    expect(iDecl?.declaredType).toBe("int");
   });
 });
