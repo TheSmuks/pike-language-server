@@ -31,7 +31,7 @@
 | references | **Implemented** | Same-file + cross-file via WorkspaceIndex dependency graphs |
 | hover | **Implemented** | Three-tier: workspace AutoDoc → stdlib index (5,505) → predef builtins (283) → tree-sitter fallback |
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (save-only). Content-hash cached. |
-| completion | **Not implemented** | Phase 6 scope |
+| completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
 | rename | **Not implemented** | Decision 0002 §12: out of scope (Pike has no rename support) |
 | code actions | **Not implemented** | Decision 0002 §13: out of scope |
 | formatting | Not planned | — |
@@ -113,6 +113,7 @@
 | 0009 | Symbol Resolution | 10-level scope hierarchy, two-pass build, cache invalidation |
 | 0010 | Cross-File Resolution | Workspace model, ModuleResolver, dependency graph |
 | 0011 | Types, Diagnostics, Hover | Subprocess lifecycle, three-tier hover, shared-server policies |
+| 0012 | Completion | Tree-sitter-first completion, unqualified + dot/arrow/scope access, stdlib prefix index |
 
 ## Corpus
 

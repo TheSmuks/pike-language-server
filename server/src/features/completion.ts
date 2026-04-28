@@ -1,0 +1,734 @@
+/**
+ * Completion provider for Pike LSP.
+ *
+ * Design: decision 0012.
+ * Sources: symbol table (local scope), WorkspaceIndex (cross-file),
+ * stdlib index (pre-built), predef builtins (pre-built).
+ * No Pike worker dependency in the common case (~93% of completions).
+ */
+
+import { Tree, Node } from "web-tree-sitter";
+import {
+  CompletionItem,
+  CompletionItemKind,
+  CompletionList,
+  InsertTextFormat,
+} from "vscode-languageserver/node";
+import {
+  type SymbolTable,
+  type Declaration,
+  type DeclKind,
+  getSymbolsInScope,
+  getDeclarationsInScope,
+  findClassScopeAt,
+} from "./symbolTable";
+import type { WorkspaceIndex } from "./workspaceIndex";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface StdlibEntry {
+  signature: string;
+  markdown: string;
+}
+
+export interface CompletionContext {
+  index: WorkspaceIndex;
+  stdlibIndex: Record<string, StdlibEntry>;
+  predefBuiltins: Record<string, string>;
+  uri: string;
+}
+
+// ---------------------------------------------------------------------------
+// Stdlib secondary index — prefix → direct children
+// ---------------------------------------------------------------------------
+
+interface StdlibMember {
+  name: string;
+  fqn: string;
+  signature: string;
+  kind: CompletionItemKind;
+}
+
+let stdlibChildrenMap: Map<string, StdlibMember[]> | null = null;
+let stdlibTopLevelNames: { name: string; kind: CompletionItemKind }[] | null = null;
+
+/**
+ * Build the secondary stdlib index (lazy, once).
+ * Maps FQN prefixes like "predef.Stdio.File" to their direct child members.
+ */
+function buildStdlibChildrenMap(
+  stdlibIndex: Record<string, StdlibEntry>,
+): Map<string, StdlibMember[]> {
+  const map = new Map<string, StdlibMember[]>();
+
+  for (const [fqn, entry] of Object.entries(stdlibIndex)) {
+    const parts = fqn.split(".");
+    if (parts.length < 2 || parts[0] !== "predef") continue;
+
+    // The direct child name is the last segment
+    const childName = parts[parts.length - 1];
+    // The parent prefix is everything except the last segment
+    const parentPrefix = parts.slice(0, -1).join(".");
+
+    const member: StdlibMember = {
+      name: childName,
+      fqn,
+      signature: entry.signature,
+      kind: inferStdlibKind(entry.signature),
+    };
+
+    const existing = map.get(parentPrefix);
+    if (existing) {
+      existing.push(member);
+    } else {
+      map.set(parentPrefix, [member]);
+    }
+  }
+
+  return map;
+}
+
+function getStdlibChildrenMap(
+  stdlibIndex: Record<string, StdlibEntry>,
+): Map<string, StdlibMember[]> {
+  if (!stdlibChildrenMap) {
+    stdlibChildrenMap = buildStdlibChildrenMap(stdlibIndex);
+  }
+  return stdlibChildrenMap;
+}
+
+/**
+ * Get top-level stdlib module names (first segment after predef.).
+ */
+function getStdlibTopLevel(
+  stdlibIndex: Record<string, StdlibEntry>,
+): { name: string; kind: CompletionItemKind }[] {
+  if (!stdlibTopLevelNames) {
+    const names = new Map<string, CompletionItemKind>();
+    for (const fqn of Object.keys(stdlibIndex)) {
+      const parts = fqn.split(".");
+      if (parts.length < 2 || parts[0] !== "predef") continue;
+      const mod = parts[1];
+      if (!names.has(mod)) {
+        const entry = stdlibIndex[fqn];
+        names.set(mod, inferStdlibKind(entry.signature));
+      }
+    }
+    stdlibTopLevelNames = [...names.entries()].map(([name, kind]) => ({ name, kind }));
+  }
+  return stdlibTopLevelNames;
+}
+
+/**
+ * Infer CompletionItemKind from a stdlib signature string.
+ */
+function inferStdlibKind(signature: string): CompletionItemKind {
+  if (signature.startsWith("inherit ")) return CompletionItemKind.Class;
+  if (signature.includes("(")) return CompletionItemKind.Method;
+  if (/^(constant|final)\s/.test(signature)) return CompletionItemKind.Constant;
+  return CompletionItemKind.Variable;
+}
+
+// ---------------------------------------------------------------------------
+// Main entry point
+// ---------------------------------------------------------------------------
+
+/**
+ * Get completions at a given position.
+ */
+export function getCompletions(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  ctx: CompletionContext,
+): CompletionList {
+  const root = tree.rootNode;
+  // Position in tree-sitter is 0-indexed
+  const pos = { row: line, column: character };
+
+  // Get the node at or immediately before the cursor position
+  let node = root.descendantForPosition(pos);
+  if (!node) {
+    return { isIncomplete: false, items: [] };
+  }
+
+  // Determine completion context
+  const triggerContext = detectTriggerContext(node, line, character, tree);
+
+  let items: CompletionItem[];
+
+  switch (triggerContext.type) {
+    case "dot":
+      items = completeDotAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
+      break;
+    case "arrow":
+      items = completeArrowAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
+      break;
+    case "scope":
+      items = completeScopeAccess(table, tree, line, character, triggerContext.scopeNode, ctx);
+      break;
+    case "unqualified":
+    default:
+      items = completeUnqualified(table, line, character, ctx, node);
+      break;
+  }
+
+  return { isIncomplete: items.length > 50, items };
+}
+
+// ---------------------------------------------------------------------------
+// Trigger detection
+// ---------------------------------------------------------------------------
+
+type TriggerContext =
+  | { type: "dot"; lhsNode: Node }
+  | { type: "arrow"; lhsNode: Node }
+  | { type: "scope"; scopeNode: Node }
+  | { type: "unqualified" };
+
+/**
+ * Determine what kind of completion is requested based on the node at the cursor.
+ */
+function detectTriggerContext(
+  node: Node,
+  line: number,
+  character: number,
+  tree: Tree,
+): TriggerContext {
+  // Check if the cursor is right after a trigger character
+  // The node at the cursor might be the trigger itself or an error node
+
+  // Walk up from the node to find a postfix_expr or scope_expr
+  let current: Node | null = node;
+
+  // First check: is this a scope_expr? (Foo::member)
+  if (current.type === "scope_expr") {
+    const scopeNode = current.childForFieldName("scope");
+    if (scopeNode) {
+      return { type: "scope", scopeNode };
+    }
+  }
+
+  // Check parent chain for scope_expr
+  let parent: Node | null = current.parent;
+  while (parent) {
+    if (parent.type === "scope_expr") {
+      const scopeNode = parent.childForFieldName("scope");
+      if (scopeNode) {
+        return { type: "scope", scopeNode };
+      }
+    }
+    parent = parent.parent;
+  }
+
+  // Check for dot or arrow access in postfix_expr
+  // Pattern: postfix_expr = expr '.' identifier | expr '->' identifier
+  current = node;
+
+  // If the node is an identifier inside a postfix_expr, look for the operator
+  if (current.parent?.type === "postfix_expr") {
+    const siblings = current.parent.children;
+    for (let i = 0; i < siblings.length; i++) {
+      const child = siblings[i];
+      if (child.type === "." && i > 0) {
+        return { type: "dot", lhsNode: siblings[i - 1] };
+      }
+      if ((child.type === "->" || child.type === "->?" || child.type === "?->") && i > 0) {
+        return { type: "arrow", lhsNode: siblings[i - 1] };
+      }
+    }
+  }
+
+  // Check if the node itself is the operator or just after it
+  // Case: cursor right after typing '.' or '->'
+  // The tree might have the dot/arrow as a sibling of the current node
+  if (current.type === "." && current.parent?.type === "postfix_expr") {
+    const siblings = current.parent.children;
+    const dotIdx = siblings.indexOf(current);
+    if (dotIdx > 0) {
+      return { type: "dot", lhsNode: siblings[dotIdx - 1] };
+    }
+  }
+
+  if ((current.type === "->" || current.type === "->?" || current.type === "?->") && current.parent?.type === "postfix_expr") {
+    const siblings = current.parent.children;
+    const arrowIdx = siblings.indexOf(current);
+    if (arrowIdx > 0) {
+      return { type: "arrow", lhsNode: siblings[arrowIdx - 1] };
+    }
+  }
+
+  // Check parent for the same pattern
+  parent = current.parent;
+  if (parent?.type === "postfix_expr") {
+    const siblings = parent.children;
+    for (let i = 0; i < siblings.length; i++) {
+      const child = siblings[i];
+      if (child.type === "." && i > 0) {
+        return { type: "dot", lhsNode: siblings[i - 1] };
+      }
+      if ((child.type === "->" || child.type === "->?" || child.type === "?->") && i > 0) {
+        return { type: "arrow", lhsNode: siblings[i - 1] };
+      }
+    }
+  }
+
+  // Check for ':' after ':' (:: trigger) — look for inherit_specifier
+  if (current.type === "::" || current.type === "inherit_specifier") {
+    // Cursor is right after ::
+    let scopeNode: Node | null = current;
+    if (current.type === "::") {
+      scopeNode = current.parent; // inherit_specifier
+    }
+    if (scopeNode) {
+      return { type: "scope", scopeNode };
+    }
+  }
+
+  // Check if the text right before the cursor is "->" or "::"
+  // This handles the case where the tree hasn't been updated yet
+  const rootNode = tree.rootNode;
+  const lineText = rootNode.text.split("\n")[line] ?? "";
+  if (character >= 2) {
+    const twoBefore = lineText.substring(character - 2, character);
+    if (twoBefore === "->") {
+      // Arrow access — find the expression before ->
+      // Try to find the node at position before the arrow
+      const beforePos = { row: line, column: character - 2 };
+      const beforeNode = rootNode.descendantForPosition(beforePos);
+      if (beforeNode && beforeNode.type !== "ERROR") {
+        return { type: "arrow", lhsNode: beforeNode };
+      }
+    }
+    if (twoBefore === "::") {
+      const beforePos = { row: line, column: character - 2 };
+      const beforeNode = rootNode.descendantForPosition(beforePos);
+      if (beforeNode) {
+        // The node before :: is the scope identifier (e.g., "Foo" in "Foo::")
+        return { type: "scope", scopeNode: beforeNode };
+      }
+    }
+  }
+  if (character >= 1) {
+    const oneBefore = lineText[character - 1];
+    if (oneBefore === ".") {
+      const beforePos = { row: line, column: character - 1 };
+      const beforeNode = rootNode.descendantForPosition(beforePos);
+      if (beforeNode && beforeNode.type !== "ERROR") {
+        return { type: "dot", lhsNode: beforeNode };
+      }
+    }
+    // '>' could be end of '->'
+    if (oneBefore === ">" && character >= 2 && lineText[character - 2] === "-") {
+      const beforePos = { row: line, column: character - 2 };
+      const beforeNode = rootNode.descendantForPosition(beforePos);
+      if (beforeNode && beforeNode.type !== "ERROR") {
+        return { type: "arrow", lhsNode: beforeNode };
+      }
+    }
+  }
+
+  return { type: "unqualified" };
+}
+
+// ---------------------------------------------------------------------------
+// Unqualified completion
+// ---------------------------------------------------------------------------
+
+function completeUnqualified(
+  table: SymbolTable,
+  line: number,
+  character: number,
+  ctx: CompletionContext,
+  node: Node,
+): CompletionItem[] {
+  const items: CompletionItem[] = [];
+  const seenNames = new Set<string>();
+
+  // 1. Local scope symbols
+  const localSymbols = getSymbolsInScope(table, line, character);
+  for (const decl of localSymbols) {
+    if (seenNames.has(decl.name)) continue;
+    seenNames.add(decl.name);
+    items.push(declToCompletionItem(decl, 0));
+  }
+
+  // 2. Imported symbols (cross-file)
+  const importDecls = table.declarations.filter(d => d.kind === "inherit");
+  for (const importDecl of importDecls) {
+    const targetUri = ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
+    if (!targetUri) continue;
+    const targetTable = ctx.index.getSymbolTable(targetUri);
+    if (!targetTable) continue;
+    // Get top-level declarations from the imported file
+    const fileScope = targetTable.scopes.find(s => s.kind === "file");
+    if (!fileScope) continue;
+    const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
+    for (const decl of importedDecls) {
+      if (seenNames.has(decl.name)) continue;
+      seenNames.add(decl.name);
+      items.push(declToCompletionItem(decl, 20));
+    }
+  }
+
+  // 3. Predef builtins
+  for (const name of Object.keys(ctx.predefBuiltins)) {
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
+    items.push({
+      label: name,
+      kind: CompletionItemKind.Function,
+      detail: cleanPredefSignature(ctx.predefBuiltins[name]),
+      sortText: padSortKey(30) + name,
+    });
+  }
+
+  // 4. Top-level stdlib modules/classes
+  const stdlibTopLevel = getStdlibTopLevel(ctx.stdlibIndex);
+  for (const { name, kind } of stdlibTopLevel) {
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
+    items.push({
+      label: name,
+      kind,
+      sortText: padSortKey(40) + name,
+    });
+  }
+
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Dot / arrow access completion
+// ---------------------------------------------------------------------------
+
+function completeDotAccess(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  lhsNode: Node,
+  ctx: CompletionContext,
+): CompletionItem[] {
+  return completeMemberAccess(table, tree, line, character, lhsNode, ctx, "dot");
+}
+
+function completeArrowAccess(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  lhsNode: Node,
+  ctx: CompletionContext,
+): CompletionItem[] {
+  return completeMemberAccess(table, tree, line, character, lhsNode, ctx, "arrow");
+}
+
+/**
+ * Complete member access after '.' or '->'.
+ *
+ * Strategies:
+ * 1. If lhs is a known module path (e.g., Stdio.File) → resolve via WorkspaceIndex + stdlib
+ * 2. If lhs is a declared variable with known type → resolve type to class scope
+ * 3. If lhs is a class name → enumerate class members
+ */
+function completeMemberAccess(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  lhsNode: Node,
+  ctx: CompletionContext,
+  _accessType: "dot" | "arrow",
+): CompletionItem[] {
+  const items: CompletionItem[] = [];
+  const seenNames = new Set<string>();
+  const lhsText = lhsNode.text;
+
+  // Strategy 1: lhs is a module/class name — check workspace index then stdlib
+  const wsTarget = ctx.index.resolveModule(lhsText, ctx.uri);
+  if (wsTarget) {
+    const targetTable = ctx.index.getSymbolTable(wsTarget);
+    if (targetTable) {
+      const fileScope = targetTable.scopes.find(s => s.kind === "file");
+      if (fileScope) {
+        const decls = getDeclarationsInScope(targetTable, fileScope.id);
+        for (const decl of decls) {
+          if (seenNames.has(decl.name)) continue;
+          seenNames.add(decl.name);
+          items.push(declToCompletionItem(decl, 0));
+        }
+      }
+    }
+  }
+
+  // Strategy 2: Check stdlib index for this prefix
+  const stdlibPrefix = "predef." + lhsText;
+  const childrenMap = getStdlibChildrenMap(ctx.stdlibIndex);
+  const stdlibMembers = childrenMap.get(stdlibPrefix);
+  if (stdlibMembers) {
+    for (const member of stdlibMembers) {
+      if (seenNames.has(member.name)) continue;
+      seenNames.add(member.name);
+      items.push({
+        label: member.name,
+        kind: member.kind,
+        detail: member.signature || undefined,
+        sortText: padSortKey(10) + member.name,
+      });
+    }
+  }
+
+  // Strategy 3: lhs is a declared variable — resolve its type
+  // Find if lhsNode text matches a declaration with a known type
+  const lhsDecl = findDeclarationForName(table, lhsText, line, character);
+  if (lhsDecl && lhsDecl.kind !== "inherit") {
+    // Try to resolve the declared type
+    const typeMembers = resolveTypeMembers(lhsDecl, table, ctx);
+    for (const item of typeMembers) {
+      if (seenNames.has(item.label)) continue;
+      seenNames.add(item.label);
+      items.push(item);
+    }
+  }
+
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Scope access completion (:: )
+// ---------------------------------------------------------------------------
+
+function completeScopeAccess(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  scopeNode: Node,
+  ctx: CompletionContext,
+): CompletionItem[] {
+  const items: CompletionItem[] = [];
+  const seenNames = new Set<string>();
+  const scopeText = scopeNode.text;
+
+  // local:: — complete from enclosing class + inherited
+  if (scopeText === "local") {
+    const classScopeId = findClassScopeAt(table, line, character);
+    if (classScopeId !== null) {
+      const classScope = table.scopes.find(s => s.id === classScopeId);
+      if (classScope) {
+        const decls = getDeclarationsInScope(table, classScopeId);
+        for (const decl of decls) {
+          if (seenNames.has(decl.name)) continue;
+          seenNames.add(decl.name);
+          items.push(declToCompletionItem(decl, 0));
+        }
+      }
+    }
+    return items;
+  }
+
+  // Bare :: — first inherited class
+  if (scopeText === "::" || scopeNode.type === "inherit_specifier") {
+    // Check if this is a bare :: (no identifier before it)
+    const children = scopeNode.children;
+    const hasIdentifier = children.some(c => c.type === "identifier");
+    if (!hasIdentifier) {
+      // Bare :: — members of first inherited class
+      const classScopeId = findClassScopeAt(table, line, character);
+      if (classScopeId !== null) {
+        const classScope = table.scopes.find(s => s.id === classScopeId);
+        if (classScope && classScope.inheritedScopes.length > 0) {
+          const firstInherited = classScope.inheritedScopes[0];
+          const decls = getDeclarationsInScope(table, firstInherited);
+          for (const decl of decls) {
+            if (seenNames.has(decl.name)) continue;
+            seenNames.add(decl.name);
+            items.push(declToCompletionItem(decl, 0));
+          }
+        }
+      }
+      return items;
+    }
+  }
+
+  // Identifier:: — resolve identifier to inherit declaration
+  const inheritName = scopeText;
+  // Find the inherit declaration with this name/alias in the enclosing class
+  const classScopeId = findClassScopeAt(table, line, character);
+  if (classScopeId !== null) {
+    const classScope = table.scopes.find(s => s.id === classScopeId);
+    if (classScope) {
+      // Find the inherit declaration
+      for (const declId of classScope.declarations) {
+        const decl = table.declarations.find(d => d?.id === declId);
+        if (decl && decl.kind === "inherit" && (decl.name === inheritName || decl.alias === inheritName)) {
+          // Resolve to target
+          const targetUri = ctx.index.resolveInherit(decl.name, false, ctx.uri);
+          if (targetUri) {
+            const targetTable = ctx.index.getSymbolTable(targetUri);
+            if (targetTable) {
+              const fileScope = targetTable.scopes.find(s => s.kind === "file");
+              if (fileScope) {
+                const targetDecls = getDeclarationsInScope(targetTable, fileScope.id);
+                for (const td of targetDecls) {
+                  if (seenNames.has(td.name)) continue;
+                  seenNames.add(td.name);
+                  items.push(declToCompletionItem(td, 0));
+                }
+              }
+            }
+          }
+          // Also check same-file inheritance
+          for (const inheritedId of classScope.inheritedScopes) {
+            const inheritedScope = table.scopes.find(s => s.id === inheritedId);
+            if (inheritedScope) {
+              const parentScope = table.scopes.find(s => s.id === inheritedScope.parentId);
+              if (parentScope) {
+                for (const parentDeclId of parentScope.declarations) {
+                  const parentDecl = table.declarations.find(d => d?.id === parentDeclId);
+                  if (parentDecl && parentDecl.kind === "class" && parentDecl.name === decl.name) {
+                    const targetDecls = getDeclarationsInScope(table, inheritedId);
+                    for (const td of targetDecls) {
+                      if (seenNames.has(td.name)) continue;
+                      seenNames.add(td.name);
+                      items.push(declToCompletionItem(td, 5));
+                    }
+                  }
+                }
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
+  function: CompletionItemKind.Function,
+  class: CompletionItemKind.Class,
+  variable: CompletionItemKind.Variable,
+  constant: CompletionItemKind.Constant,
+  enum: CompletionItemKind.Enum,
+  enum_member: CompletionItemKind.EnumMember,
+  typedef: CompletionItemKind.TypeParameter,
+  parameter: CompletionItemKind.Variable,
+  inherit: CompletionItemKind.Class,
+};
+
+function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
+  return {
+    label: decl.name,
+    kind: DECL_KIND_TO_COMPLETION_KIND[decl.kind] ?? CompletionItemKind.Text,
+    sortText: padSortKey(priority) + decl.name,
+  };
+}
+
+function padSortKey(n: number): string {
+  return String(n).padStart(4, "0");
+}
+
+/**
+ * Find the declaration for a name at a given position.
+ * Walks scope chain to find the innermost declaration matching the name.
+ */
+function findDeclarationForName(
+  table: SymbolTable,
+  name: string,
+  line: number,
+  character: number,
+): Declaration | null {
+  // Look for a reference at this position matching the name
+  for (const ref of table.references) {
+    if (ref.name === name && ref.resolvesTo !== null) {
+      const decl = table.declarations.find(d => d?.id === ref.resolvesTo);
+      if (decl) return decl;
+    }
+  }
+
+  // Look for a declaration with this name in scope
+  const symbols = getSymbolsInScope(table, line, character);
+  return symbols.find(d => d.name === name) ?? null;
+}
+
+/**
+ * Try to resolve the members of a declared type.
+ * For class types, find the class scope and enumerate its declarations.
+ */
+function resolveTypeMembers(
+  decl: Declaration,
+  table: SymbolTable,
+  ctx: CompletionContext,
+): CompletionItem[] {
+  const items: CompletionItem[] = [];
+
+  // If the declaration is a class, find its class scope
+  if (decl.kind === "class") {
+    const classScope = table.scopes.find(s =>
+      s.kind === "class" && containsDecl(s, decl),
+    );
+    if (classScope) {
+      const classDecls = getDeclarationsInScope(table, classScope.id);
+      for (const cd of classDecls) {
+        items.push(declToCompletionItem(cd, 5));
+      }
+    }
+  }
+
+  // If the declaration is a variable/parameter, check if we can find a class with its type name
+  if (decl.kind === "variable" || decl.kind === "parameter") {
+    // The variable's type would be in the source text — for v1, we don't
+    // have type annotation parsing in the symbol table. Return empty.
+    // This is the ~7% case from the design (inferred types).
+  }
+
+  return items;
+}
+
+function containsDecl(scope: { declarations: number[] }, decl: Declaration): boolean {
+  return scope.declarations.includes(decl.id);
+}
+
+/**
+ * Clean a predef builtin signature for display.
+ * Removes scope wrappers and simplifies overloaded signatures.
+ */
+function cleanPredefSignature(raw: string): string {
+  // Remove scope(0,...) wrapper
+  let sig = raw;
+  if (sig.startsWith("scope(")) {
+    // Extract inner part
+    const inner = sig.slice(6, -1);
+    // Take the first overload if multiple
+    const parts = inner.split(" | function");
+    sig = parts[0].trim();
+    // Remove leading "function" if present
+    if (sig.startsWith("function")) {
+      sig = sig.slice(8).trim();
+    }
+  }
+  return sig || raw;
+}
+
+// ---------------------------------------------------------------------------
+// Reset (for testing)
+// ---------------------------------------------------------------------------
+
+/**
+ * Reset cached indices. Used in tests to avoid state leaking between runs.
+ */
+export function resetCompletionCache(): void {
+  stdlibChildrenMap = null;
+  stdlibTopLevelNames = null;
+}

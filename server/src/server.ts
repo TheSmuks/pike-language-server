@@ -2,7 +2,7 @@
  * Pike Language Server — main entry point.
  *
  * Communicates over stdio. Provides documentSymbol, definition, references,
- * hover, and diagnostics (parse errors + Pike compilation).
+ * hover, completion, and diagnostics (parse errors + Pike compilation).
  *
  * Architecture:
  * - `createPikeServer(connection)` — wires all handlers onto a connection.
@@ -26,6 +26,8 @@ import {
   Hover,
   MarkupKind,
   MarkupContent,
+  CompletionItem,
+  CompletionList,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initParser, parse } from "./parser";
@@ -36,6 +38,7 @@ import {
   getReferencesTo,
   type SymbolTable,
 } from "./features/symbolTable";
+import { getCompletions, type CompletionContext } from "./features/completion";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { PikeWorker, type PikeDiagnostic } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
@@ -180,6 +183,9 @@ export function createPikeServer(connection: Connection): PikeServer {
         definitionProvider: true,
         referencesProvider: true,
         hoverProvider: true,
+        completionProvider: {
+          triggerCharacters: ['.', '>', ':'],
+        },
       },
     } satisfies InitializeResult;
   });
@@ -495,6 +501,34 @@ export function createPikeServer(connection: Connection): PikeServer {
     const doc = documents.get(uri);
     return doc ? doc.getText() : null;
   }
+
+  // -----------------------------------------------------------------------
+  // textDocument/completion (decision 0012)
+  // -----------------------------------------------------------------------
+
+  const completionCtx: CompletionContext = {
+    index,
+    stdlibIndex,
+    predefBuiltins,
+    uri: "", // overridden per-request
+  };
+
+  connection.onCompletion(async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return { isIncomplete: false, items: [] };
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return { isIncomplete: false, items: [] };
+
+    try {
+      const tree = parse(doc.getText());
+      completionCtx.uri = params.textDocument.uri;
+      return getCompletions(table, tree, params.position.line, params.position.character, completionCtx);
+    } catch (err) {
+      connection.console.error(`completion failed: ${(err as Error).message}`);
+      return { isIncomplete: false, items: [] };
+    }
+  });
 
   // -----------------------------------------------------------------------
   // textDocument/didSave — Pike diagnostic pipeline (decision 0011)

@@ -1,3 +1,21 @@
+## [Unreleased]
+
+### Added
+
+- `textDocument/completion` — tree-sitter-first completion provider (decision 0012)
+  - Trigger characters: `.`, `>`, `:` (dot, arrow, scope access)
+  - Unqualified completion: local scope walk + predef builtins (283) + stdlib modules (5,471)
+  - Dot/arrow access: resolve left-hand side → enumerate members from symbol table + stdlib
+  - Scope access (`::`): resolve inherited class members
+  - Deduplication: inner scope shadows outer
+  - No Pike worker dependency in the common case (~93% of completions)
+- `symbolTable.ts`: `getSymbolsInScope()` — enumerate all declarations visible at a position
+- `symbolTable.ts`: `getDeclarationsInScope()` — enumerate declarations in a specific scope
+- `symbolTable.ts`: `findClassScopeAt()` — find enclosing class scope at a position
+- `completion.ts`: stdlib secondary index — prefix-grouped member enumeration
+- 19 completion tests (direct API + LSP protocol)
+
+## Phase 5 AutoDoc Redesign: PikeExtractor XML Boundary - 2026-04-27
 # Changelog
 
 All notable changes to the Pike Language Server project will be documented in this file.
