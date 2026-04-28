@@ -2,7 +2,7 @@
 
 ## Current Phase
 
-**Phase 7: Type Resolution + Import Tracking** — Complete. 1,016 tests passing.
+**Phase 8: Rename** — In progress. 1,043 tests passing.
 
 
 
@@ -16,6 +16,7 @@
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
 | Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred (type inference prerequisite). |
 | Phase 7: Type Resolution + Import Tracking | **Complete** | Phase 6 complete | P1: Type resolver ✓. P2: Import tracking ✓. 37 new tests. |
+| Phase 8: Rename | **In progress** | Phase 7 complete | textDocument/rename, textDocument/prepareRename, 27 new tests |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -128,6 +129,19 @@ Decision 0015. `DeclKind 'import'` added to distinguish `import` from `inherit` 
 - Tree-sitter Node identity comparison (`===`) unreliable across `descendantForPosition` vs `children[i]` — changed to position comparison.
 
 ### Test suite at exit: 1,016 tests, 0 failures, 8,785 assertions, 27 files.
+
+## Phase 8 — In Progress
+
+### Rename
+Decision 0016. `textDocument/rename` + `textDocument/prepareRename`. Reuses existing `getDefinitionAt()`, `getReferencesTo()`, and `getCrossFileReferences()` infrastructure. Scope-aware renaming across files. Pike keyword validation prevents invalid renames.
+
+### Changes
+- `server/src/features/rename.ts` — New: `prepareRename()`, `getRenameLocations()`, `buildWorkspaceEdit()`, `validateRenameName()` (~190 LOC)
+- `server/src/server.ts` — Wired rename + prepareRename handlers, registered `renameProvider` capability
+- `decisions/0016-rename.md` — Rename architecture
+- `tests/lsp/rename.test.ts` — 27 tests (validation, prepare, same-file rename, LSP protocol)
+
+### Test suite at current state: 1,043 tests, 0 failures, 8,861 assertions, 28 files.
 ## Phase 6 — Complete (Verified)
 
 ### P1: Completion
