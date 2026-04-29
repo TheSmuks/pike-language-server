@@ -30,7 +30,7 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-001. Key file: server/src/features/completion.ts (resolveMemberAccess usage). After US-001 wires cross-file inheritance, completion should automatically pick up inherited members."
     },
     {

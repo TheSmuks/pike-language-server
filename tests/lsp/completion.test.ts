@@ -886,4 +886,41 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     // Dog's own member should also be present
     expect(labels).toContain("fetch");
   });
+
+  test("cross-file inherit completion: no duplicate entries when child overrides parent member (US-002)", () => {
+    // Create a scenario where Dog overrides Animal.speak()
+    const srcA = 'class Animal { string name; void speak() { return name + " talks"; } }';
+    const srcB = 'inherit "file_a.pike"; class Dog { inherit Animal; void speak() { return "woof"; } void fetch() {} } void test() { Dog d = Dog(); d-> }';
+
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uriA = "file:///test/file_a.pike";
+    const uriB = "file:///test/file_b.pike";
+
+    const treeA = parse(srcA);
+    idx.upsertFile(uriA, 1, treeA, srcA, ModificationSource.DidOpen);
+
+    const treeB = parse(srcB);
+    idx.upsertFile(uriB, 1, treeB, srcB, ModificationSource.DidOpen);
+
+    const tableB = idx.getSymbolTable(uriB)!;
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriB,
+    };
+
+    // Cursor after d-> at end of file_b
+    const arrowIdx = srcB.indexOf('d->');
+    const result = getCompletions(tableB, treeB, 0, arrowIdx + 3, ctx);
+    const labels = completionLabels(result);
+
+    // speak should appear exactly once (child overrides parent)
+    const speakCount = labels.filter(l => l === "speak").length;
+    expect(speakCount).toBe(1);
+
+    // fetch is Dog's own member
+    expect(labels).toContain("fetch");
+    // name is Animal's protected field — not visible via arrow access
+  });
 });

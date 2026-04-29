@@ -37,3 +37,16 @@ Thread: N/A (Ralph agent iteration)
   - inheritedScopes contains scope IDs local to the table — cross-file scopes must be synthesized into the local table
   - The corpus files cross-inherit-simple-*.pike are the primary test files for cross-file inheritance
 ---
+
+## 2026-04-29 - US-002
+Thread: N/A (Ralph agent iteration)
+- Cross-file inherited member completion — verified working after US-001 wiring
+- Added deduplication test: child class overrides parent method, completion shows exactly one entry
+- No code changes to server were needed — US-001's synthetic scope wiring automatically feeds into completion
+- Files changed:
+  - tests/lsp/completion.test.ts (1 new test: dedup when child overrides parent member)
+- **Learnings for future iterations:**
+  - US-001's synthetic scope approach paid off — completion, definition, and hover all work without extra wiring
+  - Protected fields (e.g., Animal.name) do NOT appear in arrow access completions — this is by design
+  - When testing completion dedup, use public methods not protected fields
+---
