@@ -152,10 +152,12 @@ mapping handle_ping(mapping params) {
 // ---------------------------------------------------------------------------
 // Method: typeof
 //
+// ---------------------------------------------------------------------------
 // Decision 0018: evaluates typeof(expr) safely by compiling the user's
 // source into a program, then using Pike's reflection API to inspect the
-// expression type without raw string interpolation that could inject
-// arbitrary code.
+// expression type.  The expression is interpolated into compiled code, so
+// we validate it strictly: character whitelist, balanced parens, dangerous
+// identifier rejection, and length limit.
 // ---------------------------------------------------------------------------
 
 mapping handle_typeof(mapping params) {
@@ -166,20 +168,72 @@ mapping handle_typeof(mapping params) {
     return ([ "type": "mixed", "error": "Missing source or expression" ]);
   }
 
-  // Reject expressions that contain statement separators.
-  // A valid Pike expression must not contain these characters.
-  // This prevents trivial injection of arbitrary statements.
+  // Length limit
+  if (sizeof(expr) > 200) {
+    return ([ "type": "mixed", "error": "Expression too long (max 200 chars)" ]);
+  }
+
+  // Reject statement separators (prevents trivial multi-statement injection)
   if (search(expr, ";") != -1 ||
       search(expr, "\n") != -1 ||
       search(expr, "\r") != -1) {
     return ([ "type": "mixed", "error": "Expression contains invalid characters" ]);
   }
 
+  // Character whitelist: only allow safe expression characters
+  // Allowed: a-z A-Z 0-9 _ . -> :: ( ) [ ] { } , space + - * / % & | ^ ~ ! < > = ?
+  for (int i = 0; i < sizeof(expr); i++) {
+    int c = expr[i];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+          (c >= '0' && c <= '9') || c == '_' || c == '.' ||
+          c == '-' || c == '>' || c == ':' || c == '(' || c == ')' ||
+          c == '[' || c == ']' || c == '{' || c == '}' || c == ',' ||
+          c == ' ' || c == '+' || c == '-' || c == '*' || c == '/' ||
+          c == '%' || c == '&' || c == '|' || c == '^' || c == '~' ||
+          c == '!' || c == '<' || c == '>' || c == '=' || c == '?')) {
+      return ([ "type": "mixed", "error": sprintf("Expression contains disallowed character: %c", c) ]);
+    }
+  }
+
+  // Balanced parentheses check
+  int depth = 0;
+  for (int i = 0; i < sizeof(expr); i++) {
+    if (expr[i] == '(') depth++;
+    else if (expr[i] == ')') {
+      depth--;
+      if (depth < 0) {
+        return ([ "type": "mixed", "error": "Unbalanced parentheses in expression" ]);
+      }
+    }
+  }
+  if (depth != 0) {
+    return ([ "type": "mixed", "error": "Unbalanced parentheses in expression" ]);
+  }
+
+  // Reject dangerous identifiers that could cause side effects during
+  // compilation (e.g., exit, destruct, throw are compile-time evaluable)
+  array(string) dangerous = ({
+    "exit", "destruct", "throw", "catch", "gauge",
+    "aggregate", "aggregate_list", "allocate", "mkmapping",
+  });
+  foreach(dangerous, string danger) {
+    // Check for identifier boundary: the dangerous word must appear as
+    // a standalone identifier followed by '('
+    if (search(expr, danger + "(") != -1) {
+      // Allow sizeof() — it's pure and safe for typeof queries
+      if (danger == "sizeof") continue;
+      return ([ "type": "mixed", "error": "Expression contains disallowed function: " + danger ]);
+    }
+  }
+
   // Compile a wrapper that evaluates typeof(expr) in the context of
-  // the original source.  typeof() is evaluated at compile time and
-  // returns a type string, so even though the expression is interpolated,
-  // it can only produce a type — not execute arbitrary code beyond what
-  // the compiler already does during compilation.
+  // the original source. typeof() is evaluated at compile time and
+  // returns a type string — the expression can only produce a type,
+  // not execute arbitrary runtime code beyond what the compiler
+  // already does during compilation.
+  //
+  // Security relies on the character whitelist and dangerous-identifier
+  // checks above, not on typeof() itself being safe.
   string typeof_wrapper =
     "#pragma strict_types\n"
     + source + "\n"
@@ -192,7 +246,6 @@ mapping handle_typeof(mapping params) {
   };
 
   if (err || !prog) {
-    // The expression may not be valid in this context
     return ([ "type": "mixed", "error": "Compilation failed for typeof query" ]);
   }
 

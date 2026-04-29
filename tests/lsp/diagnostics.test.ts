@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { createSilentStream } from "./helpers";
 
 /**
@@ -35,6 +36,7 @@ import { DiagnosticManager } from "../../server/src/features/diagnosticManager";
 // Helpers
 // ---------------------------------------------------------------------------
 
+const CORPUS_DIR = resolve(import.meta.dir, "..", "..", "corpus", "files");
 const DEBOUNCE_MS = 50;
 
 interface TestContext {
@@ -446,35 +448,122 @@ describe("Diagnostic caching", () => {
 // ---------------------------------------------------------------------------
 
 describe("Cross-file diagnostic propagation", () => {
-  let ctx: TestContext;
-
-  beforeEach(async () => {
-    ctx = await createDiagnosticTestServer();
-  });
-
-  afterEach(async () => {
-    await ctx.teardown();
-  });
-
   test("editing a base class schedules re-diagnosis of dependents", async () => {
-    // Open two files: base and dependent
-    const baseUri = ctx.openDoc("base.pike", "class Animal { string name; }\n");
-    await ctx.waitForDiagnostics(baseUri);
+    // Use corpus directory as workspace root so WorkspaceIndex can resolve
+    // inherit paths to real files on disk.
+    const corpusRoot = CORPUS_DIR;
+    const corpusUri = `file://${corpusRoot}`;
 
-    const depUri = ctx.openDoc("dependent.pike", "inherit \"base\";\nvoid foo() { Animal a; }\n");
-    await ctx.waitForDiagnostics(depUri);
+    // Create a dedicated server with the corpus root as workspace
+    const c2s = createSilentStream();
+    const s2c = createSilentStream();
 
-    // Edit the base file
-    ctx.changeDoc(baseUri, "class Animal { }\n");
+    const serverConn = createConnection(
+      new StreamMessageReader(c2s),
+      new StreamMessageWriter(s2c),
+    );
+    const server = createPikeServer(serverConn);
+    serverConn.listen();
 
-    // Wait for base file diagnostics
-    const baseDiags = await ctx.waitForDiagnostics(baseUri);
+    const client = createMessageConnection(
+      new StreamMessageReader(s2c),
+      new StreamMessageWriter(c2s),
+    );
+    client.listen();
+
+    await client.sendRequest("initialize", {
+      processId: null,
+      rootUri: corpusUri,
+      capabilities: {},
+      initializationOptions: { diagnosticMode: "realtime" },
+    });
+    client.sendNotification("initialized", {});
+
+    const { initParser } = await import("../../server/src/parser");
+    await initParser();
+
+    // Diagnostic promise tracking
+    const diagPromises = new Map<string, {
+      resolve: (value: { uri: string; diagnostics: unknown[] }) => void;
+      reject: (err: Error) => void;
+    }>();
+    const latestDiagnostics = new Map<string, unknown[]>();
+
+    client.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics: unknown[] }) => {
+      latestDiagnostics.set(params.uri, params.diagnostics);
+      const pending = diagPromises.get(params.uri);
+      if (pending) {
+        diagPromises.delete(params.uri);
+        pending.resolve(params);
+      }
+    });
+
+    function waitForDiagnostics(uri: string, timeoutMs = 5000): Promise<{ uri: string; diagnostics: unknown[] }> {
+      const existing = latestDiagnostics.get(uri);
+      if (existing !== undefined) {
+        latestDiagnostics.delete(uri);
+        return Promise.resolve({ uri, diagnostics: existing });
+      }
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          diagPromises.delete(uri);
+          reject(new Error(`Timeout waiting for diagnostics on ${uri}`));
+        }, timeoutMs);
+        diagPromises.set(uri, {
+          resolve: (value) => { clearTimeout(timer); resolve(value); },
+          reject: (err) => { clearTimeout(timer); reject(err); },
+        });
+      });
+    }
+
+    // Real corpus files: base defines Animal, dependent inherits it
+    // cross-inherit-simple-a.pike: defines class Animal with name/sound/speak()
+    // cross-inherit-simple-b.pike: inherit "cross-inherit-simple-a.pike"; class Dog { inherit Animal; ... }
+    const baseUri = `file://${resolve(corpusRoot, "cross-inherit-simple-a.pike")}`;
+    const depUri = `file://${resolve(corpusRoot, "cross-inherit-simple-b.pike")}`;
+
+    // Read the actual file content for didOpen
+    const { readFileSync } = await import("node:fs");
+    const baseContent = readFileSync(baseUri.slice("file://".length), "utf-8");
+    const depContent = readFileSync(depUri.slice("file://".length), "utf-8");
+
+    let version = 1;
+
+    // Open base file
+    client.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: baseUri, languageId: "pike", version: version++, text: baseContent },
+    });
+    await waitForDiagnostics(baseUri);
+
+    // Open dependent file
+    client.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: depUri, languageId: "pike", version: version++, text: depContent },
+    });
+    await waitForDiagnostics(depUri);
+
+    // Edit the base file — remove the Animal class body to break the dependent
+    const editedBase = "#pragma strict_types\n\nclass Animal { }\n";
+    client.sendNotification("textDocument/didChange", {
+      textDocument: { uri: baseUri, version: version++ },
+      contentChanges: [{ text: editedBase }],
+    });
+
+    // Wait for base file diagnostics after the edit
+    const baseDiags = await waitForDiagnostics(baseUri);
     expect(baseDiags).toBeDefined();
 
     // The dependent file should also get scheduled for re-diagnosis
     // (via propagateToDependents). Wait for it.
-    const depDiags = await ctx.waitForDiagnostics(depUri, 2000);
+    const depDiags = await waitForDiagnostics(depUri, 5000);
     expect(depDiags).toBeDefined();
+
+    // Teardown — stop the worker, destroy streams, and shut down
+    server.worker.stop();
+    const shutdownPromise = client.sendRequest("shutdown").catch(() => {});
+    await Promise.race([shutdownPromise, new Promise((r) => setTimeout(r, 500))]);
+    try { client.sendNotification("exit"); } catch { /* ignore */ }
+    c2s.destroy();
+    s2c.destroy();
   });
 });
 
