@@ -382,7 +382,11 @@ export class WorkspaceIndex {
       if (!depEntry?.symbolTable) continue;
 
       for (const ref of depEntry.symbolTable.references) {
-        if (ref.name === targetDecl!.name && ref.resolvesTo !== null) {
+        // Match by name. Inherited/imported symbols have resolvesTo=null because
+        // single-file analysis cannot resolve cross-file references. Locally-resolved
+        // references (resolvesTo !== null) are excluded because they point to a
+        // different declaration in the dependent file, not the inherited one.
+        if (ref.name === targetDecl!.name && ref.resolvesTo === null) {
           results.push({ uri: depUri, ref });
         }
       }

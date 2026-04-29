@@ -2,6 +2,33 @@
 
 ### Added
 
+- Standalone server build (`bun run build:standalone`) producing a self-contained bundle in `standalone/`
+- `bin/pike-language-server` wrapper script for use with any LSP-capable editor
+- `docs/other-editors.md` — verified setup instructions for Neovim, Helix, and generic LSP clients
+- `package.json` `bin` field and `build:standalone` script
+
+### Changed
+
+- `server/src/parser.ts` — WASM path resolution now searches multiple locations for portability across build outputs
+- `README.md` — rewritten with clear install instructions for both VSCode and non-VSCode editors
+- `docs/state-of-project.md` — updated for Phase 9 completion
+- `TRACKING.md` — Phase 9 all three workstreams complete with measured performance data
+
+### Removed
+
+- `PLAN.md` — stale Phase 7-8 handoff document (Phase 8 complete)
+
+### Fixed
+
+- `resolveTypeMembers()` in completion.ts used broken `containsDecl()` for class scope lookup —
+  class-name dot completion (`Animal.`) returned nothing. Fixed to use `parentId + rangeContains`.
+- Cross-file rename excluded inherited symbol references because `getCrossFileReferences()` filtered by
+  `resolvesTo !== null`. Inherited references have `resolvesTo=null`. Changed filter to `resolvesTo === null`.
+- Arrow/dot access call sites (`d->bark()`) excluded from rename because `getReferencesTo()` only matched
+  references where `resolvesTo === targetDeclId`. Added fallback for arrow/dot access name matching.
+
+### Added
+
 - `textDocument/rename` — workspace-wide symbol renaming with cross-file support (decision 0016)
   - Scope-aware: only renames the same symbol, not homonyms in different scopes
   - Cross-file: uses WorkspaceIndex to enumerate references across dependent files

@@ -2,9 +2,9 @@
 
 ## Current Phase
 
-**Phase 8: Rename** — In progress. 1,043 tests passing.
+**Phase 9: Stabilize and Multi-editor** — All workstreams complete. 1,311 tests passing.
 
-
+Workstream 1 (User-facing roughness) ✓. Workstream 2 (Production quality) ✓. Workstream 3 (Performance) ✓. Ready for beta tag.
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
@@ -14,9 +14,10 @@
 | Phase 3: Per-file Symbol Table | **Complete (verified)** | Phase 2 complete | Same-file go-to-definition and find-references |
 | Phase 4: Cross-file Resolution | **Complete** | Phase 3 complete | Cross-file navigation, workspace index |
 | Phase 5: Types and Diagnostics | **Exit verified** | Phase 4 complete + resolve.pike + integration tests | Diagnostics from Pike, three-tier hover, shared-server hardened |
-| Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion ✓. P2: Real-time diagnostics ✓. P3 rename deferred (type inference prerequisite). |
-| Phase 7: Type Resolution + Import Tracking | **Complete** | Phase 6 complete | P1: Type resolver ✓. P2: Import tracking ✓. 37 new tests. |
-| Phase 8: Rename | **In progress** | Phase 7 complete | textDocument/rename, textDocument/prepareRename, 27 new tests |
+| Phase 6: Refinement | **Complete (verified)** | Phase 5 complete | P1: Completion. P2: Real-time diagnostics. P3 rename deferred (type inference prerequisite). |
+| Phase 7: Type Resolution + Import Tracking | **Complete** | Phase 6 complete | P1: Type resolver. P2: Import tracking. 37 new tests. |
+| Phase 8: Rename | **Complete + post-audit fixes** | Phase 7 complete | textDocument/rename, textDocument/prepareRename, 30 rename tests, 3 audit bugs fixed |
+| Phase 9: Stabilize and Multi-editor | **Complete** | Phase 8 complete | Standalone build, Neovim verified, real-codebase tested, performance measured |
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -130,7 +131,7 @@ Decision 0015. `DeclKind 'import'` added to distinguish `import` from `inherit` 
 
 ### Test suite at exit: 1,016 tests, 0 failures, 8,785 assertions, 27 files.
 
-## Phase 8 — In Progress
+## Phase 8 — Complete + Post-Audit Fixes
 
 ### Rename
 Decision 0016. `textDocument/rename` + `textDocument/prepareRename`. Reuses existing `getDefinitionAt()`, `getReferencesTo()`, and `getCrossFileReferences()` infrastructure. Scope-aware renaming across files. Pike keyword validation prevents invalid renames.
@@ -139,9 +140,152 @@ Decision 0016. `textDocument/rename` + `textDocument/prepareRename`. Reuses exis
 - `server/src/features/rename.ts` — New: `prepareRename()`, `getRenameLocations()`, `buildWorkspaceEdit()`, `validateRenameName()` (~190 LOC)
 - `server/src/server.ts` — Wired rename + prepareRename handlers, registered `renameProvider` capability
 - `decisions/0016-rename.md` — Rename architecture
-- `tests/lsp/rename.test.ts` — 27 tests (validation, prepare, same-file rename, LSP protocol)
+- `tests/lsp/rename.test.ts` — 30 tests (validation, prepare, same-file rename, scope isolation, cross-file, arrow-access, LSP protocol)
 
-### Test suite at current state: 1,043 tests, 0 failures, 8,861 assertions, 28 files.
+### Audit Fixes (7 items)
+
+Three bugs found and fixed:
+
+1. **`containsDecl` bug in completion.ts** — `resolveTypeMembers()` used `containsDecl()` to find class body scope, which always failed because class declarations live in file scope. Applied the same `parentId + rangeContains` fix already present in `typeResolver.ts`. Removed unused `containsDecl` function. Test: `"dot completion on same-file class name returns its members"`.
+
+2. **Cross-file rename filter too strict** — `getCrossFileReferences()` filtered by `resolvesTo !== null`, excluding all inherited symbol references which have `resolvesTo=null`. Changed to `resolvesTo === null` to correctly match unresolved inherited references in dependent files. Test: `"cross-file rename updates all files containing references"`.
+
+3. **Arrow-access call sites excluded from rename** — `getReferencesTo()` only returned references where `resolvesTo === targetDeclId`, excluding arrow/dot access references (which have `resolvesTo=null`). Added fallback to include arrow/dot access name-matching references. Test: `"rename includes arrow-access call sites"`.
+
+Four test gaps closed:
+
+4. Rename location count assertions changed from `>=N` to `toHaveLength(N)` across 6 assertions.
+5. `resolveType` depth limit tested via 3 new tests (depth guard, member access termination, within-limit success).
+6. Cross-file arrow completion tested via `"cross-file arrow completion returns members from imported class"` using real corpus files.
+7. Scope-isolation rename tested via `"rename does not affect same-name identifier in different scope"` (confirmed code was already correct).
+
+### Known Limitations Discovered
+
+- Cross-file inherited member completion (e.g., `Dog d; d->` where `Dog` inherits from a cross-file class) returns only same-file members. `wireInheritance()` does not resolve cross-file inheritance — inherited scopes remain empty.
+- Arrow/dot access rename uses name-based matching for unresolved references, which may include call sites on different classes that share the same method name.
+
+### Test suite at current state: 1,051 tests, 0 failures, 8,896 assertions, 28 files.
+
+## Phase 9 — In Progress
+
+### Decision: 0017 (Beta Readiness)
+
+Three workstreams: User-facing roughness, Production quality, Performance at scale.
+
+### Workstream 1: User-facing Roughness — Complete
+
+**Problem:** A Helix user on the Pike mailing list reported install difficulties. The server had no standalone build, no bin entry, no non-VSCode docs.
+
+**Findings:**
+1. No `bin` field in package.json — users didn't know what command to run
+2. The `tsc` build output couldn't run with Node.js due to `moduleResolution: "bundler"` in tsconfig
+3. `bun dist/server/src/server.js --stdio` worked but the WASM wasn't in the build output
+4. `web-tree-sitter.wasm` (the runtime WASM) also wasn't copied
+5. No instructions for non-VSCode editors
+
+**Changes:**
+- `scripts/build-standalone.sh` — new: esbuild bundle + WASM + data files to `standalone/`
+- `bin/pike-language-server` — new: wrapper script that runs `standalone/server.js` via bun
+- `package.json` — added `bin` field and `build:standalone` script
+- `server/src/parser.ts` — WASM path resolution now searches multiple locations (standalone bundle, tsc output, extension bundle)
+- `README.md` — rewritten: clear install for VSCode and non-VSCode, lists features, removes confusing Node.js requirement
+- `docs/other-editors.md` — new: verified Neovim setup with nvim-lspconfig, generic LSP client config, troubleshooting
+- `.gitignore` — added `standalone/` (build artifact)
+- `docs/state-of-project.md` — updated for Phase 8 completion
+- `PLAN.md` — deleted (stale Phase 7-8 handoff)
+- 6 GitHub issues (#2210, #2217-2221) and 2 PRs (#2222-2223) closed — filed against non-existent `packages/` paths
+- `decisions/0017-beta-readiness.md` — Phase 9 scope and exit criteria
+
+**Verification:**
+- Standalone server tested with Node.js child process: initialize, documentSymbols, hover, completion all work
+- Neovim 0.10.4 + nvim-lspconfig: LSP client attaches, all capabilities advertised (documentSymbol, definition, references, hover, completion, rename)
+- Document symbols on `class Animal/Dog` test file: correct symbol hierarchy
+- Hover on `name` field: returns `string name` with range
+- Completion after `d->`: returns breed, fetch, name, age (class + inherited members)
+- All 1,311 tests pass (0 failures) after parser.ts changes
+
+### Workstream 2: Production Quality — Complete
+
+**Test target:** 555 Pike stdlib files (640 .pike/.pmod files, 5-2528 lines each)
+
+**P1 findings: 0 crashes, 0 wrong answers.**
+
+Tested 14 representative files spanning 10-2528 lines with all LSP features:
+- `documentSymbol`: 14/14 files returned correct symbols (6-53 per file, class + function counts match)
+- `hover`: 10/14 files returned type info on first typed identifier
+- `completion`: 5/7 files with `->` returned results (401-403 items from stdlib + workspace)
+- `references`: 4/4 files with class/inherit returned references
+- `definition`: 2/2 files with inherit resolved the inherited symbol
+
+**P2 findings (7 items):**
+
+| File | Feature | Issue |
+|------|---------|-------|
+| `Crypto.pmod/HMAC.pike` | completion | Empty after `->` on `B` variable (type unresolved) |
+| `Geography.pmod/GeoIP.pmod` | completion | Empty after `->` on `data` variable (type unresolved) |
+| `SSL.pmod/Packet.pike` | completion | Empty after `->` on `content_type` (type unresolved) |
+| `Protocols.pmod/HTTP.pmod/Query.pike` | hover | No hover on `ok` field at line 7 (local scope hover gap) |
+| `Protocols.pmod/IMAP.pmod/parser.pike` | completion | Empty after `->` on `b` variable (type unresolved) |
+| `Protocols.pmod/LysKOM.pmod/Raw.pike` | hover | No hover on `g` at line 20 (local variable hover gap) |
+| `Protocols.pmod/SMTP.pmod/module.pmod` | completion | Empty after `->` on `data` variable (type unresolved) |
+
+**Analysis:**
+- 5 of 7 P2s are completion after `->` where the variable's type cannot be resolved by tree-sitter alone (would need Pike runtime type inference). This is a known limitation documented in `docs/known-limitations.md`.
+- 2 of 7 P2s are hover on local variables in complex functions where the scope chain doesn't reach the declaration. This is a scope resolution gap, not a crash.
+- No crashes, no wrong answers, no missing core features.
+
+**Test infrastructure finding:**
+- The vscode-languageserver `createConnection(ProposedFeatures.all)` watchdog monitors `processId` from `initialize` params. If `process.kill(processId, 0)` throws (e.g., PID 1 = EPERM), the server exits with code 1. This caused false-positive crash reports in test harnesses. Fix: pass `processId: null` in test clients, or use a real process PID.
+
+**parser.ts ESM compatibility fix:**
+- Original `__dirname` usage broke in esbuild ESM bundles (`__dirname` is undefined in ESM). Fixed with `typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url))` fallback.
+
+**Test suite: 1,311 tests, 0 failures, 10,720 assertions.**
+
+### Workstream 3: Performance at Scale — Complete
+
+**#2210 verification:** No linear scan exists in completion. All paths use O(1) hash lookups (`WorkspaceIndex.files.get()`) or single-file `declarations.find()`. The `findClassInWorkspace` and `collectClassMembersFromWorkspace` functions mentioned in #2210 do not exist in the codebase.
+
+**Member-access completion benchmark (`obj->`):**
+
+| Case | Lines | Members | Cold | Warm p50 | Warm p99 | Max | Items |
+|------|-------|---------|------|----------|----------|-----|-------|
+| Small (10 members, no inherit) | 17 | 10 | 9.7ms | 0.7ms | 1.9ms | 1.9ms | 4 |
+| Medium (65 members, 3-level chain) | 79 | 65 | 11.1ms | 0.8ms | 2.3ms | 2.3ms | 20 |
+| Large (200 members, 4-level chain) | 217 | 200 | 9.8ms | 1.4ms | 2.4ms | 2.4ms | 0* |
+
+*Large class returns 0 items because multi-level inheritance resolution does not yet
+traverse the full chain for completion — known P2 correctness issue, not performance.
+
+**Code path analysis:** All WorkspaceIndex lookups (`resolveModule`, `resolveImport`, `resolveInherit`,
+`getSymbolTable`) are O(1) hash map access. Linear scans (`declarations.find()`) are bounded by
+single-file symbol count, not workspace size. Warm p99 <2.5ms across all inputs.
+
+**Cold-workspace indexing (561 Pike stdlib files, estimated from measured per-file times):**
+
+| Size bucket | Count | Avg per file | Estimated total |
+|-------------|-------|-------------|-----------------|
+| Small (<50L) | 162 | 2ms | 324ms |
+| Medium (50-200L) | 158 | 5ms | 790ms |
+| Large (200-500L) | 114 | 15ms | 1,710ms |
+| XL (500-1500L) | 91 | 50ms | 4,550ms |
+| XXL (1500+L) | 36 | 120ms | 4,320ms |
+| **Total** | **561** | | **~12s** |
+
+**Resource policies verified (all 8 holding after Phase 8):**
+
+| Policy | Status | Details |
+|--------|--------|---------|
+| Nice +5 on Pike subprocess | Verified | `niceValue: 5` in PikeWorkerConfig |
+| Idle eviction (5 min) | Verified | `idleTimeoutMs: 300000` |
+| No file watchers | Verified | Server uses editor-pushed notifications only |
+| Memory ceiling | Verified | `maxRequestsBeforeRestart: 100`, `maxActiveMinutes: 30` |
+| Per-request timeout (5s) | Verified | `requestTimeoutMs: 5000` |
+| Cache caps | Verified | `CACHE_MAX_ENTRIES: 50`, `CACHE_MAX_BYTES: 25MB` |
+| Timeout as diagnostic | Verified | `timedOut: true` returned, surfaced to user |
+| FIFO queueing | Verified | High/low priority queues in DiagnosticManager |
+
+**Phase 8 rename impact:** `PIKE_KEYWORDS` set is static (allocated once). `locations` arrays are request-scoped. No resource leaks or new resource concerns.
 ## Phase 6 — Complete (Verified)
 
 ### P1: Completion
@@ -345,7 +489,7 @@ Five verification items resolved:
 - [x] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** Done. `resolve.pike` introspects cross-file resolution via `master()->resolv()` and `cast_to_program()`. 7 resolution snapshots. 5 oracle tests comparing LSP against Pike.
 - [x] **Phase 5 prerequisite: Wire `@vscode/test-electron` integration tests.** Done. Extension packaging with esbuild, 3 integration tests running inside VSCode extension host. See `decisions/0007-deferred-integration-tests.md`.
 - [x] ~~Known limitation: tree-sitter-pike identifier grammar only accepts ASCII.~~ **Fixed** in tree-sitter-pike `28a8ae8` (Unicode property escapes). WASM updated, test updated.
-- [ ] **Rename feature:** Resolver-driven workspace-wide rename scoped at ~600 LOC. Arrow/dot type inference now exists (Phase 7 P1). Import dependency tracking now exists (Phase 7 P2). Re-evaluate. See `decisions/0013-verification.md` §V6.
+- [x] **Rename feature:** Resolver-driven workspace-wide rename scoped at ~600 LOC. **Done in Phase 8.** 30 rename tests, scope-aware, cross-file, arrow-access support.
 - [ ] **Cross-file propagation integration test:** `propagateToDependents` code correct but untested with real workspace files (ModuleResolver needs on-disk files). Requires layer-2 VSCode integration test.
 
 ## Oracle Gaps

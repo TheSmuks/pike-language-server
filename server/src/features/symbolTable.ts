@@ -1098,6 +1098,21 @@ export function getReferencesTo(
     }
   }
 
+  // Fallback: include arrow/dot access references by name when they couldn't
+  // be resolved to a specific declaration (untyped access). This ensures
+  // rename finds call sites like `d->bark()` even when the arrow reference
+  // has resolvesTo=null.
+  const targetDecl = table.declarations.find(d => d?.id === targetDeclId);
+  if (targetDecl) {
+    const targetName = targetDecl.name;
+    for (const ref of table.references) {
+      if (ref.resolvesTo === null && ref.name === targetName &&
+          (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
+        results.push(ref);
+      }
+    }
+  }
+
   // Also include the declaration itself as a "reference" (definition site)
   const decl = table.declarations.find(d => d?.id === targetDeclId);
   if (decl) {
