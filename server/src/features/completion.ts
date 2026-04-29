@@ -631,7 +631,7 @@ function completeScopeAccess(
   if (scopeText === "local") {
     const classScopeId = findClassScopeAt(table, line, character);
     if (classScopeId !== null) {
-      const classScope = table.scopes.find(s => s.id === classScopeId);
+      const classScope = table.scopeById.get(classScopeId);
       if (classScope) {
         const decls = getDeclarationsInScope(table, classScopeId);
         for (const decl of decls) {
@@ -653,7 +653,7 @@ function completeScopeAccess(
       // Bare :: — members of first inherited class
       const classScopeId = findClassScopeAt(table, line, character);
       if (classScopeId !== null) {
-        const classScope = table.scopes.find(s => s.id === classScopeId);
+        const classScope = table.scopeById.get(classScopeId);
         if (classScope && classScope.inheritedScopes.length > 0) {
           const firstInherited = classScope.inheritedScopes[0];
           const decls = getDeclarationsInScope(table, firstInherited);
@@ -673,11 +673,11 @@ function completeScopeAccess(
   // Find the inherit declaration with this name/alias in the enclosing class
   const classScopeId = findClassScopeAt(table, line, character);
   if (classScopeId !== null) {
-    const classScope = table.scopes.find(s => s.id === classScopeId);
+    const classScope = table.scopeById.get(classScopeId);
     if (classScope) {
       // Find the inherit declaration
       for (const declId of classScope.declarations) {
-        const decl = table.declarations.find(d => d?.id === declId);
+        const decl = table.declById.get(declId);
         if (decl && (decl.kind === "inherit" || decl.kind === "import") && (decl.name === inheritName || decl.alias === inheritName)) {
           // Resolve to target
           const targetUri = ctx.index.resolveInherit(decl.name, false, ctx.uri);
@@ -697,12 +697,12 @@ function completeScopeAccess(
           }
           // Also check same-file inheritance
           for (const inheritedId of classScope.inheritedScopes) {
-            const inheritedScope = table.scopes.find(s => s.id === inheritedId);
+            const inheritedScope = table.scopeById.get(inheritedId);
             if (inheritedScope) {
-              const parentScope = table.scopes.find(s => s.id === inheritedScope.parentId);
+              const parentScope = inheritedScope.parentId !== null ? table.scopeById.get(inheritedScope.parentId) : undefined;
               if (parentScope) {
                 for (const parentDeclId of parentScope.declarations) {
-                  const parentDecl = table.declarations.find(d => d?.id === parentDeclId);
+                  const parentDecl = table.declById.get(parentDeclId);
                   if (parentDecl && parentDecl.kind === "class" && parentDecl.name === decl.name) {
                     const targetDecls = getDeclarationsInScope(table, inheritedId);
                     for (const td of targetDecls) {
@@ -796,7 +796,7 @@ function findDeclarationForName(
   // Look for a reference at this position matching the name
   for (const ref of table.references) {
     if (ref.name === name && ref.resolvesTo !== null) {
-      const decl = table.declarations.find(d => d?.id === ref.resolvesTo);
+      const decl = table.declById.get(ref.resolvesTo);
       if (decl) return decl;
     }
   }

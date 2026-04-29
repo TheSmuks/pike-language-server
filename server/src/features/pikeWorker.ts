@@ -112,6 +112,8 @@ export class PikeWorker {
   }>();
   private buffer = "";
   private restarting = false;
+  private consecutiveMalformed = 0;
+  private static readonly MALFORMED_RESTART_THRESHOLD = 5;
   private readonly config: PikeWorkerConfig;
 
   // FIFO queue — ensures exactly one write to stdin at a time
@@ -438,6 +440,14 @@ export class PikeWorker {
   /** Restart the worker (after crash, idle eviction, or memory ceiling). */
   async restart(): Promise<void> {
     this.restarting = true;
+
+    // Clear all pending request timeouts to prevent spurious fires
+    // after the new process is up.
+    for (const [, pending] of this.pending) {
+      clearTimeout(pending.timeout);
+    }
+    this.pending.clear();
+
     this.stop();
     this.start();
     this.restarting = false;
@@ -516,6 +526,7 @@ export class PikeWorker {
 
       try {
         const response: PikeResponse = JSON.parse(line);
+        this.consecutiveMalformed = 0;
         const pending = this.pending.get(response.id);
         if (pending) {
           clearTimeout(pending.timeout);
@@ -523,9 +534,15 @@ export class PikeWorker {
           pending.resolve(response);
         }
       } catch {
-        // Ignore malformed responses — the Pike process may write debug
-        // output. Log in development but don't crash.
-        console.error("[pike-worker] Ignoring malformed response:", line.slice(0, 200));
+        // Malformed response — could be debug output or protocol corruption.
+        // Count consecutive failures and restart if threshold exceeded.
+        this.consecutiveMalformed++;
+        console.error(`[pike-worker] Malformed response (${this.consecutiveMalformed}/${PikeWorker.MALFORMED_RESTART_THRESHOLD}):`, line.slice(0, 200));
+        if (this.consecutiveMalformed >= PikeWorker.MALFORMED_RESTART_THRESHOLD) {
+          console.error('[pike-worker] Too many malformed responses — restarting worker');
+          this.consecutiveMalformed = 0;
+          this.restart().catch(() => {});
+        }
       }
     }
   }

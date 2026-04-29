@@ -31,6 +31,7 @@ import {
   FileChangeType,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { LRUCache } from "./util/lruCache";
 import { initParser, parse, deleteTree, clearTreeCache } from "./parser";
 import { getDocumentSymbols } from "./features/documentSymbol";
 import { getParseDiagnostics } from "./features/diagnostics";
@@ -41,8 +42,12 @@ import {
   type Declaration,
 } from "./features/symbolTable";
 import { getCompletions, type CompletionContext } from "./features/completion";
-import { resolveType, resolveMemberAccess, type TypeResolutionContext } from "./features/typeResolver";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
+import {
+  resolveAccessDefinition,
+  resolveAccessDeclaration,
+  type ResolutionContext,
+} from "./features/accessResolver";
 import {
   getRenameLocations,
   buildWorkspaceEdit,
@@ -100,7 +105,7 @@ export interface PikeServer {
   index: WorkspaceIndex;
   worker: PikeWorker;
   /** AutoDoc XML cache — exposed for testing. Keyed by URI. */
-  autodocCache: Map<string, { xml: string; hash: string; timestamp: number }>;
+  autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   /** Diagnostic manager — exposed for testing. */
   diagnosticManager: DiagnosticManager;
 }
@@ -117,56 +122,37 @@ export function createPikeServer(connection: Connection): PikeServer {
   // Caches (local to this server instance)
   // -----------------------------------------------------------------
 
-  const pikeCache = new Map<string, PikeCacheEntry>();
-  const autodocCache = new Map<string, { xml: string; hash: string; timestamp: number }>();
-
-  // LRU cache eviction: 50 entries max, 25MB total
-  const CACHE_MAX_ENTRIES = 50;
-  const CACHE_MAX_BYTES = 25 * 1024 * 1024;
-  let cacheTotalBytes = 0;
-  const AUTODOC_CACHE_MAX_BYTES = 5 * 1024 * 1024;
-  let autodocCacheBytes = 0;
-
-  function cacheSet(uri: string, entry: PikeCacheEntry): void {
-    if (pikeCache.size >= CACHE_MAX_ENTRIES) {
-      cacheEvictOldest();
-    }
-    const entrySize = JSON.stringify(entry).length;
-    while (cacheTotalBytes + entrySize > CACHE_MAX_BYTES && pikeCache.size > 0) {
-      cacheEvictOldest();
-    }
-    const old = pikeCache.get(uri);
-    if (old) cacheTotalBytes -= JSON.stringify(old).length;
-    pikeCache.set(uri, entry);
-    cacheTotalBytes += entrySize;
+  interface AutodocEntry {
+    xml: string;
+    hash: string;
+    timestamp: number;
   }
 
-  function cacheEvictOldest(): void {
-    let oldestKey: string | null = null;
-    let oldestTime = Infinity;
-    for (const [key, entry] of pikeCache) {
-      if (entry.timestamp < oldestTime) {
-        oldestTime = entry.timestamp;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) {
-      const old = pikeCache.get(oldestKey);
-      if (old) cacheTotalBytes -= JSON.stringify(old).length;
-      pikeCache.delete(oldestKey);
-      const autodocEntry = autodocCache.get(oldestKey);
-      if (autodocEntry) autodocCacheBytes -= autodocEntry.xml.length;
-      autodocCache.delete(oldestKey);
-    }
+  const autodocCache = new LRUCache<AutodocEntry>({
+    maxEntries: 50,
+    maxBytes: 5 * 1024 * 1024,
+    estimateSize: (entry) => entry.xml.length,
+  });
+
+  const pikeCache = new LRUCache<PikeCacheEntry>({
+    maxEntries: 50,
+    maxBytes: 25 * 1024 * 1024,
+    estimateSize: (entry) => JSON.stringify(entry).length,
+    onEvict(key) {
+      // Coupled eviction: when a pike cache entry is evicted,
+      // also evict the corresponding autodoc entry.
+      autodocCache.delete(key);
+    },
+  });
+
+  function cacheSet(uri: string, entry: PikeCacheEntry): void {
+    pikeCache.set(uri, entry);
   }
 
   function cacheClear(): void {
     pikeCache.clear();
     autodocCache.clear();
-    cacheTotalBytes = 0;
-    autodocCacheBytes = 0;
   }
-
   // Workspace index — initialized in onInitialize with the workspace root.
   // Starts with a placeholder path; overwritten when the client sends init.
   let index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
@@ -376,7 +362,7 @@ export function createPikeServer(connection: Connection): PikeServer {
       return loc;
     }
     // Try arrow/dot access resolution (obj->member, Module.function)
-    const accessResult = resolveAccessDefinition(table, params.textDocument.uri, params.position.line, params.position.character);
+    const accessResult = resolveAccessDefinition(resolutionCtx, table, params.textDocument.uri, params.position.line, params.position.character);
     if (accessResult) return accessResult;
 
     return null;
@@ -512,7 +498,7 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
 
       // Try arrow/dot access resolution for hover
-      const accessDecl = resolveAccessDeclaration(table, params.textDocument.uri, params.position.line, params.position.character);
+      const accessDecl = resolveAccessDeclaration(resolutionCtx, table, params.textDocument.uri, params.position.line, params.position.character);
       if (accessDecl) {
         return formatHover(declForHover(accessDecl.decl, accessDecl.uri));
       }
@@ -523,106 +509,9 @@ export function createPikeServer(connection: Connection): PikeServer {
     return formatHover(declForHover(decl, params.textDocument.uri));
   });
 
-  /** Shared core: resolve arrow/dot access to { decl, uri }. */
-  function resolveAccessCore(
-    table: SymbolTable,
-    uri: string,
-    line: number,
-    character: number,
-  ): { decl: Declaration; uri: string } | null {
-    const ref = table.references.find(
-      r => r.loc.line === line && r.loc.character === character &&
-        (r.kind === 'arrow_access' || r.kind === 'dot_access'),
-    );
-    if (!ref) {
-      return null;
-    }
+  // Resolution context for access resolver
+  const resolutionCtx: ResolutionContext = { documents, index, stdlibIndex };
 
-
-    const doc = documents.get(uri);
-    if (!doc) return null;
-    const tree = parse(doc.getText(), uri);
-    if (!tree) return null;
-
-    const node = tree.rootNode.descendantForPosition({ row: line, column: character });
-    if (!node) return null;
-
-    let postfixNode = node;
-    while (postfixNode.parent && postfixNode.type !== 'postfix_expr') {
-      postfixNode = postfixNode.parent;
-    }
-    if (postfixNode.type !== 'postfix_expr') return null;
-
-    const children = postfixNode.children;
-    let lhsNode = null;
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
-      if ((child.type === '->' || child.type === '.' || child.type === '->?' || child.type === '?->') &&
-          i + 1 < children.length &&
-          children[i + 1].startPosition.row === node.startPosition.row &&
-          children[i + 1].startPosition.column === node.startPosition.column) {
-        lhsNode = children[i - 1];
-        break;
-      }
-    }
-    if (!lhsNode) {
-      return null;
-    }
-
-
-    const lhsName = lhsNode.text;
-    const lhsRef = table.references.find(
-      r => r.name === lhsName && r.resolvesTo !== null &&
-        r.loc.line === lhsNode.startPosition.row &&
-        r.loc.character === lhsNode.startPosition.column,
-    );
-    const lhsDecl = lhsRef
-      ? table.declarations.find(d => d?.id === lhsRef.resolvesTo) ?? null
-      : table.declarations.find(d => d.name === lhsName) ?? null;
-
-    if (!lhsDecl) {
-      return null;
-    }
-
-
-    const ctx: TypeResolutionContext = { table, uri, index, stdlibIndex };
-    const targetDecl = resolveMemberAccess(lhsName, ref.name, lhsDecl, ctx);
-    if (!targetDecl) return null;
-
-    const targetUri = table.declarations.includes(targetDecl) ? uri : findDeclUri(targetDecl) ?? uri;
-    return { decl: targetDecl, uri: targetUri };
-  }
-
-  /** Resolve arrow/dot access to a definition location. */
-  function resolveAccessDefinition(
-    table: SymbolTable, uri: string, line: number, character: number,
-  ): LspLocation | null {
-    const result = resolveAccessCore(table, uri, line, character);
-    if (!result) return null;
-    return {
-      uri: result.uri,
-      range: {
-        start: { line: result.decl.nameRange.start.line, character: result.decl.nameRange.start.character },
-        end: { line: result.decl.nameRange.end.line, character: result.decl.nameRange.end.character },
-      },
-    };
-  }
-
-  /** Resolve arrow/dot access to a declaration (for hover). */
-  function resolveAccessDeclaration(
-    table: SymbolTable, uri: string, line: number, character: number,
-  ): { decl: Declaration; uri: string } | null {
-    return resolveAccessCore(table, uri, line, character);
-  }
-
-  /** Find the URI of a declaration by searching the workspace index. */
-  function findDeclUri(targetDecl: Declaration): string | null {
-    for (const uri of index.getAllUris()) {
-      const t = index.getSymbolTable(uri);
-      if (t?.declarations.includes(targetDecl)) return uri;
-    }
-    return null;
-  }
 
   /** Format a declaration into a Hover response. */
   function formatHover(info: HoverInfo | null): Hover | null {
@@ -680,16 +569,15 @@ export function createPikeServer(connection: Connection): PikeServer {
     // Extract the full declaration line as the signature
     const declLine = lines[decl.range.start.line] ?? "";
     const signature = declLine.trim().replace(/;$/, "");
-    const formattedSig = formatSignature(decl.kind, decl.name, signature);
 
     // Tier 1: Workspace AutoDoc — check XML cache, render from XML
     const cachedAutodoc = autodocCache.get(uri);
     if (cachedAutodoc?.xml) {
-      const rendered = renderAutodoc(cachedAutodoc.xml, decl.name, formattedSig);
+      const rendered = renderAutodoc(cachedAutodoc.xml, decl.name, signature);
       if (rendered) {
         return {
           name: decl.name,
-          signature: rendered.signature || formattedSig,
+          signature: rendered.signature || signature,
           documentation: rendered.markdown,
           line: decl.nameRange.start.line,
           character: decl.nameRange.start.character,
@@ -699,19 +587,16 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
 
     // Tier 2: Stdlib — hash-table lookup in pre-computed index
-    // Try various FQN patterns: predef.Name, predef.Module.Name, etc.
-    for (const fqn of buildStdlibLookupKeys(decl.name)) {
-      const entry = stdlibIndex[fqn];
-      if (entry) {
-        return {
-          name: decl.name,
-          signature: entry.signature,
-          documentation: entry.markdown,
-          line: decl.nameRange.start.line,
-          character: decl.nameRange.start.character,
-          isAutodoc: true,
-        };
-      }
+    const entry = stdlibIndex[`predef.${decl.name}`];
+    if (entry) {
+      return {
+        name: decl.name,
+        signature: entry.signature,
+        documentation: entry.markdown,
+        line: decl.nameRange.start.line,
+        character: decl.nameRange.start.character,
+        isAutodoc: true,
+      };
     }
 
     // Tier 2b: Predef builtins (C-level functions) — type signature lookup
@@ -742,25 +627,11 @@ export function createPikeServer(connection: Connection): PikeServer {
     // Tier 3: Fall through to tree-sitter declared type
     return {
       name: decl.name,
-      signature: formattedSig,
+      signature: signature,
       documentation: "",
       line: decl.nameRange.start.line,
       character: decl.nameRange.start.character,
     };
-  }
-
-  /** Build candidate lookup keys for stdlib index. */
-  function buildStdlibLookupKeys(name: string): string[] {
-    return [
-      `predef.${name}`,
-      // Could add module-qualified keys in the future when we track
-      // the import context of the symbol
-    ];
-  }
-
-  /** Format a declaration kind + name + signature into hover text. */
-  function formatSignature(kind: string, name: string, rawSignature: string): string {
-    return rawSignature;
   }
 
   function getSource(uri: string): string | null {
@@ -772,11 +643,10 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/completion (decision 0012)
   // -----------------------------------------------------------------------
 
-  const completionCtx: CompletionContext = {
+  const completionCtx = {
     index,
     stdlibIndex,
     predefBuiltins,
-    uri: "", // overridden per-request
   };
 
   connection.onCompletion(async (params, token: CancellationToken) => {
@@ -792,8 +662,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     try {
       const tree = parse(doc.getText(), params.textDocument.uri);
       if (token.isCancellationRequested) return { isIncomplete: false, items: [] };
-      completionCtx.uri = params.textDocument.uri;
-      return getCompletions(table, tree, params.position.line, params.position.character, completionCtx);
+      return getCompletions(table, tree, params.position.line, params.position.character, { ...completionCtx, uri: params.textDocument.uri });
     } catch (err) {
       connection.console.error(`completion failed: ${(err as Error).message}`);
       return { isIncomplete: false, items: [] };
@@ -818,28 +687,7 @@ export function createPikeServer(connection: Connection): PikeServer {
       const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
       worker.autodoc(source, filepath).then(result => {
         if (result.xml) {
-          const entrySize = result.xml.length;
-          // Evict until we have room under the autodoc byte ceiling
-          while (autodocCacheBytes + entrySize > AUTODOC_CACHE_MAX_BYTES && autodocCache.size > 0) {
-            // Find oldest autodoc entry
-            let oldestKey: string | null = null;
-            let oldestTime = Infinity;
-            for (const [key, entry] of autodocCache) {
-              if (entry.timestamp < oldestTime) {
-                oldestTime = entry.timestamp;
-                oldestKey = key;
-              }
-            }
-            if (oldestKey) {
-              const removed = autodocCache.get(oldestKey)!;
-              autodocCacheBytes -= removed.xml.length;
-              autodocCache.delete(oldestKey);
-            } else break;
-          }
-          const old = autodocCache.get(doc.uri);
-          if (old) autodocCacheBytes -= old.xml.length;
           autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
-          autodocCacheBytes += entrySize;
         }
       }).catch(() => {}); // Non-critical
     }
