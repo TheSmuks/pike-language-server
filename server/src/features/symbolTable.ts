@@ -79,8 +79,10 @@ export type ScopeKind =
   | 'block'
   | 'for'
   | 'foreach'
-  | 'if_cond';
-
+  | 'if_cond'
+  | 'while'
+  | 'do_while'
+  | 'switch';
 export interface SymbolTable {
   uri: string;
   version: number;
@@ -302,6 +304,21 @@ function collectDeclarations(node: Node, state: BuildState): void {
 
   if (node.type === 'if_statement') {
     collectIfStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'while_statement') {
+    collectWhileStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'do_while_statement') {
+    collectDoWhileStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'switch_statement') {
+    collectSwitchStatement(node, state);
     return;
   }
 
@@ -578,6 +595,79 @@ function collectIfStatement(node: Node, state: BuildState): void {
   if (alternative) {
     pushScope(state, 'block', toRange(alternative));
     collectDeclarations(alternative, state);
+    popScope(state);
+  }
+
+  if (pushedCondScope) {
+    popScope(state);
+  }
+}
+
+function collectWhileStatement(node: Node, state: BuildState): void {
+  // cond_decl in condition creates a scope wrapping body
+  const condition = node.childForFieldName('condition');
+  let pushedCondScope = false;
+  if (condition) {
+    for (const child of condition.children) {
+      if (child.type === 'cond_decl') {
+        pushScope(state, 'while', toRange(node));
+        collectDeclarations(child, state);
+        pushedCondScope = true;
+        break;
+      }
+    }
+  }
+
+  // Body gets its own block scope
+  const body = node.childForFieldName('body');
+  if (body) {
+    pushScope(state, 'block', toRange(body));
+    collectDeclarations(body, state);
+    popScope(state);
+  }
+
+  if (pushedCondScope) {
+    popScope(state);
+  }
+}
+
+function collectDoWhileStatement(node: Node, state: BuildState): void {
+  // No cond_decl possible in do-while condition
+  const body = node.childForFieldName('body');
+  if (body) {
+    pushScope(state, 'do_while', toRange(body));
+    collectDeclarations(body, state);
+    popScope(state);
+  }
+}
+
+function collectSwitchStatement(node: Node, state: BuildState): void {
+  // cond_decl in value creates a scope wrapping body
+  const value = node.childForFieldName('value');
+  let pushedCondScope = false;
+  if (value) {
+    for (const child of value.children) {
+      if (child.type === 'cond_decl') {
+        pushScope(state, 'switch', toRange(node));
+        collectDeclarations(child, state);
+        pushedCondScope = true;
+        break;
+      }
+    }
+  }
+
+  // Body block has no field name — find it by type
+  let body: Node | null = null;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'block') {
+      body = child;
+      break;
+    }
+  }
+  if (body) {
+    pushScope(state, 'block', toRange(body));
+    collectDeclarations(body, state);
     popScope(state);
   }
 

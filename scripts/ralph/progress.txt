@@ -82,3 +82,21 @@ Thread: N/A (Ralph agent iteration)
   - postfix_expr children: LHS is a nested postfix_expr, not an identifier. Must drill down through primary_expr → identifier_expr → identifier to get the name.
   - The Scope interface has a `kind` field ('class', 'function', 'block', etc.) that's useful for identifying scope types
 ---
+
+## 2026-04-29 - US-005
+Thread: N/A (Ralph agent iteration)
+- Scope handlers for while, switch, and do-while blocks
+- Added collectWhileStatement(), collectDoWhileStatement(), collectSwitchStatement()
+- Follows the same pattern as collectIfStatement(): push scope, recurse into body, pop scope
+- while_statement and do_while_statement have `body` field via childForFieldName
+- switch_statement does NOT have a `body` field — the block is an unnamed child, found by type
+- All three support cond_decl in condition (while, switch) for scoped condition declarations
+- Added 'while', 'do_while', 'switch' to ScopeKind union
+- Files changed:
+  - server/src/features/symbolTable.ts (3 new handlers, 3 dispatch entries, ScopeKind extended)
+  - tests/lsp/definition.test.ts (3 new tests: while/switch/do-while scope isolation)
+- **Learnings for future iterations:**
+  - tree-sitter-pike field names are inconsistent — while has `body`, switch does NOT. Always verify with fieldNameForChild().
+  - case_clause children are siblings of local_declaration in the switch block, not nested under case_clause
+  - The BLOCK_SCOPES set already listed while/switch/do-while but had no handlers — they were used for scope resolution but not for scope creation
+---

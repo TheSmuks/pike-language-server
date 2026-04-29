@@ -77,7 +77,7 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": "Key file: server/src/features/symbolTable.ts. Follow the pattern of collectIfStatement() and collectForStatement(). Upstream issue: tree-sitter-pike#4. These are workarounds since tree-sitter doesn't provide scope-introducing nodes for these constructs."
     },
     {

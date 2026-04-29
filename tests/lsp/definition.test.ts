@@ -464,6 +464,93 @@ describe("definition API: scope-aware shadowing", () => {
 });
 
 // ===========================================================================
+// 7b. Scope handlers for while, switch, do-while (US-005)
+// ===========================================================================
+
+describe("definition API: while/switch/do-while scope isolation (US-005)", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("while loop variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test() {',
+      '  int x = 1;',
+      '  while (x > 0) {',
+      '    int y = 2;',
+      '    x = y - 1;',
+      '  }',
+      '  // y is not visible here',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-while.pike", 1);
+
+    // y should be declared at line 3 (inside while body)
+    const yDecl = table.declarations.find(d => d.name === 'y');
+    expect(yDecl).toBeDefined();
+    expect(yDecl!.nameRange.start.line).toBe(3);
+
+    // y's scope should NOT be the function scope — it should be nested
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(yDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+
+  test("switch case variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test(int x) {',
+      '  switch (x) {',
+      '    case 1:',
+      '      int a = 10;',
+      '      break;',
+      '    case 2:',
+      '      int b = 20;',
+      '      break;',
+      '  }',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-switch.pike", 1);
+
+    // a and b should be declared inside the switch body scope
+    const aDecl = table.declarations.find(d => d.name === 'a');
+    const bDecl = table.declarations.find(d => d.name === 'b');
+    expect(aDecl).toBeDefined();
+    expect(bDecl).toBeDefined();
+
+    // Both should be in a scope nested under the function scope
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(aDecl!.scopeId).not.toBe(funcScope!.id);
+    expect(bDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+
+  test("do-while loop variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test() {',
+      '  int x = 0;',
+      '  do {',
+      '    int y = x + 1;',
+      '    x = y;',
+      '  } while (x < 10);',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-dowhile.pike", 1);
+
+    // y should be declared inside the do-while body scope
+    const yDecl = table.declarations.find(d => d.name === 'y');
+    expect(yDecl).toBeDefined();
+    expect(yDecl!.nameRange.start.line).toBe(3);
+
+    // y's scope should NOT be the function scope
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(yDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+});
+// ===========================================================================
 // 8. Direct API tests — no definition for external symbols
 // ===========================================================================
 
