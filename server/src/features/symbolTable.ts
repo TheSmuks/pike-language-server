@@ -114,6 +114,8 @@ function getNameNodes(node: Node): Node[] {
 
 /** Extract the declared type text from a variable_decl or parameter node. */
 function extractTypeText(node: Node): string | undefined {
+  // constant_decl has no type field; childForFieldName returns undefined, which is correct.
+  if (node.type === 'constant_decl') return undefined;
   const typeNode = node.childForFieldName('type');
   return typeNode?.text;
 }
@@ -410,8 +412,8 @@ function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
   pushScope(state, 'for', toRange(node));
 
-  // tree-sitter-pike does not assign field names to for_statement children
-  // Walk children directly for for_init_decl
+  // Walk children for for_init_decl rather than using named fields,
+  // to handle grammar variations across tree-sitter-pike versions.
   for (const child of node.children) {
     if (child.type === 'for_init_decl') {
       // for_init_decl has structure: type? identifier = expr
@@ -472,9 +474,9 @@ function collectForeachStatement(node: Node, state: BuildState): void {
 
 function collectForeachLvalues(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
-  // Walk children for identifiers. Structure is:
-  //   ';' type(key) identifier(key) ';' type(value) identifier(value)
-  // The identifiers are siblings of type nodes, not children of them.
+  // Walk children for identifiers. The foreach_lvalues node has key/value fields
+  // in the grammar, but we walk children directly for robustness across
+  // tree-sitter-pike versions.
   for (const child of node.children) {
     if (child.type === 'identifier') {
       addDeclaration(state, {
@@ -1043,6 +1045,9 @@ export function getDefinitionAt(
  * Resolve an inherit declaration to the target class declaration.
  * Returns the class Declaration if found, null otherwise.
  */
+// Note: matches by name within the wired parent scope. Pike does not support
+// multiple classes with the same name in the same scope, so the first match is correct.
+
 function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declaration | null {
   // Find the class scope that contains this inherit declaration
   const classScope = table.scopeById.get(decl.scopeId);

@@ -16,6 +16,7 @@
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { createTestServer, type TestServer } from "./helpers";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -119,7 +120,7 @@ async function waitForDiagCount(
 // V1: Worker thrashing prevention
 // ---------------------------------------------------------------------------
 
-describe("V1: Worker thrashing prevention", () => {
+describe.skipIf(!pikeAvailable)("V1: Worker thrashing prevention", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {
@@ -243,7 +244,7 @@ describe("V1: Worker thrashing prevention", () => {
 // V2: Hover/completion responsiveness during in-flight diagnose
 // ---------------------------------------------------------------------------
 
-describe("V2: Priority queue effectiveness", () => {
+describe.skipIf(!pikeAvailable)("V2: Priority queue effectiveness", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {
@@ -347,7 +348,7 @@ describe("V2: Priority queue effectiveness", () => {
 // V3: Cross-file propagation correctness
 // ---------------------------------------------------------------------------
 
-describe("V3: Cross-file propagation", () => {
+describe.skipIf(!pikeAvailable)("V3: Cross-file propagation", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {
@@ -493,7 +494,7 @@ describe("V3: Cross-file propagation", () => {
 // V4: Mode switching and lifecycle
 // ---------------------------------------------------------------------------
 
-describe("V4: Mode switching and lifecycle", () => {
+describe.skipIf(!pikeAvailable)("V4: Mode switching and lifecycle", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {
@@ -602,7 +603,7 @@ describe("V4: Mode switching and lifecycle", () => {
 // V5: Manual smoke test scenarios (automated equivalent)
 // ---------------------------------------------------------------------------
 
-describe("V5: Smoke test scenarios (automated)", () => {
+describe.skipIf(!pikeAvailable)("V5: Smoke test scenarios (automated)", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {

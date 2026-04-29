@@ -7,12 +7,13 @@
 
 import { describe, test, expect, afterAll } from "bun:test";
 import { PikeWorker } from "../../server/src/features/pikeWorker";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 
 // ---------------------------------------------------------------------------
 // Idle eviction
 // ---------------------------------------------------------------------------
 
-describe("Idle worker eviction", () => {
+describe.skipIf(!pikeAvailable)("Idle worker eviction", () => {
   test("worker stops after idle timeout", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 500, // 500ms for fast test
@@ -65,7 +66,7 @@ describe("Idle worker eviction", () => {
 // Worker memory ceiling (request count restart)
 // ---------------------------------------------------------------------------
 
-describe("Worker memory ceiling", () => {
+describe.skipIf(!pikeAvailable)("Worker memory ceiling", () => {
   test("worker restarts after max requests", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 60000, // Long idle for this test
@@ -98,7 +99,7 @@ describe("Worker memory ceiling", () => {
 // Timeout-as-diagnostic
 // ---------------------------------------------------------------------------
 
-describe("Timeout surfaced as diagnostic", () => {
+describe.skipIf(!pikeAvailable)("Timeout surfaced as diagnostic", () => {
   test("diagnose returns timedOut=true when Pike worker doesn't respond", async () => {
     // Create a worker with an extremely short timeout
     const worker = new PikeWorker({
@@ -190,7 +191,7 @@ describe("LRU cache eviction", () => {
 // Active time ceiling
 // ---------------------------------------------------------------------------
 
-describe("Active time ceiling (duration-based restart)", () => {
+describe.skipIf(!pikeAvailable)("Active time ceiling (duration-based restart)", () => {
   test("worker restarts after max active duration", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 60000, // Long idle for this test

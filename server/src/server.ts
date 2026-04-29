@@ -206,12 +206,20 @@ export function createPikeServer(connection: Connection): PikeServer {
     diagnosticManager.setIndex(index);
 
     // Read diagnostic mode from initializationOptions
-    const initOpts = params.initializationOptions as { diagnosticMode?: string } | undefined;
+    const initOpts = params.initializationOptions as {
+      diagnosticMode?: string;
+      pikeBinaryPath?: string;
+      diagnosticDebounceMs?: number;
+      maxNumberOfProblems?: number;
+    } | undefined;
     if (initOpts?.diagnosticMode) {
       const mode = initOpts.diagnosticMode;
       if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
         diagnosticManager.setDiagnosticMode(mode);
       }
+    }
+    if (initOpts?.pikeBinaryPath) {
+      worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
     }
 
     return {
