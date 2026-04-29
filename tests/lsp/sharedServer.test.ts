@@ -7,12 +7,13 @@
 
 import { describe, test, expect, afterAll } from "bun:test";
 import { PikeWorker } from "../../server/src/features/pikeWorker";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 
 // ---------------------------------------------------------------------------
 // Idle eviction
 // ---------------------------------------------------------------------------
 
-describe("Idle worker eviction", () => {
+describe.skipIf(!pikeAvailable)("Idle worker eviction", () => {
   test("worker stops after idle timeout", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 500, // 500ms for fast test
@@ -65,7 +66,7 @@ describe("Idle worker eviction", () => {
 // Worker memory ceiling (request count restart)
 // ---------------------------------------------------------------------------
 
-describe("Worker memory ceiling", () => {
+describe.skipIf(!pikeAvailable)("Worker memory ceiling", () => {
   test("worker restarts after max requests", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 60000, // Long idle for this test
@@ -98,7 +99,7 @@ describe("Worker memory ceiling", () => {
 // Timeout-as-diagnostic
 // ---------------------------------------------------------------------------
 
-describe("Timeout surfaced as diagnostic", () => {
+describe.skipIf(!pikeAvailable)("Timeout surfaced as diagnostic", () => {
   test("diagnose returns timedOut=true when Pike worker doesn't respond", async () => {
     // Create a worker with an extremely short timeout
     const worker = new PikeWorker({
@@ -145,33 +146,23 @@ describe("Timeout surfaced as diagnostic", () => {
 // Cache LRU eviction
 // ---------------------------------------------------------------------------
 
+import { LRUCache } from "../../server/src/util/lruCache";
+
 describe("LRU cache eviction", () => {
   test("cache evicts oldest entry at capacity", () => {
-    // This tests the cache functions indirectly through the cache helpers
-    // The real cache is in server.ts; we test the behavior pattern here
-    const cache = new Map<string, { timestamp: number }>();
-    const MAX = 5;
+    const cache = new LRUCache<string>({
+      maxEntries: 5,
+      maxBytes: Infinity,
+      estimateSize: () => 1,
+    });
 
-    // Fill cache
-    for (let i = 0; i < MAX + 3; i++) {
-      cache.set(`file://${i}.pike`, { timestamp: i });
-
-      // Evict oldest if at capacity
-      if (cache.size > MAX) {
-        let oldestKey: string | null = null;
-        let oldestTime = Infinity;
-        for (const [key, entry] of cache) {
-          if (entry.timestamp < oldestTime) {
-            oldestTime = entry.timestamp;
-            oldestKey = key;
-          }
-        }
-        if (oldestKey) cache.delete(oldestKey);
-      }
+    // Fill cache beyond capacity
+    for (let i = 0; i < 8; i++) {
+      cache.set(`file://${i}.pike`, `value-${i}`);
     }
 
-    // Cache should be at MAX size
-    expect(cache.size).toBe(MAX);
+    // Cache should be at maxEntries size
+    expect(cache.size).toBe(5);
 
     // Oldest entries should be evicted
     expect(cache.has("file://0.pike")).toBe(false);
@@ -183,14 +174,52 @@ describe("LRU cache eviction", () => {
     expect(cache.has("file://6.pike")).toBe(true);
     expect(cache.has("file://7.pike")).toBe(true);
   });
-});
 
+  test("get updates LRU order — recently accessed entries survive eviction", () => {
+    const cache = new LRUCache<string>({
+      maxEntries: 3,
+      maxBytes: Infinity,
+      estimateSize: () => 1,
+    });
+
+    cache.set("a", "val-a");
+    cache.set("b", "val-b");
+    cache.set("c", "val-c");
+
+    // Access 'a' so it's recently used
+    expect(cache.get("a")).toBe("val-a");
+
+    // Add new entry — should evict 'b' (oldest untouched)
+    cache.set("d", "val-d");
+
+    expect(cache.has("a")).toBe(true);
+    expect(cache.has("b")).toBe(false);
+    expect(cache.has("c")).toBe(true);
+    expect(cache.has("d")).toBe(true);
+  });
+
+  test("delete removes entry and runs onEvict callback", () => {
+    const evicted: string[] = [];
+    const cache = new LRUCache<string>({
+      maxEntries: 10,
+      maxBytes: Infinity,
+      estimateSize: () => 1,
+      onEvict: (key) => { evicted.push(key); },
+    });
+
+    cache.set("x", "val-x");
+    cache.delete("x");
+
+    expect(cache.has("x")).toBe(false);
+    expect(evicted).toContain("x");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Active time ceiling
 // ---------------------------------------------------------------------------
 
-describe("Active time ceiling (duration-based restart)", () => {
+describe.skipIf(!pikeAvailable)("Active time ceiling (duration-based restart)", () => {
   test("worker restarts after max active duration", async () => {
     const worker = new PikeWorker({
       idleTimeoutMs: 60000, // Long idle for this test

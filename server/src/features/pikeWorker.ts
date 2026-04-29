@@ -16,7 +16,8 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { resolve, join } from "node:path";
+import { resolve, join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
 // Configuration (tunable per deployment)
@@ -33,6 +34,8 @@ export interface PikeWorkerConfig {
   requestTimeoutMs: number;
   /** Process nice value (Linux). Default: 5. Set to 0 to disable. */
   niceValue: number;
+  /** Path to the Pike binary. Default: "pike". */
+  pikeBinaryPath: string;
 }
 
 const DEFAULT_CONFIG: PikeWorkerConfig = {
@@ -41,8 +44,8 @@ const DEFAULT_CONFIG: PikeWorkerConfig = {
   maxActiveMinutes: 30,
   requestTimeoutMs: 5_000,
   niceValue: 5,
+  pikeBinaryPath: "pike",
 };
-
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -99,7 +102,10 @@ interface QueueItem {
 // PikeWorker class
 // ---------------------------------------------------------------------------
 
-const PROJECT_ROOT = resolve(import.meta.dir, "..", "..", "..");
+const _thisDir = typeof __dirname !== 'undefined'
+  ? __dirname
+  : dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = resolve(_thisDir, "..", "..", "..");
 const WORKER_SCRIPT = join(PROJECT_ROOT, "harness", "worker.pike");
 
 export class PikeWorker {
@@ -132,6 +138,12 @@ export class PikeWorker {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
+
+  /** Update configuration. Only effective before the worker starts (lazy). */
+  updateConfig(config: Partial<PikeWorkerConfig>): void {
+    Object.assign(this.config, config);
+  }
+
   /** Start the Pike worker process (lazy — called on first request). */
   start(): void {
     if (this.proc && !this.proc.killed) return;
@@ -142,9 +154,9 @@ export class PikeWorker {
 
     if (this.config.niceValue > 0 && process.platform === "linux") {
       finalCmd = "nice";
-      finalArgs = ["-n" + this.config.niceValue, "pike", WORKER_SCRIPT];
+      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, WORKER_SCRIPT];
     } else {
-      finalCmd = "pike";
+      finalCmd = this.config.pikeBinaryPath;
       finalArgs = [WORKER_SCRIPT];
     }
 
@@ -153,12 +165,16 @@ export class PikeWorker {
       cwd: PROJECT_ROOT,
     });
 
-    this.proc.stdout!.on("data", (data: Buffer) => {
+    const stdout = this.proc.stdout;
+    const stderr = this.proc.stderr;
+    if (!stdout || !stderr) {
+      throw new Error("Pike worker: failed to create stdio streams");
+    }
+    stdout.on("data", (data: Buffer) => {
       this.buffer += data.toString();
       this.processBuffer();
     });
-
-    this.proc.stderr!.on("data", (data: Buffer) => {
+    stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
       if (msg) {
         console.error("[pike-worker stderr]", msg);
@@ -325,19 +341,10 @@ export class PikeWorker {
         reject(new Error("Pike worker process not available"));
         return;
       }
-
       const stdin = this.proc.stdin;
-
-      // If the write buffer is full, wait for drain
-      if (stdin.writableLength > 0 && !stdin.write(payload)) {
-        const onDrain = () => {
-          cleanup();
-          resolve();
-        };
-        const onError = (err: Error) => {
-          cleanup();
-          reject(err);
-        };
+      if (!stdin.write(payload)) {
+        const onDrain = () => { cleanup(); resolve(); };
+        const onError = (err: Error) => { cleanup(); reject(err); };
         const cleanup = () => {
           stdin.removeListener("drain", onDrain);
           stdin.removeListener("error", onError);
@@ -345,14 +352,7 @@ export class PikeWorker {
         stdin.once("drain", onDrain);
         stdin.once("error", onError);
       } else {
-        // Write succeeded immediately or buffer not full
-        stdin.write(payload, (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
+        resolve();
       }
     });
   }
@@ -532,6 +532,9 @@ export class PikeWorker {
           clearTimeout(pending.timeout);
           this.pending.delete(response.id);
           pending.resolve(response);
+        } else {
+          // Response arrived after timeout — log and discard
+          console.debug(`[pike-worker] Discarding response for timed-out request id=${response.id}`);
         }
       } catch {
         // Malformed response — could be debug output or protocol corruption.
@@ -541,7 +544,9 @@ export class PikeWorker {
         if (this.consecutiveMalformed >= PikeWorker.MALFORMED_RESTART_THRESHOLD) {
           console.error('[pike-worker] Too many malformed responses — restarting worker');
           this.consecutiveMalformed = 0;
-          this.restart().catch(() => {});
+          this.restart().catch((err) => {
+            console.error('[pike-worker] Auto-restart failed after malformed responses:', (err as Error).message);
+          });
         }
       }
     }

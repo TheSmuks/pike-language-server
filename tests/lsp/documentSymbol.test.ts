@@ -14,6 +14,7 @@ import { readSnapshot } from "../../harness/src/snapshot";
 import { listCorpusFiles, CORPUS_DIR, snapshotNameForFile } from "../../harness/src/runner";
 import type { DocumentSymbol } from "../../server/src/features/documentSymbol";
 import { SymbolKind } from "../../server/src/features/documentSymbol";
+import { createSilentStream } from "./helpers";
 
 // ---------------------------------------------------------------------------
 // In-process test server factory
@@ -29,8 +30,8 @@ interface TestContext {
 }
 
 async function createServer(): Promise<TestContext> {
-  const c2s = new PassThrough();
-  const s2c = new PassThrough();
+  const c2s = createSilentStream();
+  const s2c = createSilentStream();
 
   const serverConn = createConnection(
     new StreamMessageReader(c2s),

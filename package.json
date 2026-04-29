@@ -43,6 +43,40 @@
         "extensions": [".pike", ".pmod", ".mmod"],
         "aliases": ["Pike"]
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Pike Language Server",
+      "properties": {
+        "pike.languageServer.path": {
+          "type": "string",
+          "default": "pike",
+          "description": "Path to the Pike binary. Used for language server subprocess and path discovery.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.diagnosticMode": {
+          "type": "string",
+          "enum": ["realtime", "saveOnly", "off"],
+          "default": "realtime",
+          "description": "Controls when diagnostics are generated.",
+          "enumDescriptions": [
+            "Diagnostics run on every change (debounced).",
+            "Diagnostics run only on save.",
+            "Diagnostics are disabled."
+          ]
+        },
+        "pike.languageServer.diagnosticDebounceMs": {
+          "type": "number",
+          "default": 500,
+          "description": "Debounce interval (ms) before running diagnostics after a document change.",
+          "minimum": 0
+        },
+        "pike.languageServer.maxNumberOfProblems": {
+          "type": "number",
+          "default": 100,
+          "description": "Maximum number of diagnostic problems reported per file.",
+          "minimum": 1
+        }
+      }
+    }
   }
 }

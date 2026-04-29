@@ -2,6 +2,22 @@
 
 ### Changed
 
+- Audit remediation round 2: correctness and robustness fixes across 10 files:
+  - `symbolTable.ts`: for-init and foreach-lvalue collection now use grammar field names (`childrenForFieldName('name')`, `childrenForFieldName('key'/'value')`) instead of walking bare `identifier` children, preventing type identifiers from being registered as variable names (C5, C6)
+  - `symbolTable.ts`: removed all non-null assertions (`!`) on `scopeMap.get()` results that were followed by null checks — the assertion lied to the type system and could crash before the guard executed (H12)
+  - `symbolTable.ts`: `collectFunctionDecl` now extracts `return_type` field as `declaredType` (M13)
+  - `server.ts`: `diagnosticDebounceMs` and `maxNumberOfProblems` from `initializationOptions` are now wired to `DiagnosticManager` instead of being extracted and ignored (H9, H10)
+  - `diagnosticManager.ts`: added `setDebounceMs()`, `setMaxNumberOfProblems()` methods; `publishDiagnostics()` now truncates to max problems limit
+  - `moduleResolver.ts`: removed dead code — step 4 iterated `modulePaths` identically to step 2 (H11)
+  - `pikeWorker.ts`: auto-restart after malformed responses now logs failure reason instead of silently swallowing errors (H14)
+  - `client/extension.ts`: added restart-in-progress guard to prevent duplicate `LanguageClient` instances when settings change rapidly (H15)
+  - `server.ts`: extracted `renderPredefSignature()` helper from inline regex chain for testability (M9)
+  - `server.ts`: replaced Bun-specific `import.meta?.main` with cross-runtime guard (M14)
+  - `accessResolver.ts`: added cache-hit comment on `parse()` call (M10)
+  - `documentSymbol.test.ts`: uses `createSilentStream()` instead of bare `new PassThrough()` (H13)
+  - `completion.test.ts`: removed dead first `getCompletions()` call whose result was never asserted (M11)
+  - `sharedServer.test.ts`: LRU eviction test now uses production `LRUCache` class instead of hand-rolled Map (M12/L5)
+
 - Systematic refactoring across 12 files addressing correctness, structural, error handling, and dead code issues:
   - Rewrote `detectPikePaths()` to use `pike --show-paths` for actual paths instead of hardcoded defaults
   - Extracted access resolution into new `server/src/features/accessResolver.ts` with `ResolutionContext` interface

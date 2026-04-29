@@ -18,6 +18,7 @@ import { createSilentStream } from "./helpers";
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 import { PassThrough } from "node:stream";
 import {
   StreamMessageReader,
@@ -226,7 +227,7 @@ describe("DiagnosticManager unit", () => {
 // Protocol tests: debouncing and mode
 // ---------------------------------------------------------------------------
 
-describe("Diagnostic debouncing", () => {
+describe.skipIf(!pikeAvailable)("Diagnostic debouncing", () => {
   let ctx: TestContext;
 
   beforeEach(async () => {
@@ -302,7 +303,7 @@ describe("Diagnostic debouncing", () => {
 // Diagnostic mode
 // ---------------------------------------------------------------------------
 
-describe("Diagnostic mode", () => {
+describe.skipIf(!pikeAvailable)("Diagnostic mode", () => {
   test("saveOnly mode does not diagnose on didChange", async () => {
     const c2s = createSilentStream();
     const s2c = createSilentStream();
@@ -375,7 +376,7 @@ describe("Diagnostic mode", () => {
 // Lifecycle
 // ---------------------------------------------------------------------------
 
-describe("Diagnostic lifecycle", () => {
+describe.skipIf(!pikeAvailable)("Diagnostic lifecycle", () => {
   let ctx: TestContext;
 
   beforeEach(async () => {
@@ -416,7 +417,7 @@ describe("Diagnostic lifecycle", () => {
 // Content-hash caching
 // ---------------------------------------------------------------------------
 
-describe("Diagnostic caching", () => {
+describe.skipIf(!pikeAvailable)("Diagnostic caching", () => {
   let ctx: TestContext;
 
   beforeEach(async () => {
@@ -447,7 +448,7 @@ describe("Diagnostic caching", () => {
 // Cross-file propagation
 // ---------------------------------------------------------------------------
 
-describe("Cross-file diagnostic propagation", () => {
+describe.skipIf(!pikeAvailable)("Cross-file diagnostic propagation", () => {
   test("editing a base class schedules re-diagnosis of dependents", async () => {
     // Use corpus directory as workspace root so WorkspaceIndex can resolve
     // inherit paths to real files on disk.
@@ -571,7 +572,7 @@ describe("Cross-file diagnostic propagation", () => {
 // Supersession
 // ---------------------------------------------------------------------------
 
-describe("Diagnostic supersession", () => {
+describe.skipIf(!pikeAvailable)("Diagnostic supersession", () => {
   let ctx: TestContext;
 
   beforeEach(async () => {
@@ -605,7 +606,7 @@ describe("Diagnostic supersession", () => {
 // FIFO queue serialization — real Pike worker integration
 // ---------------------------------------------------------------------------
 
-describe("PikeWorker FIFO queue serialization", () => {
+describe.skipIf(!pikeAvailable)("PikeWorker FIFO queue serialization", () => {
   test("concurrent diagnose/ping/autodoc process sequentially without corruption", async () => {
     const { PikeWorker } = await import("../../server/src/features/pikeWorker");
     const worker = new PikeWorker();
