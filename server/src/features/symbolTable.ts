@@ -25,6 +25,8 @@ export interface Declaration {
   alias?: string;
   /** For variables and parameters: the declared type annotation text, if present. */
   declaredType?: string;
+  /** For synthetic declarations from cross-file inheritance: URI of the origin file. */
+  sourceUri?: string;
 }
 
 export type DeclKind =
@@ -171,14 +173,25 @@ function addDeclaration(state: BuildState, decl: Omit<Declaration, 'id'>): numbe
 // Scope-aware tree walker
 // ---------------------------------------------------------------------------
 
+export interface BuildOptions {
+  /** WorkspaceIndex for cross-file inheritance resolution. */
+  index?: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  };
+}
+
 /**
  * Build a symbol table from a tree-sitter parse tree.
  *
  * Two passes:
  * 1. Collect declarations and build scope tree
  * 2. Collect references and resolve them
+ *
+ * @param index Optional WorkspaceIndex for cross-file inheritance wiring.
  */
-export function buildSymbolTable(tree: Tree, uri: string, version: number): SymbolTable {
+export function buildSymbolTable(tree: Tree, uri: string, version: number, options?: BuildOptions): SymbolTable {
   const state: BuildState = {
     nextId: 0,
     declarations: [],
@@ -206,7 +219,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number): Symb
   };
 
   // Pass 3: wire inheritance BEFORE reference resolution
-  wireInheritance(table);
+  wireInheritance(table, options?.index, uri);
 
   // Pass 4: collect and resolve references (inheritance now wired)
   state.references = table.references;
@@ -1352,8 +1365,30 @@ export function findClassScopeAt(table: SymbolTable, line: number, character: nu
  * After building the symbol table, wire up class inheritance.
  * For each class scope that contains `inherit` declarations,
  * find the inherited class's scope and add it to `inheritedScopes`.
+ *
+ * Two resolution paths:
+ * 1. Local: class declared in the same file (existing behavior).
+ * 2. Cross-file: class brought into scope via file-level inherit/import,
+ *    resolved through the WorkspaceIndex.
+ *
+ * Cross-file classes get a synthetic scope in the local table whose
+ * declarations mirror the remote class's members. This lets all
+ * inheritedScopes consumers work without modification.
  */
-export function wireInheritance(table: SymbolTable): void {
+export function wireInheritance(
+  table: SymbolTable,
+  index?: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  },
+  uri?: string,
+): void {
+  // Track the next synthetic ID to avoid collisions with real declarations.
+  let syntheticIdCounter = table.declarations.length > 0
+    ? Math.max(...table.declarations.map(d => d.id)) + 1
+    : 0;
+
   for (const scope of table.scopes) {
     if (scope.kind !== 'class') continue;
 
@@ -1363,27 +1398,184 @@ export function wireInheritance(table: SymbolTable): void {
 
     for (const inheritDecl of inheritDecls) {
       if (!inheritDecl) continue;
-      // Find a class declaration with this name in the parent (file) scope
-      const parentScope = scope.parentId !== null ? table.scopes.find(s => s.id === scope.parentId) : null;
-      if (!parentScope) continue;
 
-      for (const candidateId of parentScope.declarations) {
-        const candidate = table.declById.get(candidateId);
-        if (candidate && candidate.kind === 'class' && candidate.name === inheritDecl.name) {
-          // Find the class scope for this class declaration
-          const classScope = table.scopes.find(s =>
-            s.kind === 'class' &&
-            s.parentId === scope.parentId &&
-            containsRange(s.range, candidate.range)
-          );
-          if (classScope && classScope.id !== scope.id) {
-            scope.inheritedScopes.push(classScope.id);
-          }
-        }
+      const resolvedLocally = wireLocalInheritance(table, scope, inheritDecl);
+      if (resolvedLocally) continue;
+
+      // Cross-file resolution: look up the inherited class via WorkspaceIndex.
+      if (!index || !uri) continue;
+      const crossFileResult = wireCrossFileInheritance(
+        table, scope, inheritDecl, index, uri, syntheticIdCounter,
+      );
+      if (crossFileResult !== null) {
+        syntheticIdCounter = crossFileResult.nextId;
+        scope.inheritedScopes.push(crossFileResult.scopeId);
       }
     }
   }
 }
+
+/**
+ * Try to wire an inherit declaration against same-file classes.
+ * Returns true if a local class was found and wired.
+ */
+function wireLocalInheritance(
+  table: SymbolTable,
+  scope: Scope,
+  inheritDecl: Declaration,
+): boolean {
+  const parentScope = scope.parentId !== null
+    ? table.scopes.find(s => s.id === scope.parentId)
+    : null;
+  if (!parentScope) return false;
+
+  for (const candidateId of parentScope.declarations) {
+    const candidate = table.declById.get(candidateId);
+    if (candidate && candidate.kind === 'class' && candidate.name === inheritDecl.name) {
+      const classScope = table.scopes.find(s =>
+        s.kind === 'class' &&
+        s.parentId === scope.parentId &&
+        containsRange(s.range, candidate.range),
+      );
+      if (classScope && classScope.id !== scope.id) {
+        scope.inheritedScopes.push(classScope.id);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Try to wire an inherit declaration against a cross-file class.
+ *
+ * Resolution strategy:
+ * 1. Check if the inherit name matches a class in a file-level inherit/import target.
+ *    File-level `inherit "other.pike"` brings other.pike's top-level classes into scope.
+ * 2. If found, create a synthetic scope in the local table that mirrors
+ *    the remote class's members (including its own inherited members).
+ *
+ * Returns the synthetic scope ID and next available ID, or null if not found.
+ */
+function wireCrossFileInheritance(
+  table: SymbolTable,
+  scope: Scope,
+  inheritDecl: Declaration,
+  index: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  },
+  fromUri: string,
+  startId: number,
+): { scopeId: number; nextId: number } | null {
+  const inheritName = inheritDecl.name;
+
+  // The inherit name might be a class brought into scope by a file-level
+  // inherit/import. Check file-level inherit/import declarations.
+  const fileScope = table.scopes.find(s => s.kind === 'file');
+  if (!fileScope) return null;
+
+  for (const fileDeclId of fileScope.declarations) {
+    const fileDecl = table.declById.get(fileDeclId);
+    if (!fileDecl || (fileDecl.kind !== 'inherit' && fileDecl.kind !== 'import')) continue;
+
+    // Resolve the file-level inherit/import to a target URI.
+    const isStringLit = fileDecl.name.startsWith('"') && fileDecl.name.endsWith('"');
+    const targetUri = isStringLit
+      ? index.resolveInherit(fileDecl.name, true, fromUri)
+      : index.resolveImport(fileDecl.name, fromUri)
+        ?? index.resolveInherit(fileDecl.name, false, fromUri);
+    if (!targetUri) continue;
+
+    const targetTable = index.getSymbolTable(targetUri);
+    if (!targetTable) continue;
+
+    // Look for the class in the target file.
+    const targetClass = targetTable.declarations.find(
+      d => d.kind === 'class' && d.name === inheritName,
+    );
+    if (!targetClass) continue;
+
+    // Find the class body scope in the target table.
+    const targetClassScope = targetTable.scopes.find(s =>
+      s.kind === 'class' && s.parentId === targetClass.scopeId &&
+      containsRange(s.range, targetClass.range),
+    );
+    if (!targetClassScope) continue;
+
+    // Create a synthetic scope in the local table mirroring the remote
+    // class's declarations. This allows all inheritedScopes consumers
+    // to work without modification.
+    const syntheticScopeId = startId;
+    const syntheticDeclIds: number[] = [];
+    let nextId = startId + 1;
+
+    for (const remoteDeclId of targetClassScope.declarations) {
+      const remoteDecl = targetTable.declById.get(remoteDeclId);
+      if (!remoteDecl) continue;
+
+      const syntheticDecl: Declaration = {
+        id: nextId,
+        name: remoteDecl.name,
+        kind: remoteDecl.kind,
+        nameRange: remoteDecl.nameRange,
+        range: remoteDecl.range,
+        scopeId: syntheticScopeId,
+        declaredType: remoteDecl.declaredType,
+        alias: remoteDecl.alias,
+        sourceUri: targetUri,
+      };
+      table.declarations.push(syntheticDecl);
+      table.declById.set(nextId, syntheticDecl);
+      syntheticDeclIds.push(nextId);
+      nextId++;
+    }
+
+    // Also include declarations from inherited scopes of the target class.
+    for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+      const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+      if (!remoteInheritedScope) continue;
+
+      for (const remoteDeclId of remoteInheritedScope.declarations) {
+        const remoteDecl = targetTable.declById.get(remoteDeclId);
+        if (!remoteDecl) continue;
+
+        const syntheticDecl: Declaration = {
+          id: nextId,
+          name: remoteDecl.name,
+          kind: remoteDecl.kind,
+          nameRange: remoteDecl.nameRange,
+          range: remoteDecl.range,
+          scopeId: syntheticScopeId,
+          declaredType: remoteDecl.declaredType,
+          alias: remoteDecl.alias,
+          sourceUri: targetUri,
+        };
+        table.declarations.push(syntheticDecl);
+        table.declById.set(nextId, syntheticDecl);
+        syntheticDeclIds.push(nextId);
+        nextId++;
+      }
+    }
+
+    const syntheticScope: Scope = {
+      id: syntheticScopeId,
+      kind: 'class',
+      range: targetClassScope.range,
+      parentId: scope.id,
+      declarations: syntheticDeclIds,
+      inheritedScopes: [],
+    };
+    table.scopes.push(syntheticScope);
+    table.scopeById.set(syntheticScopeId, syntheticScope);
+
+    return { scopeId: syntheticScopeId, nextId };
+  }
+
+  return null;
+}
+
 
 function containsRange(outer: Range, inner: Range): boolean {
   return (

@@ -8,6 +8,18 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createTestServer, type TestServer } from "./helpers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+
+function readCorpusSource(filename: string): string {
+  return readFileSync(join(CORPUS_DIR, filename), "utf-8");
+}
+
+function corpusUri(filename: string): string {
+  return `file://${join(CORPUS_DIR, filename)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Shared server
@@ -276,5 +288,39 @@ describe("Hover isolation", () => {
     // (it would take >100ms due to subprocess startup)
     expect(result).not.toBeNull();
     expect(result!.contents.value).toContain("Documented");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Cross-file inherited member hover (US-001)
+// ---------------------------------------------------------------------------
+
+describe("hover LSP: cross-file inherited member (US-001)", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("hover on d->speak() shows Animal.speak signature from cross-file", async () => {
+    const srcA = readCorpusSource("cross-inherit-simple-a.pike");
+    server.openDoc(corpusUri("cross-inherit-simple-a.pike"), srcA);
+
+    const srcB = readCorpusSource("cross-inherit-simple-b.pike");
+    const uriB = server.openDoc(corpusUri("cross-inherit-simple-b.pike"), srcB);
+
+    // d->speak() — speak is at line 25, char 28
+    const result = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: uriB },
+      position: { line: 25, character: 28 },
+    }) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("speak");
   });
 });

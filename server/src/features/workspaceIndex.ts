@@ -111,8 +111,8 @@ export class WorkspaceIndex {
       this.removeDependencies(existing);
     }
 
-    // Build symbol table
-    const symbolTable = buildSymbolTable(tree, uri, version);
+    // Build symbol table — pass self for cross-file inheritance wiring
+    const symbolTable = buildSymbolTable(tree, uri, version, { index: this });
 
     // Parse #pike version directive
     const pikeVersion = this.parsePikeVersion(tree);

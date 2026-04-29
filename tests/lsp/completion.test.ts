@@ -862,4 +862,28 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     // Should NOT fall through to unqualified predef builtins
     expect(labels).not.toContain("write");
   });
+
+  test("cross-file inherit completion: Dog d-> shows Animal members (US-001)", () => {
+    const idx = indexCorpus(["cross-inherit-simple-a.pike", "cross-inherit-simple-b.pike"]);
+    const uriB = "file://" + join(CORPUS_DIR, "cross-inherit-simple-b.pike");
+    const tableB = idx.getSymbolTable(uriB)!;
+    const srcB = readFileSync(join(CORPUS_DIR, "cross-inherit-simple-b.pike"), "utf-8");
+    const treeB = parse(srcB);
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriB,
+    };
+
+    // Line 25: d->speak() — cursor after d-> at column 28
+    const result = getCompletions(tableB, treeB, 25, 28, ctx);
+    const labels = completionLabels(result);
+
+    // Animal's members should appear via cross-file inheritance
+    expect(labels).toContain("speak");
+    expect(labels).toContain("get_name");
+    // Dog's own member should also be present
+    expect(labels).toContain("fetch");
+  });
 });

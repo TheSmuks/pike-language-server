@@ -931,3 +931,40 @@ describe("definition cross-check: resolved refs match snapshot symbols", () => {
     },
   );
 });
+
+
+// ===========================================================================
+// 16. Cross-file inherited member definition (US-001)
+// ===========================================================================
+
+describe("definition LSP: cross-file inherited member (US-001)", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("d->speak() resolves to Animal.speak in cross-file A", async () => {
+    // Index file A first so B's wireInheritance can resolve Animal
+    const srcA = readCorpusSource("cross-inherit-simple-a.pike");
+    server.openDoc(corpusUri("cross-inherit-simple-a.pike"), srcA);
+
+    const srcB = readCorpusSource("cross-inherit-simple-b.pike");
+    const uriB = server.openDoc(corpusUri("cross-inherit-simple-b.pike"), srcB);
+
+    // d->speak() — speak is at line 25, char 28
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri: uriB },
+      position: { line: 25, character: 28 },
+    });
+
+    expect(result).not.toBeNull();
+    // Should resolve to Animal.speak in file A
+    expect(result.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
+    expect(result.range.start.line).toBe(18); // speak() is declared at line 18 in file A
+  });
+});
