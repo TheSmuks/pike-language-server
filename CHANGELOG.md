@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+
+- `server/src/features/rename.ts` — stdlib/predef protected symbol rejection: `prepareRename()` and `getRenameLocations()` now reject rename targets matching 283 predef builtins or 5,471 stdlib short names, preventing accidental breakage of shadowed stdlib symbols
+- `corpus/files/rename-base.pike`, `rename-child.pike`, `rename-main.pike` — multi-file inheritance chain corpus files for rename testing
+- 9 new rename tests: protected symbol rejection (6), 3-file inheritance chain rename (3)
 - `tests/integration/p2-verification.test.ts` — Phase 6 P2 verification suite: worker thrashing, hover latency, cross-file propagation, mode switching (10 tests, real PikeWorker, no mocks)
 - `server/src/server.ts` — `PikeServer.index` changed from stale value to live getter, fixing dependency graph access after initialization
 - `server/src/features/symbolTable.ts` — `buildSymbolTableAsync()` for event-loop yielding on large files (>= 1000 nodes)
@@ -16,6 +20,12 @@
 - `package.json` `bin` field and `build:standalone` script
 
 ### Changed
+
+- `server/src/server.ts` — `onPrepareRename` and `onRenameRequest` now pass protected stdlib/predef name set to rename functions
+- `server/src/features/rename.ts` — `prepareRename()` and `getRenameLocations()` accept optional `ProtectedNames` parameter for stdlib/predef rejection
+- `decisions/0016-rename.md` — amended with protected symbol rejection section
+- `TRACKING.md` — Phase 6 P3 entry corrected from 'Deferred' to 'Shipped in Phase 8'
+- `tests/lsp/rename.test.ts` — LSP protocol test fixtures renamed to avoid stdlib name collisions (counter→tally, add→computeSum)
 
 - `harness/worker.pike` — `handle_typeof` hardened with character whitelist, balanced-parentheses check, dangerous-identifier rejection, and 200-char length limit
 - `server/src/server.ts` — `autodocCache` now has independent 5 MB size cap with LRU eviction

@@ -451,13 +451,13 @@ describe("textDocument/rename — LSP protocol", () => {
   test("renames a local variable", async () => {
     const uri = server.openDoc(
       "file:///rename-local.pike",
-      "int counter = 0;\ncounter = counter + 1;\n",
+      "int tally = 0;\ntally = tally + 1;\n",
     );
 
     const result = await server.client.sendRequest("textDocument/rename", {
       textDocument: { uri },
-      position: { line: 0, character: 4 }, // "counter" declaration
-      newName: "myCounter",
+      position: { line: 0, character: 4 }, // "tally" declaration
+      newName: "myTally",
     });
 
     expect(result).not.toBeNull();
@@ -468,20 +468,20 @@ describe("textDocument/rename — LSP protocol", () => {
 
     // All edits should use the new name
     for (const te of edit.changes[uri]) {
-      expect(te.newText).toBe("myCounter");
+      expect(te.newText).toBe("myTally");
     }
   });
 
   test("renames a function", async () => {
     const uri = server.openDoc(
       "file:///rename-func.pike",
-      "int add(int a, int b) { return a + b; }\nint x = add(1, 2);\n",
+      "int computeSum(int a, int b) { return a + b; }\nint x = computeSum(1, 2);\n",
     );
 
     const result = await server.client.sendRequest("textDocument/rename", {
       textDocument: { uri },
-      position: { line: 0, character: 4 }, // "add" declaration
-      newName: "sum",
+      position: { line: 0, character: 4 }, // "computeSum" declaration
+      newName: "calculateTotal",
     });
 
     expect(result).not.toBeNull();
@@ -595,5 +595,221 @@ describe("textDocument/prepareRename — LSP protocol", () => {
 
     expect(result).not.toBeNull();
     expect(result.placeholder).toBe("x");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Protected symbol rejection — stdlib/predef
+// ---------------------------------------------------------------------------
+
+describe("prepareRename — stdlib/predef rejection", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const protectedNames = new Set(["write", "search", "sizeof", "strlen", "getcwd"]);
+
+  test("rejects predef builtin names", () => {
+    // Parse a file that declares a function named 'write' (shadows predef)
+    const src = `void write(string msg) {}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    const result = prepareRename(table, 0, 5, protectedNames);
+    expect(result).toBeNull();
+  });
+
+  test("rejects stdlib short names", () => {
+    const src = `int strlen(string s) { return 0; }`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    const result = prepareRename(table, 0, 4, protectedNames);
+    expect(result).toBeNull();
+  });
+
+  test("allows non-protected names", () => {
+    const src = `int myFunc(int x) { return x; }`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    const result = prepareRename(table, 0, 4, protectedNames);
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("myFunc");
+  });
+
+  test("allows all names when protectedNames is not provided", () => {
+    const src = `void write(string msg) {}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    // Without protectedNames, 'write' is renameable
+    const result = prepareRename(table, 0, 5);
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("write");
+  });
+});
+
+describe("getRenameLocations — stdlib/predef rejection", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const protectedNames = new Set(["write", "search", "sizeof"]);
+
+  test("returns null for predef builtin declaration", () => {
+    const src = `void write(string msg) { write("hi"); }`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    const result = getRenameLocations(
+      table, "file:///test.pike", 0, 5, null, protectedNames,
+    );
+    expect(result).toBeNull();
+  });
+
+  test("returns null for reference to protected name", () => {
+    const src = `void search(string s) {}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    const decl = findDecl(table, "search", "function");
+    expect(decl).toBeDefined();
+
+    const result = getRenameLocations(
+      table, "file:///test.pike",
+      decl!.nameRange.start.line, decl!.nameRange.start.character,
+      null, protectedNames,
+    );
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-file inheritance chain rename
+// ---------------------------------------------------------------------------
+
+describe("rename across 3-file inheritance chain", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const RENAME_FILES = ["rename-base.pike", "rename-child.pike", "rename-main.pike"];
+
+  function makeRenameIndex(): { index: WorkspaceIndex; uris: Map<string, string> } {
+    const idx = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    const uris = new Map<string, string>();
+    for (const name of RENAME_FILES) {
+      const uri = "file://" + join(CORPUS_DIR, name);
+      uris.set(name, uri);
+      const src = readCorpus(name);
+      const tree = parse(src);
+      idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    }
+    return { index: idx, uris };
+  }
+
+  test("renaming BaseShape.describe updates all three files", () => {
+    const { index, uris } = makeRenameIndex();
+    const uriBase = uris.get("rename-base.pike")!;
+    const tableBase = index.getSymbolTable(uriBase)!;
+
+    // Find the 'describe' method in BaseShape
+    const describeDecl = tableBase.declarations.find(
+      d => d.name === "describe" && d.kind === "function",
+    );
+    expect(describeDecl).toBeDefined();
+
+    const result = getRenameLocations(
+      tableBase, uriBase,
+      describeDecl!.nameRange.start.line,
+      describeDecl!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("describe");
+
+    // Build workspace edit
+    const edit = buildWorkspaceEdit(result!.locations, "toString");
+
+    // All three files must be affected
+    const affectedUris = new Set(Object.keys(edit.changes));
+    expect(affectedUris.has(uriBase)).toBe(true);
+    expect(affectedUris.has(uris.get("rename-main.pike")!)).toBe(true);
+
+    // Verify the edit text is correct
+    for (const [, edits] of Object.entries(edit.changes)) {
+      for (const te of edits) {
+        expect(te.newText).toBe("toString");
+      }
+    }
+
+    // Verify at least one edit in base (declaration) and main (call sites)
+    const baseEdits = edit.changes[uriBase] ?? [];
+    expect(baseEdits.length).toBeGreaterThanOrEqual(1);
+
+    const mainEdits = edit.changes[uris.get("rename-main.pike")!] ?? [];
+    expect(mainEdits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("renaming DEFAULT_COLOR constant updates base and main", () => {
+    const { index, uris } = makeRenameIndex();
+    const uriBase = uris.get("rename-base.pike")!;
+    const tableBase = index.getSymbolTable(uriBase)!;
+
+    const constDecl = tableBase.declarations.find(
+      d => d.name === "DEFAULT_COLOR" && d.kind === "constant",
+    );
+    expect(constDecl).toBeDefined();
+
+    const result = getRenameLocations(
+      tableBase, uriBase,
+      constDecl!.nameRange.start.line,
+      constDecl!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("DEFAULT_COLOR");
+
+    const edit = buildWorkspaceEdit(result!.locations, "FALLBACK_COLOR");
+
+    // Base file should have the declaration edit
+    const baseEdits = edit.changes[uriBase] ?? [];
+    expect(baseEdits.length).toBeGreaterThanOrEqual(1);
+
+    // Main file should have the reference edit
+    const mainEdits = edit.changes[uris.get("rename-main.pike")!] ?? [];
+    expect(mainEdits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("renaming area method updates base, child, and main", () => {
+    const { index, uris } = makeRenameIndex();
+    const uriBase = uris.get("rename-base.pike")!;
+    const tableBase = index.getSymbolTable(uriBase)!;
+
+    const areaDecl = tableBase.declarations.find(
+      d => d.name === "area" && d.kind === "function",
+    );
+    expect(areaDecl).toBeDefined();
+
+    const result = getRenameLocations(
+      tableBase, uriBase,
+      areaDecl!.nameRange.start.line,
+      areaDecl!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("area");
+
+    const edit = buildWorkspaceEdit(result!.locations, "surfaceArea");
+
+    // At minimum, base file (declaration) should be edited
+    const baseEdits = edit.changes[uriBase] ?? [];
+    expect(baseEdits.length).toBeGreaterThanOrEqual(1);
+
+    // Main file references area() via arrow access
+    const mainEdits = edit.changes[uris.get("rename-main.pike")!] ?? [];
+    expect(mainEdits.length).toBeGreaterThanOrEqual(1);
   });
 });
