@@ -341,6 +341,7 @@ function collectClassDecl(node: Node, state: BuildState): void {
 
 function collectFunctionDecl(node: Node, state: BuildState): void {
   const nameNode = node.childForFieldName('name');
+  const returnType = node.childForFieldName('return_type');
   const scopeId = currentScopeId(state);
 
   if (nameNode) {
@@ -350,6 +351,7 @@ function collectFunctionDecl(node: Node, state: BuildState): void {
       nameRange: toRange(nameNode),
       range: toRange(node),
       scopeId,
+      declaredType: returnType?.text,
     });
   }
 
@@ -412,37 +414,30 @@ function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
   pushScope(state, 'for', toRange(node));
 
-  // Walk children for for_init_decl rather than using named fields,
-  // to handle grammar variations across tree-sitter-pike versions.
+  // Find for_init_decl child — field name 'initializer' may not be available
+  // in older WASM builds, so walk children by type.
   for (const child of node.children) {
     if (child.type === 'for_init_decl') {
-      // for_init_decl has structure: type? identifier = expr
-      // The identifier is the variable name, not in a named field
+      // for_init_decl grammar: field('type', $.type), commaSep1(seq(field('name', $.identifier), ...))
+      // Use childrenForFieldName('name') to get only the variable name identifiers,
+      // not the type identifiers (which would be picked up by walking bare 'identifier' children).
       const scopeId = currentScopeId(state);
-      for (const sub of child.children) {
-        if (sub.type === 'identifier') {
-          addDeclaration(state, {
-            name: sub.text,
-            kind: 'variable',
-            nameRange: toRange(sub),
-            range: toRange(child),
-            scopeId,
-          });
-        }
+      for (const nameNode of child.childrenForFieldName('name')) {
+        addDeclaration(state, {
+          name: nameNode.text,
+          kind: 'variable',
+          nameRange: toRange(nameNode),
+          range: toRange(child),
+          scopeId,
+        });
       }
+      break;
     }
   }
 
   const body = node.childForFieldName('body');
   if (body) {
     collectDeclarations(body, state);
-  } else {
-    // Fallback: look for block or expression_statement child
-    for (const child of node.children) {
-      if (child.type === 'block' || child.type === 'expression_statement') {
-        collectDeclarations(child, state);
-      }
-    }
   }
 
   popScope(state);
@@ -474,20 +469,70 @@ function collectForeachStatement(node: Node, state: BuildState): void {
 
 function collectForeachLvalues(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
-  // Walk children for identifiers. The foreach_lvalues node has key/value fields
-  // in the grammar, but we walk children directly for robustness across
-  // tree-sitter-pike versions.
-  for (const child of node.children) {
-    if (child.type === 'identifier') {
-      addDeclaration(state, {
-        name: child.text,
-        kind: 'parameter',
-        nameRange: toRange(child),
-        range: toRange(child),
-        scopeId,
-      });
+
+  // foreach_lvalues grammar defines field('key', ...) and field('value', ...).
+  // _foreach_lvalue is: choice($._expr, seq($.type, $.identifier), $.array_destructure)
+  //
+  // When tree-sitter flattens seq($.type, $.identifier), both the type and identifier
+  // nodes get tagged with the same field name. So childrenForFieldName('key') may
+  // return [type_node, identifier_node]. We extract identifiers from the field children.
+  const extractIdentifiersFromField = (fieldName: string): void => {
+    const nodes = node.childrenForFieldName(fieldName);
+    if (nodes.length === 0) return;
+
+    // Find identifier nodes among the field children.
+    // Typed form: [type, identifier] — take the identifier.
+    // Expression form: [comma_expr] — may contain bare identifier children.
+    for (const n of nodes) {
+      if (n.type === 'identifier') {
+        addDeclaration(state, {
+          name: n.text,
+          kind: 'parameter',
+          nameRange: toRange(n),
+          range: toRange(n),
+          scopeId,
+        });
+      }
     }
-  }
+
+    // If no direct identifier was found, the field captured a compound expression.
+    // Walk its children for identifiers (handles comma_expr and array_destructure).
+    const identifiers = nodes.filter(n => n.type === 'identifier');
+    if (identifiers.length === 0) {
+      for (const n of nodes) {
+        if (n.type === 'comma_expr') {
+          // Bare identifier in untyped foreach: foreach(x; key; val)
+          // The comma_expr may contain identifier_expr children
+          for (const child of n.children) {
+            if (child.type === 'identifier') {
+              addDeclaration(state, {
+                name: child.text,
+                kind: 'parameter',
+                nameRange: toRange(child),
+                range: toRange(child),
+                scopeId,
+              });
+            }
+          }
+        } else if (n.type === 'array_destructure') {
+          for (const child of n.children) {
+            if (child.type === 'identifier') {
+              addDeclaration(state, {
+                name: child.text,
+                kind: 'parameter',
+                nameRange: toRange(child),
+                range: toRange(child),
+                scopeId,
+              });
+            }
+          }
+        }
+      }
+    }
+  };
+
+  extractIdentifiersFromField('key');
+  extractIdentifiersFromField('value');
 }
 
 function collectIfStatement(node: Node, state: BuildState): void {
@@ -570,12 +615,12 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
     }
   } else {
     // Single name or no name field
-    const nameText = getNameText(decl);
-    if (nameText) {
+    const nameNode = decl.childForFieldName('name');
+    if (nameNode) {
       addDeclaration(state, {
-        name: nameText,
+        name: nameNode.text,
         kind: actualKind,
-        nameRange: toRange(decl.childForFieldName('name')!),
+        nameRange: toRange(nameNode),
         range: toRange(decl),
         scopeId,
         declaredType: typeText,
@@ -802,7 +847,7 @@ function resolveName(name: string, refNode: Node, state: BuildState): number | n
   // Walk scope chain outward
   let scopeId: number | null = refScopeId;
   while (scopeId !== null) {
-    const scope: Scope = state.scopeMap.get(scopeId)!;
+    const scope = state.scopeMap.get(scopeId);
     if (!scope) break;
 
     // Check declarations in this scope
@@ -852,7 +897,7 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
   if (isBareScope) {
     const classScopeId = findEnclosingClassScopeId(refNode, state);
     if (classScopeId !== null) {
-      const classScope = state.scopeMap.get(classScopeId)!;
+      const classScope = state.scopeMap.get(classScopeId);
       if (classScope && classScope.inheritedScopes.length > 0) {
         const firstInherited = classScope.inheritedScopes[0];
         return findDeclInScope(name, firstInherited, state);
@@ -867,7 +912,8 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
     const inheritName = firstIdent.text;
     const classScopeId = findEnclosingClassScopeId(refNode, state);
     if (classScopeId !== null) {
-      const classScope = state.scopeMap.get(classScopeId)!;
+      const classScope = state.scopeMap.get(classScopeId);
+      if (!classScope) return null;
       // Find the inherit declaration matching this name (by alias or path name)
       for (const declId of classScope.declarations) {
         const decl = state.declMap.get(declId);
@@ -877,8 +923,9 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
             // Find the inherited scope that wireInheritance wired for this inherit
             // by looking for a class declaration with name == decl.name
             for (const inheritedId of classScope.inheritedScopes) {
-              const inheritedScope = state.scopeMap.get(inheritedId)!;
-              const parentScope = state.scopeMap.get(inheritedScope.parentId!)!;
+              const inheritedScope = state.scopeMap.get(inheritedId);
+              if (!inheritedScope || inheritedScope.parentId === null) continue;
+              const parentScope = state.scopeMap.get(inheritedScope.parentId);
               if (parentScope) {
                 for (const parentDeclId of parentScope.declarations) {
                   const parentDecl = state.declMap.get(parentDeclId);
@@ -901,7 +948,7 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
  * Find a declaration by name in a specific scope (and its inherited scopes).
  */
 function findDeclInScope(name: string, scopeId: number, state: BuildState): number | null {
-  const scope = state.scopeMap.get(scopeId)!;
+  const scope = state.scopeMap.get(scopeId);
   if (!scope) return null;
 
   for (const declId of scope.declarations) {
@@ -966,7 +1013,8 @@ function findEnclosingClassScopeId(node: Node, state: BuildState): number | null
 
   let current: number | null = scopeId;
   while (current !== null) {
-    const scope: Scope = state.scopeMap.get(current)!;
+    const scope = state.scopeMap.get(current);
+    if (!scope) break;
     if (scope.kind === 'class') return current;
     current = scope.parentId;
   }
@@ -977,10 +1025,12 @@ function findEnclosingClassDecl(node: Node, state: BuildState): number | null {
   const classScopeId = findEnclosingClassScopeId(node, state);
   if (classScopeId === null) return null;
 
-  const classScope = state.scopeMap.get(classScopeId)!;
+  const classScope = state.scopeMap.get(classScopeId);
+  if (!classScope) return null;
   // The class declaration is in the parent scope
   if (classScope.parentId !== null) {
-    const parentScope = state.scopeMap.get(classScope.parentId)!;
+    const parentScope = state.scopeMap.get(classScope.parentId);
+    if (!parentScope) return null;
     for (const declId of parentScope.declarations) {
       const decl = state.declMap.get(declId);
       if (decl && decl.kind === 'class') {

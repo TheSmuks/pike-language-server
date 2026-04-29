@@ -257,7 +257,7 @@ export class ModuleResolver {
     // 1. Current file's directory (for relative resolution)
     paths.push(dirname(currentFile));
 
-    // 2. Workspace module paths
+    // 2. Workspace + system module paths
     for (const mp of this.pikePaths.modulePaths) {
       if (!paths.includes(mp)) paths.push(mp);
     }
@@ -275,14 +275,8 @@ export class ModuleResolver {
       }
     }
 
-    // 4. System module paths
-    for (const sp of this.pikePaths.modulePaths) {
-      if (!paths.includes(sp)) paths.push(sp);
-    }
-
     return paths;
   }
-
   /**
    * Find a module named `name` within the given search path.
    * Tries directory module (.pmod/), then file module (.pmod), then .pike.

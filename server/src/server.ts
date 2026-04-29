@@ -114,6 +114,32 @@ export interface PikeServer {
  * Wire all LSP handlers onto the given connection.
  * Does NOT call connection.listen() — the caller decides when to start.
  */
+/**
+ * Render a predef builtin type signature into a human-readable display form.
+ *
+ * Raw signatures from Pike look like:
+ *   scope(0,function(mixed|void...:mixed))
+ *   function(string,mixed...:string) | function(array,mixed...:array)
+ *   scope(0,__attribute__("deprecated",function(mixed...:mixed)))
+ *
+ * This function strips scope/attribute wrappers, takes the first overload,
+ * and extracts the inner parameter list.
+ */
+export function renderPredefSignature(name: string, rawSig: string): string {
+  let cleanSig = rawSig
+    .replace(/^scope\(\d+,/, "")
+    .replace(/\)$/, ""); // Remove trailing scope paren
+  // Remove attribute annotations for cleaner display
+  cleanSig = cleanSig.replace(/__attribute__\("[^"]*",\s*/g, "");
+  // Take the first overload for brevity
+  const overloads = cleanSig.split(" | function");
+  if (overloads.length > 1) overloads[0] += ")";
+  const displaySig = overloads[0]
+    .replace(/^function\(/, "")
+    .replace(/\)$/, "");
+  return `${name}(${displaySig})`;
+}
+
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
   const worker = new PikeWorker();
@@ -220,6 +246,12 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
     if (initOpts?.pikeBinaryPath) {
       worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
+    }
+    if (initOpts?.diagnosticDebounceMs && initOpts.diagnosticDebounceMs > 0) {
+      diagnosticManager.setDebounceMs(initOpts.diagnosticDebounceMs);
+    }
+    if (initOpts?.maxNumberOfProblems && initOpts.maxNumberOfProblems > 0) {
+      diagnosticManager.setMaxNumberOfProblems(initOpts.maxNumberOfProblems);
     }
 
     return {
@@ -610,21 +642,9 @@ export function createPikeServer(connection: Connection): PikeServer {
     // Tier 2b: Predef builtins (C-level functions) — type signature lookup
     const builtinSig = predefBuiltins[decl.name];
     if (builtinSig) {
-      // Clean up the raw type string for readability
-      let cleanSig = builtinSig
-        .replace(/^scope\(\d+,/, "")
-        .replace(/\)$/, ""); // Remove trailing scope paren
-      // Remove attribute annotations for cleaner display
-      cleanSig = cleanSig.replace(/__attribute__\("[^"]*",\s*/g, "");
-      // Take the first overload for brevity
-      const overloads = cleanSig.split(" | function");
-      if (overloads.length > 1) overloads[0] += ")";
-      const displaySig = overloads[0]
-        .replace(/^function\(/, "")
-        .replace(/\)$/, "");
       return {
         name: decl.name,
-        signature: `${decl.name}(${displaySig})`,
+        signature: renderPredefSignature(decl.name, builtinSig),
         documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
         line: decl.nameRange.start.line,
         character: decl.nameRange.start.character,
@@ -762,8 +782,13 @@ export function createPikeServer(connection: Connection): PikeServer {
 // Only runs when this module is executed directly, not when imported by tests.
 // ---------------------------------------------------------------------------
 
-// @ts-ignore — Bun import.meta.main is true only when run directly
-if (import.meta?.main) {
+// Production entry point: stdio transport.
+// Only runs when this module is executed directly, not when imported by tests.
+// Bun: import.meta.main, Node: not available (ESM mode only).
+const isMain = typeof (import.meta as unknown as Record<string, unknown>).main === 'boolean'
+  ? (import.meta as unknown as Record<string, unknown>).main === true
+  : false;
+if (isMain) {
   const connection = createConnection(ProposedFeatures.all);
   const server = createPikeServer(connection);
   server.connection.listen();

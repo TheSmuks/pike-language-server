@@ -59,10 +59,15 @@ export function activate(context: vscode.ExtensionContext): void {
     clientOptions,
   );
 
+
   // Restart the server when settings change
+  // Guard against rapid-fire config changes creating duplicate clients
+  let restarting = false;
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("pike.languageServer")) {
+        if (restarting) return;
+        restarting = true;
         client?.stop().then(() => {
           client = new LanguageClient(
             "pikeLanguageServer",
@@ -71,6 +76,8 @@ export function activate(context: vscode.ExtensionContext): void {
             { ...clientOptions, initializationOptions: getSettings() },
           );
           client.start();
+        }).finally(() => {
+          restarting = false;
         });
       }
     }),

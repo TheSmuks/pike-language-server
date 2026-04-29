@@ -544,7 +544,9 @@ export class PikeWorker {
         if (this.consecutiveMalformed >= PikeWorker.MALFORMED_RESTART_THRESHOLD) {
           console.error('[pike-worker] Too many malformed responses — restarting worker');
           this.consecutiveMalformed = 0;
-          this.restart().catch(() => {});
+          this.restart().catch((err) => {
+            console.error('[pike-worker] Auto-restart failed after malformed responses:', (err as Error).message);
+          });
         }
       }
     }
