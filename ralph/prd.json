@@ -16,7 +16,7 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": "Key file: server/src/features/workspaceIndex.ts (wireInheritance method). Depends on existing WorkspaceIndex.getFile() and ModuleResolver. See known limitation in docs/known-limitations.md section 'Cross-file inherited member completion not supported'."
     },
     {

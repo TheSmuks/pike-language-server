@@ -1,3 +1,39 @@
 # Ralph Progress Log
 Started: Wed Apr 29 11:44:51 PM CEST 2026
 ---
+
+## Codebase Patterns
+- WorkspaceIndex.upsertFile() builds symbol tables via buildSymbolTable(), which calls wireInheritance() internally
+- wireInheritance() resolves same-file class inheritance by finding matching class declarations in the parent file scope
+- Completion uses getCompletions() which takes a table + tree + CompletionContext (index, stdlibIndex, predefBuiltins, uri)
+- Cross-file resolution in typeResolver uses resolveCrossFileType() which walks inherit/import declarations in the current file
+- accessResolver.resolveAccessCore() resolves arrow/dot access: finds LHS declaration, calls resolveMemberAccess(), then findDeclUri()
+- Tests use createTestServer() for LSP protocol tests and WorkspaceIndex directly for unit-level tests
+- Corpus files are in corpus/files/ with naming convention: cross-inherit-*.pike, cross-import-*.pike
+- The Declaration interface has optional sourceUri field for synthetic declarations from cross-file inheritance
+- buildSymbolTable() accepts optional BuildOptions with index for cross-file inheritance wiring
+---
+
+## 2026-04-29 - US-001
+Thread: N/A (Ralph agent iteration)
+- Implemented cross-file inheritance lookup in wireInheritance()
+- wireInheritance() now accepts optional WorkspaceIndex + URI for cross-file class resolution
+- When a class-level inherit declaration can't be resolved locally, the function looks through file-level inherit/import declarations to find the target class in another indexed file
+- Creates synthetic scopes in the local table that mirror remote class members (including their own inherited members)
+- Added sourceUri field to Declaration for correct cross-file definition routing
+- Updated accessResolver.findDeclUri() to check sourceUri for synthetic declarations
+- Files changed:
+  - server/src/features/symbolTable.ts (wireInheritance refactored, wireLocalInheritance + wireCrossFileInheritance added, Declaration.sourceUri added, BuildOptions interface added)
+  - server/src/features/workspaceIndex.ts (upsertFile passes self to buildSymbolTable)
+  - server/src/features/accessResolver.ts (findDeclUri checks sourceUri)
+  - tests/lsp/crossFile.test.ts (3 new tests: cross-file wiring, chain wiring, backward compat)
+  - tests/lsp/definition.test.ts (1 new test: d->speak() resolves to Animal in file A)
+  - tests/lsp/hover.test.ts (1 new test: d->speak() hover shows Animal signature)
+  - tests/lsp/completion.test.ts (1 new test: d-> shows Animal members via cross-file inherit)
+- **Learnings for future iterations:**
+  - wireInheritance runs inside buildSymbolTable, which runs inside WorkspaceIndex.upsertFile — so passing the index is straightforward
+  - Synthetic declarations need sourceUri to avoid routing definition/hover to wrong file
+  - The existing cross-file resolution (typeResolver.resolveCrossFileType) works at a different level — it resolves type names to declarations. The new wiring happens at scope level and benefits completion/reference resolution.
+  - inheritedScopes contains scope IDs local to the table — cross-file scopes must be synthesized into the local table
+  - The corpus files cross-inherit-simple-*.pike are the primary test files for cross-file inheritance
+---
