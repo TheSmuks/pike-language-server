@@ -1,6 +1,8 @@
 ## [Unreleased]
 
 ### Added
+- `tests/integration/p2-verification.test.ts` — Phase 6 P2 verification suite: worker thrashing, hover latency, cross-file propagation, mode switching (10 tests, real PikeWorker, no mocks)
+- `server/src/server.ts` — `PikeServer.index` changed from stale value to live getter, fixing dependency graph access after initialization
 - `server/src/features/symbolTable.ts` — `buildSymbolTableAsync()` for event-loop yielding on large files (>= 1000 nodes)
 - `server/src/server.ts` — `workspace/didChangeWatchedFiles` capability with dynamic watcher registration for `.pike` and `.pmod` files
 - `decisions/0014-audit-remediation-and-incremental-parsing.md` — architecture decision record for audit fixes
