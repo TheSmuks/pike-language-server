@@ -1,10 +1,15 @@
 /**
  * DiagnosticManager — real-time diagnostics with debouncing.
  *
- * Design: decision 0013.
+ * Design: decision 0013 (debouncing/supersession), decision 0018 (FIFO
+ * queue moved to PikeWorker).
  *
- * Per-file debounce timers, version-gated supersession, worker priority
- * queueing, cross-file propagation, and diagnostic mode selection.
+ * Per-file debounce timers, version-gated supersession, cross-file
+ * propagation, and diagnostic mode selection.
+ *
+ * The PikeWorker now owns the FIFO queue — DiagnosticManager no longer
+ * maintains its own.  All calls to worker.diagnose(), worker.autodoc(),
+ * etc. are automatically serialized by PikeWorker.enqueue().
  */
 
 import {
@@ -86,19 +91,6 @@ export class DiagnosticManager {
 
   private readonly fileStates = new Map<string, FileDiagnosticState>();
 
-  // Worker priority queue
-  private readonly highPriorityQueue: Array<{
-    resolve: (response: unknown) => void;
-    reject: (error: Error) => void;
-    execute: () => Promise<unknown>;
-  }> = [];
-  private readonly lowPriorityQueue: Array<{
-    resolve: (response: unknown) => void;
-    reject: (error: Error) => void;
-    execute: () => Promise<unknown>;
-  }> = [];
-  private workerBusy = false;
-
   constructor(options: DiagnosticManagerOptions) {
     this.worker = options.worker;
     this.documents = options.documents;
@@ -147,7 +139,7 @@ export class DiagnosticManager {
 
     // Always publish parse diagnostics immediately (tree-sitter, no worker)
     try {
-      const tree = parse(doc.getText());
+      const tree = parse(doc.getText(), uri);
       if (!this.disposed) {
         this.connection.sendDiagnostics({
           uri,
@@ -215,24 +207,6 @@ export class DiagnosticManager {
       this.clearTimers(state);
     }
     this.fileStates.clear();
-    // Silently drop queued items — don't reject, connections may be closed
-    this.lowPriorityQueue.length = 0;
-    this.highPriorityQueue.length = 0;
-  }
-
-  /**
-   * Queue a high-priority request (hover, completion, etc.).
-   * Returns a promise that resolves when the worker processes the request.
-   */
-  queueHighPriority<T>(fn: () => Promise<T>): Promise<T> {
-    return new Promise((resolve, reject) => {
-      this.highPriorityQueue.push({
-        resolve: resolve as (r: unknown) => void,
-        reject,
-        execute: fn,
-      });
-      this.drainQueue();
-    });
   }
 
   // -----------------------------------------------------------------------
@@ -258,10 +232,8 @@ export class DiagnosticManager {
     // Don't queue if already in flight (the result will cover this version)
     if (state.inFlight) return;
 
-    // Queue as low priority
-    this.enqueueLowPriority(async () => {
-      await this.runDiagnose(uri);
-    });
+    // Fire-and-forget: PikeWorker's FIFO queue handles serialization
+    this.runDiagnose(uri);
   }
 
   /**
@@ -344,13 +316,19 @@ export class DiagnosticManager {
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
-        this.connection.console.error(
-          `Pike diagnose failed for ${uri}: ${(err as Error).message}`,
-        );
+        try {
+          this.connection.console.error(
+            `Pike diagnose failed for ${uri}: ${(err as Error).message},`,
+          );
+        } catch {
+          // Connection may be closed during teardown
+        }
       }
       // Keep only parse diagnostics
       const parseDiags = this.safeParseDiagnostics(source);
-      this.publishDiagnostics(uri, parseDiags);
+      if (!this.disposed) {
+        this.publishDiagnostics(uri, parseDiags);
+      }
     } finally {
       state.inFlight = false;
     }
@@ -387,48 +365,6 @@ export class DiagnosticManager {
 
       if (depState.timer.unref) depState.timer.unref();
     }
-  }
-
-  // -----------------------------------------------------------------------
-  // Internal: priority queue
-  // -----------------------------------------------------------------------
-
-  private enqueueLowPriority(fn: () => Promise<void>): void {
-    this.lowPriorityQueue.push({
-      resolve: () => {},
-      reject: (_err: Error) => {
-        // Silently swallow — connection may be closed during teardown
-      },
-      execute: fn,
-    });
-    this.drainQueue();
-  }
-
-  private drainQueue(): void {
-    if (this.workerBusy || this.disposed) return;
-
-    // High priority first
-    const item =
-      this.highPriorityQueue.shift() ?? this.lowPriorityQueue.shift();
-    if (!item) return;
-
-    this.workerBusy = true;
-    item
-      .execute()
-      .then((result) => {
-        this.workerBusy = false;
-        if (!this.disposed) {
-          item.resolve(result);
-          this.drainQueue();
-        }
-      })
-      .catch((err: Error) => {
-        this.workerBusy = false;
-        if (!this.disposed) {
-          item.reject(err);
-          this.drainQueue();
-        }
-      });
   }
 
   // -----------------------------------------------------------------------
@@ -477,7 +413,11 @@ export class DiagnosticManager {
     if (state) {
       state.lastDiagnostics = diagnostics;
     }
-    this.connection.sendDiagnostics({ uri, diagnostics });
+    try {
+      this.connection.sendDiagnostics({ uri, diagnostics });
+    } catch {
+      // Connection may be closed during teardown — not an error
+    }
   }
 
   /** Parse diagnostics with error suppression. */

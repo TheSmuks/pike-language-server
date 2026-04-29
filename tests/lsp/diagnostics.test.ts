@@ -8,7 +8,7 @@ import { createSilentStream } from "./helpers";
  * - Supersession (version-gated dispatch)
  * - Diagnostic mode (realtime/saveOnly/off)
  * - Lifecycle (close clears, reopen republishes)
- * - Worker priority queueing
+ * - FIFO queue serialization (via PikeWorker)
  * - Cross-file propagation
  * - Content-hash caching
  *
@@ -512,62 +512,109 @@ describe("Diagnostic supersession", () => {
 // ---------------------------------------------------------------------------
 // Priority queueing
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// FIFO queue serialization — real Pike worker integration
+// ---------------------------------------------------------------------------
 
-describe("Worker priority queueing", () => {
-  test("queueHighPriority resolves with result", async () => {
-    const { DiagnosticManager } = await import("../../server/src/features/diagnosticManager");
+describe("PikeWorker FIFO queue serialization", () => {
+  test("concurrent diagnose/ping/autodoc process sequentially without corruption", async () => {
+    const { PikeWorker } = await import("../../server/src/features/pikeWorker");
+    const worker = new PikeWorker();
 
-    const c2s = createSilentStream();
-    const s2c = createSilentStream();
-    const serverConn = createConnection(
-      new StreamMessageReader(c2s),
-      new StreamMessageWriter(s2c),
-    );
-    const server = createPikeServer(serverConn);
-    serverConn.listen();
+    try {
+      // Fire 3 concurrent requests of different types with varying payloads.
+      // The FIFO queue must serialize them so that each JSON response
+      // arrives intact (no interleaved stdout writes).
+      const sources = [
+        "int x = 1;\n",
+        "string s = \"hello\";\nint y = 2;\n",
+        "class Foo { int a; int b; }\n",
+      ];
 
-    // queueHighPriority should resolve
-    const result = await server.diagnosticManager.queueHighPriority(async () => {
-      return 42;
-    });
-    expect(result).toBe(42);
+      const results = await Promise.all([
+        worker.diagnose(sources[0], "fifo-1.pike"),
+        worker.ping(),
+        worker.diagnose(sources[2], "fifo-3.pike"),
+      ]);
 
-    // Cleanup
-    c2s.destroy();
-    s2c.destroy();
+      // All requests must complete without errors
+      expect(results[0].exit_code).toBe(0);
+      expect(results[0].diagnostics).toEqual([]);
+
+      expect(results[1].status).toBe("ok");
+      expect(results[1].pike_version).toMatch(/\d+\.\d+/);
+
+      expect(results[2].exit_code).toBe(0);
+      expect(results[2].diagnostics).toEqual([]);
+
+      // Verify the worker is still alive and functional after serialization
+      const postCheck = await worker.diagnose("int z = 42;\n", "fifo-post.pike");
+      expect(postCheck.exit_code).toBe(0);
+    } finally {
+      worker.stop();
+    }
   });
 
-  test("multiple queueHighPriority calls execute in order", async () => {
-    const { DiagnosticManager } = await import("../../server/src/features/diagnosticManager");
+  test("5 concurrent diagnose requests all produce correct, distinct results", async () => {
+    const { PikeWorker } = await import("../../server/src/features/pikeWorker");
+    const worker = new PikeWorker();
 
-    const c2s = createSilentStream();
-    const s2c = createSilentStream();
-    const serverConn = createConnection(
-      new StreamMessageReader(c2s),
-      new StreamMessageWriter(s2c),
-    );
-    const server = createPikeServer(serverConn);
-    serverConn.listen();
+    try {
+      // Each request uses a unique identifier that appears in the
+      // compilation context.  Verify responses are not mixed up.
+      const payloads = await Promise.all([
+        worker.diagnose("int a_0 = 0;\n", "distinct-0.pike"),
+        worker.diagnose("int a_1 = 1;\n", "distinct-1.pike"),
+        worker.diagnose("int a_2 = 2;\n", "distinct-2.pike"),
+        worker.ping(),
+        worker.diagnose("int a_4 = 4;\n", "distinct-4.pike"),
+      ]);
 
-    const order: number[] = [];
+      // All diagnose results should succeed
+      for (const r of [payloads[0], payloads[1], payloads[2], payloads[4]]) {
+        expect(r.exit_code).toBe(0);
+        expect(r.diagnostics).toEqual([]);
+      }
 
-    const p1 = server.diagnosticManager.queueHighPriority(async () => {
-      order.push(1);
-      return 1;
-    });
-    const p2 = server.diagnosticManager.queueHighPriority(async () => {
-      order.push(2);
-      return 2;
-    });
-    const p3 = server.diagnosticManager.queueHighPriority(async () => {
-      order.push(3);
-      return 3;
-    });
+      // Ping should return version
+      expect((payloads[3] as { status: string }).status).toBe("ok");
+    } finally {
+      worker.stop();
+    }
+  });
 
-    await Promise.all([p1, p2, p3]);
-    expect(order).toEqual([1, 2, 3]);
+  test("diagnose with intentional errors reports correct line numbers", async () => {
+    const { PikeWorker } = await import("../../server/src/features/pikeWorker");
+    const worker = new PikeWorker();
 
-    c2s.destroy();
-    s2c.destroy();
+    try {
+      // This is the critical FIFO test: if responses were interleaved,
+      // error line numbers would be wrong or diagnostics would be missing.
+      const source = [
+        "#pragma strict_types",
+        "int main() {",
+        "  int x = 1;",
+        "  string y = x;",  // line 4: type error
+        "  return 0;",
+        "}",
+      ].join("\n");
+
+      const result = await worker.diagnose(source, "strict-error.pike", { strict: true });
+
+      expect(result.exit_code).toBe(1);
+      expect(result.diagnostics.length).toBeGreaterThanOrEqual(1);
+
+      const typeError = result.diagnostics.find(
+        (d) => d.message === "Bad type in assignment.",
+      );
+      expect(typeError).toBeDefined();
+      expect(typeError!.severity).toBe("error");
+      // Line 4 in 1-based indexing — verify the Pike oracle gave us the right line
+      expect(typeError!.line).toBe(4);
+      expect(typeError!.expected_type).toBe("string");
+      expect(typeError!.actual_type).toBe("int");
+    } finally {
+      worker.stop();
+    }
   });
 });

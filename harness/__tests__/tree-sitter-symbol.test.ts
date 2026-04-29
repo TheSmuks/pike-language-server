@@ -24,7 +24,8 @@ import {
   existsSync,
 } from "node:fs";
 import { initParser, parse } from "../../server/src/parser";
-import { getDocumentSymbols, SymbolKind } from "../../server/src/features/documentSymbol";
+import { getDocumentSymbols } from "../../server/src/features/documentSymbol";
+import { SymbolKind } from "vscode-languageserver/node";
 import { getParseDiagnostics } from "../../server/src/features/diagnostics";
 import { readSnapshot } from "../src/snapshot";
 import { listCorpusFiles, CORPUS_DIR } from "../src/runner";
@@ -86,7 +87,7 @@ const TS_KIND_TO_PIKE: Partial<Record<number, string[]>> = {
 };
 
 /** Kinds that tree-sitter reports but Pike never reports. */
-const TS_ONLY_KINDS = new Set([
+const TS_ONLY_KINDS = new Set<number>([
   SymbolKind.Module,
   SymbolKind.TypeParameter,
 ]);
@@ -447,7 +448,7 @@ describe("canary: class-create.pike produces deep symbol tree", () => {
       if (!cls.children) continue;
       for (const child of cls.children) {
         // Children of a class should be functions (methods), variables, constants, or inherits (Module)
-        const validKinds = [
+        const validKinds: number[] = [
           SymbolKind.Function,
           SymbolKind.Variable,
           SymbolKind.Constant,
