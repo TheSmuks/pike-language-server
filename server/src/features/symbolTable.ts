@@ -47,6 +47,8 @@ export interface Reference {
   kind: RefKind;
   resolvesTo: number | null; // Declaration.id, null if unresolved
   confidence: 'high' | 'medium' | 'low';
+  /** For arrow/dot access: the LHS identifier name (e.g., 'd' in d->bark). */
+  lhsName?: string;
 }
 
 export type RefKind =
@@ -783,6 +785,21 @@ function collectThisRef(node: Node, state: BuildState): void {
   });
 }
 
+/**
+ * Extract the leftmost identifier text from a postfix_expr chain.
+ * For d->bark, the LHS postfix_expr contains [primary_expr [identifier_expr [identifier 'd']]].
+ * Returns the identifier text, or undefined if not found.
+ */
+function extractLhsIdentifier(lhsNode: Node | undefined): string | undefined {
+  if (!lhsNode) return undefined;
+  if (lhsNode.type === 'identifier') return lhsNode.text;
+  // Drill into first child recursively
+  if (lhsNode.childCount > 0) {
+    return extractLhsIdentifier(lhsNode.child(0)!);
+  }
+  return undefined;
+}
+
 function collectPostfixRef(node: Node, state: BuildState): void {
   // postfix_expr is polymorphic — dispatch based on children
   const children = node.children;
@@ -792,12 +809,15 @@ function collectPostfixRef(node: Node, state: BuildState): void {
     if (child.type === '->' || child.type === '->?' || child.type === '?->') {
       const memberNode = children[i + 1];
       if (memberNode && (memberNode.type === 'identifier' || memberNode.type === 'magic_identifier')) {
+        // Capture LHS identifier for type-aware filtering (US-004).
+        const lhsName = extractLhsIdentifier(children[i - 1]);
         state.references.push({
           name: memberNode.text,
           loc: toLoc(memberNode.startPosition),
           kind: 'arrow_access',
           resolvesTo: null, // TODO: resolve through object type (Phase 3 basic)
           confidence: 'low',
+          lhsName,
         });
       }
     }
@@ -805,12 +825,14 @@ function collectPostfixRef(node: Node, state: BuildState): void {
     if (child.type === '.') {
       const memberNode = children[i + 1];
       if (memberNode && memberNode.type === 'identifier') {
+        const lhsName = extractLhsIdentifier(children[i - 1]);
         state.references.push({
           name: memberNode.text,
           loc: toLoc(memberNode.startPosition),
           kind: 'dot_access',
           resolvesTo: null, // Cross-file for now
           confidence: 'low',
+          lhsName,
         });
       }
     }
@@ -1132,6 +1154,87 @@ function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declarati
 }
 
 /**
+ * Find a declaration by name that is visible at the given line.
+ * Searches scopes from innermost to outermost.
+ */
+function findDeclInScopeAt(
+  table: SymbolTable,
+  name: string,
+  line: number,
+): Declaration | undefined {
+  // Find the innermost scope containing this line.
+  let bestScopeId: number | null = null;
+  let bestDepth = -1;
+  for (const scope of table.scopes) {
+    if (line >= scope.range.start.line && line <= scope.range.end.line) {
+      let depth = 0;
+      let parentId = scope.parentId;
+      while (parentId !== null) {
+        depth++;
+        const parent = table.scopeById.get(parentId);
+        if (!parent) break;
+        parentId = parent.parentId;
+      }
+      if (depth > bestDepth) {
+        bestDepth = depth;
+        bestScopeId = scope.id;
+      }
+    }
+  }
+
+  // Walk up scopes to find the declaration
+  let scopeId = bestScopeId;
+  while (scopeId !== null) {
+    const scope = table.scopeById.get(scopeId);
+    if (!scope) break;
+    for (const declId of scope.declarations) {
+      const decl = table.declById.get(declId);
+      if (decl && decl.name === name) return decl;
+    }
+    scopeId = scope.parentId;
+  }
+
+  return undefined;
+}
+
+/**
+ * Check if a declaration is a member (direct or inherited) of a class.
+ *
+ * classDecl.scopeId is the scope CONTAINING the class (e.g., file scope),
+ * not the class body scope. We find the class body scope by looking for a
+ * child scope with kind === 'class'.
+ */
+function isMemberOfClass(
+  table: SymbolTable,
+  targetDeclId: number,
+  classDecl: Declaration,
+): boolean {
+  // Find the class body scope — it's a child scope with kind 'class'
+  // whose range matches the class declaration's range.
+  let classBodyScope = null;
+  for (const scope of table.scopes) {
+    if (scope.parentId === classDecl.scopeId && scope.kind === 'class' &&
+        scope.range.start.line >= classDecl.range.start.line &&
+        scope.range.end.line <= classDecl.range.end.line) {
+      classBodyScope = scope;
+      break;
+    }
+  }
+  if (!classBodyScope) return false;
+
+  // Direct member of the class body scope
+  if (classBodyScope.declarations.includes(targetDeclId)) return true;
+
+  // Inherited member
+  for (const inheritedScopeId of classBodyScope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedScopeId);
+    if (inheritedScope?.declarations.includes(targetDeclId)) return true;
+  }
+
+  return false;
+}
+
+/**
  * Find all references to a declaration (for find-references).
  */
 export function getReferencesTo(
@@ -1176,12 +1279,29 @@ export function getReferencesTo(
   // be resolved to a specific declaration (untyped access). This ensures
   // rename finds call sites like `d->bark()` even when the arrow reference
   // has resolvesTo=null.
+  //
+  // US-004: filter by declared type when LHS type is known. If LHS resolves
+  // to a class that does NOT contain the target declaration, exclude it.
   const targetDecl = table.declById.get(targetDeclId);
   if (targetDecl) {
     const targetName = targetDecl.name;
     for (const ref of table.references) {
       if (ref.resolvesTo === null && ref.name === targetName &&
           (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
+        if (ref.lhsName) {
+          // Type-aware filtering: check if LHS's declared type contains the target.
+          const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
+          if (lhsDecl?.declaredType) {
+            const typeClass = table.declarations.find(
+              d => d.kind === 'class' && d.name === lhsDecl.declaredType,
+            );
+            if (typeClass) {
+              // Check if target declaration is a member of the LHS's type class.
+              const isMember = isMemberOfClass(table, targetDeclId, typeClass);
+              if (!isMember) continue; // LHS type doesn't contain target — exclude
+            }
+          }
+        }
         results.push(ref);
       }
     }

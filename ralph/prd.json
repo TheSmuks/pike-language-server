@@ -60,7 +60,7 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": "Key file: server/src/features/rename.ts (getRenameLocations). The arrow/dot access references currently use name-based matching. After US-001 wires cross-file types, use resolveMemberAccess to check if the reference's type resolves to the target class."
     },
     {

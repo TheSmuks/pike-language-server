@@ -63,3 +63,22 @@ Thread: N/A (Ralph agent iteration)
   - US-001/US-002/US-003 were one design decision (synthetic scopes) decomposed into three stories
   - When a core wiring change automatically fixes downstream features, mark them together
 ---
+
+## 2026-04-29 - US-004
+Thread: N/A (Ralph agent iteration)
+- Cross-file inherited member rename scope precision
+- Added `lhsName` field to `Reference` interface for arrow/dot access refs
+- Added `extractLhsIdentifier()` helper to drill through postfix_expr tree to find LHS identifier
+- Added `findDeclInScopeAt()` to look up a declaration by name at a line position
+- Added `isMemberOfClass()` to check if a declaration is a member (direct or inherited) of a class
+- Updated `getReferencesTo()` fallback to filter arrow/dot candidates by LHS declared type
+- If LHS has a declared type that resolves to a class, only include the ref if the target declaration is a member of that class
+- If type resolution fails (no declaredType, type not found), fall back to name-based matching
+- Files changed:
+  - server/src/features/symbolTable.ts (Reference.lhsName, extractLhsIdentifier, findDeclInScopeAt, isMemberOfClass, getReferencesTo filter)
+  - tests/lsp/rename.test.ts (1 new test: Dog.bark rename excludes Cat.bark)
+- **Learnings for future iterations:**
+  - classDecl.scopeId is the scope CONTAINING the class declaration (e.g., file scope), NOT the class body scope. The class body scope is a child scope with kind='class'. Use range matching to find it.
+  - postfix_expr children: LHS is a nested postfix_expr, not an identifier. Must drill down through primary_expr → identifier_expr → identifier to get the name.
+  - The Scope interface has a `kind` field ('class', 'function', 'block', etc.) that's useful for identifying scope types
+---
