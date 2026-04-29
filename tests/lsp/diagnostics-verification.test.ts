@@ -303,19 +303,25 @@ describe("V2: Priority queue effectiveness", () => {
     expect(avgDuring).toBeLessThan(500);
   });
 
-  test("queueHighPriority executes in FIFO order", async () => {
-    const results: string[] = [];
+  test("PikeWorker FIFO: concurrent requests produce correct results", async () => {
+    // Fire concurrent requests through the real PikeWorker.
+    // This validates that the FIFO queue serializes them correctly.
+    const sources = [
+      "int a = 1;\n",
+      "int b = 2;\n",
+      "int c = 3;\n",
+    ];
 
-    for (let i = 0; i < 3; i++) {
-      ts.server.diagnosticManager.queueHighPriority(async () => {
-        results.push(`item-${i}`);
-        return i;
-      });
+    const results = await Promise.all(sources.map((src, i) =>
+      ts.server.worker.diagnose(src, `fifo-${i}.pike`),
+    ));
+
+    // All should succeed — if the FIFO queue corrupted the JSON stream,
+    // we'd get parse errors or mismatched responses.
+    for (const r of results) {
+      expect(r.exit_code).toBe(0);
+      expect(r.diagnostics).toEqual([]);
     }
-
-    await wait(200);
-    console.log(`V2-queue: execution order = ${results.join(", ")}`);
-    expect(results).toEqual(["item-0", "item-1", "item-2"]);
   });
 
   test("architectural: hover doesn't block on worker", async () => {

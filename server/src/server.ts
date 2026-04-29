@@ -29,7 +29,7 @@ import {
   CancellationToken,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initParser, parse } from "./parser";
+import { initParser, parse, deleteTree, clearTreeCache } from "./parser";
 import { getDocumentSymbols } from "./features/documentSymbol";
 import { getParseDiagnostics } from "./features/diagnostics";
 import {
@@ -158,7 +158,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (!doc) return null;
 
     try {
-      const tree = parse(doc.getText());
+      const tree = parse(doc.getText(), uri);
       index.upsertFile(uri, doc.version, tree, doc.getText(), ModificationSource.DidChange);
       return index.getSymbolTable(uri);
     } catch (err) {
@@ -227,7 +227,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (!doc) return [];
 
     try {
-      const tree = parse(doc.getText());
+      const tree = parse(doc.getText(), doc.uri);
 
       // Report parse errors as diagnostics.
       const diagnostics = getParseDiagnostics(tree);
@@ -451,7 +451,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
     const doc = documents.get(uri);
     if (!doc) return null;
-    const tree = parse(doc.getText());
+    const tree = parse(doc.getText(), uri);
     if (!tree) return null;
 
     const node = tree.rootNode.descendantForPosition({ row: line, column: character });
@@ -700,7 +700,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (!table || token.isCancellationRequested) return { isIncomplete: false, items: [] };
 
     try {
-      const tree = parse(doc.getText());
+      const tree = parse(doc.getText(), params.textDocument.uri);
       if (token.isCancellationRequested) return { isIncomplete: false, items: [] };
       completionCtx.uri = params.textDocument.uri;
       return getCompletions(table, tree, params.position.line, params.position.character, completionCtx);
@@ -746,6 +746,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     diagnosticManager.dispose();
     index.clear();
     cacheClear();
+    clearTreeCache();
     worker.stop();
   });
 
@@ -757,7 +758,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     const doc = event.document;
 
     try {
-      const tree = parse(doc.getText());
+      const tree = parse(doc.getText(), doc.uri);
 
       // Update workspace index, invalidating dependents
       const invalidated = index.invalidateWithDependents(doc.uri);
@@ -780,9 +781,11 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   documents.onDidClose((event) => {
-    index.removeFile(event.document.uri);
-    pikeCache.delete(event.document.uri);
-    diagnosticManager.onDidClose(event.document.uri);
+    const uri = event.document.uri;
+    deleteTree(uri);
+    index.removeFile(uri);
+    pikeCache.delete(uri);
+    diagnosticManager.onDidClose(uri);
   });
 
   documents.listen(connection);

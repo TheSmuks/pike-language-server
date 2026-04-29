@@ -1,40 +1,25 @@
+/**
+ * Parse diagnostics — converts tree-sitter ERROR nodes to LSP Diagnostics.
+ *
+ * Uses canonical LSP types from vscode-languageserver (decision 0018).
+ */
+
+import {
+  Diagnostic,
+  DiagnosticSeverity,
+  Range,
+  Position,
+} from 'vscode-languageserver/node';
 import { Tree, Node, Point } from 'web-tree-sitter';
 
-// Minimal LSP types — avoids pulling in vscode-languageserver-types just for diagnostics.
-
-export interface Position {
-  line: number;
-  character: number;
-}
-
-export interface Range {
-  start: Position;
-  end: Position;
-}
-
-export enum DiagnosticSeverity {
-  Error = 1,
-  Warning = 2,
-  Information = 3,
-  Hint = 4,
-}
-
-export interface Diagnostic {
-  range: Range;
-  severity: DiagnosticSeverity;
-  source: string;
-  message: string;
-}
+export { Diagnostic, DiagnosticSeverity, Range, Position };
 
 function toPosition(point: Point): Position {
-  return { line: point.row, character: point.column };
+  return Position.create(point.row, point.column);
 }
 
 function toRange(node: Node): Range {
-  return {
-    start: toPosition(node.startPosition),
-    end: toPosition(node.endPosition),
-  };
+  return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
 }
 
 function findErrorNodes(node: Node): Node[] {
@@ -57,11 +42,12 @@ export function getParseDiagnostics(tree: Tree): Diagnostic[] {
     const message = unexpected
       ? `Parse error: unexpected ${unexpected}`
       : 'Parse error';
-    return {
-      range: toRange(node),
-      severity: DiagnosticSeverity.Error,
-      source: 'pike-lsp',
+    return Diagnostic.create(
+      toRange(node),
       message,
-    };
+      DiagnosticSeverity.Error,
+      undefined,
+      'pike-lsp',
+    );
   });
 }
