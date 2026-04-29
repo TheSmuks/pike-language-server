@@ -173,7 +173,7 @@ function resolveQualifiedType(
     return {
       decl: syntheticDecl,
       uri: `stdlib://${typeName}`,
-      table: { declarations: [], scopes: [], references: [], nextDeclId: 0, nextScopeId: 0, uri: `stdlib://${typeName}`, version: 0 } as unknown as import("./symbolTable").SymbolTable,
+      table: { declarations: [], scopes: [], references: [], declById: new Map(), scopeById: new Map(), uri: `stdlib://${typeName}`, version: 0 },
     };
   }
 
@@ -232,7 +232,7 @@ function findMemberInClass(
 
   // Look for the member in the class scope's declarations
   for (const declId of classScope.declarations) {
-    const decl = table.declarations.find(d => d?.id === declId);
+    const decl = table.declById.get(declId);
     if (decl && decl.name === memberName) return decl;
   }
 
@@ -254,11 +254,11 @@ function findMemberInInheritedScopes(
   if (!classScope) return null;
 
   for (const inheritedId of classScope.inheritedScopes) {
-    const inheritedScope = table.scopes.find(s => s.id === inheritedId);
+    const inheritedScope = table.scopeById.get(inheritedId);
     if (!inheritedScope) continue;
 
     for (const declId of inheritedScope.declarations) {
-      const decl = table.declarations.find(d => d?.id === declId);
+      const decl = table.declById.get(declId);
       if (decl && decl.name === memberName) return decl;
     }
   }

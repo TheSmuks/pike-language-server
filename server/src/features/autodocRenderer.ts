@@ -229,7 +229,6 @@ function renderType(node: XmlNode): string {
       return "bool";
     case "zero":
       return "zero";
-      return "bool";
     case "object": {
       const cls = node.attrs?.["class"] ?? node.children?.map(renderType).join("");
       return cls ? `object(${cls})` : "object";

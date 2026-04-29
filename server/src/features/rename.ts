@@ -18,6 +18,7 @@
 import {
   type Declaration,
   type Reference,
+  type SymbolTable,
   getDefinitionAt,
   getReferencesTo,
 } from "./symbolTable";
@@ -122,7 +123,7 @@ export type ProtectedNames = ReadonlySet<string>;
  * 4. Build the list of all locations (declaration + references)
  */
 export function getRenameLocations(
-  table: { uri: string; declarations: Declaration[]; references: Reference[] },
+  table: SymbolTable,
   uri: string,
   line: number,
   character: number,
@@ -130,7 +131,7 @@ export function getRenameLocations(
   protectedNames?: ProtectedNames,
 ): RenameResult | null {
   // Find the declaration at cursor
-  const decl = getDefinitionAt(table as any, line, character);
+  const decl = getDefinitionAt(table, line, character);
   if (!decl) {
     return null;
   }
@@ -172,7 +173,7 @@ export function getRenameLocations(
   }
 
   // Same-file references
-  const refs = getReferencesTo(table as any, line, character);
+  const refs = getReferencesTo(table, line, character);
   for (const ref of refs) {
     // Skip the declaration site (first element is always the declaration)
     if (ref.loc.line === decl.nameRange.start.line &&
@@ -228,13 +229,13 @@ export function buildWorkspaceEdit(
  * Rejects: positions with no symbol, stdlib/predef symbols, Pike keywords.
  */
 export function prepareRename(
-  table: { uri: string; declarations: Declaration[]; references: Reference[] },
+  table: SymbolTable,
   line: number,
   character: number,
   protectedNames?: ProtectedNames,
 ): PrepareRenameResult | null {
   // Try to find a declaration at or referenced from this position
-  const decl = getDefinitionAt(table as any, line, character);
+  const decl = getDefinitionAt(table, line, character);
   if (!decl) {
     return null;
   }

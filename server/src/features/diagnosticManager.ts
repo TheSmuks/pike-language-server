@@ -37,7 +37,7 @@ export interface DiagnosticManagerOptions {
   connection: Connection;
   index: WorkspaceIndex;
   /** Pike cache (shared with server.ts for LRU eviction). */
-  pikeCache: Map<string, PikeCacheEntry>;
+  pikeCache: { get(key: string): PikeCacheEntry | undefined };
   /** Function to update the LRU cache. */
   cacheSet: (uri: string, entry: PikeCacheEntry) => void;
   /** Debounce interval in ms. Default: 500. */
@@ -82,7 +82,7 @@ export class DiagnosticManager {
   private readonly documents: TextDocuments<TextDocument>;
   private readonly connection: Connection;
   private index: WorkspaceIndex;
-  private readonly pikeCache: Map<string, PikeCacheEntry>;
+  private readonly pikeCache: { get(key: string): PikeCacheEntry | undefined };
   private readonly cacheSet: (uri: string, entry: PikeCacheEntry) => void;
   private readonly debounceMs: number;
   private readonly staleMs: number;
@@ -146,8 +146,9 @@ export class DiagnosticManager {
           diagnostics: getParseDiagnostics(tree),
         });
       }
-    } catch {
-      // Parse failure — don't crash the manager
+    } catch (err) {
+      // Parse failure — log but don't crash the manager
+      this.connection.console.error(`parse failed for ${uri}: ${(err as Error).message}`);
     }
 
     if (this.mode !== "realtime") return;

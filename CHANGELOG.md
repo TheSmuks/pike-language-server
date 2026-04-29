@@ -1,5 +1,26 @@
 ## [Unreleased]
 
+### Changed
+
+- Systematic refactoring across 12 files addressing correctness, structural, error handling, and dead code issues:
+  - Rewrote `detectPikePaths()` to use `pike --show-paths` for actual paths instead of hardcoded defaults
+  - Extracted access resolution into new `server/src/features/accessResolver.ts` with `ResolutionContext` interface
+  - Added generic `LRUCache<T>` (`server/src/util/lruCache.ts`) with max entries, max bytes, and `onEvict` callback; integrated into parser and server
+  - Added `declById`/`scopeById` indexed maps to `SymbolTable` for O(1) lookups (replaced 21 O(n) array scans)
+  - Fixed shared `completionCtx.uri` mutation with per-request context spread
+  - Added malformed response counter in `PikeWorker` with auto-restart threshold
+  - Log parse failures in `DiagnosticManager.onDidChange`
+  - Clear pending request timeouts in `PikeWorker.restart()`
+
+### Removed
+
+- Dead `return "bool"` after `case "zero"` in `autodocRenderer.ts`
+- Unsafe `as unknown as` cast on synthetic `SymbolTable` in `typeResolver.ts`
+- `table as any` casts in `rename.ts` (replaced with proper `SymbolTable` type)
+- Dead `buildStdlibLookupKeys` and `formatSignature` helpers from `server.ts`
+- Unused `fileScopeId` variable in `symbolTable.ts`
+- Unused `buildSymbolTableAsync`, `yieldToEventLoop`, and `YIELD_THRESHOLD` from `symbolTable.ts`
+
 ### Added
 
 - `server/src/features/rename.ts` — stdlib/predef protected symbol rejection: `prepareRename()` and `getRenameLocations()` now reject rename targets matching 283 predef builtins or 5,471 stdlib short names, preventing accidental breakage of shadowed stdlib symbols
