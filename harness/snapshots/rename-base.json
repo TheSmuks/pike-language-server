@@ -1,0 +1,36 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/rename-base.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "DEFAULT_COLOR"
+    },
+    {
+      "kind": "class",
+      "line": 8,
+      "members": [
+        {
+          "kind": "function",
+          "name": "area"
+        },
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        }
+      ],
+      "name": "BaseShape"
+    }
+  ]
+}
