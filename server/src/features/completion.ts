@@ -820,7 +820,9 @@ function resolveTypeMembers(
   // If the declaration is a class, find its class scope
   if (decl.kind === "class") {
     const classScope = table.scopes.find(s =>
-      s.kind === "class" && containsDecl(s, decl),
+      s.kind === "class" &&
+      s.parentId === decl.scopeId &&
+      rangeContains(s.range, decl.nameRange.start),
     );
     if (classScope) {
       const classDecls = getDeclarationsInScope(table, classScope.id);
@@ -867,10 +869,6 @@ function resolveTypeMembers(
   }
 
   return items;
-}
-
-function containsDecl(scope: { declarations: number[] }, decl: Declaration): boolean {
-  return scope.declarations.includes(decl.id);
 }
 
 

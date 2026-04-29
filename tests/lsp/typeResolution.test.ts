@@ -477,3 +477,65 @@ describe("resolveType — qualified types", () => {
     expect(resolveType("NonExistent.Module", ctx)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Depth limit
+// ---------------------------------------------------------------------------
+
+describe("resolveType depth limit", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("resolveType returns null when depth exceeds MAX_RESOLUTION_DEPTH", () => {
+    // Build a symbol table with a chain of classes that reference each other:
+    //   class A { A next; }
+    //   class B { B next; }
+    //   ... (enough to exceed depth 5 via member access chain)
+    //
+    // resolveType itself only recurses through resolveMemberAccess.
+    // The direct depth guard is tested by calling resolveType with depth=5.
+    const src = "class A {}";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/depth.pike", 1);
+    const ctx = makeTypeCtx(table);
+
+    // Calling resolveType with depth >= MAX_RESOLUTION_DEPTH should return null
+    // even if the type exists, because the depth guard fires before any lookup.
+    const result = resolveType("A", ctx, 5);
+    expect(result).toBeNull();
+  });
+
+  test("resolveMemberAccess terminates at depth limit", () => {
+    // Build: class Wrapper { Wrapper inner; }
+    // Resolving inner->inner->inner->... should terminate at depth 5.
+    const src = "class Wrapper { Wrapper inner; void fetch() {} }";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/depth-member.pike", 1);
+    wireInheritance(table);
+    const ctx = makeTypeCtx(table);
+
+    // Get the inner declaration
+    const innerDecl = table.declarations.find(d => d.name === "inner");
+    expect(innerDecl).toBeDefined();
+    expect(innerDecl!.declaredType).toBe("Wrapper");
+
+    // Resolving member access at depth 5 should return null
+    const result = resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 5);
+    expect(result).toBeNull();
+  });
+
+  test("resolveMemberAccess works within depth limit", () => {
+    const src = "class Wrapper { Wrapper inner; void fetch() {} }";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/depth-ok.pike", 1);
+    wireInheritance(table);
+    const ctx = makeTypeCtx(table);
+
+    const innerDecl = table.declarations.find(d => d.name === "inner");
+    // Depth 0 should work: inner is Wrapper -> resolve Wrapper -> find fetch
+    const result = resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 0);
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("fetch");
+  });
+});

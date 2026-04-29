@@ -145,4 +145,26 @@ Type resolution only works for variables and parameters with explicit type annot
 
 ### No inference through function return types
 
+### No inference through function return types
+
 If a function returns `Animal`, calling `f()->speak()` cannot resolve `speak` because the return type is not tracked. Only direct declared types on variables and parameters are used.
+
+## Phase 8: Rename Limitations
+
+### Cross-file inherited member completion not supported
+
+When `Dog` inherits from `Animal` where `Animal` is defined in another file, `Dog d; d->` returns only `Dog`'s own members. `wireInheritance()` only resolves same-file inheritance — cross-file inherited scopes remain empty in the symbol table.
+
+**Impact**: Cross-file inherited methods like `speak()` (from `Animal` in file A) won't appear in completion for `d->` in file B. Same-file inherited methods work correctly.
+
+**Fix**: Requires WorkspaceIndex to wire cross-file inheritance during indexing, which is a larger architectural change.
+
+### Arrow/dot access rename uses name-based matching for unresolved references
+
+When renaming `bark()` on class `Dog`, all `->bark` call sites are included regardless of the object's type. If another class also has a `bark()` method, `otherObj->bark()` would be renamed too.
+
+**Impact**: Low in practice — different classes rarely share method names in the same scope, and the rename preview allows users to verify before applying.
+
+### Rename does not rename through function return types
+
+If `makeDog()` returns `Dog`, renaming `Dog` class won't update the return type annotation of `makeDog()`. Type annotation renaming is not implemented.

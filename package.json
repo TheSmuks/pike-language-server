@@ -3,9 +3,13 @@
   "version": "0.1.0-alpha",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
+  "bin": {
+    "pike-language-server": "./bin/pike-language-server"
+  },
   "scripts": {
     "build": "tsc",
     "build:extension": "esbuild server/src/server.ts --bundle --outfile=server/dist/server.js --platform=node --target=node22 --format=esm --sourcemap --external:vscode --external:vscode-* && esbuild client/extension.ts --bundle --outfile=client/dist/extension.js --platform=node --target=node22 --format=esm --sourcemap --external:vscode",
+    "build:standalone": "scripts/build-standalone.sh",
     "test": "bun test",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
