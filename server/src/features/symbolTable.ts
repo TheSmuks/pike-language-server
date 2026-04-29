@@ -208,6 +208,65 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number): Symb
   return table;
 }
 
+/** Node count threshold above which we yield between passes. */
+const YIELD_THRESHOLD = 1000;
+
+function yieldToEventLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
+ * Async variant of buildSymbolTable.
+ * Yields to the event loop between passes for large trees,
+ * preventing main-thread blocking on shared SSH servers.
+ */
+export async function buildSymbolTableAsync(
+  tree: Tree,
+  uri: string,
+  version: number,
+): Promise<SymbolTable> {
+  const nodeCount = tree.rootNode.descendantCount;
+  const shouldYield = nodeCount >= YIELD_THRESHOLD;
+
+  const state: BuildState = {
+    nextId: 0,
+    declarations: [],
+    references: [],
+    scopes: [],
+    scopeMap: new Map(),
+    declMap: new Map(),
+    scopeStack: [],
+  };
+
+  // Pass 1: declarations + scope tree
+  const fileScopeId = pushScope(state, 'file', toRange(tree.rootNode));
+  collectDeclarations(tree.rootNode, state);
+  popScope(state);
+
+  if (shouldYield) await yieldToEventLoop();
+
+  // Pass 2: build the table
+  const table: SymbolTable = {
+    uri,
+    version,
+    declarations: state.declarations,
+    references: [],
+    scopes: state.scopes,
+  };
+
+  // Pass 3: wire inheritance BEFORE reference resolution
+  wireInheritance(table);
+
+  if (shouldYield) await yieldToEventLoop();
+
+  // Pass 4: collect and resolve references
+  state.references = table.references;
+  collectReferences(tree.rootNode, state);
+  table.references = state.references;
+
+  return table;
+}
+
 // ---------------------------------------------------------------------------
 // Pass 1: Declaration collection
 // ---------------------------------------------------------------------------

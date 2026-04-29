@@ -156,25 +156,26 @@ describe("Tier 1: Workspace AutoDoc hover", () => {
 // ---------------------------------------------------------------------------
 
 describe("Tier 2: Stdlib hover", () => {
-  test("stdlib symbol from pre-computed index", async () => {
-    const uri = "file:///test/stdlib-usage.pike";
-    // "write" is a well-known predef function
-    const source = "write(\"hello\");";
+  test("predef builtin hover shows type signature", async () => {
+    // Declare a local variable with the same name as a predef builtin,
+    // then hover over a reference to it. This exercises the Tier 2b
+    // predef builtins lookup inside declForHover.
+    const uri = "file:///test/predef-hover.pike";
+    const source = "int write(int x) { return x; }\nint y = write(1);";
     server.openDoc(uri, source);
 
+    // Hover over the call to write() on line 1
     const result = await server.client.sendRequest(
       "textDocument/hover",
-      { textDocument: { uri }, position: { line: 0, character: 0 } },
+      { textDocument: { uri }, position: { line: 1, character: 8 } },
     ) as HoverResult | null;
 
-    // The stdlib index should have predef.write
-    // If it doesn't match (because tree-sitter doesn't resolve "write" as a declaration),
-    // we get null — that's acceptable for this test
-    if (result) {
-      // Either from stdlib index or tree-sitter fallback
-      expect(result.contents.value).toBeDefined();
-    }
-    // This test verifies the lookup path doesn't crash
+    // The local function 'write' should be resolved by tree-sitter
+    // and produce a hover result (Tier 3 at minimum — bare signature).
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toBeDefined();
+    // Should contain the function signature
+    expect(result!.contents.value).toContain("function");
   });
 });
 

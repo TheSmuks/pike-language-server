@@ -1,6 +1,10 @@
 ## [Unreleased]
 
 ### Added
+- `server/src/features/symbolTable.ts` — `buildSymbolTableAsync()` for event-loop yielding on large files (>= 1000 nodes)
+- `server/src/server.ts` — `workspace/didChangeWatchedFiles` capability with dynamic watcher registration for `.pike` and `.pmod` files
+- `decisions/0014-audit-remediation-and-incremental-parsing.md` — architecture decision record for audit fixes
+
 
 - `server/src/parser.ts` — `deleteTree(uri)`, `getCachedTree(uri)`, `clearTreeCache()` for tree cache lifecycle
 - `decisions/0018-incremental-parsing-and-ipc-security.md` — architecture decision record
@@ -11,6 +15,9 @@
 
 ### Changed
 
+- `harness/worker.pike` — `handle_typeof` hardened with character whitelist, balanced-parentheses check, dangerous-identifier rejection, and 200-char length limit
+- `server/src/server.ts` — `autodocCache` now has independent 5 MB size cap with LRU eviction
+- `server/src/server.ts` — `getSymbolTable` and `upsertFile` callers properly await async operations
 - `server/src/parser.ts` — incremental tree-sitter parsing with LRU tree cache (50 entries / 50 MB ceiling), `parse(source, uri)` passes old tree for diff-based re-parsing
 - `server/src/features/pikeWorker.ts` — strict FIFO queue serializing all worker calls, stdin backpressure via `drain` event, process-exit race fix
 - `harness/worker.pike` — `typeof` handler rejects `;\n\r` in expressions, uses function wrapper instead of raw variable interpolation
@@ -25,6 +32,8 @@
 
 ### Fixed
 
+- `tests/lsp/hover.test.ts` — stdlib hover test now asserts unconditionally (no more `if (result)` maybe-assertion)
+- `tests/lsp/diagnostics.test.ts` — cross-file propagation test uses real corpus files and real workspace root instead of virtual URIs
 - `resolveTypeMembers()` in completion.ts used broken `containsDecl()` for class scope lookup —
   class-name dot completion (`Animal.`) returned nothing. Fixed to use `parentId + rangeContains`.
 - Cross-file rename excluded inherited symbol references because `getCrossFileReferences()` filtered by

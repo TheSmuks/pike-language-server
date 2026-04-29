@@ -27,6 +27,8 @@ import {
   CompletionItem,
   CompletionList,
   CancellationToken,
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { initParser, parse, deleteTree, clearTreeCache } from "./parser";
@@ -94,6 +96,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   const CACHE_MAX_ENTRIES = 50;
   const CACHE_MAX_BYTES = 25 * 1024 * 1024;
   let cacheTotalBytes = 0;
+  const AUTODOC_CACHE_MAX_BYTES = 5 * 1024 * 1024;
+  let autodocCacheBytes = 0;
 
   function cacheSet(uri: string, entry: PikeCacheEntry): void {
     if (pikeCache.size >= CACHE_MAX_ENTRIES) {
@@ -122,6 +126,8 @@ export function createPikeServer(connection: Connection): PikeServer {
       const old = pikeCache.get(oldestKey);
       if (old) cacheTotalBytes -= JSON.stringify(old).length;
       pikeCache.delete(oldestKey);
+      const autodocEntry = autodocCache.get(oldestKey);
+      if (autodocEntry) autodocCacheBytes -= autodocEntry.xml.length;
       autodocCache.delete(oldestKey);
     }
   }
@@ -130,6 +136,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     pikeCache.clear();
     autodocCache.clear();
     cacheTotalBytes = 0;
+    autodocCacheBytes = 0;
   }
 
   // Workspace index — initialized in onInitialize with the workspace root.
@@ -173,9 +180,14 @@ export function createPikeServer(connection: Connection): PikeServer {
   // Initialization
   // -----------------------------------------------------------------------
 
+  // Track whether the client supports dynamic file watcher registration
+  let clientSupportsWatchedFiles = false;
+
   connection.onInitialize((params: InitializeParams) => {
     const rootUri = params.rootUri ?? params.rootPath ?? "";
     const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
+    clientSupportsWatchedFiles =
+      params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
     index = new WorkspaceIndex({ workspaceRoot: rootPath });
     diagnosticManager.setIndex(index);
 
@@ -203,6 +215,11 @@ export function createPikeServer(connection: Connection): PikeServer {
         completionProvider: {
           triggerCharacters: ['.', '>', ':'],
         },
+        workspace: {
+          fileOperations: {
+            didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
+          },
+        },
       },
     } satisfies InitializeResult;
   });
@@ -215,6 +232,50 @@ export function createPikeServer(connection: Connection): PikeServer {
       connection.console.error(
         `Pike LSP: parser init failed: ${(err as Error).message}`,
       );
+    }
+
+    // Register file watchers for .pike and .pmod files.
+    // Enables notifications when files change externally
+    // (git checkout, file creation/deletion outside the editor).
+    // Only register if the client supports dynamic registration;
+    // the test harness does not, and calling register() on it
+    // causes an unhandled JSON-RPC error.
+    if (clientSupportsWatchedFiles) {
+      connection.client.register(
+        DidChangeWatchedFilesNotification.type,
+        {
+          watchers: [
+            { globPattern: '**/*.pike' },
+            { globPattern: '**/*.pmod' },
+          ],
+        },
+      ).catch(() => {
+        // Registration may still fail (e.g., client rejects it)
+      });
+    }
+  });
+
+  connection.onDidChangeWatchedFiles((params) => {
+    for (const event of params.changes) {
+      const uri = event.uri;
+      switch (event.type) {
+        case FileChangeType.Created:
+        case FileChangeType.Changed: {
+          // Invalidate cached data so it gets re-indexed on next access
+          index.removeFile(uri);
+          pikeCache.delete(uri);
+          autodocCache.delete(uri);
+          break;
+        }
+        case FileChangeType.Deleted: {
+          index.removeFile(uri);
+          deleteTree(uri);
+          pikeCache.delete(uri);
+          autodocCache.delete(uri);
+          diagnosticManager.onDidClose(uri);
+          break;
+        }
+      }
     }
   });
 
@@ -728,10 +789,28 @@ export function createPikeServer(connection: Connection): PikeServer {
       const filepath = doc.uri.startsWith("file://") ? doc.uri.slice(7) : doc.uri;
       worker.autodoc(source, filepath).then(result => {
         if (result.xml) {
-          if (autodocCache.size >= CACHE_MAX_ENTRIES) {
-            cacheEvictOldest();
+          const entrySize = result.xml.length;
+          // Evict until we have room under the autodoc byte ceiling
+          while (autodocCacheBytes + entrySize > AUTODOC_CACHE_MAX_BYTES && autodocCache.size > 0) {
+            // Find oldest autodoc entry
+            let oldestKey: string | null = null;
+            let oldestTime = Infinity;
+            for (const [key, entry] of autodocCache) {
+              if (entry.timestamp < oldestTime) {
+                oldestTime = entry.timestamp;
+                oldestKey = key;
+              }
+            }
+            if (oldestKey) {
+              const removed = autodocCache.get(oldestKey)!;
+              autodocCacheBytes -= removed.xml.length;
+              autodocCache.delete(oldestKey);
+            } else break;
           }
+          const old = autodocCache.get(doc.uri);
+          if (old) autodocCacheBytes -= old.xml.length;
           autodocCache.set(doc.uri, { xml: result.xml, hash: autodocHash, timestamp: Date.now() });
+          autodocCacheBytes += entrySize;
         }
       }).catch(() => {}); // Non-critical
     }
