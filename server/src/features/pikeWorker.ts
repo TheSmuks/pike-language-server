@@ -1,13 +1,15 @@
 /**
  * PikeWorker: manages a Pike subprocess for diagnostics and type queries.
  *
- * Architecture (decision 0011 — shared-server deployment):
+ * Architecture (decision 0018 — shared-server deployment):
  * - One Pike process per LSP server instance
- * - Communication over stdio using JSON protocol
+ * - Communication over stdio using JSON protocol (newline-delimited)
+ * - Strict FIFO queue: ALL calls serialized through a single queue.
+ *   No concurrent writes to stdin — exactly one request in flight at a time.
+ * - stdin backpressure: writes wait for drain when the pipe buffer fills.
  * - Idle eviction: kill after N minutes of no requests (default 5)
  * - Memory ceiling: restart after N requests or M minutes of active use
  * - CPU politeness: spawned with nice +5 on Linux
- * - FIFO queueing: one request at a time, no pipelining
  * - Timeout: 5s per request (configurable), surfaced as diagnostic on timeout
  * - Lazy start (on first request)
  * - Content-hash caching (via caller, with LRU eviction)
@@ -83,6 +85,17 @@ interface PikeResponse {
 }
 
 // ---------------------------------------------------------------------------
+// FIFO queue item
+// ---------------------------------------------------------------------------
+
+interface QueueItem {
+  payload: string;
+  resolve: (response: PikeResponse) => void;
+  reject: (error: Error) => void;
+  timeout: ReturnType<typeof setTimeout>;
+}
+
+// ---------------------------------------------------------------------------
 // PikeWorker class
 // ---------------------------------------------------------------------------
 
@@ -101,6 +114,10 @@ export class PikeWorker {
   private restarting = false;
   private readonly config: PikeWorkerConfig;
 
+  // FIFO queue — ensures exactly one write to stdin at a time
+  private readonly queue: QueueItem[] = [];
+  private sending = false;
+
   // Idle eviction
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private lastRequestTime = 0;
@@ -116,10 +133,6 @@ export class PikeWorker {
   /** Start the Pike worker process (lazy — called on first request). */
   start(): void {
     if (this.proc && !this.proc.killed) return;
-
-    // Build spawn args with nice
-    const spawnArgs: string[] = [];
-    const spawnCmd: string = "pike";
 
     // On Linux, use nice for CPU politeness under contention
     let finalCmd: string;
@@ -150,9 +163,12 @@ export class PikeWorker {
       }
     });
 
+    const exitingProc = this.proc;
     this.proc.on("exit", (code, signal) => {
       this.clearIdleTimer();
-      if (!this.restarting) {
+      // Only reject pending if this is the CURRENT proc (not an old one
+      // that was killed during a restart cycle)
+      if (!this.restarting && this.proc === exitingProc) {
         const error = new Error(
           `Pike worker exited (code=${code}, signal=${signal})`,
         );
@@ -161,6 +177,13 @@ export class PikeWorker {
           pending.reject(error);
         }
         this.pending.clear();
+        // Also reject everything still in the queue
+        for (const item of this.queue) {
+          clearTimeout(item.timeout);
+          item.reject(error);
+        }
+        this.queue.length = 0;
+        this.sending = false;
         this.proc = null;
       }
     });
@@ -177,6 +200,8 @@ export class PikeWorker {
       this.proc.kill("SIGTERM");
       this.proc = null;
     }
+    this.queue.length = 0;
+    this.sending = false;
   }
 
   /** Check if the worker is alive. */
@@ -189,25 +214,34 @@ export class PikeWorker {
     return this.requestCount;
   }
 
-  /** Send a request and wait for the response. */
-  async request(method: string, params: Record<string, unknown> = {}): Promise<PikeResponse> {
-    // Check if forced restart is needed before starting
+  // -----------------------------------------------------------------------
+  // FIFO-queued request — all public methods go through this
+  // -----------------------------------------------------------------------
+
+  /**
+   * Enqueue a request.  The queue guarantees that at most one request is
+   * written to stdin at any time.  Returns a promise that resolves with
+   * the Pike worker's response.
+   */
+  private enqueue(method: string, params: Record<string, unknown> = {}): Promise<PikeResponse> {
+    // Check if forced restart is needed before queuing
     if (this.shouldForceRestart()) {
+      this.restarting = true;
       try {
-        await this.restart();
+        this.stop();
+        this.start();
       } catch {
-        // If restart fails, try a fresh start
         this.start();
       }
+      this.restarting = false;
     }
 
-    this.start(); // Lazy start
-
-    // Track request count for memory ceiling
-    this.requestCount++;
+    this.start(); // Lazy start (no-op if already running)
 
     const id = ++this.requestId;
+    this.requestCount++;
     const request: PikeRequest = { id, method, params };
+    const payload = JSON.stringify(request) + "\n";
 
     // Reset idle timer
     this.resetIdleTimer();
@@ -215,16 +249,115 @@ export class PikeWorker {
 
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
+        // Remove from pending map (may already be resolved)
         this.pending.delete(id);
+        // Also remove from queue if not yet sent
+        const queueIdx = this.queue.findIndex(item =>
+          item.payload === payload
+        );
+        if (queueIdx !== -1) {
+          this.queue.splice(queueIdx, 1);
+        }
         reject(new Error(`TIMEOUT: Pike worker timeout for ${method} (id=${id})`));
       }, this.config.requestTimeoutMs);
 
-      this.pending.set(id, { resolve, reject, timeout });
+      const item: QueueItem = {
+        payload,
+        resolve: (response: PikeResponse) => {
+          clearTimeout(timeout);
+          resolve(response);
+        },
+        reject: (error: Error) => {
+          clearTimeout(timeout);
+          reject(error);
+        },
+        timeout,
+      };
 
-      const payload = JSON.stringify(request) + "\n";
-      this.proc!.stdin!.write(payload);
+      // Register in pending map so processBuffer can resolve it
+      this.pending.set(id, {
+        resolve: item.resolve,
+        reject: item.reject,
+        timeout: item.timeout,
+      });
+
+      this.queue.push(item);
+      this.drainQueue();
     });
   }
+
+  /**
+   * Drain the FIFO queue.  Sends exactly one item at a time.
+   * Handles stdin backpressure by waiting for the drain event.
+   */
+  private drainQueue(): void {
+    if (this.sending || this.queue.length === 0) return;
+    if (!this.proc || this.proc.killed) return;
+
+    this.sending = true;
+    const item = this.queue.shift()!;
+
+    this.writeToStdin(item.payload).then(
+      () => {
+        // Write succeeded — response will be resolved by processBuffer
+        // via the pending map.  Allow next item to be sent.
+        this.sending = false;
+        this.drainQueue();
+      },
+      (err) => {
+        // Write failed — reject this item
+        item.reject(err instanceof Error ? err : new Error(String(err)));
+        this.sending = false;
+        this.drainQueue();
+      },
+    );
+  }
+
+  /**
+   * Write a payload to stdin, respecting backpressure.
+   * If the write returns false (buffer full), wait for the drain event.
+   */
+  private writeToStdin(payload: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (!this.proc || this.proc.killed || !this.proc.stdin) {
+        reject(new Error("Pike worker process not available"));
+        return;
+      }
+
+      const stdin = this.proc.stdin;
+
+      // If the write buffer is full, wait for drain
+      if (stdin.writableLength > 0 && !stdin.write(payload)) {
+        const onDrain = () => {
+          cleanup();
+          resolve();
+        };
+        const onError = (err: Error) => {
+          cleanup();
+          reject(err);
+        };
+        const cleanup = () => {
+          stdin.removeListener("drain", onDrain);
+          stdin.removeListener("error", onError);
+        };
+        stdin.once("drain", onDrain);
+        stdin.once("error", onError);
+      } else {
+        // Write succeeded immediately or buffer not full
+        stdin.write(payload, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      }
+    });
+  }
+
+  // -----------------------------------------------------------------------
+  // Public API — all delegate to enqueue()
+  // -----------------------------------------------------------------------
 
   /** Diagnose a source file. */
   async diagnose(
@@ -238,7 +371,7 @@ export class PikeWorker {
     },
   ): Promise<DiagnoseResult> {
     try {
-      const response = await this.request("diagnose", {
+      const response = await this.enqueue("diagnose", {
         source,
         file: filepath,
         strict: options?.strict ?? false,
@@ -267,7 +400,7 @@ export class PikeWorker {
 
   /** Extract AutoDoc XML from Pike source. */
   async autodoc(source: string, file?: string): Promise<AutodocResult> {
-    const response = await this.request("autodoc", {
+    const response = await this.enqueue("autodoc", {
       source,
       file: file ?? "<autodoc>",
     });
@@ -281,7 +414,7 @@ export class PikeWorker {
 
   /** Get the type of an expression in context. */
   async typeof_(source: string, expression: string): Promise<TypeofResult> {
-    const response = await this.request("typeof", {
+    const response = await this.enqueue("typeof", {
       source,
       expression,
     });
@@ -295,7 +428,7 @@ export class PikeWorker {
 
   /** Health check. */
   async ping(): Promise<{ status: string; pike_version: string }> {
-    const response = await this.request("ping");
+    const response = await this.enqueue("ping");
     if (response.error) {
       throw new Error(`Pike ping failed: ${response.error.message}`);
     }
@@ -390,7 +523,9 @@ export class PikeWorker {
           pending.resolve(response);
         }
       } catch {
-        // Ignore malformed responses
+        // Ignore malformed responses — the Pike process may write debug
+        // output. Log in development but don't crash.
+        console.error("[pike-worker] Ignoring malformed response:", line.slice(0, 200));
       }
     }
   }

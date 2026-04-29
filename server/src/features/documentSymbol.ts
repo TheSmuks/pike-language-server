@@ -1,58 +1,29 @@
+/**
+ * DocumentSymbol provider — converts tree-sitter AST to LSP DocumentSymbol[].
+ *
+ * Uses canonical LSP types from vscode-languageserver (decision 0018).
+ */
+
+import {
+  DocumentSymbol,
+  SymbolKind,
+  Range,
+  Position,
+} from 'vscode-languageserver/node';
 import { Tree, Node, Point } from 'web-tree-sitter';
 
-// Minimal LSP types for documentSymbol. Keep in sync with diagnostics.ts until
-// a shared types module is introduced.
-
-export interface Position {
-  line: number;
-  character: number;
-}
-
-export interface Range {
-  start: Position;
-  end: Position;
-}
-
-export enum SymbolKind {
-  File = 1,
-  Module = 2,
-  Namespace = 3,
-  Package = 4,
-  Class = 5,
-  Method = 6,
-  Property = 7,
-  Field = 8,
-  Constructor = 9,
-  Enum = 10,
-  Interface = 11,
-  Function = 12,
-  Variable = 13,
-  Constant = 14,
-  EnumMember = 22,
-  TypeParameter = 26,
-}
-
-export interface DocumentSymbol {
-  name: string;
-  kind: SymbolKind;
-  range: Range;
-  selectionRange: Range;
-  children?: DocumentSymbol[];
-}
+export { DocumentSymbol, SymbolKind };
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function toPosition(point: Point): Position {
-  return { line: point.row, character: point.column };
+  return Position.create(point.row, point.column);
 }
 
 function toRange(node: Node): Range {
-  return {
-    start: toPosition(node.startPosition),
-    end: toPosition(node.endPosition),
-  };
+  return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
 }
 
 function nameRange(nameNode: Node | null, fallback: Node): Range {
@@ -74,13 +45,14 @@ function symbolsFromClassDecl(node: Node): DocumentSymbol[] {
   const body = node.childForFieldName('body');
   const children = body ? collectSymbols(body) : [];
   return [
-    {
-      name: nameNode.text,
-      kind: SymbolKind.Class,
-      range: toRange(node),
-      selectionRange: nameRange(nameNode, node),
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.Class,
+      toRange(node),
+      nameRange(nameNode, node),
       children,
-    },
+    ),
   ];
 }
 
@@ -88,35 +60,42 @@ function symbolsFromFunctionDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous — skip
   return [
-    {
-      name: nameNode.text,
-      kind: SymbolKind.Function,
-      range: toRange(node),
-      selectionRange: nameRange(nameNode, node),
-    },
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.Function,
+      toRange(node),
+      nameRange(nameNode, node),
+    ),
   ];
 }
 
 function symbolsFromVariableDecl(node: Node): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
-  return names.map((nameNode) => ({
-    name: nameNode.text,
-    kind: SymbolKind.Variable,
-    range: toRange(node),
-    selectionRange: toRange(nameNode),
-  }));
+  return names.map((nameNode) =>
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.Variable,
+      toRange(node),
+      toRange(nameNode),
+    ),
+  );
 }
 
 function symbolsFromConstantDecl(node: Node): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
-  return names.map((nameNode) => ({
-    name: nameNode.text,
-    kind: SymbolKind.Constant,
-    range: toRange(node),
-    selectionRange: toRange(nameNode),
-  }));
+  return names.map((nameNode) =>
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.Constant,
+      toRange(node),
+      toRange(nameNode),
+    ),
+  );
 }
 
 function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
@@ -127,23 +106,27 @@ function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
     if (child.type === 'enum_member') {
       const memberName = child.childForFieldName('name');
       if (memberName) {
-        members.push({
-          name: memberName.text,
-          kind: SymbolKind.EnumMember,
-          range: toRange(child),
-          selectionRange: toRange(memberName),
-        });
+        members.push(
+          DocumentSymbol.create(
+            memberName.text,
+            undefined,
+            SymbolKind.EnumMember,
+            toRange(child),
+            toRange(memberName),
+          ),
+        );
       }
     }
   }
   return [
-    {
-      name: nameNode.text,
-      kind: SymbolKind.Enum,
-      range: toRange(node),
-      selectionRange: nameRange(nameNode, node),
-      children: members,
-    },
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.Enum,
+      toRange(node),
+      nameRange(nameNode, node),
+      members,
+    ),
   ];
 }
 
@@ -151,12 +134,13 @@ function symbolsFromImportDecl(node: Node): DocumentSymbol[] {
   const pathNode = node.childForFieldName('path');
   if (!pathNode) return [];
   return [
-    {
-      name: pathNode.text,
-      kind: SymbolKind.Module,
-      range: toRange(node),
-      selectionRange: toRange(pathNode),
-    },
+    DocumentSymbol.create(
+      pathNode.text,
+      undefined,
+      SymbolKind.Module,
+      toRange(node),
+      toRange(pathNode),
+    ),
   ];
 }
 
@@ -167,12 +151,13 @@ function symbolsFromInheritDecl(node: Node): DocumentSymbol[] {
   const displayNode = aliasNode ?? pathNode;
   if (!displayNode) return [];
   return [
-    {
-      name: displayNode.text,
-      kind: SymbolKind.Module,
-      range: toRange(node),
-      selectionRange: toRange(displayNode),
-    },
+    DocumentSymbol.create(
+      displayNode.text,
+      undefined,
+      SymbolKind.Module,
+      toRange(node),
+      toRange(displayNode),
+    ),
   ];
 }
 
@@ -180,12 +165,13 @@ function symbolsFromTypedefDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return [];
   return [
-    {
-      name: nameNode.text,
-      kind: SymbolKind.TypeParameter,
-      range: toRange(node),
-      selectionRange: toRange(nameNode),
-    },
+    DocumentSymbol.create(
+      nameNode.text,
+      undefined,
+      SymbolKind.TypeParameter,
+      toRange(node),
+      toRange(nameNode),
+    ),
   ];
 }
 

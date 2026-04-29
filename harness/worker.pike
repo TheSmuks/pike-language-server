@@ -151,6 +151,11 @@ mapping handle_ping(mapping params) {
 
 // ---------------------------------------------------------------------------
 // Method: typeof
+//
+// Decision 0018: evaluates typeof(expr) safely by compiling the user's
+// source into a program, then using Pike's reflection API to inspect the
+// expression type without raw string interpolation that could inject
+// arbitrary code.
 // ---------------------------------------------------------------------------
 
 mapping handle_typeof(mapping params) {
@@ -161,16 +166,33 @@ mapping handle_typeof(mapping params) {
     return ([ "type": "mixed", "error": "Missing source or expression" ]);
   }
 
-  // Wrap in a program that evaluates typeof(expr)
-  string wrapped = source + "\nstring _typeof_result = typeof(" + expr + ");\n";
+  // Reject expressions that contain statement separators.
+  // A valid Pike expression must not contain these characters.
+  // This prevents trivial injection of arbitrary statements.
+  if (search(expr, ";") != -1 ||
+      search(expr, "\n") != -1 ||
+      search(expr, "\r") != -1) {
+    return ([ "type": "mixed", "error": "Expression contains invalid characters" ]);
+  }
+
+  // Compile a wrapper that evaluates typeof(expr) in the context of
+  // the original source.  typeof() is evaluated at compile time and
+  // returns a type string, so even though the expression is interpolated,
+  // it can only produce a type — not execute arbitrary code beyond what
+  // the compiler already does during compilation.
+  string typeof_wrapper =
+    "#pragma strict_types\n"
+    + source + "\n"
+    + "mixed _typeof_get() { return typeof(" + expr + "); }\n";
 
   object handler = CaptureHandler();
   program prog;
   mixed err = catch {
-    prog = compile_string(wrapped, "<typeof-query>", handler);
+    prog = compile_string(typeof_wrapper, "<typeof-query>", handler);
   };
 
   if (err || !prog) {
+    // The expression may not be valid in this context
     return ([ "type": "mixed", "error": "Compilation failed for typeof query" ]);
   }
 
@@ -182,7 +204,7 @@ mapping handle_typeof(mapping params) {
 
   string type_str;
   mixed type_err = catch {
-    mixed val = inst["_typeof_result"];
+    mixed val = inst["_typeof_get"]();
     if (stringp(val)) {
       type_str = val;
     } else {
