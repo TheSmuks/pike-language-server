@@ -46,6 +46,8 @@ export interface DiagnosticManagerOptions {
   staleMs?: number;
   /** Diagnostic mode. Default: "realtime". */
   mode?: DiagnosticMode;
+  /** Maximum number of diagnostics to publish per file. Default: 100. */
+  maxNumberOfProblems?: number;
 }
 
 export interface PikeCacheEntry {
@@ -84,9 +86,10 @@ export class DiagnosticManager {
   private index: WorkspaceIndex;
   private readonly pikeCache: { get(key: string): PikeCacheEntry | undefined };
   private readonly cacheSet: (uri: string, entry: PikeCacheEntry) => void;
-  private readonly debounceMs: number;
+  private debounceMs: number;
   private readonly staleMs: number;
   private mode: DiagnosticMode;
+  private maxProblems: number;
   private disposed = false;
 
   private readonly fileStates = new Map<string, FileDiagnosticState>();
@@ -101,6 +104,7 @@ export class DiagnosticManager {
     this.debounceMs = options.debounceMs ?? 500;
     this.staleMs = options.staleMs ?? 2000;
     this.mode = options.mode ?? "realtime";
+    this.maxProblems = options.maxNumberOfProblems ?? 100;
   }
 
   // -----------------------------------------------------------------------
@@ -126,6 +130,16 @@ export class DiagnosticManager {
   /** Update the workspace index reference (called after onInitialize). */
   setIndex(idx: WorkspaceIndex): void {
     this.index = idx;
+  }
+
+  /** Update the debounce interval. Takes effect on next timer reset. */
+  setDebounceMs(ms: number): void {
+    this.debounceMs = ms;
+  }
+
+  /** Update the maximum number of diagnostics per file. */
+  setMaxNumberOfProblems(max: number): void {
+    this.maxProblems = max;
   }
 
   /**
@@ -410,12 +424,15 @@ export class DiagnosticManager {
   /** Publish diagnostics and cache them for staleness overlay. */
   private publishDiagnostics(uri: string, diagnostics: Diagnostic[]): void {
     if (this.disposed) return;
+    const truncated = diagnostics.length > this.maxProblems
+      ? diagnostics.slice(0, this.maxProblems)
+      : diagnostics;
     const state = this.fileStates.get(uri);
     if (state) {
-      state.lastDiagnostics = diagnostics;
+      state.lastDiagnostics = truncated;
     }
     try {
-      this.connection.sendDiagnostics({ uri, diagnostics });
+      this.connection.sendDiagnostics({ uri, diagnostics: truncated });
     } catch {
       // Connection may be closed during teardown — not an error
     }

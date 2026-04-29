@@ -10,6 +10,7 @@ import { initParser, parse } from "../../server/src/parser";
 import {
   buildSymbolTable,
   wireInheritance,
+  getSymbolsInScope,
 } from "../../server/src/features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 
@@ -134,7 +135,6 @@ describe("getSymbolsInScope — import handling", () => {
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
 
     // Import declarations should be excluded from getSymbolsInScope results
-    const { getSymbolsInScope } = require("../../server/src/features/symbolTable");
     const symbols = getSymbolsInScope(table, 0, 20);
     const names = symbols.map((d: any) => d.name);
 
@@ -148,7 +148,6 @@ describe("getSymbolsInScope — import handling", () => {
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     wireInheritance(table);
 
-    const { getSymbolsInScope } = require("../../server/src/features/symbolTable");
     const symbols = getSymbolsInScope(table, 2, 20);
     const names = symbols.map((d: any) => d.name);
 

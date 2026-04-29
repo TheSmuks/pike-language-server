@@ -257,7 +257,7 @@ export class ModuleResolver {
     // 1. Current file's directory (for relative resolution)
     paths.push(dirname(currentFile));
 
-    // 2. Workspace module paths
+    // 2. Workspace + system module paths
     for (const mp of this.pikePaths.modulePaths) {
       if (!paths.includes(mp)) paths.push(mp);
     }
@@ -275,14 +275,8 @@ export class ModuleResolver {
       }
     }
 
-    // 4. System module paths
-    for (const sp of this.pikePaths.modulePaths) {
-      if (!paths.includes(sp)) paths.push(sp);
-    }
-
     return paths;
   }
-
   /**
    * Find a module named `name` within the given search path.
    * Tries directory module (.pmod/), then file module (.pmod), then .pike.
@@ -361,24 +355,45 @@ export class ModuleResolver {
  * Detect Pike installation paths from the running Pike binary.
  * Falls back to well-known paths.
  */
-export function detectPikePaths(workspaceRoot: string): PikePaths {
+export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string): PikePaths {
+  const pike = pikeBinaryPath ?? "pike";
   let pikeHome = "";
   let systemModulePath = "";
+  let includePath = "";
+  let programPath = "";
 
   // Try to get actual paths from the Pike binary
   try {
-    const output = execSync("pike --show-paths", {
+    const output = execSync(`"${pike}" --show-paths`, {
       timeout: 5000,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
     });
 
     for (const line of output.split("\n")) {
-      const moduleMatch = line.match(/^Module path\.\.\.\s*(.+)$/);
+      const masterMatch = line.match(/^master\.pike\.\.\.\s*:\s*(.+)$/);
+      if (masterMatch) {
+        // Derive pikeHome from master.pike path: /path/to/pike/VERSION/lib/master.pike
+        pikeHome = dirname(dirname(masterMatch[1].trim()));
+      }
+
+      const moduleMatch = line.match(/^Module path\.\.\.\s*:\s*(.+)$/);
       if (moduleMatch) {
         systemModulePath = moduleMatch[1].trim();
-        // Derive pikeHome from module path: /path/to/pike/VERSION/lib/modules
-        pikeHome = join(dirname(dirname(systemModulePath)));
+        if (!pikeHome) {
+          // Fallback: derive pikeHome from module path
+          pikeHome = dirname(dirname(systemModulePath));
+        }
+      }
+
+      const includeMatch = line.match(/^Include path\.\.\s*:\s*(.+)$/);
+      if (includeMatch) {
+        includePath = includeMatch[1].trim();
+      }
+
+      const programMatch = line.match(/^Program path\.\.\s*:\s*(.+)$/);
+      if (programMatch) {
+        programPath = programMatch[1].trim();
       }
     }
   } catch {
@@ -389,7 +404,7 @@ export function detectPikePaths(workspaceRoot: string): PikePaths {
   if (!pikeHome) {
     let detectedVersion = "";
     try {
-      const versionOutput = execSync("pike --version", {
+      const versionOutput = execSync(`"${pike}" --version`, {
         timeout: 5000,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],
@@ -407,6 +422,8 @@ export function detectPikePaths(workspaceRoot: string): PikePaths {
         `/usr/local/pike/${detectedVersion}`,
         `/opt/pike/${detectedVersion}`,
         `/usr/lib/pike/${detectedVersion}`,
+        `/opt/homebrew/opt/pike/${detectedVersion}`,
+        `/usr/local/Cellar/pike/${detectedVersion}`,
       ];
       for (const candidate of versionCandidates) {
         if (existsSync(candidate)) {
@@ -419,7 +436,7 @@ export function detectPikePaths(workspaceRoot: string): PikePaths {
 
   // Final fallback: scan for any Pike version in well-known directories
   if (!pikeHome) {
-    const scanDirs = ["/usr/local/pike", "/opt/pike", "/usr/lib/pike"];
+    const scanDirs = ["/usr/local/pike", "/opt/pike", "/usr/lib/pike", "/opt/homebrew/opt/pike", "/usr/local/Cellar/pike"];
     for (const scanDir of scanDirs) {
       if (!existsSync(scanDir)) continue;
       try {
@@ -445,10 +462,20 @@ export function detectPikePaths(workspaceRoot: string): PikePaths {
     modulePaths.push(systemModulePath);
   }
 
+  const includePaths: string[] = [workspaceRoot];
+  if (includePath) {
+    includePaths.push(includePath);
+  }
+
+  const programPaths: string[] = [workspaceRoot];
+  if (programPath) {
+    programPaths.push(programPath);
+  }
+
   return {
     pikeHome,
     modulePaths,
-    includePaths: [workspaceRoot],
-    programPaths: [workspaceRoot],
+    includePaths,
+    programPaths,
   };
 }

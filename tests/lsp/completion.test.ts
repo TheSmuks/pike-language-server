@@ -215,14 +215,8 @@ describe("getCompletions — unqualified", () => {
     ].join("\n");
     const tree = parse(src);
     const ctx = makeCtx();
-    const result = getCompletions(
-      { uri: "file:///test/unqual.pike", version: 1, declarations: [], references: [], scopes: [] },
-      tree,
-      4, 3, // cursor on "al" at line 4, char 3
-      ctx,
-    );
 
-    // We need to use the actual symbol table from parsing
+    // Build the actual symbol table
     const table = buildSymbolTable(tree, "file:///test/unqual.pike", 1);
     wireInheritance(table);
 

@@ -6,6 +6,7 @@
 
 import { describe, test, expect, afterAll } from "bun:test";
 import { PikeWorker } from "../../server/src/features/pikeWorker";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 
 const worker = new PikeWorker();
 
@@ -13,7 +14,7 @@ afterAll(() => {
   worker.stop();
 });
 
-describe("PikeWorker lifecycle", () => {
+describe.skipIf(!pikeAvailable)("PikeWorker lifecycle", () => {
   test("ping returns status and version", async () => {
     const result = await worker.ping();
     expect(result.status).toBe("ok");
@@ -51,7 +52,7 @@ describe("PikeWorker lifecycle", () => {
   });
 });
 
-describe("PikeWorker diagnostics", () => {
+describe.skipIf(!pikeAvailable)("PikeWorker diagnostics", () => {
   test("clean source returns empty diagnostics", async () => {
     const result = await worker.diagnose(
       "int main() { return 0; }\n",
@@ -133,7 +134,7 @@ describe("PikeWorker diagnostics", () => {
   });
 });
 
-describe("PikeWorker concurrent requests", () => {
+describe.skipIf(!pikeAvailable)("PikeWorker concurrent requests", () => {
   test("5 concurrent diagnose requests all complete", async () => {
     const sources = Array.from({ length: 5 }, (_, i) => ({
       source: `int x_${i} = ${i};\n`,

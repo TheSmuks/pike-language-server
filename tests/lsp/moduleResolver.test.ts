@@ -9,6 +9,7 @@
  */
 
 import { describe, test, expect, beforeAll } from "bun:test";
+import { pikeAvailable, pikeHome } from "../helpers/pikeAvailable";
 import {
   ModuleResolver,
   detectPikePaths,
@@ -24,7 +25,7 @@ import { pathToFileURL } from "node:url";
 
 const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
 const CORPUS_URI = pathToFileURL(CORPUS_DIR).href;
-const PIKE_HOME = "/usr/local/pike/8.0.1116";
+const PIKE_HOME = pikeHome ?? "/usr/local/pike/8.0.1116";
 const SYSTEM_MODULES = join(PIKE_HOME, "lib", "modules");
 
 function makePikePaths(workspaceRoot: string): PikePaths {
@@ -236,7 +237,7 @@ describe("ModuleResolver — #pike version paths", () => {
 // Pike path detection
 // ---------------------------------------------------------------------------
 
-describe("detectPikePaths", () => {
+describe.skipIf(!pikeAvailable)("detectPikePaths", () => {
   test("detects system Pike paths", () => {
     const paths = detectPikePaths(CORPUS_DIR);
     expect(paths.pikeHome).toBe(PIKE_HOME);

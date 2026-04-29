@@ -15,8 +15,20 @@ import {
 
 let client: LanguageClient | undefined;
 
+/**
+ * Read language server settings from VSCode configuration.
+ */
+function getSettings(): Record<string, unknown> {
+  const config = vscode.workspace.getConfiguration("pike.languageServer");
+  return {
+    pikeBinaryPath: config.get<string>("path", "pike"),
+    diagnosticMode: config.get<string>("diagnosticMode", "realtime"),
+    diagnosticDebounceMs: config.get<number>("diagnosticDebounceMs", 500),
+    maxNumberOfProblems: config.get<number>("maxNumberOfProblems", 100),
+  };
+}
+
 export function activate(context: vscode.ExtensionContext): void {
-  // Server entry point — compiled server.ts
   const serverModule = context.asAbsolutePath(
     path.join("server", "dist", "server.js"),
   );
@@ -37,6 +49,7 @@ export function activate(context: vscode.ExtensionContext): void {
     synchronize: {
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{pike,pmod,mmod}"),
     },
+    initializationOptions: getSettings(),
   };
 
   client = new LanguageClient(
@@ -44,6 +57,30 @@ export function activate(context: vscode.ExtensionContext): void {
     "Pike Language Server",
     serverOptions,
     clientOptions,
+  );
+
+
+  // Restart the server when settings change
+  // Guard against rapid-fire config changes creating duplicate clients
+  let restarting = false;
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration("pike.languageServer")) {
+        if (restarting) return;
+        restarting = true;
+        client?.stop().then(() => {
+          client = new LanguageClient(
+            "pikeLanguageServer",
+            "Pike Language Server",
+            serverOptions,
+            { ...clientOptions, initializationOptions: getSettings() },
+          );
+          client.start();
+        }).finally(() => {
+          restarting = false;
+        });
+      }
+    }),
   );
 
   client.start();

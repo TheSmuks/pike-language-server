@@ -57,6 +57,7 @@ export function resolveAccessCore(
 
   const doc = ctx.documents.get(uri);
   if (!doc) return null;
+  // parse() uses the LRU cache — typically a cache hit for open documents
   const tree = parse(doc.getText(), uri);
   if (!tree) return null;
 
