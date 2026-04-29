@@ -9,6 +9,8 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { createTestServer, type TestServer } from "./helpers";
 import {
   initParser,
@@ -615,6 +617,30 @@ describe("Audit fixes", () => {
     const labels = completionLabels(result);
     expect(labels).toContain("base_method");
   });
+
+  test("dot completion on same-file class name returns its members", () => {
+    const src = [
+      'class Animal {',
+      '  string name;',
+      '  void speak() {}',
+      '  void eat() {}',
+      '}',
+      'void test() { Animal. }',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/class-dot.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    // Cursor after the dot on line 5: 'void test() { Animal. }'
+    // The dot is at column 20, cursor at column 21
+    const result = getCompletions(table, tree, 5, 21, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("name");
+    expect(labels).toContain("speak");
+    expect(labels).toContain("eat");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -792,5 +818,54 @@ describe("Declared-type member completion", () => {
     expect(aDecl?.declaredType).toBe("Animal");
     expect(sDecl?.declaredType).toBe("string");
     expect(iDecl?.declaredType).toBe("int");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Cross-file completion via WorkspaceIndex
+// ---------------------------------------------------------------------------
+
+describe("Cross-file completion via WorkspaceIndex", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+
+  function indexCorpus(filenames: string[]): WorkspaceIndex {
+    const idx = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    for (const name of filenames) {
+      const uri = "file://" + join(CORPUS_DIR, name);
+      const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
+      const tree = parse(src);
+      idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    }
+    return idx;
+  }
+
+  test("cross-file arrow completion returns members from imported class", () => {
+    const idx = indexCorpus(["cross_import_a.pmod", "cross-import-b.pike"]);
+    const uriB = "file://" + join(CORPUS_DIR, "cross-import-b.pike");
+    const tableB = idx.getSymbolTable(uriB)!;
+    const srcB = readFileSync(join(CORPUS_DIR, "cross-import-b.pike"), "utf-8");
+    const treeB = parse(srcB);
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriB,
+    };
+
+    // Line 18 (0-indexed 17): "    write(\"greet: %s\\n\", g->greet(\"Alice\"));"
+    // Cursor after g-> at column 27
+    const result = getCompletions(tableB, treeB, 17, 27, ctx);
+    const labels = completionLabels(result);
+
+    // greet is a method of class Greeter defined in cross_import_a.pmod
+    expect(labels).toContain("greet");
+    // Should also find the greeting property and create constructor
+    expect(labels).toContain("greeting");
+    // Should NOT fall through to unqualified predef builtins
+    expect(labels).not.toContain("write");
   });
 });

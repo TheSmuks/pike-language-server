@@ -23,7 +23,7 @@ import {
   buildWorkspaceEdit,
   prepareRename,
 } from "../../server/src/features/rename";
-
+import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -189,8 +189,8 @@ write((string)counter);`;
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("counter");
 
-    // Should have: declaration + 3 references (assignment, addition, cast)
-    expect(result!.locations.length).toBeGreaterThanOrEqual(2);
+    // Should have: declaration (line 0) + assignment (line 1) + addition (line 1) + cast (line 2) = 4
+    expect(result!.locations).toHaveLength(4);
     // All locations should be in the same file
     expect(result!.locations.every(l => l.uri === "file:///test.pike")).toBe(true);
   });
@@ -211,8 +211,8 @@ g->name;`;
     const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("Greeter");
-    // Should include at least the declaration + the constructor calls
-    expect(result!.locations.length).toBeGreaterThanOrEqual(1);
+    // Declaration + 2 constructor calls (Greeter g = Greeter(...))
+    expect(result!.locations).toHaveLength(3);
   });
 
   test("renames a function parameter", () => {
@@ -229,7 +229,7 @@ g->name;`;
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("a");
     // Declaration + reference in "a + b"
-    expect(result!.locations.length).toBeGreaterThanOrEqual(2);
+    expect(result!.locations).toHaveLength(2);
   });
 
   test("returns null for position with no symbol", () => {
@@ -256,10 +256,144 @@ g->name;`;
     const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("reset");
-    expect(result!.locations.length).toBeGreaterThanOrEqual(1);
+    // Declaration only — reset() is not called within this fixture
+    expect(result!.locations).toHaveLength(1);
+  });
+
+  test("rename does not affect same-name identifier in different scope", () => {
+    const src = [
+      'int x = 1;',               // line 0: outer x (decl 1)
+      'void foo() {',
+      '  string x = "a";',        // line 2: inner x (decl 4)
+      '  int y = x + 1;',         // line 3: reference to inner x
+      '}',
+      'int z = x + 2;',           // line 5: reference to outer x
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    // Rename the inner x (line 2, character 10 → position of 'x' in 'string x')
+    const result = getRenameLocations(table, "file:///test.pike", 2, 10, null);
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("x");
+
+    // Should have exactly 2 locations: inner x declaration + inner x reference
+    expect(result!.locations).toHaveLength(2);
+
+    // All locations must be inside foo() — lines 2 and 3 only
+    const lines = result!.locations.map(l => l.line);
+    expect(lines.every(l => l >= 2 && l <= 3)).toBe(true);
+
+    // The file-scope x (line 0) and its reference (line 5) must NOT appear
+    expect(lines).not.toContain(0);
+    expect(lines).not.toContain(5);
+  });
+
+  test("rename includes arrow-access call sites", () => {
+    const src = [
+      'class Dog {',
+      '  void bark() {}',
+      '  void fetch(string item) {}',
+      '}',
+      'void test() {',
+      '  Dog d = Dog();',
+      '  d->bark();',
+      '  d->fetch("stick");',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+
+    // Rename bark method
+    const barkDecl = table.declarations.find(d => d.name === "bark" && d.kind === "function");
+    expect(barkDecl).toBeDefined();
+
+    const result = getRenameLocations(
+      table, "file:///test.pike",
+      barkDecl!.nameRange.start.line,
+      barkDecl!.nameRange.start.character,
+      null,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("bark");
+
+    // Should have 2 locations: declaration + arrow-access call site
+    expect(result!.locations).toHaveLength(2);
+
+    // The call site location should cover only the method name (not d->)
+    const callSite = result!.locations.find(l => l.line !== barkDecl!.nameRange.start.line);
+    expect(callSite).toBeDefined();
+    expect(callSite!.length).toBe(4); // "bark" is 4 chars
+    expect(callSite!.character).toBeGreaterThan(0);
+
+    // Verify the range points to "bark" not "d" or "->"
+    const srcLines = src.split('\n');
+    const callLine = srcLines[callSite!.line];
+    const renamedText = callLine.substring(callSite!.character, callSite!.character + callSite!.length);
+    expect(renamedText).toBe("bark");
   });
 });
 
+// ---------------------------------------------------------------------------
+// Get rename locations — cross-file
+// ---------------------------------------------------------------------------
+
+describe("getRenameLocations — cross-file", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+
+  function makeIndexWithFiles(filenames: string[]): { index: WorkspaceIndex; uris: Map<string, string> } {
+    const index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    const uris = new Map<string, string>();
+    for (const name of filenames) {
+      const uri = "file://" + join(CORPUS_DIR, name);
+      uris.set(name, uri);
+      const src = readCorpus(name);
+      const tree = parse(src);
+      index.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    }
+    return { index, uris };
+  }
+
+  test("cross-file rename updates all files containing references", () => {
+    const { index, uris } = makeIndexWithFiles([
+      "cross-inherit-simple-a.pike",
+      "cross-inherit-simple-b.pike",
+    ]);
+    const uriA = uris.get("cross-inherit-simple-a.pike")!;
+    const tableA = index.getSymbolTable(uriA)!;
+
+    // Rename the SPECIES constant in file A
+    const speciesDecl = tableA.declarations.find(d => d.name === "SPECIES");
+    expect(speciesDecl).toBeDefined();
+
+    const result = getRenameLocations(
+      tableA, uriA,
+      speciesDecl!.nameRange.start.line,
+      speciesDecl!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("SPECIES");
+
+    // Locations should span at least 2 different files
+    const affectedUris = new Set(result!.locations.map(l => l.uri));
+    expect(affectedUris.size).toBeGreaterThanOrEqual(2);
+    expect(affectedUris.has(uriA)).toBe(true);
+    expect(affectedUris.has(uris.get("cross-inherit-simple-b.pike")!)).toBe(true);
+
+    // Verify newText would be correct in each file
+    const edit = buildWorkspaceEdit(result!.locations, "KIND");
+    for (const [, edits] of Object.entries(edit.changes)) {
+      for (const te of edits) {
+        expect(te.newText).toBe("KIND");
+      }
+    }
+  });
+});
 // ---------------------------------------------------------------------------
 // Build workspace edit
 // ---------------------------------------------------------------------------
@@ -329,7 +463,8 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    expect(edit.changes[uri].length).toBeGreaterThanOrEqual(2);
+    // Declaration (line 0) + assignment (line 1) + addition (line 1) = 3
+    expect(edit.changes[uri]).toHaveLength(3);
 
     // All edits should use the new name
     for (const te of edit.changes[uri]) {
@@ -352,8 +487,8 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    // Declaration + call site
-    expect(edit.changes[uri].length).toBeGreaterThanOrEqual(2);
+    // Declaration (line 0) + call site (line 1) = 2
+    expect(edit.changes[uri]).toHaveLength(2);
   });
 
   test("returns null for empty position", async () => {
