@@ -50,3 +50,16 @@ Thread: N/A (Ralph agent iteration)
   - Protected fields (e.g., Animal.name) do NOT appear in arrow access completions — this is by design
   - When testing completion dedup, use public methods not protected fields
 ---
+
+## 2026-04-29 - US-003
+Thread: N/A (Ralph agent iteration)
+- Cross-file inherited member definition and hover — already working from US-001
+- Tests were added during US-001 implementation:
+  - definition.test.ts: d->speak() resolves to Animal.speak in file A
+  - hover.test.ts: d->speak() hover shows Animal signature
+- accessResolver.findDeclUri() now checks sourceUri on synthetic declarations
+- No additional code or tests needed — acceptance criteria already met
+- **Learnings for future iterations:**
+  - US-001/US-002/US-003 were one design decision (synthetic scopes) decomposed into three stories
+  - When a core wiring change automatically fixes downstream features, mark them together
+---
