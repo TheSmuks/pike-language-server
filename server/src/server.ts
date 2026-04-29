@@ -869,7 +869,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.listen(connection);
 
-  return { connection, documents, index, worker, autodocCache, diagnosticManager };
+  return { connection, documents, get index() { return index; }, worker, autodocCache, diagnosticManager };
 }
 
 // ---------------------------------------------------------------------------
