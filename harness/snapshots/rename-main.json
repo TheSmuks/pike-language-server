@@ -1,0 +1,22 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/rename-main.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "DEFAULT_COLOR"
+    },
+    {
+      "kind": "function",
+      "line": 12,
+      "name": "main"
+    }
+  ]
+}

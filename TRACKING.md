@@ -294,8 +294,8 @@ Decision 0012. Tree-sitter-first completion provider. Three resolution paths (un
 ### P2: Real-time Diagnostics
 Decision 0013. DiagnosticManager with debouncing, supersession, priority, cross-file propagation. 15 tests.
 
-### P3: Rename — Deferred
-Resolver-driven approach scoped at ~600 LOC but depends on arrow/dot access type inference and import dependency tracking, neither of which exist yet. Deferral rationale updated in `decisions/0013-verification.md` §V6.
+### P3: Rename — Shipped in Phase 8
+Originally deferred from Phase 6 due to type inference prerequisites. Prerequisites resolved in Phase 7 (type resolution + import tracking). Delivered in Phase 8 (Decision 0016). Stdlib/predef rejection added post-Phase 9.
 
 ### P4: Code Actions — Deferred (Decision 0002 §13)
 

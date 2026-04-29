@@ -8,6 +8,11 @@
  *
  * The rename provider builds a `WorkspaceEdit` that replaces every occurrence
  * of the symbol (declaration + all references) with the new name.
+ *
+ * Protected symbol rejection: stdlib symbols (5,471 from the pre-built index),
+ * predef builtins (283 C-level functions), syntax keywords, and ERROR nodes
+ * cannot be renamed. The caller provides a `ReadonlySet<string>` of short names
+ * derived from both indexes.
  */
 
 import {
@@ -102,10 +107,12 @@ export interface PrepareRenameResult {
   name: string;
 }
 
+/** Set of symbol short names that cannot be renamed (stdlib + predef). */
+export type ProtectedNames = ReadonlySet<string>;
+
 // ---------------------------------------------------------------------------
 // Rename logic
 // ---------------------------------------------------------------------------
-
 /**
  * Find all locations that should be renamed for the symbol at the given position.
  *
@@ -120,6 +127,7 @@ export function getRenameLocations(
   line: number,
   character: number,
   index: WorkspaceIndex | null,
+  protectedNames?: ProtectedNames,
 ): RenameResult | null {
   // Find the declaration at cursor
   const decl = getDefinitionAt(table as any, line, character);
@@ -127,6 +135,10 @@ export function getRenameLocations(
     return null;
   }
 
+  // Reject stdlib/predef symbols
+  if (protectedNames?.has(decl.name)) {
+    return null;
+  }
   const locations: RenameLocation[] = [];
   const oldName = decl.name;
 
@@ -212,15 +224,29 @@ export function buildWorkspaceEdit(
 /**
  * Determine if the symbol at the given position can be renamed.
  * Returns the range and placeholder for the rename UI, or null.
+ *
+ * Rejects: positions with no symbol, stdlib/predef symbols, Pike keywords.
  */
 export function prepareRename(
   table: { uri: string; declarations: Declaration[]; references: Reference[] },
   line: number,
   character: number,
+  protectedNames?: ProtectedNames,
 ): PrepareRenameResult | null {
   // Try to find a declaration at or referenced from this position
   const decl = getDefinitionAt(table as any, line, character);
   if (!decl) {
+    return null;
+  }
+
+  // Reject stdlib/predef symbols
+  if (protectedNames?.has(decl.name)) {
+    return null;
+  }
+
+  // Reject Pike keywords (double-check — declaration names should never be
+  // keywords, but guard against malformed parse results)
+  if (PIKE_KEYWORDS.has(decl.name)) {
     return null;
   }
 

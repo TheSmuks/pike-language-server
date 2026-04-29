@@ -48,6 +48,7 @@ import {
   buildWorkspaceEdit,
   prepareRename,
   validateRenameName,
+  type ProtectedNames,
 } from "./features/rename";
 import { PikeWorker } from "./features/pikeWorker";
 import { renderAutodoc } from "./features/autodocRenderer";
@@ -61,6 +62,33 @@ import stdlibAutodocIndex from "./data/stdlib-autodoc.json";
 import predefBuiltinIndex from "./data/predef-builtin-index.json";
 
 const predefBuiltins: Record<string, string> = predefBuiltinIndex as Record<string, string>;
+
+/**
+ * Build the set of protected symbol names that cannot be renamed.
+ * Combines predef builtins (283) and unqualified stdlib names (5,471 FQNs).
+ */
+function buildProtectedNames(
+  stdlibAutodoc: Record<string, unknown>,
+  predef: Record<string, string>,
+): Set<string> {
+  const names = new Set<string>();
+  // Predef builtins: keys are short names (write, search, etc.)
+  for (const name of Object.keys(predef)) {
+    names.add(name);
+  }
+  // Stdlib: keys are FQNs (predef.Array.diff). Extract unqualified name.
+  for (const fqn of Object.keys(stdlibAutodoc)) {
+    const parts = fqn.split('.');
+    const short = parts[parts.length - 1];
+    names.add(short);
+  }
+  return names;
+}
+
+const protectedNames: Set<string> = buildProtectedNames(
+  stdlibAutodocIndex as Record<string, unknown>,
+  predefBuiltins,
+);
 
 // ---------------------------------------------------------------------------
 // Server factory — reusable for production and tests
@@ -403,7 +431,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
-    const result = prepareRename(table, params.position.line, params.position.character);
+    const result = prepareRename(table, params.position.line, params.position.character, protectedNames);
     if (!result) return null;
 
     return {
@@ -432,6 +460,7 @@ export function createPikeServer(connection: Connection): PikeServer {
       params.position.line,
       params.position.character,
       index,
+      protectedNames,
     );
 
     if (!renameResult) return null;
