@@ -108,7 +108,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "Key file: server/src/features/typeResolver.ts. resolveType() currently only resolves declared types on variables/parameters. Extend it to also look up function declarations by name, check their return type, and resolve that. Decision 0014 describes the existing architecture."
     },
     {

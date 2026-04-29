@@ -923,4 +923,61 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("fetch");
     // name is Animal's protected field — not visible via arrow access
   });
+
+  test("function return type completion: makeDog()-> shows Dog members (US-007)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  makeDog()->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 3, col 13)
+    const result = getCompletions(table, tree, 3, 13, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via function return type resolution
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("chained function return type: makeDog()->fetch()-> stops at void (US-007)", () => {
+    // fetch returns void — no further members should be resolved
+    const src = [
+      'class Dog { string speak() { return "woof"; } void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  makeDog()->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // makeDog() returns Dog, so makeDog()->speak resolves speak
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+    const result = getCompletions(table, tree, 3, 13, ctx);
+    const labels = completionLabels(result);
+    expect(labels).toContain("speak");
+  });
 });

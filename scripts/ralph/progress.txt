@@ -115,3 +115,19 @@ Thread: N/A (Ralph agent iteration)
   - Scope chain is constructed via parentId links during buildSymbolTable — no gaps for deeply nested constructs
   - Corpus file comment lines affect line numbering — always verify with actual parse output
 ---
+
+## 2026-04-29 - US-007
+Thread: N/A (Ralph agent iteration)
+- Function return type tracking in type resolver
+- Functions already have `declaredType` set to their return type in the symbol table
+- Extended `resolveTypeMembers()` in completion.ts to handle function declarations alongside variables/parameters
+- Extended `completeMemberAccess()` to extract function name from call expression LHS (e.g., makeDog() -> makeDog)
+- Files changed:
+  - server/src/features/completion.ts (resolveTypeMembers handles functions, completeMemberAccess extracts call name)
+  - tests/lsp/completion.test.ts (2 new tests: function return type completion)
+- **Learnings for future iterations:**
+  - Function declarations already store their return type as `declaredType` — no new field needed
+  - When the LHS of arrow access is a function call (postfix_expr ending with ()), need to extract the function name by drilling down through the tree
+  - The `extractLhsIdentifier` pattern from US-004 could be reused here but the completion system uses a different code path
+  - Completion positions: cursor ON the identifier (e.g., speak at col 13) triggers arrow context; cursor AFTER `->` without identifier falls through to unqualified
+---
