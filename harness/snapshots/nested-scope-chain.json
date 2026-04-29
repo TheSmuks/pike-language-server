@@ -1,0 +1,23 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/nested-scope-chain.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 9,
+      "name": "deep"
+    },
+    {
+      "kind": "function",
+      "line": 29,
+      "name": "main"
+    }
+  ]
+}

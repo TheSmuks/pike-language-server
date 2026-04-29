@@ -550,7 +550,74 @@ describe("definition API: while/switch/do-while scope isolation (US-005)", () =>
     expect(yDecl!.scopeId).not.toBe(funcScope!.id);
   });
 });
+
 // ===========================================================================
+// 7c. Full scope chain for deeply nested variables (US-006)
+// ===========================================================================
+
+describe("definition API: deep scope chain resolution (US-006)", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("variable in outer function scope resolves from 4 levels deep", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // level3 = level0 + level1 + level2 is at line 18
+    // level0 is at the outermost function scope (line 9)
+    const level0Ref = table.references.find(
+      r => r.name === 'level0' && r.loc.line === 18,
+    );
+    expect(level0Ref).toBeDefined();
+    expect(level0Ref!.resolvesTo).not.toBeNull();
+
+    const level0Decl = table.declarations.find(d => d.id === level0Ref!.resolvesTo);
+    expect(level0Decl).toBeDefined();
+    expect(level0Decl!.nameRange.start.line).toBe(9); // string level0
+  });
+
+  test("for-loop variable resolves from inside while/if nesting", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // level1 is at line 12 (inside for loop)
+    // level1 reference at line 18 should resolve to declaration at line 12
+    const level1Refs = table.references.filter(
+      r => r.name === 'level1' && r.loc.line === 18,
+    );
+    expect(level1Refs.length).toBeGreaterThanOrEqual(1);
+
+    const decl = table.declarations.find(d => d.id === level1Refs[0].resolvesTo);
+    expect(decl).toBeDefined();
+    expect(decl!.nameRange.start.line).toBe(12);
+  });
+
+  test("getDefinitionAt resolves through 4 scope levels", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // On line 18: string level3 = level0 + level1 + level2;
+    const level0Ref = table.references.find(r => r.name === 'level0' && r.loc.line === 18);
+    const level1Ref = table.references.find(r => r.name === 'level1' && r.loc.line === 18);
+    const level2Ref = table.references.find(r => r.name === 'level2' && r.loc.line === 18);
+
+    expect(level0Ref).toBeDefined();
+    expect(level1Ref).toBeDefined();
+    expect(level2Ref).toBeDefined();
+
+    const def0 = getDefinitionAt(table, 18, level0Ref!.loc.character);
+    const def1 = getDefinitionAt(table, 18, level1Ref!.loc.character);
+    const def2 = getDefinitionAt(table, 18, level2Ref!.loc.character);
+
+    expect(def0?.name).toBe('level0');
+    expect(def1?.name).toBe('level1');
+    expect(def2?.name).toBe('level2');
+  });
+});
 // 8. Direct API tests — no definition for external symbols
 // ===========================================================================
 

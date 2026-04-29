@@ -91,7 +91,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts (onHover), server/src/features/symbolTable.ts (getDefinitionAt). The scope chain walk in getDefinitionAt may be stopping early for deeply nested scopes. Investigate whether the issue is in scope chain construction or in the walk itself."
     },
     {

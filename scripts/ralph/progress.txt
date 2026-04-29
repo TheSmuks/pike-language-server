@@ -100,3 +100,18 @@ Thread: N/A (Ralph agent iteration)
   - case_clause children are siblings of local_declaration in the switch block, not nested under case_clause
   - The BLOCK_SCOPES set already listed while/switch/do-while but had no handlers — they were used for scope resolution but not for scope creation
 ---
+
+## 2026-04-29 - US-006
+Thread: N/A (Ralph agent iteration)
+- Full scope chain for local variable hover — verified working
+- Added corpus file: nested-scope-chain.pike (4 levels of nesting: for > while > if)
+- Scope chain walk in getDefinitionAt correctly resolves variables from outer scopes through 4+ nesting levels
+- No code changes needed — existing scope chain construction is correct
+- Files changed:
+  - corpus/files/nested-scope-chain.pike (new corpus file)
+  - tests/lsp/definition.test.ts (3 new tests: deep scope chain resolution)
+- **Learnings for future iterations:**
+  - getDefinitionAt works by first checking references (resolvesTo field), then declarations at position — both paths walk the scope chain correctly
+  - Scope chain is constructed via parentId links during buildSymbolTable — no gaps for deeply nested constructs
+  - Corpus file comment lines affect line numbering — always verify with actual parse output
+---
