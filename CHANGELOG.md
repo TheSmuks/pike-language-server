@@ -2,6 +2,8 @@
 
 ### Added
 
+- `server/src/parser.ts` — `deleteTree(uri)`, `getCachedTree(uri)`, `clearTreeCache()` for tree cache lifecycle
+- `decisions/0018-incremental-parsing-and-ipc-security.md` — architecture decision record
 - Standalone server build (`bun run build:standalone`) producing a self-contained bundle in `standalone/`
 - `bin/pike-language-server` wrapper script for use with any LSP-capable editor
 - `docs/other-editors.md` — verified setup instructions for Neovim, Helix, and generic LSP clients
@@ -9,10 +11,13 @@
 
 ### Changed
 
-- `server/src/parser.ts` — WASM path resolution now searches multiple locations for portability across build outputs
-- `README.md` — rewritten with clear install instructions for both VSCode and non-VSCode editors
-- `docs/state-of-project.md` — updated for Phase 9 completion
-- `TRACKING.md` — Phase 9 all three workstreams complete with measured performance data
+- `server/src/parser.ts` — incremental tree-sitter parsing with LRU tree cache (50 entries / 50 MB ceiling), `parse(source, uri)` passes old tree for diff-based re-parsing
+- `server/src/features/pikeWorker.ts` — strict FIFO queue serializing all worker calls, stdin backpressure via `drain` event, process-exit race fix
+- `harness/worker.pike` — `typeof` handler rejects `;\n\r` in expressions, uses function wrapper instead of raw variable interpolation
+- `server/src/features/diagnosticManager.ts` — removed internal priority queue; all worker calls delegate to `PikeWorker.enqueue()`
+- `server/src/features/diagnostics.ts` — eliminated duplicate types (`Position`, `Range`, `DiagnosticSeverity`, `Diagnostic`), now imported from `vscode-languageserver/node`
+- `server/src/features/documentSymbol.ts` — eliminated duplicate types (`Position`, `Range`, `SymbolKind`, `DocumentSymbol`), now imported from `vscode-languageserver/node`
+- `server/src/server.ts` — all `parse()` calls pass URI for incremental cache; `didClose` evicts tree, `onShutdown` clears cache
 
 ### Removed
 
