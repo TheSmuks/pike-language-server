@@ -19,6 +19,7 @@
 
 import { join, dirname, resolve, basename, sep } from "node:path";
 import { existsSync, statSync, readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
@@ -361,31 +362,92 @@ export class ModuleResolver {
  * Falls back to well-known paths.
  */
 export function detectPikePaths(workspaceRoot: string): PikePaths {
-  // Detect Pike home from `pike --show-paths` or well-known location
-  let pikeHome = "/usr/local/pike/8.0.1116";
+  let pikeHome = "";
+  let systemModulePath = "";
 
-  // Check common locations
-  const candidates = [
-    "/usr/local/pike/8.0.1116",
-    "/opt/pike/8.0.1116",
-    "/usr/lib/pike/8.0.1116",
-  ];
+  // Try to get actual paths from the Pike binary
+  try {
+    const output = execSync("pike --show-paths", {
+      timeout: 5000,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+    });
 
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) {
-      pikeHome = candidate;
-      break;
+    for (const line of output.split("\n")) {
+      const moduleMatch = line.match(/^Module path\.\.\.\s*(.+)$/);
+      if (moduleMatch) {
+        systemModulePath = moduleMatch[1].trim();
+        // Derive pikeHome from module path: /path/to/pike/VERSION/lib/modules
+        pikeHome = join(dirname(dirname(systemModulePath)));
+      }
+    }
+  } catch {
+    // Pike binary not found or failed — fall through to heuristic detection
+  }
+
+  // Fallback: detect version from `pike --version` and check common locations
+  if (!pikeHome) {
+    let detectedVersion = "";
+    try {
+      const versionOutput = execSync("pike --version", {
+        timeout: 5000,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const versionMatch = versionOutput.match(/Pike v(\d+\.\d+) release (\d+)/);
+      if (versionMatch) {
+        detectedVersion = `${versionMatch[1]}.${versionMatch[2]}`;
+      }
+    } catch {
+      // Pike not available
+    }
+
+    if (detectedVersion) {
+      const versionCandidates = [
+        `/usr/local/pike/${detectedVersion}`,
+        `/opt/pike/${detectedVersion}`,
+        `/usr/lib/pike/${detectedVersion}`,
+      ];
+      for (const candidate of versionCandidates) {
+        if (existsSync(candidate)) {
+          pikeHome = candidate;
+          break;
+        }
+      }
     }
   }
 
-  const systemModulePath = join(pikeHome, "lib", "modules");
+  // Final fallback: scan for any Pike version in well-known directories
+  if (!pikeHome) {
+    const scanDirs = ["/usr/local/pike", "/opt/pike", "/usr/lib/pike"];
+    for (const scanDir of scanDirs) {
+      if (!existsSync(scanDir)) continue;
+      try {
+        const entries = readdirSync(scanDir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
+        if (entries.length > 0) {
+          pikeHome = join(scanDir, entries[0].name);
+          break;
+        }
+      } catch {
+        // Permission denied or similar — skip
+      }
+    }
+  }
+
+  if (!systemModulePath && pikeHome) {
+    systemModulePath = join(pikeHome, "lib", "modules");
+  }
+
+  const modulePaths: string[] = [workspaceRoot];
+  if (systemModulePath) {
+    modulePaths.push(systemModulePath);
+  }
 
   return {
     pikeHome,
-    modulePaths: [
-      workspaceRoot,
-      systemModulePath,
-    ],
+    modulePaths,
     includePaths: [workspaceRoot],
     programPaths: [workspaceRoot],
   };

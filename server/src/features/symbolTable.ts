@@ -83,6 +83,10 @@ export interface SymbolTable {
   declarations: Declaration[];
   references: Reference[];
   scopes: Scope[];
+  /** O(1) lookup: declaration ID → Declaration. Populated at build time. */
+  declById: Map<number, Declaration>;
+  /** O(1) lookup: scope ID → Scope. Populated at build time. */
+  scopeById: Map<number, Scope>;
 }
 
 // ---------------------------------------------------------------------------
@@ -184,7 +188,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number): Symb
   };
 
   // Pass 1: declarations + scope tree
-  const fileScopeId = pushScope(state, 'file', toRange(tree.rootNode));
+  pushScope(state, 'file', toRange(tree.rootNode));
   collectDeclarations(tree.rootNode, state);
   popScope(state); // file scope
 
@@ -195,71 +199,14 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number): Symb
     declarations: state.declarations,
     references: [], // filled in pass 4
     scopes: state.scopes,
+    declById: state.declMap,
+    scopeById: state.scopeMap,
   };
 
   // Pass 3: wire inheritance BEFORE reference resolution
   wireInheritance(table);
 
   // Pass 4: collect and resolve references (inheritance now wired)
-  state.references = table.references;
-  collectReferences(tree.rootNode, state);
-  table.references = state.references;
-
-  return table;
-}
-
-/** Node count threshold above which we yield between passes. */
-const YIELD_THRESHOLD = 1000;
-
-function yieldToEventLoop(): Promise<void> {
-  return new Promise((resolve) => setImmediate(resolve));
-}
-
-/**
- * Async variant of buildSymbolTable.
- * Yields to the event loop between passes for large trees,
- * preventing main-thread blocking on shared SSH servers.
- */
-export async function buildSymbolTableAsync(
-  tree: Tree,
-  uri: string,
-  version: number,
-): Promise<SymbolTable> {
-  const nodeCount = tree.rootNode.descendantCount;
-  const shouldYield = nodeCount >= YIELD_THRESHOLD;
-
-  const state: BuildState = {
-    nextId: 0,
-    declarations: [],
-    references: [],
-    scopes: [],
-    scopeMap: new Map(),
-    declMap: new Map(),
-    scopeStack: [],
-  };
-
-  // Pass 1: declarations + scope tree
-  const fileScopeId = pushScope(state, 'file', toRange(tree.rootNode));
-  collectDeclarations(tree.rootNode, state);
-  popScope(state);
-
-  if (shouldYield) await yieldToEventLoop();
-
-  // Pass 2: build the table
-  const table: SymbolTable = {
-    uri,
-    version,
-    declarations: state.declarations,
-    references: [],
-    scopes: state.scopes,
-  };
-
-  // Pass 3: wire inheritance BEFORE reference resolution
-  wireInheritance(table);
-
-  if (shouldYield) await yieldToEventLoop();
-
-  // Pass 4: collect and resolve references
   state.references = table.references;
   collectReferences(tree.rootNode, state);
   table.references = state.references;
@@ -1060,7 +1007,7 @@ export function getDefinitionAt(
   for (const ref of table.references) {
     if (ref.loc.line === line && ref.loc.character === character) {
       if (ref.resolvesTo !== null) {
-        return table.declarations.find(d => d?.id === ref.resolvesTo) ?? null;
+        return table.declById.get(ref.resolvesTo) ?? null;
       }
     }
   }
@@ -1098,17 +1045,17 @@ export function getDefinitionAt(
  */
 function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declaration | null {
   // Find the class scope that contains this inherit declaration
-  const classScope = table.scopes.find(s => s.id === decl.scopeId);
+  const classScope = table.scopeById.get(decl.scopeId);
   if (!classScope) return null;
 
   // Find the inherited scope wired by wireInheritance
   const parentScope = classScope.parentId !== null
-    ? table.scopes.find(s => s.id === classScope.parentId)
+    ? table.scopeById.get(classScope.parentId)
     : null;
   if (!parentScope) return null;
 
   for (const parentDeclId of parentScope.declarations) {
-    const parentDecl = table.declarations.find(d => d?.id === parentDeclId);
+    const parentDecl = table.declById.get(parentDeclId);
     if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === decl.name) {
       return parentDecl;
     }
@@ -1161,7 +1108,7 @@ export function getReferencesTo(
   // be resolved to a specific declaration (untyped access). This ensures
   // rename finds call sites like `d->bark()` even when the arrow reference
   // has resolvesTo=null.
-  const targetDecl = table.declarations.find(d => d?.id === targetDeclId);
+  const targetDecl = table.declById.get(targetDeclId);
   if (targetDecl) {
     const targetName = targetDecl.name;
     for (const ref of table.references) {
@@ -1173,7 +1120,7 @@ export function getReferencesTo(
   }
 
   // Also include the declaration itself as a "reference" (definition site)
-  const decl = table.declarations.find(d => d?.id === targetDeclId);
+  const decl = table.declById.get(targetDeclId);
   if (decl) {
     results.unshift({
       name: decl.name,
@@ -1224,12 +1171,12 @@ function findScopeAtPosition(table: SymbolTable, line: number, character: number
  * Used for class scope enumeration.
  */
 function collectScopeDecls(scopeId: number, table: SymbolTable, seen: Set<number>, results: Declaration[]): void {
-  const scope = table.scopes.find(s => s.id === scopeId);
+  const scope = table.scopeById.get(scopeId);
   if (!scope || seen.has(scopeId)) return;
   seen.add(scopeId);
 
   for (const declId of scope.declarations) {
-    const decl = table.declarations.find(d => d?.id === declId);
+    const decl = table.declById.get(declId);
     if (decl && !seen.has(decl.id)) {
       // Skip inherit declarations themselves — they're not completable symbols
       if (decl.kind !== 'inherit') {
@@ -1264,12 +1211,12 @@ export function getSymbolsInScope(
 
   let current: number | null = scopeId;
   while (current !== null) {
-    const scope = table.scopes.find(s => s.id === current);
+    const scope = table.scopeById.get(current);
     if (!scope) break;
 
     // Collect direct declarations in this scope
     for (const declId of scope.declarations) {
-      const decl = table.declarations.find(d => d?.id === declId);
+      const decl = table.declById.get(declId);
       if (!decl) continue;
 
       // Skip inherit declarations
@@ -1293,10 +1240,10 @@ export function getSymbolsInScope(
     // For class scopes, collect inherited members
     if (scope.kind === 'class') {
       for (const inheritedId of scope.inheritedScopes) {
-        const inheritedScope = table.scopes.find(s => s.id === inheritedId);
+        const inheritedScope = table.scopeById.get(inheritedId);
         if (!inheritedScope) continue;
         for (const declId of inheritedScope.declarations) {
-          const decl = table.declarations.find(d => d?.id === declId);
+          const decl = table.declById.get(declId);
           if (!decl || decl.kind === 'inherit' || decl.kind === 'import') continue;
           if (!seenNames.has(decl.name)) {
             seenNames.add(decl.name);
@@ -1334,7 +1281,7 @@ export function findClassScopeAt(table: SymbolTable, line: number, character: nu
 
   let current: number | null = scopeId;
   while (current !== null) {
-    const scope = table.scopes.find(s => s.id === current);
+    const scope = table.scopeById.get(current);
     if (!scope) break;
     if (scope.kind === 'class') return current;
     current = scope.parentId;
@@ -1356,7 +1303,7 @@ export function wireInheritance(table: SymbolTable): void {
     if (scope.kind !== 'class') continue;
 
     const inheritDecls = scope.declarations
-      .map(id => table.declarations.find(d => d?.id === id))
+      .map(id => table.declById.get(id))
       .filter(d => d?.kind === 'inherit');
 
     for (const inheritDecl of inheritDecls) {
@@ -1366,7 +1313,7 @@ export function wireInheritance(table: SymbolTable): void {
       if (!parentScope) continue;
 
       for (const candidateId of parentScope.declarations) {
-        const candidate = table.declarations.find(d => d?.id === candidateId);
+        const candidate = table.declById.get(candidateId);
         if (candidate && candidate.kind === 'class' && candidate.name === inheritDecl.name) {
           // Find the class scope for this class declaration
           const classScope = table.scopes.find(s =>
