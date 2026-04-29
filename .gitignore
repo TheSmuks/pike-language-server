@@ -28,6 +28,7 @@ benchmark_results/
 .env
 .env.*
 !.env.example
+*.vsix
 *.key
 *.pem
 secrets/
@@ -82,3 +83,4 @@ htmlcov/
 *.log
 logs/
 PLAN.md
+standalone/

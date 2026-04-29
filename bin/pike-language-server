@@ -1,0 +1,31 @@
+#!/usr/bin/env node
+/**
+ * Pike Language Server — standalone entry point.
+ *
+ * Communicates over stdio. Run with: pike-language-server --stdio
+ *
+ * Requires: bun runtime.
+ * Install: bun install && bun run build:standalone
+ */
+
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const serverPath = resolve(__dirname, "..", "standalone", "server.js");
+
+// Forward all args, defaulting to --stdio
+const args = process.argv.slice(2);
+if (!args.some(a => a === "--stdio" || a === "--node-ipc" || a.startsWith("--socket="))) {
+  args.push("--stdio");
+}
+
+const child = spawn("bun", [serverPath, ...args], {
+  stdio: "inherit",
+  env: { ...process.env },
+});
+
+child.on("exit", (code) => process.exit(code ?? 1));
+process.on("SIGTERM", () => child.kill("SIGTERM"));
+process.on("SIGINT", () => child.kill("SIGINT"));
