@@ -269,7 +269,7 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts, server/src/features/symbolTable.ts, server/src/data/stdlib-autodoc.json. Use tree-sitter to find the enclosing call expression, identify the callee, resolve it to a declaration, extract parameter list."
     },
     {

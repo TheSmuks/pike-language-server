@@ -53,9 +53,10 @@ import {
 } from "./features/semanticTokens";
 import { produceFoldingRanges } from "./features/foldingRange";
 import { produceSignatureHelp } from "./features/signatureHelp";
+import { produceCodeActions } from "./features/codeAction";
 import {
-  resolveAccessDefinition,
   resolveAccessDeclaration,
+  resolveAccessDefinition,
   type ResolutionContext,
 } from "./features/accessResolver";
 import {
@@ -288,6 +289,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         signatureHelpProvider: {
           triggerCharacters: ['(', ','],
         },
+        codeActionProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -485,6 +487,19 @@ export function createPikeServer(connection: Connection): PikeServer {
       stdlibIndex,
     );
   });
+
+  // -----------------------------------------------------------------------
+  // textDocument/codeAction (US-018)
+  // -----------------------------------------------------------------------
+
+  connection.onCodeAction(async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+
+    return produceCodeActions(params, doc.getText());
+  });
+
+  // -----------------------------------------------------------------------
   // textDocument/definition
   // -----------------------------------------------------------------------
 

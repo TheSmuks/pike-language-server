@@ -330,3 +330,33 @@ Thread: N/A (Ralph agent iteration)
   - Foldable ranges are determined by node types: class_body and block cover all Pike block structures
   - Comment groups need manual grouping logic — tree-sitter has no 'comment_group' node
 ---
+
+## 2026-04-30 - US-017
+Thread: N/A (Ralph agent iteration)
+- Signature help handler
+- Created server/src/features/signatureHelp.ts with:
+  - produceSignatureHelp() — finds enclosing call, resolves callee, extracts parameters, tracks active param
+  - findEnclosingCall() — walks up tree to find postfix_expr with parens
+  - extractCalleeInfo() — extracts callee name, handles arrow/dot access (d->speak → speak)
+  - countActiveParameter() — counts commas before cursor in argument list
+  - countCommasInNode() — recursive comma counting inside argument_list/comma_expr
+  - buildSignatureFromDecl() — extracts params from symbol table scope structure
+  - buildSignatureFromStdlib() — parses params from stdlib autodoc signature string
+  - splitParams() — comma-aware parameter text splitter respecting nested parens
+- Registered textDocument/signatureHelp handler with trigger chars '(' and ','
+- Key challenges solved:
+  - Method parameters are in a child scope of the class scope — must match by range overlap
+  - Arguments wrapped in argument_list → comma_expr nodes — recursive descent needed
+  - Callee extraction: d->speak() → callee text is 'd->speak', must extract 'speak' after '->'
+- Added 5 LSP protocol tests and decision document
+- Files changed:
+  - server/src/features/signatureHelp.ts (new)
+  - server/src/server.ts (handler + capability)
+  - tests/lsp/signatureHelp.test.ts (new, 5 tests)
+  - docs/decisions/0021-signature-help.md (new)
+- **Learnings for future iterations:**
+  - tree-sitter-pike wraps comma-separated args in 'comma_expr' nodes, not flat list
+  - 'argument_list' is a child of 'postfix_expr', containing the comma_expr
+  - Class methods: the class scope contains the function declaration; the function body scope (child) has parameters. Must match by range, not just first child.
+  - Stdlib autodoc uses qualified names (predef.X.Y) — simple name matching won't find them. Predef builtins use a separate index.
+---
