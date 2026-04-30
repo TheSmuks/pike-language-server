@@ -836,3 +836,65 @@ Thread: N/A (Ralph agent iteration)
   - validateRenameName rejects Pike keywords, operators, and identifiers starting with backtick
   - The rename corpus files (rename-base.pike, rename-child.pike, rename-main.pike) form a 3-file chain for cross-file testing
 ---
+
+## 2026-04-30 - US-012 through US-018 (batch)
+Thread: N/A (Ralph agent iteration)
+- All 7 remaining stories audited in parallel via subagent tasks
+
+### US-012: typeResolver
+- typeResolver.ts (278 lines): resolves declared/qualified/inherited types to class Declarations
+- typeResolution.test.ts: 25 tests, 6 describe blocks covering same-file, member access, recursion guards, cross-file, qualified/stdlib, depth limits
+- 4 inference corpus files: inference-failure, inference-chained, inference-assign, inference-return
+- Inference failure returns 'mixed' or undefined (not wrong specific type) ✓
+
+### US-013: cross-file features
+- workspaceIndex.ts (581 lines): in-memory per-file symbol table index with reverse dependency graph
+- moduleResolver.ts (480 lines): Pike module path resolver implementing simplified master.pike algorithm
+- backgroundIndex.ts (184 lines): background workspace file discovery with setTimeout(0) yielding
+- Tests: crossFile.test.ts (22 tests), crossFileOracle.test.ts (5 tests), importDependencies.test.ts (7 tests), workspaceIndex.test.ts (16 tests), moduleResolver.test.ts (22 tests), backgroundIndex.test.ts (3 tests)
+- All use real LSP protocol, no mocks
+
+### US-014: pikeWorker
+- pikeWorker.ts (554 lines): single Pike subprocess via stdio JSON protocol with FIFO queue, idle eviction, memory ceiling, timeout handling
+- pikeWorker.test.ts: 10 tests, 28 expect() calls, all gated by pikeAvailable
+- Timeout handling verified: long-running processes killed, error reported (not silently)
+- Concurrent invocations serialized via FIFO queue
+
+### US-015: remaining features
+- semanticTokens.ts (229 lines): 9 token types, 5 modifiers, delta encoding. Tests: 22 tests, 48 expect()
+- foldingRange.ts (101 lines): class_body, block, comment groups. Tests: 8 tests, 13 expect()
+- signatureHelp.ts (318 lines): resolves function/method call at cursor. Tests: 5 tests, 12 expect(). Gap: no stdlib resolution test
+- codeAction.ts (244 lines): remove unused var, add missing import. Tests: 8 tests, 30 expect()
+- documentSymbol.ts (167 lines): tree-sitter AST → DocumentSymbol[]. Tests: 392 lines, corpus-driven
+- workspaceSymbol.ts (77 lines): prefix match search. Tests: 6 tests, 14 expect()
+- persistentCache.ts: cache serialization/deserialization
+
+### US-016: server.ts
+- server.ts (1074 lines): createPikeServer() wires all LSP handlers
+- All handlers follow consistent defensive pattern: early null return, try/catch, cancellation tokens
+- Document lifecycle: didOpen/didChange/didClose/didSave correctly trigger parse, index, diagnostics
+- lifecycle.test.ts: 4 tests, error-handling.test.ts: tests real failure modes, edge-cases.test.ts: edge case coverage
+
+### US-017: integration tests
+- p2-verification.test.ts (775 lines): 10 tests, 20 expect(). Full in-process LSP stack
+- 4 suites: worker thrashing, hover latency, cross-file propagation, mode switching
+- suite/index.ts: runs in VSCode extension host (testActivation, testDocumentSymbol, testErrorRecovery)
+- 3 stub files (activation, crossFilePropagation, documentSymbol, error-recovery) — real tests in suite/
+
+### US-018: performance benchmarks
+- benchmarks.test.ts (183 lines): 9 benchmarks covering core LSP operations
+- Uses synthetic generated source, not real corpus files
+- Setup/teardown excluded from measurements
+- Assertions enforce timing constraints (not just 'it ran')
+
+### Summary
+- No code changes needed for any of the 7 stories
+- All stories are audit-only: reading and verifying existing code and tests
+- Files changed: scripts/ralph/prd.json (US-012 through US-018 passes: true)
+- **Learnings for future iterations:**
+  - The project has comprehensive test coverage across all features with minimal mocking
+  - Integration tests are split: p2-verification.test.ts (bun:test, in-process) and suite/index.ts (VSCode extension host)
+  - Some stub test files in tests/integration/ exist for discoverability — real tests are elsewhere
+  - PikeWorker uses a FIFO queue to serialize concurrent diagnose calls
+  - backgroundIndex.ts yields between files via setTimeout(0) to avoid blocking event loop
+---

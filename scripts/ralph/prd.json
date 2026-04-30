@@ -1,19 +1,19 @@
 {
   "project": "pike-language-server",
   "branchName": "ralph/full-audit-correctness",
-  "description": "Full audit and correctness verification of the Pike Language Server. Every test, every feature module, every harness component is fact-checked against ground truth (pike as oracle). Passing tests do not mean correct — tests lie if they are hallucinated or test the wrong thing. Each story verifies one subsystem end-to-end by cross-referencing test expectations against actual pike output and LSP behavior.",
+  "description": "Full audit and correctness verification of the Pike Language Server. Every test, every feature module, every harness component is fact-checked against ground truth (pike as oracle). Passing tests do not mean correct \u2014 tests lie if they are hallucinated or test the wrong thing. Each story verifies one subsystem end-to-end by cross-referencing test expectations against actual pike output and LSP behavior.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Audit test infrastructure — harness runner and snapshot correctness",
+      "title": "Audit test infrastructure \u2014 harness runner and snapshot correctness",
       "description": "As an auditor, I need to verify the test harness itself is trustworthy before trusting any test results. The harness spawns pike, captures JSON, diffs against snapshots. If the harness lies, all tests lie.",
       "acceptanceCriteria": [
         "Read harness/src/runner.ts end-to-end. Verify pike invocation flags match what introspect.pike and resolve.pike expect",
-        "Read harness/introspect.pike. Verify every field it outputs matches the IntrospectionResult type in harness/src/types.ts — no missing fields, no extra fields, no wrong types",
+        "Read harness/introspect.pike. Verify every field it outputs matches the IntrospectionResult type in harness/src/types.ts \u2014 no missing fields, no extra fields, no wrong types",
         "Read harness/resolve.pike. Same verification against its expected output schema",
         "Read harness/src/snapshot.ts. Verify canonicalStringify produces deterministic output (sorted keys at all levels). Verify diffSnapshot correctly identifies added/removed/changed fields",
         "Verify corpus/corpus.json RunnerOptions (strict, modulePath, includePath) are correctly applied in the runner for each corpus file",
-        "Read harness/__tests__/harness.test.ts. Verify test expectations match actual harness behavior — not just 'test passes' but 'test tests the right thing'",
+        "Read harness/__tests__/harness.test.ts. Verify test expectations match actual harness behavior \u2014 not just 'test passes' but 'test tests the right thing'",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -22,14 +22,14 @@
     },
     {
       "id": "US-002",
-      "title": "Audit canary tests — verify they catch real regressions",
+      "title": "Audit canary tests \u2014 verify they catch real regressions",
       "description": "As an auditor, I need to verify canary tests actually detect broken behavior. A canary test that always passes is worse than no test.",
       "acceptanceCriteria": [
         "Read harness/__tests__/canary.test.ts. List every assertion and what it claims to verify",
         "For each canary test: manually verify the assertion would FAIL if the tested behavior were broken. Confirm the test is not tautological (asserting what it itself produces)",
         "Verify the corpus files used by canary tests exist in corpus/files/ and match what manifest.md describes",
         "Confirm canary tests run against actual pike output (not mocked)",
-        "Document any canary test that does not have a clear failure mode — i.e., a test that would still pass if the underlying behavior broke",
+        "Document any canary test that does not have a clear failure mode \u2014 i.e., a test that would still pass if the underlying behavior broke",
         "Typecheck passes"
       ],
       "priority": 2,
@@ -38,12 +38,12 @@
     },
     {
       "id": "US-003",
-      "title": "Audit snapshot-canonicalizer tests — verify diff detection works",
+      "title": "Audit snapshot-canonicalizer tests \u2014 verify diff detection works",
       "description": "As an auditor, I need to verify the snapshot canonicalizer tests actually test diff detection, not just round-trip serialization.",
       "acceptanceCriteria": [
         "Read harness/__tests__/snapshot-canonicalizer.test.ts end-to-end",
         "Verify each test case tests a DISTINCT diff scenario (field added, field removed, field changed, nested change, array reorder)",
-        "Confirm test expectations are NOT self-referential — the expected values must be independently derived, not computed by the same code under test",
+        "Confirm test expectations are NOT self-referential \u2014 the expected values must be independently derived, not computed by the same code under test",
         "Verify deepSortKeys handles all edge cases: null, undefined, empty arrays, nested objects, mixed types",
         "Typecheck passes"
       ],
@@ -53,7 +53,7 @@
     },
     {
       "id": "US-004",
-      "title": "Audit tree-sitter-symbol tests — verify against actual tree-sitter output",
+      "title": "Audit tree-sitter-symbol tests \u2014 verify against actual tree-sitter output",
       "description": "As an auditor, I need to verify tree-sitter-symbol tests compare against real tree-sitter parse output, not hand-crafted expected values that might not match what tree-sitter actually produces.",
       "acceptanceCriteria": [
         "Read harness/__tests__/tree-sitter-symbol.test.ts end-to-end",
@@ -68,14 +68,14 @@
     },
     {
       "id": "US-005",
-      "title": "Audit parser.ts — verify tree-sitter integration and incremental parsing",
+      "title": "Audit parser.ts \u2014 verify tree-sitter integration and incremental parsing",
       "description": "As an auditor, I need to verify the parser module correctly initializes tree-sitter, loads the Pike grammar, handles incremental re-parsing, and manages the tree cache.",
       "acceptanceCriteria": [
         "Read server/src/parser.ts end-to-end (133 lines)",
         "Verify initParser correctly loads tree-sitter-pike.wasm from all candidate paths",
         "Verify parse() correctly passes oldTree for incremental parsing and stores the result",
         "Verify deleteTree and clearTreeCache correctly evict entries",
-        "Verify LRU cache (server/src/util/lruCache.ts) has correct eviction behavior — fixed max size, evicts LRU when full",
+        "Verify LRU cache (server/src/util/lruCache.ts) has correct eviction behavior \u2014 fixed max size, evicts LRU when full",
         "Run existing parser-related tests and verify they test real behavior, not mocked parse results",
         "Typecheck passes"
       ],
@@ -85,26 +85,26 @@
     },
     {
       "id": "US-006",
-      "title": "Audit diagnostics — verify error detection matches pike compilation output",
+      "title": "Audit diagnostics \u2014 verify error detection matches pike compilation output",
       "description": "As an auditor, I need to verify the LSP diagnostics feature correctly identifies and reports Pike errors, matching what pike -c actually produces for each corpus file.",
       "acceptanceCriteria": [
         "Read server/src/features/diagnostics.ts and server/src/features/diagnosticManager.ts end-to-end",
         "For each error corpus file (err-*.pike): run pike compilation manually, capture the actual errors, compare against what the LSP diagnostics feature would report",
         "Verify diagnostic severities, messages, and line numbers match pike output exactly",
         "Verify the diagnosticManager debounce, caching, and mode-switching logic is correct (test real timing, not just 'no crash')",
-        "Read tests/lsp/diagnostics.test.ts and tests/lsp/diagnostics-verification.test.ts — verify test expectations match actual pike output for each error case",
+        "Read tests/lsp/diagnostics.test.ts and tests/lsp/diagnostics-verification.test.ts \u2014 verify test expectations match actual pike output for each error case",
         "Typecheck passes"
       ],
       "priority": 6,
       "passes": true,
-      "notes": "This is the most critical correctness story — if diagnostics are wrong, users get wrong error reports."
+      "notes": "This is the most critical correctness story \u2014 if diagnostics are wrong, users get wrong error reports."
     },
     {
       "id": "US-007",
-      "title": "Audit symbolTable — verify symbol extraction matches tree-sitter AST",
+      "title": "Audit symbolTable \u2014 verify symbol extraction matches tree-sitter AST",
       "description": "As an auditor, I need to verify the symbol table module correctly extracts declarations, references, types, and scopes from tree-sitter parse trees.",
       "acceptanceCriteria": [
-        "Read server/src/features/symbolTable.ts (1881 lines) — focus on core extraction logic, not just the exports",
+        "Read server/src/features/symbolTable.ts (1881 lines) \u2014 focus on core extraction logic, not just the exports",
         "For 5 representative corpus files: parse with tree-sitter, manually walk the AST, and verify every symbol the module extracts matches what is actually in the AST",
         "Verify PRIMITIVE_TYPES set is complete and accurate for Pike 8.0",
         "Verify scope handling: local variables are not visible outside their function, class members are scoped to the class, imports are scoped to the file",
@@ -117,12 +117,12 @@
     },
     {
       "id": "US-008",
-      "title": "Audit definition and references — verify go-to-def and find-references correctness",
+      "title": "Audit definition and references \u2014 verify go-to-def and find-references correctness",
       "description": "As an auditor, I need to verify that go-to-definition jumps to the correct declaration and find-references returns all actual usages, not just some of them.",
       "acceptanceCriteria": [
         "Read server/src/features/symbolTable.ts functions: getDefinitionAt, getReferencesTo",
-        "Read tests/lsp/definition.test.ts (1145 lines) — verify test cases cover: local variables, function params, class members, inherited members, imported symbols, cross-file references, generic types",
-        "Read tests/lsp/references.test.ts (497 lines) — verify test cases cover: variable references, function calls, class instantiation, member access, cross-file references",
+        "Read tests/lsp/definition.test.ts (1145 lines) \u2014 verify test cases cover: local variables, function params, class members, inherited members, imported symbols, cross-file references, generic types",
+        "Read tests/lsp/references.test.ts (497 lines) \u2014 verify test cases cover: variable references, function calls, class instantiation, member access, cross-file references",
         "For at least 3 corpus files: manually trace a definition lookup and verify the LSP would return the correct location",
         "Verify cross-file resolution works: cross-lib-consumer.pike inherits from cross-lib-base.pike, cross-lib-user.pike uses cross_lib_module.pmod",
         "Typecheck passes"
@@ -133,11 +133,11 @@
     },
     {
       "id": "US-009",
-      "title": "Audit completion — verify completion items match available symbols",
+      "title": "Audit completion \u2014 verify completion items match available symbols",
       "description": "As an auditor, I need to verify the completion feature returns accurate, complete suggestions for the current context.",
       "acceptanceCriteria": [
         "Read server/src/features/completion.ts (929 lines) end-to-end",
-        "Read tests/lsp/completion.test.ts (1096 lines) — verify test cases cover: member access, local variables, function arguments, import completions, stdlib symbols, predef builtins",
+        "Read tests/lsp/completion.test.ts (1096 lines) \u2014 verify test cases cover: member access, local variables, function arguments, import completions, stdlib symbols, predef builtins",
         "Verify completion items include correct insertText, detail, documentation, and kind for each symbol type",
         "Verify predef builtins (server/src/data/predef-builtin-index.json) are included in completions where appropriate",
         "Verify stdlib autodoc (server/src/data/stdlib-autodoc.json) is correctly rendered in completion documentation",
@@ -150,11 +150,11 @@
     },
     {
       "id": "US-010",
-      "title": "Audit hover — verify type and documentation information is correct",
+      "title": "Audit hover \u2014 verify type and documentation information is correct",
       "description": "As an auditor, I need to verify hover responses show the correct type signature and AutoDoc documentation for the symbol under the cursor.",
       "acceptanceCriteria": [
-        "Read tests/lsp/hover.test.ts (439 lines) — verify test cases check actual type signatures against what pike reports",
-        "Read server/src/features/autodocRenderer.ts (918 lines) — verify AutoDoc XML is correctly parsed and rendered to markdown",
+        "Read tests/lsp/hover.test.ts (439 lines) \u2014 verify test cases check actual type signatures against what pike reports",
+        "Read server/src/features/autodocRenderer.ts (918 lines) \u2014 verify AutoDoc XML is correctly parsed and rendered to markdown",
         "For autodoc-documented.pike: verify the LSP extracts and renders the //! comments correctly",
         "For stdlib symbols: verify hover shows the correct stdlib documentation from stdlib-autodoc.json",
         "Verify hover for variables shows inferred type (not just 'mixed' for typed variables)",
@@ -166,12 +166,12 @@
     },
     {
       "id": "US-011",
-      "title": "Audit rename — verify rename refactoring is safe and complete",
+      "title": "Audit rename \u2014 verify rename refactoring is safe and complete",
       "description": "As an auditor, I need to verify that rename operations correctly rename ALL occurrences and do NOT rename protected symbols (predef builtins, stdlib).",
       "acceptanceCriteria": [
         "Read server/src/features/rename.ts (260 lines) end-to-end",
-        "Read server/src/features/accessResolver.ts (169 lines) — verify access resolution for rename scoping",
-        "Read tests/lsp/rename.test.ts (871 lines) — verify test cases cover: local rename, member rename, cross-file rename, protected name rejection, invalid name rejection",
+        "Read server/src/features/accessResolver.ts (169 lines) \u2014 verify access resolution for rename scoping",
+        "Read tests/lsp/rename.test.ts (871 lines) \u2014 verify test cases cover: local rename, member rename, cross-file rename, protected name rejection, invalid name rejection",
         "Verify buildProtectedNames correctly blocks rename of predef builtins and stdlib symbols",
         "Verify prepareRename correctly identifies renamable vs non-renamable positions",
         "Verify buildWorkspaceEdit produces correct TextEdits with correct ranges (not off-by-one)",
@@ -183,23 +183,23 @@
     },
     {
       "id": "US-012",
-      "title": "Audit typeResolver and typeResolution tests — verify type inference correctness",
+      "title": "Audit typeResolver and typeResolution tests \u2014 verify type inference correctness",
       "description": "As an auditor, I need to verify the type resolver correctly infers types for expressions, function returns, assignments, and chained member access.",
       "acceptanceCriteria": [
         "Read server/src/features/typeResolver.ts (278 lines) end-to-end",
-        "Read tests/lsp/typeResolution.test.ts (540 lines) — verify test cases cover: return type inference, assignment inference, chained inference, inference failure",
+        "Read tests/lsp/typeResolution.test.ts (540 lines) \u2014 verify test cases cover: return type inference, assignment inference, chained inference, inference failure",
         "For inference-*.pike corpus files: verify the LSP's inferred types match what pike would report",
         "Verify type resolution correctly handles: this_program, this_object(), function returns, constructor results, method chaining",
         "Verify inference failure cases return 'mixed' or appropriate fallback, not a wrong specific type",
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-013",
-      "title": "Audit cross-file features — workspaceIndex, moduleResolver, backgroundIndex",
+      "title": "Audit cross-file features \u2014 workspaceIndex, moduleResolver, backgroundIndex",
       "description": "As an auditor, I need to verify cross-file resolution works: importing a module, inheriting a class, and referencing symbols across files all resolve correctly.",
       "acceptanceCriteria": [
         "Read server/src/features/workspaceIndex.ts (581 lines), moduleResolver.ts (480 lines), backgroundIndex.ts (184 lines)",
@@ -211,64 +211,64 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-014",
-      "title": "Audit pikeWorker — verify pike process management is correct",
+      "title": "Audit pikeWorker \u2014 verify pike process management is correct",
       "description": "As an auditor, I need to verify the pike worker correctly spawns pike processes, handles stdout/stderr, manages timeouts, and reports errors truthfully.",
       "acceptanceCriteria": [
         "Read server/src/features/pikeWorker.ts (554 lines) end-to-end",
-        "Read tests/lsp/pikeWorker.test.ts (153 lines) — verify tests cover: successful compilation, compilation errors, process timeout, process crash, stdout parsing",
+        "Read tests/lsp/pikeWorker.test.ts (153 lines) \u2014 verify tests cover: successful compilation, compilation errors, process timeout, process crash, stdout parsing",
         "Verify the worker correctly parses pike JSON output and does not silently swallow parse errors",
         "Verify timeout handling: long-running pike processes are killed and the error is reported (not silently returning empty results)",
         "Verify concurrent pike invocations do not interfere with each other",
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-015",
-      "title": "Audit remaining features — semanticTokens, foldingRange, signatureHelp, codeAction, documentSymbol, workspaceSymbol, persistentCache",
+      "title": "Audit remaining features \u2014 semanticTokens, foldingRange, signatureHelp, codeAction, documentSymbol, workspaceSymbol, persistentCache",
       "description": "As an auditor, I need to verify the remaining LSP features produce correct output for their respective test cases.",
       "acceptanceCriteria": [
-        "Read and audit server/src/features/semanticTokens.ts — verify token types and modifiers match LSP spec",
-        "Read and audit server/src/features/foldingRange.ts — verify ranges match actual code structure",
-        "Read and audit server/src/features/signatureHelp.ts — verify parameter info matches function signatures",
-        "Read and audit server/src/features/codeAction.ts — verify quick-fix actions are correct",
-        "Read and audit server/src/features/documentSymbol.ts — verify document outline matches code structure",
-        "Read and audit server/src/features/workspaceSymbol.ts — verify workspace-wide search returns correct results",
-        "Read and audit server/src/features/persistentCache.ts — verify cache serialization/deserialization is lossless",
+        "Read and audit server/src/features/semanticTokens.ts \u2014 verify token types and modifiers match LSP spec",
+        "Read and audit server/src/features/foldingRange.ts \u2014 verify ranges match actual code structure",
+        "Read and audit server/src/features/signatureHelp.ts \u2014 verify parameter info matches function signatures",
+        "Read and audit server/src/features/codeAction.ts \u2014 verify quick-fix actions are correct",
+        "Read and audit server/src/features/documentSymbol.ts \u2014 verify document outline matches code structure",
+        "Read and audit server/src/features/workspaceSymbol.ts \u2014 verify workspace-wide search returns correct results",
+        "Read and audit server/src/features/persistentCache.ts \u2014 verify cache serialization/deserialization is lossless",
         "For each: read the corresponding test file and verify test expectations match real LSP behavior",
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-016",
-      "title": "Audit server.ts main orchestrator — verify handler wiring and edge cases",
+      "title": "Audit server.ts main orchestrator \u2014 verify handler wiring and edge cases",
       "description": "As an auditor, I need to verify the main server.ts correctly wires all feature handlers, handles lifecycle events, and manages shared state.",
       "acceptanceCriteria": [
-        "Read server/src/server.ts (1074 lines) — verify every LSP handler is correctly registered",
+        "Read server/src/server.ts (1074 lines) \u2014 verify every LSP handler is correctly registered",
         "Verify document lifecycle: didOpen, didChange, didClose, didSave all trigger correct processing",
         "Verify error handling: each handler catches and reports errors rather than crashing the server",
         "Verify connection lifecycle: initialize returns correct capabilities, shutdown cleans up resources",
         "Verify the server correctly handles concurrent requests (e.g., completion request while diagnostics are computing)",
-        "Read tests/lsp/lifecycle.test.ts, error-handling.test.ts, edge-cases.test.ts — verify they test real failure modes",
+        "Read tests/lsp/lifecycle.test.ts, error-handling.test.ts, edge-cases.test.ts \u2014 verify they test real failure modes",
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-017",
-      "title": "Audit integration tests — verify end-to-end correctness across subsystems",
+      "title": "Audit integration tests \u2014 verify end-to-end correctness across subsystems",
       "description": "As an auditor, I need to verify integration tests actually test the full stack from document open to LSP response, not just isolated units.",
       "acceptanceCriteria": [
         "Read tests/integration/activation.test.ts, crossFilePropagation.test.ts, error-recovery.test.ts, documentSymbol.test.ts, p2-verification.test.ts",
@@ -279,12 +279,12 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
       "id": "US-018",
-      "title": "Audit performance benchmarks — verify they measure real work",
+      "title": "Audit performance benchmarks \u2014 verify they measure real work",
       "description": "As an auditor, I need to verify the performance benchmarks measure actual LSP operations, not trivial no-ops.",
       "acceptanceCriteria": [
         "Read tests/perf/benchmarks.test.ts (183 lines)",
@@ -294,7 +294,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]
