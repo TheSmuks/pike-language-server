@@ -1,0 +1,456 @@
+{
+  "project": "Pike Language Server",
+  "branchName": "ralph/lsp-v1-roadmap",
+  "description": "Roadmap from v0.1.0-alpha to v1.0: close correctness gaps (cross-file inheritance, type inference, scope leaks), add LSP capabilities (semantic tokens, document highlights, folding, signature help, code actions, workspace symbol), and harden infrastructure (incremental rebuilds, background indexing, persistent cache, config UI).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Cross-file inheritance lookup in wireInheritance",
+      "description": "As a developer, I need wireInheritance() to look up inherited classes via WorkspaceIndex when not found in the same file, so that Dog d; d->speak() resolves speak() when Animal is in a different file.",
+      "acceptanceCriteria": [
+        "wireInheritance() calls WorkspaceIndex to find classes not present in the current file's symbol table",
+        "When Animal is in file_b.pike and Dog inherits Animal in file_a.pike, Dog's inheritedScopes includes Animal's scope",
+        "Existing same-file inheritance tests still pass (backward compatible)",
+        "Add at least 3 tests: cross-file inherit completion, cross-file inherit definition, cross-file inherit hover",
+        "Tests use existing corpus files (cross_inherit_chain.pike, class-single-inherit.pike)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Key file: server/src/features/workspaceIndex.ts (wireInheritance method). Depends on existing WorkspaceIndex.getFile() and ModuleResolver. See known limitation in docs/known-limitations.md section 'Cross-file inherited member completion not supported'."
+    },
+    {
+      "id": "US-002",
+      "title": "Cross-file inherited member completion",
+      "description": "As a user, I want Dog d; d-> to show inherited members like speak() from Animal, even when Animal is defined in another file.",
+      "acceptanceCriteria": [
+        "Completion after d-> includes members from cross-file inherited classes",
+        "No duplicate entries when member exists in both same-file and inherited class",
+        "Add test: Dog in file_a inherits Animal in file_b, d-> returns speak() from Animal",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Depends on US-001. Key file: server/src/features/completion.ts (resolveMemberAccess usage). After US-001 wires cross-file inheritance, completion should automatically pick up inherited members."
+    },
+    {
+      "id": "US-003",
+      "title": "Cross-file inherited member definition and hover",
+      "description": "As a user, I want go-to-definition on Dog d; d->speak() to jump to Animal.speak() in the other file, and hover to show Animal's speak documentation.",
+      "acceptanceCriteria": [
+        "Go-to-definition on d->speak() jumps to the file containing Animal and highlights speak()",
+        "Hover on d->speak() shows the signature/documentation from Animal.speak()",
+        "Add test for cross-file inherited definition resolution",
+        "Add test for cross-file inherited hover resolution",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Depends on US-001. Key files: server/src/features/accessResolver.ts (resolveAccessDefinition, resolveAccessDeclaration), server/src/server.ts (onDefinition, onHover handlers)."
+    },
+    {
+      "id": "US-004",
+      "title": "Cross-file inherited member rename scope precision",
+      "description": "As a user, I want renaming bark() on Dog to NOT rename bark() on Cat when they share the same method name.",
+      "acceptanceCriteria": [
+        "When renaming bark() on Dog, arrow/dot access references are filtered by resolved type where type is known",
+        "If type is unresolved, keep current name-based matching (no behavior change for unresolvable cases)",
+        "Add test: two classes with same method name, rename one does not affect the other",
+        "Existing rename tests still pass",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Key file: server/src/features/rename.ts (getRenameLocations). The arrow/dot access references currently use name-based matching. After US-001 wires cross-file types, use resolveMemberAccess to check if the reference's type resolves to the target class."
+    },
+    {
+      "id": "US-005",
+      "title": "Scope handlers for while, switch, and do-while blocks",
+      "description": "As a developer, I need per-construct scope handlers for while, switch, and do-while blocks so variables declared inside don't leak to the enclosing scope.",
+      "acceptanceCriteria": [
+        "Add collectWhileStatement() in symbolTable.ts that creates a block scope for while_statement body",
+        "Add collectDoWhileStatement() in symbolTable.ts that creates a block scope for do_while_statement body",
+        "Add collectSwitchStatement() in symbolTable.ts that creates a block scope for switch_statement body",
+        "Variables declared inside while/switch/do-while blocks are scoped to that block",
+        "All existing 1,311+ tests pass (backward compatible)",
+        "Add 3+ tests: one per construct, verifying variables don't leak",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Key file: server/src/features/symbolTable.ts. Follow the pattern of collectIfStatement() and collectForStatement(). Upstream issue: tree-sitter-pike#4. These are workarounds since tree-sitter doesn't provide scope-introducing nodes for these constructs."
+    },
+    {
+      "id": "US-006",
+      "title": "Full scope chain for local variable hover",
+      "description": "As a user, I want hover on any local variable in a complex function, not just ones in the immediate scope.",
+      "acceptanceCriteria": [
+        "Hover resolves variables declared in outer scopes of deeply nested functions",
+        "Add corpus file with deeply nested function (3+ nesting levels) to exercise scope chain walking",
+        "Add tests verifying hover on variables at each nesting level",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts (onHover), server/src/features/symbolTable.ts (getDefinitionAt). The scope chain walk in getDefinitionAt may be stopping early for deeply nested scopes. Investigate whether the issue is in scope chain construction or in the walk itself."
+    },
+    {
+      "id": "US-007",
+      "title": "Function return type tracking in type resolver",
+      "description": "As a user, I want makeDog()->speak() to resolve speak() because makeDog() has return type Dog.",
+      "acceptanceCriteria": [
+        "resolveType() resolves through function return type annotations (e.g., Dog makeDog() returns Dog)",
+        "resolveMemberAccess() uses resolved return type for chained access",
+        "makeDog()->speak() completion returns speak() when makeDog has return type Dog",
+        "makeDog()->speak() go-to-definition jumps to Dog.speak()",
+        "Depth-limited to MAX_RESOLUTION_DEPTH (already 5) to prevent infinite recursion",
+        "Add 5+ tests: return type inference, chained calls, depth limit, failure cases",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Key file: server/src/features/typeResolver.ts. resolveType() currently only resolves declared types on variables/parameters. Extend it to also look up function declarations by name, check their return type, and resolve that. Decision 0014 describes the existing architecture."
+    },
+    {
+      "id": "US-008",
+      "title": "Assignment-based type narrowing in symbol table",
+      "description": "As a user, I want Dog d = makeDog(); d->speak() to resolve even without an explicit type annotation on d, because the assignment RHS is Dog.",
+      "acceptanceCriteria": [
+        "Declaration interface gains optional assignedType field",
+        "Symbol table builder records initializer type for variable declarations when RHS is a simple type reference",
+        "resolveMemberAccess() checks assignedType when declaredType is absent or mixed",
+        "Only track simple assignments (x = TypeName), not control-flow-sensitive narrowing",
+        "Add 4+ tests: assignment inference, mixed variable with assignment, no initializer, complex initializer (ignored)",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Depends on US-007. Key files: server/src/features/symbolTable.ts (Declaration type, buildSymbolTable), server/src/features/typeResolver.ts. The initializer is available in tree-sitter's local_declaration node (the RHS of the assignment). Only resolve if the RHS is a single identifier that resolves to a class."
+    },
+    {
+      "id": "US-009",
+      "title": "PikeWorker typeof integration for hover on mixed variables",
+      "description": "As a user, I want hover on mixed x = someFunction() to show the inferred type from Pike, not just mixed.",
+      "acceptanceCriteria": [
+        "Hover on local variable with declaredType mixed or absent queries PikeWorker typeof()",
+        "Falls back to declared/assigned type if worker unavailable or times out (no added latency for typed vars)",
+        "Explicitly typed variables (int x) skip typeof() call entirely",
+        "Add 3+ tests: mixed variable hover with typeof, typed variable skips typeof, worker timeout fallback",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts (declForHover), server/src/features/pikeWorker.ts. PikeWorker already has a typeof method wired. The integration point is in declForHover() \u2014 after Tier 3 (tree-sitter) returns mixed, make an async call to worker.typeof() and use the result if available."
+    },
+    {
+      "id": "US-010",
+      "title": "Type inference corpus files and harness snapshots",
+      "description": "As a developer, I need corpus files that exercise each inference path with ground-truth snapshots from Pike.",
+      "acceptanceCriteria": [
+        "Add corpus file for return type inference: function returning typed object, caller accessing members",
+        "Add corpus file for assignment inference: variable assigned from typed function, accessing members",
+        "Add corpus file for chained inference: a()->b()->c pattern",
+        "Add corpus file for inference failure: mixed returns, unknown types",
+        "Harness snapshots generated for each new corpus file",
+        "Existing harness tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Key files: corpus/files/ (new .pike files), harness/snapshots/ (new JSON). Follow existing corpus file patterns. Run bun run harness:verify after adding files."
+    },
+    {
+      "id": "US-011",
+      "title": "Decision document for type inference and Phase 10 audit",
+      "description": "As a developer, I need decision documents for the type inference architecture and an audit of Decision 0002 to confirm type resolution boundaries are still accurate.",
+      "acceptanceCriteria": [
+        "Write decisions/0019-type-inference.md covering: return type tracking, assignment narrowing, typeof integration, depth limits, fallback behavior",
+        "Update decisions/0002-tier-3-scope.md: reassess undocumented object members gap after Phase 10/11 improvements",
+        "Update docs/known-limitations.md: mark resolved items, document remaining gaps",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "This is a documentation-only story. No code changes. Follow the ADR template in decisions/0000-template.md."
+    },
+    {
+      "id": "US-012",
+      "title": "Semantic token type and modifier mapping",
+      "description": "As a developer, I need a defined mapping from Pike's declaration types to LSP SemanticTokenTypes and SemanticTokenModifiers.",
+      "acceptanceCriteria": [
+        "Create server/src/features/semanticTokens.ts with the token type mapping: class->class, function->function, method->method, variable->variable, parameter->parameter, constant->variable(modifier:readonly), enum->enum, enum_member->enumMember, typedef->type, inherit/import->namespace",
+        "Define modifier mapping: declaration, definition, readonly (constants), static (class-level declarations), deprecated (from AutoDoc)",
+        "Token type and modifier indices follow LSP spec (legend ordering)",
+        "Write decisions/0020-semantic-tokens.md with the mapping rationale",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "This is a data model and design story. No LSP handler yet. Key reference: LSP spec 3.16+ semantic tokens. Key file: server/src/features/symbolTable.ts (DeclKind, Declaration types). Each DeclKind maps to a SemanticTokenType."
+    },
+    {
+      "id": "US-013",
+      "title": "Semantic token production from symbol table",
+      "description": "As a developer, I need a function that walks the symbol table and tree-sitter parse tree to produce semantic token data (delta-encoded array per LSP spec).",
+      "acceptanceCriteria": [
+        "Add produceSemanticTokens(table: SymbolTable, tree: Tree): SemanticToken[] function",
+        "Walks all declarations in the symbol table, producing one token per declaration with correct type and modifiers",
+        "Handles references: identifier_expr, arrow_access, dot_access, scope_access get appropriate token types",
+        "Stdlib/predef identifiers tokenized as namespace or type (not variable)",
+        "Tokens are delta-encoded (relative positions) per LSP spec",
+        "Add 10+ unit tests for the token production function",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Key files: server/src/features/semanticTokens.ts (new), server/src/features/symbolTable.ts (SymbolTable, Declaration, Reference types). This story produces the data, NOT the LSP handler."
+    },
+    {
+      "id": "US-014",
+      "title": "Semantic token LSP handler registration",
+      "description": "As a user, I want my Pike code to be semantically highlighted with correct token types for classes, functions, variables, parameters, etc.",
+      "acceptanceCriteria": [
+        "Register textDocument/semanticTokens/full handler in server.ts",
+        "Register semanticTokens capability in initialize response with full delta support",
+        "Handler calls produceSemanticTokens() from US-013 and returns the LSP-encoded response",
+        "Incremental token updates on didChange (delta encoding per LSP spec)",
+        "Add 5+ LSP protocol tests (Layer 1) verifying token output for various declaration types",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Depends on US-012 and US-013. Key file: server/src/server.ts (add onSemanticTokens handler). Follow the pattern of onDocumentSymbol \u2014 get doc, parse, produce tokens, return."
+    },
+    {
+      "id": "US-015",
+      "title": "Document highlight handler",
+      "description": "As a user, I want to see all occurrences of the symbol under my cursor highlighted in the current file.",
+      "acceptanceCriteria": [
+        "Register textDocument/documentHighlight handler in server.ts",
+        "Uses getReferencesTo() from symbolTable (same-file, already implemented)",
+        "Distinguishes read (DocumentHighlightKind.Read) vs write (DocumentHighlightKind.Write) access",
+        "Register documentHighlightProvider capability in initialize response",
+        "Add 5+ tests: variable read/write, function call, class usage, parameter, enum member",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts, server/src/features/symbolTable.ts (getReferencesTo). getReferencesTo already returns Reference objects with location data. Map them to DocumentHighlight with Read/Write kind based on the reference context."
+    },
+    {
+      "id": "US-016",
+      "title": "Folding range handler",
+      "description": "As a user, I want to fold class bodies, function bodies, if/for/foreach/while/switch blocks, import groups, and comment blocks.",
+      "acceptanceCriteria": [
+        "Register textDocument/foldingRange handler in server.ts",
+        "Register foldingRangeProvider capability in initialize response",
+        "Foldable ranges from tree-sitter: class_body, function_body, if/for/foreach/while/switch blocks",
+        "Foldable ranges for comment blocks (line_comment groups) and AutoDoc blocks (//! groups)",
+        "Add 6+ tests: one per foldable construct type",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts, server/src/parser.ts (tree-sitter parse). This uses the tree-sitter parse tree directly \u2014 walk the tree for nodes that have block-like children and produce FoldingRange objects."
+    },
+    {
+      "id": "US-017",
+      "title": "Signature help handler",
+      "description": "As a user, I want parameter hints when calling a function or method, showing which parameter I am currently typing.",
+      "acceptanceCriteria": [
+        "Register textDocument/signatureHelp handler in server.ts",
+        "Trigger characters: ( and ,",
+        "Register signatureHelpProvider capability with trigger characters",
+        "Shows parameter name and type from tree-sitter declaration for local/workspace functions",
+        "Shows signature from stdlib-autodoc.json for stdlib functions",
+        "Active parameter tracking based on comma count inside the argument list",
+        "Write decisions/0021-signature-help.md",
+        "Add 5+ tests: local function, class method, stdlib function, nested calls, no match",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts, server/src/features/symbolTable.ts, server/src/data/stdlib-autodoc.json. Use tree-sitter to find the enclosing call expression, identify the callee, resolve it to a declaration, extract parameter list."
+    },
+    {
+      "id": "US-018",
+      "title": "Code action: remove unused variable",
+      "description": "As a user, I want a quick-fix to remove unused variables when the Pike compiler reports them.",
+      "acceptanceCriteria": [
+        "Register textDocument/codeAction handler in server.ts",
+        "Register codeActionProvider capability in initialize response",
+        "Code action: 'Remove unused variable' appears for diagnostics with message matching 'Unused local variable'",
+        "Action produces a WorkspaceEdit that deletes the declaration line",
+        "Add 3+ tests: unused variable gets action, used variable gets no action, action produces correct edit",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts, server/src/features/diagnosticManager.ts (diagnostics source). This is the simplest code action \u2014 start here before adding more complex ones."
+    },
+    {
+      "id": "US-019",
+      "title": "Code action: add missing import",
+      "description": "As a user, I want a quick-fix to add an import when the Pike compiler reports an undefined identifier that matches a known module.",
+      "acceptanceCriteria": [
+        "Code action: 'Add import X' appears for undefined identifier diagnostics where X matches a known module name",
+        "Module matching uses WorkspaceIndex module map and stdlib index",
+        "Action produces a WorkspaceEdit inserting import statement at file top (after any existing imports or #pike directives)",
+        "Add 3+ tests: undefined identifier matching stdlib module, matching workspace module, no match gets no action",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": true,
+      "notes": "Depends on US-018 (code action handler already registered). Key files: server/src/server.ts, server/src/features/workspaceIndex.ts (module map), server/src/data/stdlib-autodoc.json."
+    },
+    {
+      "id": "US-020",
+      "title": "Workspace symbol search handler",
+      "description": "As a user, I want to search for symbols across the entire workspace (Ctrl+T / workspace/symbol).",
+      "acceptanceCriteria": [
+        "Register workspace/symbol handler in server.ts",
+        "Searches across all indexed files in WorkspaceIndex",
+        "Supports prefix matching on symbol names (case-insensitive)",
+        "Returns SymbolInformation with name, kind, location (URI + range)",
+        "Lazy: only searches files that have been indexed (opened or changed)",
+        "Register workspace.symbolProvider capability in initialize response",
+        "Add 4+ tests: search by class name, function name, partial match, no results",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts, server/src/features/workspaceIndex.ts. Iterate over all FileEntry objects in the index, collect declarations whose name matches the query, map to SymbolInformation."
+    },
+    {
+      "id": "US-021",
+      "title": "Background workspace indexing on startup",
+      "description": "As a user, I want the LSP to index my entire workspace on startup so that workspace/symbol and cross-file navigation work immediately.",
+      "acceptanceCriteria": [
+        "On initialized event, kick off background file discovery of workspace .pike/.pmod files",
+        "Parse and index each discovered file into WorkspaceIndex",
+        "Report progress via window/workDoneProgress",
+        "Does not block or degrade responsiveness of active editing (async, yields between files)",
+        "Add 3+ tests: background indexing populates index, progress reported, concurrent requests still respond",
+        "Write decisions/0022-background-indexing.md",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts (onInitialized), server/src/features/workspaceIndex.ts. File discovery: use glob pattern **/*.pike and **/*.pmod relative to workspace root. Parse each file with tree-sitter, build symbol table, upsert into index."
+    },
+    {
+      "id": "US-022",
+      "title": "Persistent cache across LSP restarts",
+      "description": "As a user, I want the LSP to start fast when reopening a workspace because it reuses cached analysis from the previous session.",
+      "acceptanceCriteria": [
+        "On shutdown, serialize symbol tables and workspace index metadata to .pike-lsp/cache/ in the workspace",
+        "On startup, load cache and rebuild only files whose content hash changed",
+        "Cache invalidated when pike version changes (read pike --version) or tree-sitter-pike WASM hash changes",
+        "Graceful fallback: if cache is corrupt, delete and rebuild from scratch (no crash)",
+        "Add 4+ tests: cache roundtrip, cache invalidation on version change, corrupt cache recovery, partial rebuild",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": true,
+      "notes": "Key files: server/src/server.ts (onShutdown, onInitialized), server/src/features/workspaceIndex.ts. Cache format: JSON files keyed by URI. Each entry: URI, version, contentHash, symbolTable (serialized declarations/scopes/references)."
+    },
+    {
+      "id": "US-023",
+      "title": "VSCode configuration schema and settings UI",
+      "description": "As a user, I want a VSCode settings UI for the LSP configuration options, not just raw initializationOptions.",
+      "acceptanceCriteria": [
+        "Add configuration.contributes.configuration to extension.package.json with schema for: pike.diagnostics.mode (enum: realtime/saveOnly/off), pike.diagnostics.debounceMs (number), pike.diagnostics.maxProblems (number), pike.binaryPath (string)",
+        "Add didChangeConfiguration handler in server.ts that reads updated settings",
+        "Settings changes take effect without restart",
+        "Default values documented in the schema",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": true,
+      "notes": "Key files: extension.package.json (contributes.configuration), server/src/server.ts (onDidChangeConfiguration handler). The server already reads initializationOptions; extend to also read workspace/configuration."
+    },
+    {
+      "id": "US-024",
+      "title": "Cancellation token propagation to all handlers",
+      "description": "As a developer, I need all request handlers to respect CancellationToken so stale requests don't compete with new ones.",
+      "acceptanceCriteria": [
+        "onDefinition handler checks token.isCancellationRequested before and after expensive operations",
+        "onReferences handler checks token.isCancellationRequested",
+        "onHover handler checks token.isCancellationRequested",
+        "onRenameRequest handler checks token.isCancellationRequested",
+        "onSemanticTokens handler checks token.isCancellationRequested (if implemented)",
+        "Return null or empty result immediately when cancelled",
+        "Add 4+ tests: cancellation during definition, references, hover, rename",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": true,
+      "notes": "Key file: server/src/server.ts. The onCompletion handler already checks CancellationToken (Phase 6). Extend the pattern to all other handlers. Each handler's signature already includes CancellationToken \u2014 just add the checks."
+    },
+    {
+      "id": "US-025",
+      "title": "Update Decision 0002 and project documentation for v1.0",
+      "description": "As a developer, I need to revise Decision 0002 to include code actions and update all project documentation to reflect the v1.0 feature set.",
+      "acceptanceCriteria": [
+        "Decision 0002 section 13 (code actions) updated from 'out of scope' to 'in scope, implemented'",
+        "docs/state-of-project.md updated with Phase 10-14 completions and new capability table",
+        "README.md updated: feature list includes all 12 LSP capabilities",
+        "docs/other-editors.md verified current for Neovim and generic LSP clients",
+        "CHANGELOG.md updated with all changes since alpha",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": true,
+      "notes": "Documentation-only story. No code changes. Read the existing docs before updating to ensure accuracy."
+    },
+    {
+      "id": "US-026",
+      "title": "Real-codebase verification against Pike stdlib",
+      "description": "As a developer, I need to verify the LSP against Pike's lib/modules/ (555 files) with all v1.0 features to confirm zero crashes and zero wrong answers.",
+      "acceptanceCriteria": [
+        "Run LSP against Pike's lib/modules/ or equivalent 100+ file Pike codebase",
+        "Test documentSymbol, definition, references, hover, completion, rename, semanticTokens, foldingRange, documentHighlight, signatureHelp across 14+ representative files",
+        "Zero crashes (P1)",
+        "Zero wrong answers (P1) \u2014 any P1 found must be fixed before this story passes",
+        "All P2 findings documented with specific file, line, feature, expected vs actual",
+        "Semantic token coverage measured: % of declarations with correct token type",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": true,
+      "notes": "Follow the Phase 9 WS2 methodology: select 14 representative files spanning 10-2528 lines, exercise each LSP feature, classify findings as P1 (crash/wrong) or P2 (degraded/missing)."
+    },
+    {
+      "id": "US-027",
+      "title": "Performance regression test suite",
+      "description": "As a developer, I need automated performance regression tests so v1.0 stays fast as features are added.",
+      "acceptanceCriteria": [
+        "Add benchmark tests for: completion (cold and warm), hover, definition, semantic tokens, workspace indexing",
+        "Benchmarks are separate test file(s) in tests/perf/ marked as slow",
+        "CI workflow added that runs benchmarks (separate from main test suite)",
+        "Baseline measurements documented in docs/state-of-project.md Performance Baseline section",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": true,
+      "notes": "Key files: tests/perf/ (new directory), .github/workflows/benchmark.yml (new). Use Bun's built-in test runner with performance measurement. Baselines: completion warm p50 <2ms, hover <1ms, semantic tokens full <50ms."
+    },
+    {
+      "id": "US-028",
+      "title": "Version bump and v1.0.0 release",
+      "description": "As a maintainer, I need to tag and release v1.0.0 with tested VSIX and standalone builds.",
+      "acceptanceCriteria": [
+        "package.json version set to 1.0.0",
+        "VSIX built via existing build process and tested on clean VSCode installation",
+        "Standalone build tested with Neovim + nvim-lspconfig",
+        "GitHub release created with changelog from CHANGELOG.md",
+        "docs/state-of-project.md updated with v1.0.0 status and final test counts",
+        "All tests pass (1,500+ expected)",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": true,
+      "notes": "This is the final story. All previous stories must pass. Use existing build scripts: bun run build, bun run build:standalone, bun run build:extension."
+    }
+  ]
+}

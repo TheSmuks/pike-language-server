@@ -8,6 +8,18 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createTestServer, type TestServer } from "./helpers";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
+
+function readCorpusSource(filename: string): string {
+  return readFileSync(join(CORPUS_DIR, filename), "utf-8");
+}
+
+function corpusUri(filename: string): string {
+  return `file://${join(CORPUS_DIR, filename)}`;
+}
 
 // ---------------------------------------------------------------------------
 // Shared server
@@ -276,5 +288,153 @@ describe("Hover isolation", () => {
     // (it would take >100ms due to subprocess startup)
     expect(result).not.toBeNull();
     expect(result!.contents.value).toContain("Documented");
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// Cross-file inherited member hover (US-001)
+// ---------------------------------------------------------------------------
+
+describe("hover LSP: cross-file inherited member (US-001)", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("hover on d->speak() shows Animal.speak signature from cross-file", async () => {
+    const srcA = readCorpusSource("cross-inherit-simple-a.pike");
+    server.openDoc(corpusUri("cross-inherit-simple-a.pike"), srcA);
+
+    const srcB = readCorpusSource("cross-inherit-simple-b.pike");
+    const uriB = server.openDoc(corpusUri("cross-inherit-simple-b.pike"), srcB);
+
+    // d->speak() — speak is at line 25, char 28
+    const result = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: uriB },
+      position: { line: 25, character: 28 },
+    }) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("speak");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// US-009: PikeWorker typeof integration for hover on mixed/untyped variables
+// ---------------------------------------------------------------------------
+
+describe("US-009: typeof integration for hover on mixed/untyped variables", () => {
+  let server: TestServer;
+  let typeofCalls: Array<{ source: string; expression: string }>;
+  let origTypeof: typeof server.server.worker.typeof_;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+    origTypeof = server.server.worker.typeof_.bind(server.server.worker);
+  });
+
+  afterAll(async () => {
+    // Restore original typeof_
+    server.server.worker.typeof_ = origTypeof;
+    await server.teardown();
+  });
+
+  test("hover on mixed variable calls typeof and shows inferred type", async () => {
+    typeofCalls = [];
+    // Stub typeof_ to simulate Pike returning 'Dog' for 'd'
+    server.server.worker.typeof_ = async (source, expression) => {
+      typeofCalls.push({ source, expression });
+      return { type: "Dog" };
+    };
+
+    const uri = "file:///test/us009-mixed.pike";
+    const source = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d;',
+      '}',
+    ].join('\n');
+    server.openDoc(uri, source);
+
+    // Hover on 'd' at line 3, char 2
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 3, character: 2 } },
+    ) as HoverResult | null;
+
+    // typeof_ should have been called for 'd'
+    expect(typeofCalls.length).toBe(1);
+    expect(typeofCalls[0].expression).toBe("d");
+
+    // Hover should show the inferred type from Pike
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("Dog");
+  });
+
+  test("hover on explicitly typed variable skips typeof call", async () => {
+    typeofCalls = [];
+    server.server.worker.typeof_ = async (source, expression) => {
+      typeofCalls.push({ source, expression });
+      return { type: "int" };
+    };
+
+    const uri = "file:///test/us009-typed.pike";
+    const source = [
+      'void test() {',
+      '  int x = 42;',
+      '  x;',
+      '}',
+    ].join('\n');
+    server.openDoc(uri, source);
+
+    // Hover on 'x' at line 2, char 2
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 2, character: 2 } },
+    ) as HoverResult | null;
+
+    // typeof_ should NOT have been called — x has explicit type 'int'
+    expect(typeofCalls.length).toBe(0);
+
+    // Should still show hover from tree-sitter
+    expect(result).not.toBeNull();
+  });
+
+  test("hover on mixed variable falls back when worker times out", async () => {
+    typeofCalls = [];
+    // Simulate worker failure by throwing
+    server.server.worker.typeof_ = async (source, expression) => {
+      typeofCalls.push({ source, expression });
+      throw new Error("Worker timeout");
+    };
+
+    const uri = "file:///test/us009-fallback.pike";
+    const source = [
+      'void test() {',
+      '  mixed d = 42;',
+      '  d;',
+      '}',
+    ].join('\n');
+    server.openDoc(uri, source);
+
+    // Hover on 'd' at line 2, char 2
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 2, character: 2 } },
+    ) as HoverResult | null;
+
+    // typeof_ was attempted
+    expect(typeofCalls.length).toBe(1);
+
+    // Should fall back to tree-sitter hover (not null, just basic)
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("d");
   });
 });

@@ -146,13 +146,19 @@ export function resolveAccessDeclaration(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Find the URI of a declaration by searching the workspace index. */
+/** Find the URI of a declaration by searching the workspace index.
+ *
+ * For synthetic declarations from cross-file inheritance, uses sourceUri.
+ */
 function findDeclUri(
   ctx: ResolutionContext,
   targetDecl: Declaration,
   localTable: SymbolTable,
   localUri: string,
 ): string {
+  // Synthetic declarations from cross-file inheritance carry their origin URI.
+  if (targetDecl.sourceUri) return targetDecl.sourceUri;
+
   if (localTable.declarations.some(d => d.id === targetDecl.id)) return localUri;
   for (const uri of ctx.index.getAllUris()) {
     if (uri === localUri) continue;

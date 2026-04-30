@@ -11,6 +11,7 @@
  * 4. Stdlib type via prefix index
  */
 
+import { PRIMITIVE_TYPES } from "./symbolTable";
 import type { Declaration, SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
@@ -25,11 +26,6 @@ export interface TypeResolutionContext {
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
 }
 
-const PRIMITIVE_TYPES = new Set([
-  "void", "mixed", "zero", "int", "float", "string",
-  "array", "mapping", "multiset", "object", "function", "program",
-  "bool", "auto", "any",
-]);
 
 const MAX_RESOLUTION_DEPTH = 5;
 
@@ -99,9 +95,12 @@ export function resolveMemberAccess(
 ): Declaration | null {
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
-  // If we have a declaration with a declared type, resolve through it
-  if (lhsDecl?.declaredType) {
-    const result = resolveType(lhsDecl.declaredType, context, depth + 1);
+  // Use assignedType when declaredType is absent or a primitive like 'mixed'
+  const typeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
+    ? lhsDecl.declaredType
+    : lhsDecl?.assignedType;
+  if (typeName) {
+    const result = resolveType(typeName, context, depth + 1);
     if (result?.decl.kind === "class") {
       const member = findMemberInClass(memberName, result.decl, result.table);
       if (member) return member;

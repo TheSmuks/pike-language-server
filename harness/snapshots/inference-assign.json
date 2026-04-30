@@ -1,0 +1,91 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 49,
+      "message": "Unused local variable info.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 56,
+      "message": "Unused local variable eng.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/inference-assign.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "fuel"
+        },
+        {
+          "kind": "function",
+          "name": "get_hp"
+        },
+        {
+          "kind": "variable",
+          "name": "horsepower"
+        }
+      ],
+      "name": "Engine"
+    },
+    {
+      "kind": "class",
+      "line": 21,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "engine"
+        },
+        {
+          "kind": "function",
+          "name": "get_engine"
+        },
+        {
+          "kind": "function",
+          "name": "info"
+        },
+        {
+          "kind": "variable",
+          "name": "model"
+        }
+      ],
+      "name": "Car"
+    },
+    {
+      "kind": "function",
+      "line": 40,
+      "name": "test_constructor_assign"
+    },
+    {
+      "kind": "function",
+      "line": 47,
+      "name": "test_function_assign"
+    },
+    {
+      "kind": "function",
+      "line": 55,
+      "name": "test_mixed_constructor"
+    }
+  ]
+}

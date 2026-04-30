@@ -464,6 +464,160 @@ describe("definition API: scope-aware shadowing", () => {
 });
 
 // ===========================================================================
+// 7b. Scope handlers for while, switch, do-while (US-005)
+// ===========================================================================
+
+describe("definition API: while/switch/do-while scope isolation (US-005)", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("while loop variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test() {',
+      '  int x = 1;',
+      '  while (x > 0) {',
+      '    int y = 2;',
+      '    x = y - 1;',
+      '  }',
+      '  // y is not visible here',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-while.pike", 1);
+
+    // y should be declared at line 3 (inside while body)
+    const yDecl = table.declarations.find(d => d.name === 'y');
+    expect(yDecl).toBeDefined();
+    expect(yDecl!.nameRange.start.line).toBe(3);
+
+    // y's scope should NOT be the function scope — it should be nested
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(yDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+
+  test("switch case variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test(int x) {',
+      '  switch (x) {',
+      '    case 1:',
+      '      int a = 10;',
+      '      break;',
+      '    case 2:',
+      '      int b = 20;',
+      '      break;',
+      '  }',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-switch.pike", 1);
+
+    // a and b should be declared inside the switch body scope
+    const aDecl = table.declarations.find(d => d.name === 'a');
+    const bDecl = table.declarations.find(d => d.name === 'b');
+    expect(aDecl).toBeDefined();
+    expect(bDecl).toBeDefined();
+
+    // Both should be in a scope nested under the function scope
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(aDecl!.scopeId).not.toBe(funcScope!.id);
+    expect(bDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+
+  test("do-while loop variables don't leak to enclosing scope", () => {
+    const src = [
+      'void test() {',
+      '  int x = 0;',
+      '  do {',
+      '    int y = x + 1;',
+      '    x = y;',
+      '  } while (x < 10);',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test-dowhile.pike", 1);
+
+    // y should be declared inside the do-while body scope
+    const yDecl = table.declarations.find(d => d.name === 'y');
+    expect(yDecl).toBeDefined();
+    expect(yDecl!.nameRange.start.line).toBe(3);
+
+    // y's scope should NOT be the function scope
+    const funcScope = table.scopes.find(s => s.kind === 'function');
+    expect(funcScope).toBeDefined();
+    expect(yDecl!.scopeId).not.toBe(funcScope!.id);
+  });
+});
+
+// ===========================================================================
+// 7c. Full scope chain for deeply nested variables (US-006)
+// ===========================================================================
+
+describe("definition API: deep scope chain resolution (US-006)", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("variable in outer function scope resolves from 4 levels deep", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // level3 = level0 + level1 + level2 is at line 18
+    // level0 is at the outermost function scope (line 9)
+    const level0Ref = table.references.find(
+      r => r.name === 'level0' && r.loc.line === 18,
+    );
+    expect(level0Ref).toBeDefined();
+    expect(level0Ref!.resolvesTo).not.toBeNull();
+
+    const level0Decl = table.declarations.find(d => d.id === level0Ref!.resolvesTo);
+    expect(level0Decl).toBeDefined();
+    expect(level0Decl!.nameRange.start.line).toBe(9); // string level0
+  });
+
+  test("for-loop variable resolves from inside while/if nesting", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // level1 is at line 12 (inside for loop)
+    // level1 reference at line 18 should resolve to declaration at line 12
+    const level1Refs = table.references.filter(
+      r => r.name === 'level1' && r.loc.line === 18,
+    );
+    expect(level1Refs.length).toBeGreaterThanOrEqual(1);
+
+    const decl = table.declarations.find(d => d.id === level1Refs[0].resolvesTo);
+    expect(decl).toBeDefined();
+    expect(decl!.nameRange.start.line).toBe(12);
+  });
+
+  test("getDefinitionAt resolves through 4 scope levels", () => {
+    const src = readCorpusSource("nested-scope-chain.pike");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+
+    // On line 18: string level3 = level0 + level1 + level2;
+    const level0Ref = table.references.find(r => r.name === 'level0' && r.loc.line === 18);
+    const level1Ref = table.references.find(r => r.name === 'level1' && r.loc.line === 18);
+    const level2Ref = table.references.find(r => r.name === 'level2' && r.loc.line === 18);
+
+    expect(level0Ref).toBeDefined();
+    expect(level1Ref).toBeDefined();
+    expect(level2Ref).toBeDefined();
+
+    const def0 = getDefinitionAt(table, 18, level0Ref!.loc.character);
+    const def1 = getDefinitionAt(table, 18, level1Ref!.loc.character);
+    const def2 = getDefinitionAt(table, 18, level2Ref!.loc.character);
+
+    expect(def0?.name).toBe('level0');
+    expect(def1?.name).toBe('level1');
+    expect(def2?.name).toBe('level2');
+  });
+});
 // 8. Direct API tests — no definition for external symbols
 // ===========================================================================
 
@@ -930,4 +1084,63 @@ describe("definition cross-check: resolved refs match snapshot symbols", () => {
       }
     },
   );
+});
+
+
+// ===========================================================================
+// 16. Cross-file inherited member definition (US-001)
+// ===========================================================================
+
+describe("definition LSP: cross-file inherited member (US-001)", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("d->speak() resolves to Animal.speak in cross-file A", async () => {
+    // Index file A first so B's wireInheritance can resolve Animal
+    const srcA = readCorpusSource("cross-inherit-simple-a.pike");
+    server.openDoc(corpusUri("cross-inherit-simple-a.pike"), srcA);
+
+    const srcB = readCorpusSource("cross-inherit-simple-b.pike");
+    const uriB = server.openDoc(corpusUri("cross-inherit-simple-b.pike"), srcB);
+
+    // d->speak() — speak is at line 25, char 28
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri: uriB },
+      position: { line: 25, character: 28 },
+    });
+
+    expect(result).not.toBeNull();
+    // Should resolve to Animal.speak in file A
+    expect(result.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
+    expect(result.range.start.line).toBe(18); // speak() is declared at line 18 in file A
+  });
+
+  test("definition: d->speak() resolves via assignedType when declaredType is mixed (US-008)", async () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-assigned.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 3, character: 5 }, // on 'speak'
+    });
+
+    // assignedType='Dog' should let the resolver find Dog.speak
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should point to the speak method inside Dog class
+    expect(result.range.start.line).toBe(0); // Dog class is at line 0
+  });
 });

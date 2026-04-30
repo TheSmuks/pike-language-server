@@ -25,6 +25,10 @@ export interface Declaration {
   alias?: string;
   /** For variables and parameters: the declared type annotation text, if present. */
   declaredType?: string;
+  /** For variables: type inferred from assignment initializer (e.g., Dog d = makeDog()). */
+  assignedType?: string;
+  /** For synthetic declarations from cross-file inheritance: URI of the origin file. */
+  sourceUri?: string;
 }
 
 export type DeclKind =
@@ -45,6 +49,8 @@ export interface Reference {
   kind: RefKind;
   resolvesTo: number | null; // Declaration.id, null if unresolved
   confidence: 'high' | 'medium' | 'low';
+  /** For arrow/dot access: the LHS identifier name (e.g., 'd' in d->bark). */
+  lhsName?: string;
 }
 
 export type RefKind =
@@ -75,8 +81,10 @@ export type ScopeKind =
   | 'block'
   | 'for'
   | 'foreach'
-  | 'if_cond';
-
+  | 'if_cond'
+  | 'while'
+  | 'do_while'
+  | 'switch';
 export interface SymbolTable {
   uri: string;
   version: number;
@@ -120,7 +128,79 @@ function extractTypeText(node: Node): string | undefined {
   return typeNode?.text;
 }
 
-// ---------------------------------------------------------------------------
+/**
+ * Primitive type names that can never have members.
+ * Shared with typeResolver.ts — kept as a set for O(1) lookup.
+ */
+export const PRIMITIVE_TYPES = new Set([
+  'void', 'mixed', 'zero', 'int', 'float', 'string',
+  'array', 'mapping', 'multiset', 'object', 'function', 'program',
+  'bool', 'auto', 'any',
+]);
+
+/**
+ * Extract the type name from a variable initializer, if the RHS is a simple
+ * identifier that could be a class name (e.g., Dog d = makeDog() → makeDog).
+ *
+ * Drills through expression wrappers (comma_expr, assign_expr, cond_expr,
+ * postfix_expr) to find the innermost identifier. Returns undefined for
+ * literals, complex expressions, or call expressions whose callee is not
+ * a simple identifier.
+ */
+function extractInitializerType(node: Node): string | undefined {
+  // Only variable_decl or local_declaration has a 'value' field with an initializer
+  if (node.type !== 'variable_decl' && node.type !== 'local_declaration') return undefined;
+
+  const valueNode = node.childForFieldName('value');
+  if (!valueNode) return undefined;
+
+  // Drill through expression wrappers to find the innermost meaningful node.
+  // The tree wraps expressions: comma_expr > assign_expr > cond_expr > ... >
+  // postfix_expr > primary_expr > identifier_expr > identifier
+  // For call expressions like makeDog(), we want the callee name (makeDog).
+  // For simple references like someVar, we want the identifier.
+  let inner: Node | null = valueNode;
+  while (inner !== null) {
+    if (inner.type === 'postfix_expr') {
+      // postfix_expr is a call expression if it has more than 1 child
+      // (the extra children are ( and ) or an argument_list).
+      // For calls, extract the callee name (first child) and stop.
+      // For simple references, keep drilling into the single child.
+      if (inner.childCount > 1) {
+        // Call expression: extract the callee (first child)
+        inner = inner.child(0);
+        // Continue drilling — callee may be wrapped in another postfix_expr
+        continue;
+      }
+      // Single child: keep drilling
+      inner = inner.child(0);
+      continue;
+    }
+
+    if (inner.type === 'identifier_expr' || inner.type === 'primary_expr') {
+      inner = inner.namedChild(0);
+      continue;
+    }
+
+    // Expression wrappers: drill into first named child
+    if (inner.namedChildCount === 1) {
+      inner = inner.namedChild(0);
+      continue;
+    }
+
+    // identifier, literal, etc. — stop drilling
+    break;
+  }
+
+  if (!inner || inner.type !== 'identifier') return undefined;
+
+  const name = inner.text;
+  // Skip primitive types and keywords
+  if (PRIMITIVE_TYPES.has(name)) return undefined;
+
+  return name;
+}
+
 // Builder state
 // ---------------------------------------------------------------------------
 
@@ -171,14 +251,25 @@ function addDeclaration(state: BuildState, decl: Omit<Declaration, 'id'>): numbe
 // Scope-aware tree walker
 // ---------------------------------------------------------------------------
 
+export interface BuildOptions {
+  /** WorkspaceIndex for cross-file inheritance resolution. */
+  index?: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  };
+}
+
 /**
  * Build a symbol table from a tree-sitter parse tree.
  *
  * Two passes:
  * 1. Collect declarations and build scope tree
  * 2. Collect references and resolve them
+ *
+ * @param index Optional WorkspaceIndex for cross-file inheritance wiring.
  */
-export function buildSymbolTable(tree: Tree, uri: string, version: number): SymbolTable {
+export function buildSymbolTable(tree: Tree, uri: string, version: number, options?: BuildOptions): SymbolTable {
   const state: BuildState = {
     nextId: 0,
     declarations: [],
@@ -206,7 +297,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number): Symb
   };
 
   // Pass 3: wire inheritance BEFORE reference resolution
-  wireInheritance(table);
+  wireInheritance(table, options?.index, uri);
 
   // Pass 4: collect and resolve references (inheritance now wired)
   state.references = table.references;
@@ -287,6 +378,21 @@ function collectDeclarations(node: Node, state: BuildState): void {
 
   if (node.type === 'if_statement') {
     collectIfStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'while_statement') {
+    collectWhileStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'do_while_statement') {
+    collectDoWhileStatement(node, state);
+    return;
+  }
+
+  if (node.type === 'switch_statement') {
+    collectSwitchStatement(node, state);
     return;
   }
 
@@ -571,6 +677,79 @@ function collectIfStatement(node: Node, state: BuildState): void {
   }
 }
 
+function collectWhileStatement(node: Node, state: BuildState): void {
+  // cond_decl in condition creates a scope wrapping body
+  const condition = node.childForFieldName('condition');
+  let pushedCondScope = false;
+  if (condition) {
+    for (const child of condition.children) {
+      if (child.type === 'cond_decl') {
+        pushScope(state, 'while', toRange(node));
+        collectDeclarations(child, state);
+        pushedCondScope = true;
+        break;
+      }
+    }
+  }
+
+  // Body gets its own block scope
+  const body = node.childForFieldName('body');
+  if (body) {
+    pushScope(state, 'block', toRange(body));
+    collectDeclarations(body, state);
+    popScope(state);
+  }
+
+  if (pushedCondScope) {
+    popScope(state);
+  }
+}
+
+function collectDoWhileStatement(node: Node, state: BuildState): void {
+  // No cond_decl possible in do-while condition
+  const body = node.childForFieldName('body');
+  if (body) {
+    pushScope(state, 'do_while', toRange(body));
+    collectDeclarations(body, state);
+    popScope(state);
+  }
+}
+
+function collectSwitchStatement(node: Node, state: BuildState): void {
+  // cond_decl in value creates a scope wrapping body
+  const value = node.childForFieldName('value');
+  let pushedCondScope = false;
+  if (value) {
+    for (const child of value.children) {
+      if (child.type === 'cond_decl') {
+        pushScope(state, 'switch', toRange(node));
+        collectDeclarations(child, state);
+        pushedCondScope = true;
+        break;
+      }
+    }
+  }
+
+  // Body block has no field name — find it by type
+  let body: Node | null = null;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child?.type === 'block') {
+      body = child;
+      break;
+    }
+  }
+  if (body) {
+    pushScope(state, 'block', toRange(body));
+    collectDeclarations(body, state);
+    popScope(state);
+  }
+
+  if (pushedCondScope) {
+    popScope(state);
+  }
+}
+
 function collectSimpleDecl(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
   const kind = DECL_KIND_MAP[node.type];
@@ -602,6 +781,10 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
   // Multi-name declarations (variable, constant)
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
+  // Only extract assignedType for variable declarations without a useful declared type
+  const assignedType = (actualKind === 'variable' && (!typeText || typeText === 'mixed'))
+    ? extractInitializerType(decl)
+    : undefined;
   if (nameNodes.length > 0) {
     for (const nameNode of nameNodes) {
       addDeclaration(state, {
@@ -611,6 +794,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         range: toRange(decl),
         scopeId,
         declaredType: typeText,
+        assignedType,
       });
     }
   } else {
@@ -624,6 +808,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         range: toRange(decl),
         scopeId,
         declaredType: typeText,
+        assignedType,
       });
     }
   }
@@ -770,6 +955,21 @@ function collectThisRef(node: Node, state: BuildState): void {
   });
 }
 
+/**
+ * Extract the leftmost identifier text from a postfix_expr chain.
+ * For d->bark, the LHS postfix_expr contains [primary_expr [identifier_expr [identifier 'd']]].
+ * Returns the identifier text, or undefined if not found.
+ */
+function extractLhsIdentifier(lhsNode: Node | undefined): string | undefined {
+  if (!lhsNode) return undefined;
+  if (lhsNode.type === 'identifier') return lhsNode.text;
+  // Drill into first child recursively
+  if (lhsNode.childCount > 0) {
+    return extractLhsIdentifier(lhsNode.child(0)!);
+  }
+  return undefined;
+}
+
 function collectPostfixRef(node: Node, state: BuildState): void {
   // postfix_expr is polymorphic — dispatch based on children
   const children = node.children;
@@ -779,12 +979,15 @@ function collectPostfixRef(node: Node, state: BuildState): void {
     if (child.type === '->' || child.type === '->?' || child.type === '?->') {
       const memberNode = children[i + 1];
       if (memberNode && (memberNode.type === 'identifier' || memberNode.type === 'magic_identifier')) {
+        // Capture LHS identifier for type-aware filtering (US-004).
+        const lhsName = extractLhsIdentifier(children[i - 1]);
         state.references.push({
           name: memberNode.text,
           loc: toLoc(memberNode.startPosition),
           kind: 'arrow_access',
           resolvesTo: null, // TODO: resolve through object type (Phase 3 basic)
           confidence: 'low',
+          lhsName,
         });
       }
     }
@@ -792,12 +995,14 @@ function collectPostfixRef(node: Node, state: BuildState): void {
     if (child.type === '.') {
       const memberNode = children[i + 1];
       if (memberNode && memberNode.type === 'identifier') {
+        const lhsName = extractLhsIdentifier(children[i - 1]);
         state.references.push({
           name: memberNode.text,
           loc: toLoc(memberNode.startPosition),
           kind: 'dot_access',
           resolvesTo: null, // Cross-file for now
           confidence: 'low',
+          lhsName,
         });
       }
     }
@@ -1119,6 +1324,87 @@ function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declarati
 }
 
 /**
+ * Find a declaration by name that is visible at the given line.
+ * Searches scopes from innermost to outermost.
+ */
+function findDeclInScopeAt(
+  table: SymbolTable,
+  name: string,
+  line: number,
+): Declaration | undefined {
+  // Find the innermost scope containing this line.
+  let bestScopeId: number | null = null;
+  let bestDepth = -1;
+  for (const scope of table.scopes) {
+    if (line >= scope.range.start.line && line <= scope.range.end.line) {
+      let depth = 0;
+      let parentId = scope.parentId;
+      while (parentId !== null) {
+        depth++;
+        const parent = table.scopeById.get(parentId);
+        if (!parent) break;
+        parentId = parent.parentId;
+      }
+      if (depth > bestDepth) {
+        bestDepth = depth;
+        bestScopeId = scope.id;
+      }
+    }
+  }
+
+  // Walk up scopes to find the declaration
+  let scopeId = bestScopeId;
+  while (scopeId !== null) {
+    const scope = table.scopeById.get(scopeId);
+    if (!scope) break;
+    for (const declId of scope.declarations) {
+      const decl = table.declById.get(declId);
+      if (decl && decl.name === name) return decl;
+    }
+    scopeId = scope.parentId;
+  }
+
+  return undefined;
+}
+
+/**
+ * Check if a declaration is a member (direct or inherited) of a class.
+ *
+ * classDecl.scopeId is the scope CONTAINING the class (e.g., file scope),
+ * not the class body scope. We find the class body scope by looking for a
+ * child scope with kind === 'class'.
+ */
+function isMemberOfClass(
+  table: SymbolTable,
+  targetDeclId: number,
+  classDecl: Declaration,
+): boolean {
+  // Find the class body scope — it's a child scope with kind 'class'
+  // whose range matches the class declaration's range.
+  let classBodyScope = null;
+  for (const scope of table.scopes) {
+    if (scope.parentId === classDecl.scopeId && scope.kind === 'class' &&
+        scope.range.start.line >= classDecl.range.start.line &&
+        scope.range.end.line <= classDecl.range.end.line) {
+      classBodyScope = scope;
+      break;
+    }
+  }
+  if (!classBodyScope) return false;
+
+  // Direct member of the class body scope
+  if (classBodyScope.declarations.includes(targetDeclId)) return true;
+
+  // Inherited member
+  for (const inheritedScopeId of classBodyScope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedScopeId);
+    if (inheritedScope?.declarations.includes(targetDeclId)) return true;
+  }
+
+  return false;
+}
+
+/**
  * Find all references to a declaration (for find-references).
  */
 export function getReferencesTo(
@@ -1163,12 +1449,33 @@ export function getReferencesTo(
   // be resolved to a specific declaration (untyped access). This ensures
   // rename finds call sites like `d->bark()` even when the arrow reference
   // has resolvesTo=null.
+  //
+  // US-004: filter by declared type when LHS type is known. If LHS resolves
+  // to a class that does NOT contain the target declaration, exclude it.
   const targetDecl = table.declById.get(targetDeclId);
   if (targetDecl) {
     const targetName = targetDecl.name;
     for (const ref of table.references) {
       if (ref.resolvesTo === null && ref.name === targetName &&
           (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
+        if (ref.lhsName) {
+          // Type-aware filtering: check if LHS's type contains the target.
+          // Uses declaredType first, falls back to assignedType.
+          const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
+          const lhsTypeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
+            ? lhsDecl.declaredType
+            : lhsDecl?.assignedType;
+          if (lhsTypeName) {
+            const typeClass = table.declarations.find(
+              d => d.kind === 'class' && d.name === lhsTypeName,
+            );
+            if (typeClass) {
+              // Check if target declaration is a member of the LHS's type class.
+              const isMember = isMemberOfClass(table, targetDeclId, typeClass);
+              if (!isMember) continue; // LHS type doesn't contain target — exclude
+            }
+          }
+        }
         results.push(ref);
       }
     }
@@ -1352,8 +1659,30 @@ export function findClassScopeAt(table: SymbolTable, line: number, character: nu
  * After building the symbol table, wire up class inheritance.
  * For each class scope that contains `inherit` declarations,
  * find the inherited class's scope and add it to `inheritedScopes`.
+ *
+ * Two resolution paths:
+ * 1. Local: class declared in the same file (existing behavior).
+ * 2. Cross-file: class brought into scope via file-level inherit/import,
+ *    resolved through the WorkspaceIndex.
+ *
+ * Cross-file classes get a synthetic scope in the local table whose
+ * declarations mirror the remote class's members. This lets all
+ * inheritedScopes consumers work without modification.
  */
-export function wireInheritance(table: SymbolTable): void {
+export function wireInheritance(
+  table: SymbolTable,
+  index?: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  },
+  uri?: string,
+): void {
+  // Track the next synthetic ID to avoid collisions with real declarations.
+  let syntheticIdCounter = table.declarations.length > 0
+    ? Math.max(...table.declarations.map(d => d.id)) + 1
+    : 0;
+
   for (const scope of table.scopes) {
     if (scope.kind !== 'class') continue;
 
@@ -1363,27 +1692,184 @@ export function wireInheritance(table: SymbolTable): void {
 
     for (const inheritDecl of inheritDecls) {
       if (!inheritDecl) continue;
-      // Find a class declaration with this name in the parent (file) scope
-      const parentScope = scope.parentId !== null ? table.scopes.find(s => s.id === scope.parentId) : null;
-      if (!parentScope) continue;
 
-      for (const candidateId of parentScope.declarations) {
-        const candidate = table.declById.get(candidateId);
-        if (candidate && candidate.kind === 'class' && candidate.name === inheritDecl.name) {
-          // Find the class scope for this class declaration
-          const classScope = table.scopes.find(s =>
-            s.kind === 'class' &&
-            s.parentId === scope.parentId &&
-            containsRange(s.range, candidate.range)
-          );
-          if (classScope && classScope.id !== scope.id) {
-            scope.inheritedScopes.push(classScope.id);
-          }
-        }
+      const resolvedLocally = wireLocalInheritance(table, scope, inheritDecl);
+      if (resolvedLocally) continue;
+
+      // Cross-file resolution: look up the inherited class via WorkspaceIndex.
+      if (!index || !uri) continue;
+      const crossFileResult = wireCrossFileInheritance(
+        table, scope, inheritDecl, index, uri, syntheticIdCounter,
+      );
+      if (crossFileResult !== null) {
+        syntheticIdCounter = crossFileResult.nextId;
+        scope.inheritedScopes.push(crossFileResult.scopeId);
       }
     }
   }
 }
+
+/**
+ * Try to wire an inherit declaration against same-file classes.
+ * Returns true if a local class was found and wired.
+ */
+function wireLocalInheritance(
+  table: SymbolTable,
+  scope: Scope,
+  inheritDecl: Declaration,
+): boolean {
+  const parentScope = scope.parentId !== null
+    ? table.scopes.find(s => s.id === scope.parentId)
+    : null;
+  if (!parentScope) return false;
+
+  for (const candidateId of parentScope.declarations) {
+    const candidate = table.declById.get(candidateId);
+    if (candidate && candidate.kind === 'class' && candidate.name === inheritDecl.name) {
+      const classScope = table.scopes.find(s =>
+        s.kind === 'class' &&
+        s.parentId === scope.parentId &&
+        containsRange(s.range, candidate.range),
+      );
+      if (classScope && classScope.id !== scope.id) {
+        scope.inheritedScopes.push(classScope.id);
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Try to wire an inherit declaration against a cross-file class.
+ *
+ * Resolution strategy:
+ * 1. Check if the inherit name matches a class in a file-level inherit/import target.
+ *    File-level `inherit "other.pike"` brings other.pike's top-level classes into scope.
+ * 2. If found, create a synthetic scope in the local table that mirrors
+ *    the remote class's members (including its own inherited members).
+ *
+ * Returns the synthetic scope ID and next available ID, or null if not found.
+ */
+function wireCrossFileInheritance(
+  table: SymbolTable,
+  scope: Scope,
+  inheritDecl: Declaration,
+  index: {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  },
+  fromUri: string,
+  startId: number,
+): { scopeId: number; nextId: number } | null {
+  const inheritName = inheritDecl.name;
+
+  // The inherit name might be a class brought into scope by a file-level
+  // inherit/import. Check file-level inherit/import declarations.
+  const fileScope = table.scopes.find(s => s.kind === 'file');
+  if (!fileScope) return null;
+
+  for (const fileDeclId of fileScope.declarations) {
+    const fileDecl = table.declById.get(fileDeclId);
+    if (!fileDecl || (fileDecl.kind !== 'inherit' && fileDecl.kind !== 'import')) continue;
+
+    // Resolve the file-level inherit/import to a target URI.
+    const isStringLit = fileDecl.name.startsWith('"') && fileDecl.name.endsWith('"');
+    const targetUri = isStringLit
+      ? index.resolveInherit(fileDecl.name, true, fromUri)
+      : index.resolveImport(fileDecl.name, fromUri)
+        ?? index.resolveInherit(fileDecl.name, false, fromUri);
+    if (!targetUri) continue;
+
+    const targetTable = index.getSymbolTable(targetUri);
+    if (!targetTable) continue;
+
+    // Look for the class in the target file.
+    const targetClass = targetTable.declarations.find(
+      d => d.kind === 'class' && d.name === inheritName,
+    );
+    if (!targetClass) continue;
+
+    // Find the class body scope in the target table.
+    const targetClassScope = targetTable.scopes.find(s =>
+      s.kind === 'class' && s.parentId === targetClass.scopeId &&
+      containsRange(s.range, targetClass.range),
+    );
+    if (!targetClassScope) continue;
+
+    // Create a synthetic scope in the local table mirroring the remote
+    // class's declarations. This allows all inheritedScopes consumers
+    // to work without modification.
+    const syntheticScopeId = startId;
+    const syntheticDeclIds: number[] = [];
+    let nextId = startId + 1;
+
+    for (const remoteDeclId of targetClassScope.declarations) {
+      const remoteDecl = targetTable.declById.get(remoteDeclId);
+      if (!remoteDecl) continue;
+
+      const syntheticDecl: Declaration = {
+        id: nextId,
+        name: remoteDecl.name,
+        kind: remoteDecl.kind,
+        nameRange: remoteDecl.nameRange,
+        range: remoteDecl.range,
+        scopeId: syntheticScopeId,
+        declaredType: remoteDecl.declaredType,
+        alias: remoteDecl.alias,
+        sourceUri: targetUri,
+      };
+      table.declarations.push(syntheticDecl);
+      table.declById.set(nextId, syntheticDecl);
+      syntheticDeclIds.push(nextId);
+      nextId++;
+    }
+
+    // Also include declarations from inherited scopes of the target class.
+    for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+      const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+      if (!remoteInheritedScope) continue;
+
+      for (const remoteDeclId of remoteInheritedScope.declarations) {
+        const remoteDecl = targetTable.declById.get(remoteDeclId);
+        if (!remoteDecl) continue;
+
+        const syntheticDecl: Declaration = {
+          id: nextId,
+          name: remoteDecl.name,
+          kind: remoteDecl.kind,
+          nameRange: remoteDecl.nameRange,
+          range: remoteDecl.range,
+          scopeId: syntheticScopeId,
+          declaredType: remoteDecl.declaredType,
+          alias: remoteDecl.alias,
+          sourceUri: targetUri,
+        };
+        table.declarations.push(syntheticDecl);
+        table.declById.set(nextId, syntheticDecl);
+        syntheticDeclIds.push(nextId);
+        nextId++;
+      }
+    }
+
+    const syntheticScope: Scope = {
+      id: syntheticScopeId,
+      kind: 'class',
+      range: targetClassScope.range,
+      parentId: scope.id,
+      declarations: syntheticDeclIds,
+      inheritedScopes: [],
+    };
+    table.scopes.push(syntheticScope);
+    table.scopeById.set(syntheticScopeId, syntheticScope);
+
+    return { scopeId: syntheticScopeId, nextId };
+  }
+
+  return null;
+}
+
 
 function containsRange(outer: Range, inner: Range): boolean {
   return (

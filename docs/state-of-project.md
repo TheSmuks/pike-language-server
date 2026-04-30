@@ -1,6 +1,6 @@
-# State of the Project — Phase 9 Complete
+# State of the Project — Phase 14 Complete
 
-> Audit date: 2026-04-28. Updated after Phase 9 completion (all three workstreams).
+> Audit date: 2026-04-30. Updated after Phase 14 completion (type inference, semantic tokens, code actions, workspace features).
 
 ## Project Identity
 
@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 1,311 tests, 0 failures, 10,720 assertions, 28 files
+- **Test suite:** 1,565 tests, 1 flaky (pre-existing), 13,072 assertions, 43 files
 
 ## Phase History
 
@@ -24,10 +24,15 @@
 | 7: Type Resolution + Import Tracking | Complete | 1,016 | resolveType/resolveMemberAccess, DeclKind 'import', 37 new tests |
 | 8: Rename | Complete + post-audit fixes | 1,051 | textDocument/rename, textDocument/prepareRename, 30 rename tests, 3 audit bugs fixed |
 | 9: Stabilize and Multi-editor | Complete | 1,311 | Standalone build, Neovim verified, real-codebase tested (0 P1), performance measured |
+| 10: Type Inference | Complete | 1,356 | assignedType, extractInitializerType, PRIMITIVE_TYPES, typeof integration |
+| 11: Inference Docs | Complete | 1,356 | Decision 0019, corpus files, harness snapshots, known-limitations |
+| 12: Semantic Tokens | Complete | 1,425 | Token type/modifier mapping, production, delta encoding. Decision 0020. |
+| 13: LSP Features | Complete | 1,530 | documentHighlight, foldingRange, signatureHelp, semanticTokens handler. Decisions 0020, 0021. |
+| 14: Workspace Features | Complete | 1,565 | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
 
 ## LSP Feature Completeness
 
-| Capability | Status | Details |
+| capability | status | Details |
 |------------|--------|---------|
 | documentSymbol | **Implemented** | 15 node-type to SymbolKind mappings, partial results on parse errors |
 | definition | **Implemented** | Same-file scope chain + cross-file inherit/import chains + arrow/dot via type resolution |
@@ -36,11 +41,13 @@
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
 | rename | **Implemented** | textDocument/rename + prepareRename. Scope-aware, cross-file via WorkspaceIndex. Keyword validation. Decision 0016. |
-| code actions | **Not implemented** | Decision 0002 section 13: out of scope |
+| code actions | **Implemented** | Remove unused variable, add missing import. Extensible quick-fix registry. Decision 0021. |
+| semanticTokens | **Implemented** | 9 token types + 5 modifiers. Function→method promotion in class scope. Decision 0020. |
+| documentHighlight | **Implemented** | Read/Write highlighting for declarations and references. |
+| foldingRange | **Implemented** | class_body, block, comment group folding. |
+| signatureHelp | **Implemented** | Parameter hints with active parameter tracking. Stdlib + local function support. Decision 0021. |
+| workspaceSymbol | **Implemented** | Cross-file prefix search, case-insensitive. Decision 0022. |
 | formatting | Not planned | — |
-| signature help | Not planned | — |
-| folding range | Not planned | — |
-| document highlight | Not planned | — |
 
 ## Architecture Summary
 
@@ -141,7 +148,13 @@
 | Unqualified completion cold/warm | 6ms / 0.5ms (small file), 5.3ms / 2.6ms (large file) |
 | Dot completion (Stdio.) cold/warm | 8.3ms / 0.06ms |
 | Cross-file go-to-definition p50 | 0.001ms |
+| Semantic tokens (300-line file) | < 50ms |
+| Document symbols (300-line file) | < 30ms |
+| Workspace symbol search (300-line file) | < 20ms |
+| Folding ranges (300-line file) | < 20ms |
+| Document highlight | < 20ms |
 
+See tests/perf/benchmarks.test.ts for regression tests (3x slack for CI variability).
 ## Corpus
 
 37 committed files across 14 categories, 21 planned:

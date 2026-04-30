@@ -10,6 +10,8 @@
  * - Top-level `connection.listen()` — the production entry point over stdio.
  */
 
+import { resolve } from "node:path";
+
 import {
   createConnection,
   TextDocuments,
@@ -29,6 +31,8 @@ import {
   CancellationToken,
   DidChangeWatchedFilesNotification,
   FileChangeType,
+  DocumentHighlight,
+  DocumentHighlightKind,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { LRUCache } from "./util/lruCache";
@@ -38,14 +42,26 @@ import { getParseDiagnostics } from "./features/diagnostics";
 import {
   getDefinitionAt,
   getReferencesTo,
+  PRIMITIVE_TYPES,
   type SymbolTable,
   type Declaration,
 } from "./features/symbolTable";
 import { getCompletions, type CompletionContext } from "./features/completion";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import {
-  resolveAccessDefinition,
+  SEMANTIC_TOKENS_LEGEND,
+  produceSemanticTokens,
+  deltaEncodeTokens,
+} from "./features/semanticTokens";
+import { produceFoldingRanges } from "./features/foldingRange";
+import { produceSignatureHelp } from "./features/signatureHelp";
+import { produceCodeActions } from "./features/codeAction";
+import { searchWorkspaceSymbols } from "./features/workspaceSymbol";
+import { indexWorkspaceFiles } from "./features/backgroundIndex";
+import { saveCache, loadCache, deserializeSymbolTable, computeWasmHash, deleteCache } from "./features/persistentCache";
+import {
   resolveAccessDeclaration,
+  resolveAccessDefinition,
   type ResolutionContext,
 } from "./features/accessResolver";
 import {
@@ -93,6 +109,26 @@ function buildProtectedNames(
 const protectedNames: Set<string> = buildProtectedNames(
   stdlibAutodocIndex as Record<string, unknown>,
   predefBuiltins,
+);
+
+/**
+ * Extract top-level stdlib module names from the autodoc index.
+ * Keys are 'predef.Module.Class.method' — we extract the 'Module' segment.
+ */
+function buildStdlibModules(stdlibAutodoc: Record<string, unknown>): Set<string> {
+  const modules = new Set<string>();
+  for (const fqn of Object.keys(stdlibAutodoc)) {
+    const parts = fqn.split('.');
+    // predef.X.Y... → X is the module name
+    if (parts.length >= 2) {
+      modules.add(parts[1]);
+    }
+  }
+  return modules;
+}
+
+const stdlibModules: Set<string> = buildStdlibModules(
+  stdlibAutodocIndex as Record<string, unknown>,
 );
 
 // ---------------------------------------------------------------------------
@@ -269,6 +305,17 @@ export function createPikeServer(connection: Connection): PikeServer {
         completionProvider: {
           triggerCharacters: ['.', '>', ':'],
         },
+        semanticTokensProvider: {
+          legend: SEMANTIC_TOKENS_LEGEND,
+          full: true,
+        },
+        documentHighlightProvider: true,
+        foldingRangeProvider: true,
+        signatureHelpProvider: {
+          triggerCharacters: ['(', ','],
+        },
+        codeActionProvider: true,
+        workspaceSymbolProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -307,6 +354,43 @@ export function createPikeServer(connection: Connection): PikeServer {
         // Registration may still fail (e.g., client rejects it)
       });
     }
+
+    // Load persistent cache
+    const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+    const currentWasmHash = computeWasmHash(wasmPath);
+
+    try {
+      const cached = await loadCache(index.workspaceRoot, currentWasmHash);
+      if (cached) {
+        let restored = 0;
+        for (const entry of cached) {
+          if (entry.symbolTable) {
+            const table = deserializeSymbolTable(entry.symbolTable);
+            // Rebuild only if not already indexed (open doc takes precedence)
+            if (!index.getFile(entry.uri)) {
+              index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
+              restored++;
+            }
+          }
+        }
+        connection.console.log(`Pike LSP: restored ${restored} files from cache`);
+      }
+    } catch (err) {
+      connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
+    }
+
+    // Background workspace indexing — fire-and-forget
+    // Discovers and indexes all .pike/.pmod files for workspace/symbol
+    // and cross-file navigation.
+    indexWorkspaceFiles({
+      connection,
+      index,
+      workspaceRoot: index.workspaceRoot,
+    }).catch((err) => {
+      connection.console.error(
+        `Pike LSP: background indexing failed: ${(err as Error).message}`,
+      );
+    });
   });
 
   connection.onDidChangeWatchedFiles((params) => {
@@ -330,6 +414,30 @@ export function createPikeServer(connection: Connection): PikeServer {
           break;
         }
       }
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // Configuration changes (US-023)
+  // -----------------------------------------------------------------------
+
+  connection.onDidChangeConfiguration(async (settings) => {
+    const config = settings.settings?.pike?.languageServer;
+    if (!config) return;
+
+    if (config.diagnosticMode) {
+      const mode = config.diagnosticMode;
+      if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
+        diagnosticManager.setDiagnosticMode(mode);
+      }
+    }
+
+    if (config.diagnosticDebounceMs && config.diagnosticDebounceMs > 0) {
+      diagnosticManager.setDebounceMs(config.diagnosticDebounceMs);
+    }
+
+    if (config.maxNumberOfProblems && config.maxNumberOfProblems > 0) {
+      diagnosticManager.setMaxNumberOfProblems(config.maxNumberOfProblems);
     }
   });
 
@@ -359,10 +467,141 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   // -----------------------------------------------------------------------
+  // textDocument/semanticTokens/full
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/semanticTokens/full", async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return { data: [] };
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return { data: [] };
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return { data: [] };
+
+    const tokens = produceSemanticTokens(table);
+    const data = deltaEncodeTokens(tokens);
+
+    return { data };
+  });
+
+  // -----------------------------------------------------------------------
+  // textDocument/documentHighlight (US-015)
+  // -----------------------------------------------------------------------
+
+  connection.onDocumentHighlight(async (params) => {
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const refs = getReferencesTo(
+      table,
+      params.position.line,
+      params.position.character,
+    );
+
+    if (refs.length === 0) return null;
+
+    // Map references to DocumentHighlight
+    // Declaration sites → Write, reference sites → Read
+    // Find the target declaration to distinguish
+    const targetDecl = getDefinitionAt(
+      table,
+      params.position.line,
+      params.position.character,
+    );
+
+    const highlights: DocumentHighlight[] = [];
+
+    // Add the declaration itself as a Write highlight
+    if (targetDecl) {
+      highlights.push({
+        range: {
+          start: { line: targetDecl.nameRange.start.line, character: targetDecl.nameRange.start.character },
+          end: { line: targetDecl.nameRange.end.line, character: targetDecl.nameRange.end.character },
+        },
+        kind: DocumentHighlightKind.Write,
+      });
+    }
+
+    // Add all references as Read highlights
+    for (const ref of refs) {
+      // Skip if same position as declaration (already added as Write)
+      if (targetDecl && ref.loc.line === targetDecl.nameRange.start.line &&
+          ref.loc.character === targetDecl.nameRange.start.character) {
+        continue;
+      }
+
+      highlights.push({
+        range: {
+          start: { line: ref.loc.line, character: ref.loc.character },
+          end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+        },
+        kind: DocumentHighlightKind.Read,
+      });
+    }
+
+    return highlights.length > 0 ? highlights : null;
+  });
+  // -----------------------------------------------------------------------
+  // textDocument/foldingRange (US-016)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/foldingRange", async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+
+    const tree = parse(doc.getText(), doc.uri);
+    if (!tree) return [];
+
+    return produceFoldingRanges(tree);
+  });
+  // -----------------------------------------------------------------------
+  // textDocument/signatureHelp (US-017)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/signatureHelp", async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const tree = parse(doc.getText(), doc.uri);
+    if (!tree) return null;
+
+    return produceSignatureHelp(
+      tree, table,
+      params.position.line,
+      params.position.character,
+      stdlibIndex,
+    );
+  });
+
+  // -----------------------------------------------------------------------
+  // textDocument/codeAction (US-018)
+  // -----------------------------------------------------------------------
+
+  connection.onCodeAction(async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+
+    return produceCodeActions(params, doc.getText(), { stdlibModules });
+  });
+
+  // -----------------------------------------------------------------------
+  // workspace/symbol (US-020)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("workspace/symbol", async (params) => {
+    const query = params.query ?? "";
+    return searchWorkspaceSymbols(query, index);
+  });
+
+  // -----------------------------------------------------------------------
   // textDocument/definition
   // -----------------------------------------------------------------------
 
-  connection.onDefinition(async (params) => {
+  connection.onDefinition(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -392,6 +631,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     );
 
     if (crossFile) {
+      if (token.isCancellationRequested) return null;
       const loc: LspLocation = {
         uri: crossFile.uri,
         range: {
@@ -412,7 +652,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/references
   // -----------------------------------------------------------------------
 
-  connection.onReferences(async (params) => {
+  connection.onReferences(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return [];
 
@@ -453,7 +694,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/rename (decision 0016)
   // -----------------------------------------------------------------------
 
-  connection.onPrepareRename(async (params) => {
+  connection.onPrepareRename(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -469,7 +711,8 @@ export function createPikeServer(connection: Connection): PikeServer {
     };
   });
 
-  connection.onRenameRequest(async (params) => {
+  connection.onRenameRequest(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -512,7 +755,8 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   const stdlibIndex = stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>;
 
-  connection.onHover(async (params) => {
+  connection.onHover(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
 
@@ -544,6 +788,32 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
 
       return null;
+    }
+
+    // Tier 4: PikeWorker typeof for untyped/mixed variables
+    // Only for variables/parameters where declaredType is absent or 'mixed'.
+    // Explicitly typed variables (int, string, Dog, etc.) skip entirely.
+    const isVariableLike = decl.kind === 'variable' || decl.kind === 'parameter';
+    const declType = (decl as Declaration).declaredType;
+    const needsPikeTypeof = isVariableLike && (!declType || declType === 'mixed' || declType === 'auto');
+    if (needsPikeTypeof) {
+      const source = doc.getText();
+      try {
+        const typeofResult = await worker.typeof_(source, decl.name);
+        if (typeofResult.type && typeofResult.type !== 'mixed' && !typeofResult.error) {
+          const baseHover = declForHover(decl, params.textDocument.uri);
+          if (baseHover) {
+            const inferredSig = `${typeofResult.type} ${decl.name}`;
+            return formatHover({
+              ...baseHover,
+              signature: `${baseHover.signature}  // inferred: ${typeofResult.type}`,
+              documentation: `Type inferred by Pike: \`${typeofResult.type}\``,
+            });
+          }
+        }
+      } catch {
+        // Worker unavailable or timed out — fall through to tree-sitter hover
+      }
     }
 
     return formatHover(declForHover(decl, params.textDocument.uri));
@@ -726,8 +996,18 @@ export function createPikeServer(connection: Connection): PikeServer {
   // Shutdown
   // -----------------------------------------------------------------------
 
-  connection.onShutdown(() => {
+  connection.onShutdown(async () => {
     diagnosticManager.dispose();
+
+    // Save persistent cache before clearing
+    try {
+      const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+      const wasmHash = computeWasmHash(wasmPath);
+      await saveCache(index.workspaceRoot, index, wasmHash);
+    } catch (err) {
+      // Cache save failure is non-critical
+    }
+
     index.clear();
     cacheClear();
     clearTreeCache();

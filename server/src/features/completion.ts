@@ -22,6 +22,7 @@ import {
   getSymbolsInScope,
   getDeclarationsInScope,
   findClassScopeAt,
+  PRIMITIVE_TYPES,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveType } from "./typeResolver";
@@ -595,9 +596,24 @@ function completeMemberAccess(
     }
   }
 
-  // Strategy 3: lhs is a declared variable — resolve its type
-  // Find if lhsNode text matches a declaration with a known type
-  const lhsDecl = findDeclarationForName(table, lhsText, line, character);
+  // Strategy 3: lhs is a declared variable/function — resolve its type
+  // For function calls (e.g., makeDog()->), extract the function name
+  let lookupName = lhsText;
+  if (lhsNode.type === 'postfix_expr' && lhsText.endsWith('()')) {
+    // Function call — extract the innermost identifier
+    const innerIdent = lhsNode.child(0);
+    if (innerIdent) {
+      // Drill down to the identifier inside the call expression
+      let nameNode = innerIdent;
+      while (nameNode.childCount > 0 && nameNode.type !== 'identifier') {
+        nameNode = nameNode.child(0)!;
+      }
+      if (nameNode.type === 'identifier') {
+        lookupName = nameNode.text;
+      }
+    }
+  }
+  const lhsDecl = findDeclarationForName(table, lookupName, line, character);
   if (lhsDecl && lhsDecl.kind !== "inherit") {
     // Try to resolve the declared type
     const typeMembers = resolveTypeMembers(lhsDecl, table, ctx);
@@ -764,12 +780,6 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   import: CompletionItemKind.Module,
 };
 
-/** Primitive Pike types that can never resolve to a class with members. */
-const PRIMITIVE_TYPES = new Set([
-  "void", "mixed", "zero", "int", "float", "string",
-  "array", "mapping", "multiset", "object", "function", "program",
-  "bool", "auto", "any",
-]);
 
 function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
   return {
@@ -832,11 +842,15 @@ function resolveTypeMembers(
     }
   }
 
-  // If the declaration is a variable/parameter, resolve its declared type
-  if ((decl.kind === "variable" || decl.kind === "parameter") && decl.declaredType) {
-    const typeName = decl.declaredType;
-    // Skip primitive types that can never have members
-    if (!PRIMITIVE_TYPES.has(typeName)) {
+  // If the declaration is a variable/parameter/function, resolve its type
+  // Functions have declaredType set to their return type
+  // Variables with assignedType use that when declaredType is absent/mixed
+  if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") {
+    // Use assignedType when declaredType is absent or a primitive like 'mixed'
+    const typeName = (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
+      ? decl.declaredType
+      : decl.assignedType;
+    if (typeName) {
       // Use typeResolver for same-file, cross-file, and qualified type resolution
       const result = resolveType(typeName, {
         table,
