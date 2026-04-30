@@ -403,3 +403,24 @@ Thread: N/A (Ralph agent iteration)
   - Dynamic titles (function returning string) allow parameterized fix names like 'Add import Stdio'
   - The stdlibAutodocIndex keys are FQNs like 'predef.Module.Class.method' — extract Module from parts[1]
 ---
+
+## 2026-04-30 - US-020
+Thread: N/A (Ralph agent iteration)
+- Workspace symbol search handler
+- Created server/src/features/workspaceSymbol.ts with:
+  - searchWorkspaceSymbols() — case-insensitive prefix matching across all indexed files
+  - DeclKind → SymbolKind mapping (reused from documentSymbol patterns)
+  - Filters out parameters and imports from results
+- Added getAllEntries() method to WorkspaceIndex for iterating file entries
+- Registered workspace/symbol handler and workspaceSymbolProvider capability
+- 6 tests: class search, function search, partial match, no results, multi-file, parameter filtering
+- Files changed:
+  - server/src/features/workspaceSymbol.ts (new)
+  - server/src/features/workspaceIndex.ts (getAllEntries method)
+  - server/src/server.ts (handler, capability)
+  - tests/lsp/workspaceSymbol.test.ts (new, 6 tests)
+- **Learnings for future iterations:**
+  - WorkspaceIndex.getAllEntries() is useful for any cross-file feature
+  - Parameters should be excluded from workspace symbol results (too noisy)
+  - SymbolKind values: Class=5, Function=12, Variable=13, Constant=14, Enum=10, EnumMember=22
+---

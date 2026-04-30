@@ -26,6 +26,7 @@ export enum ModificationSource {
   DidChangeWatchedFiles = "didChangeWatchedFiles",
   DidSave = "didSave",
   DidClose = "didClose",
+  BackgroundIndex = "backgroundIndex",
   DidChangeConfiguration = "didChangeConfiguration",
 }
 

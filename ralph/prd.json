@@ -318,7 +318,7 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts, server/src/features/workspaceIndex.ts. Iterate over all FileEntry objects in the index, collect declarations whose name matches the query, map to SymbolInformation."
     },
     {

@@ -55,6 +55,7 @@ import { produceFoldingRanges } from "./features/foldingRange";
 import { produceSignatureHelp } from "./features/signatureHelp";
 import { produceCodeActions } from "./features/codeAction";
 import { searchWorkspaceSymbols } from "./features/workspaceSymbol";
+import { indexWorkspaceFiles } from "./features/backgroundIndex";
 import {
   resolveAccessDeclaration,
   resolveAccessDefinition,
@@ -350,6 +351,19 @@ export function createPikeServer(connection: Connection): PikeServer {
         // Registration may still fail (e.g., client rejects it)
       });
     }
+
+    // Background workspace indexing — fire-and-forget
+    // Discovers and indexes all .pike/.pmod files for workspace/symbol
+    // and cross-file navigation.
+    indexWorkspaceFiles({
+      connection,
+      index,
+      workspaceRoot: index.workspaceRoot,
+    }).catch((err) => {
+      connection.console.error(
+        `Pike LSP: background indexing failed: ${(err as Error).message}`,
+      );
+    });
   });
 
   connection.onDidChangeWatchedFiles((params) => {
