@@ -626,3 +626,31 @@ Thread: N/A (Ralph agent iteration)
   - The broken file test creates a temp dir inside corpus/files/ which is on the module path — no path issues
   - All 11 tests produce 45 expect() calls — comprehensive coverage of the harness integrity
 ---
+
+## 2026-04-30 - US-003
+Thread: N/A (Ralph agent iteration)
+- Full audit of snapshot-canonicalizer.test.ts: 16 tests, 22 expect() calls, all passing
+- Verified DISTINCT diff scenarios:
+  - Field added (symbols missing from expected) ✓
+  - Field changed (symbols differ) ✓
+  - Field removed (covered by field missing test, one-directional) ✓
+  - pike_version excluded from diff ✓
+  - Key ordering ignored ✓
+- Minor gap: nested change diff and array reorder not explicitly tested via diffSnapshot (only via canonicalStringify)
+- All test expectations are independently constructed literals — NOT self-referential
+- deepSortKeys edge cases verified:
+  - null → returns null ✓
+  - undefined → returns undefined ✓
+  - empty arrays → returns [] ✓
+  - empty objects → returns {} ✓
+  - nested objects → recursively sorted ✓
+  - mixed types → preserved ✓
+  - Note: undefined values in objects are dropped during JSON.stringify (by design)
+- No code changes needed — tests are well-designed
+- Files changed:
+  - scripts/ralph/prd.json (US-003 passes: true)
+- **Learnings for future iterations:**
+  - The snapshot tests use independent object literals, not computed values — good pattern for avoiding self-referential tests
+  - Fisher-Yates shuffle is used for key-order independence verification — genuinely random, not deterministic
+  - deepSortKeys(undefined) returns undefined, but JSON.stringify drops undefined keys — the canonicalizer is JSON-aware
+---
