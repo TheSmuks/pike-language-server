@@ -603,3 +603,26 @@ Thread: N/A (Ralph agent iteration)
   - The harness test self-heals: if a snapshot is missing, writeSnapshot() generates it instead of failing
   - The EXCLUDED_DIFF_FIELDS set in snapshot.ts only excludes pike_version — all other fields are compared strictly
 ---
+
+## 2026-04-30 - US-002
+Thread: N/A (Ralph agent iteration)
+- Full audit of canary tests: all 11 tests verified against actual pike output
+- Every test has a clear failure mode and is not tautological
+- Verified error corpus file line numbers against pike output:
+  - err-type-assign.pike: type_mismatch at lines 12, 18 (confirmed)
+  - err-undef-var.pike: undefined_identifier with 'nonexistent_var' (confirmed)
+  - err-arity-few.pike: wrong_arity with 'Too few arguments' (confirmed)
+  - err-syntax-basic.pike: syntax_error present (confirmed)
+- Verified valid files: basic-types, class-create, basic-collections, fn-lambda all exit_code=0
+- Verified deliberately broken file produces diagnostic (type_mismatch)
+- All corpus files exist in corpus/files/ and match manifest.md descriptions
+- Canary tests run against actual pike process (runIntrospect spawns `pike introspect.pike`)
+- No code changes needed — canary tests are well-designed
+- Files changed:
+  - scripts/ralph/prd.json (US-002 passes: true)
+- **Learnings for future iterations:**
+  - The canary tests exercise the full introspection pipeline: spawn pike → parse JSON → assert fields
+  - The `byCategory` helper filters diagnostics by exact category match — useful for precise assertions
+  - The broken file test creates a temp dir inside corpus/files/ which is on the module path — no path issues
+  - All 11 tests produce 45 expect() calls — comprehensive coverage of the harness integrity
+---
