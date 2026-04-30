@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 env:
-  PIKE_BINARY: pike8.0
+  PIKE_VERSION: "8.0.1116"
 
 jobs:
   typecheck:
@@ -47,11 +47,37 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - name: Cache pike8.0 apt package
-        uses: awalsh128/cache-apt-pkgs-action@latest
+
+      - name: Cache pike install
+        id: cache-pike
+        uses: actions/cache@v4
         with:
-          packages: pike8.0
-          version: 2.0
+          path: ~/.pike
+          key: pike-${{ env.PIKE_VERSION }}-${{ runner.os }}
+      - name: Install build dependencies
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make gcc g++ libgmp-dev nettle-dev bison \
+            libreadline-dev zlib1g-dev
+      - name: Build Pike
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://pike.lysator.liu.se/pub/pike/all/${PIKE_VERSION}/Pike-v${PIKE_VERSION}.tar.gz" \
+            | tar xz
+          mkdir -p "Pike-v${PIKE_VERSION}/build"
+          cd "Pike-v${PIKE_VERSION}/build"
+          ../src/configure \
+            --prefix="$HOME/.pike" \
+            --without-debug \
+            --without-mysql
+          make -j$(nproc) || make
+          make install
+      - name: Verify pike binary
+        run: |
+          "$HOME/.pike/pike/${PIKE_VERSION}/bin/pike" --version
+
       - run: bun test
         env:
-          PIKE_BINARY: pike8.0
+          PIKE_BINARY: /home/runner/.pike/pike/8.0.1116/bin/pike
