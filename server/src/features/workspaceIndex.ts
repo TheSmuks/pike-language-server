@@ -151,6 +151,44 @@ export class WorkspaceIndex {
   }
 
   /**
+   * Insert a file entry from persistent cache (no tree or content needed).
+   * Used when restoring from cache on startup.
+   */
+  upsertCachedFile(
+    uri: string,
+    version: number,
+    symbolTable: SymbolTable,
+    contentHash: string,
+  ): FileEntry {
+    const dependencies = this.extractDependencies(symbolTable, uri);
+
+    const entry: FileEntry = {
+      uri,
+      version,
+      symbolTable,
+      pikeVersion: null,
+      dependencies,
+      lastModSource: ModificationSource.DidOpen,
+      contentHash,
+      stale: false,
+    };
+
+    this.files.set(uri, entry);
+
+    // Register reverse dependencies
+    for (const depUri of dependencies) {
+      let depSet = this.dependents.get(depUri);
+      if (!depSet) {
+        depSet = new Set();
+        this.dependents.set(depUri, depSet);
+      }
+      depSet.add(uri);
+    }
+
+    return entry;
+  }
+
+  /**
    * Remove a file from the index.
    * Invalidates dependents.
    */

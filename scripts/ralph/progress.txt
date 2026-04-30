@@ -424,3 +424,29 @@ Thread: N/A (Ralph agent iteration)
   - Parameters should be excluded from workspace symbol results (too noisy)
   - SymbolKind values: Class=5, Function=12, Variable=13, Constant=14, Enum=10, EnumMember=22
 ---
+
+## 2026-04-30 - US-021
+Thread: N/A (Ralph agent iteration)
+- Background workspace indexing on startup
+- Created server/src/features/backgroundIndex.ts with:
+  - indexWorkspaceFiles() — discovers and indexes all .pike/.pmod files
+  - Uses Bun Glob for file discovery
+  - Yields between files via setTimeout to avoid blocking
+  - Reports progress via window/workDoneProgress (ProgressType from vscode-jsonrpc)
+  - Skips already-indexed files (open documents)
+  - Fire-and-forget from onInitialized
+- Added ModificationSource.BackgroundIndex enum value
+- Added call in onInitialized after parser init
+- 3 tests: index populated, symbol searchable, concurrent requests not blocked
+- Decision doc: docs/decisions/0022-background-indexing.md
+- Files changed:
+  - server/src/features/backgroundIndex.ts (new)
+  - server/src/features/workspaceIndex.ts (ModificationSource.BackgroundIndex)
+  - server/src/server.ts (import + onInitialized call)
+  - tests/lsp/backgroundIndex.test.ts (new, 3 tests)
+  - docs/decisions/0022-background-indexing.md (new)
+- **Learnings for future iterations:**
+  - sendProgress takes ProgressType<T> as first arg, not string — import from vscode-jsonrpc
+  - ast_edit with $$$ARGS pattern can eat the rest of the function body — prefer manual edit for complex calls
+  - Pre-existing flaky test: PikeWorker FIFO queue '5 concurrent diagnose' test is timing-sensitive
+---

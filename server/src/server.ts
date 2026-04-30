@@ -10,6 +10,8 @@
  * - Top-level `connection.listen()` — the production entry point over stdio.
  */
 
+import { resolve } from "node:path";
+
 import {
   createConnection,
   TextDocuments,
@@ -56,6 +58,7 @@ import { produceSignatureHelp } from "./features/signatureHelp";
 import { produceCodeActions } from "./features/codeAction";
 import { searchWorkspaceSymbols } from "./features/workspaceSymbol";
 import { indexWorkspaceFiles } from "./features/backgroundIndex";
+import { saveCache, loadCache, deserializeSymbolTable, computeWasmHash, deleteCache } from "./features/persistentCache";
 import {
   resolveAccessDeclaration,
   resolveAccessDefinition,
@@ -350,6 +353,30 @@ export function createPikeServer(connection: Connection): PikeServer {
       ).catch(() => {
         // Registration may still fail (e.g., client rejects it)
       });
+    }
+
+    // Load persistent cache
+    const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+    const currentWasmHash = computeWasmHash(wasmPath);
+
+    try {
+      const cached = await loadCache(index.workspaceRoot, currentWasmHash);
+      if (cached) {
+        let restored = 0;
+        for (const entry of cached) {
+          if (entry.symbolTable) {
+            const table = deserializeSymbolTable(entry.symbolTable);
+            // Rebuild only if not already indexed (open doc takes precedence)
+            if (!index.getFile(entry.uri)) {
+              index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
+              restored++;
+            }
+          }
+        }
+        connection.console.log(`Pike LSP: restored ${restored} files from cache`);
+      }
+    } catch (err) {
+      connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
     }
 
     // Background workspace indexing — fire-and-forget
@@ -938,8 +965,18 @@ export function createPikeServer(connection: Connection): PikeServer {
   // Shutdown
   // -----------------------------------------------------------------------
 
-  connection.onShutdown(() => {
+  connection.onShutdown(async () => {
     diagnosticManager.dispose();
+
+    // Save persistent cache before clearing
+    try {
+      const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+      const wasmHash = computeWasmHash(wasmPath);
+      await saveCache(index.workspaceRoot, index, wasmHash);
+    } catch (err) {
+      // Cache save failure is non-critical
+    }
+
     index.clear();
     cacheClear();
     clearTreeCache();

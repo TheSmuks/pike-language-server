@@ -335,7 +335,7 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts (onInitialized), server/src/features/workspaceIndex.ts. File discovery: use glob pattern **/*.pike and **/*.pmod relative to workspace root. Parse each file with tree-sitter, build symbol table, upsert into index."
     },
     {
