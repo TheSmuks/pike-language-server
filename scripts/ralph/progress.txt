@@ -654,3 +654,27 @@ Thread: N/A (Ralph agent iteration)
   - Fisher-Yates shuffle is used for key-order independence verification — genuinely random, not deterministic
   - deepSortKeys(undefined) returns undefined, but JSON.stringify drops undefined keys — the canonicalizer is JSON-aware
 ---
+
+## 2026-04-30 - US-004
+Thread: N/A (Ralph agent iteration)
+- Full audit of tree-sitter-symbol.test.ts: 200 tests, 1297 expect() calls, all passing
+- Tests run real tree-sitter parse (initParser + parse from server/src/parser), NOT mocked
+- Verified class-create.pike tree-sitter output:
+  - Top-level: Base(class), Middle(class), Leaf(class), Simple(class), main(function) — matches Pike snapshot
+  - Children: methods, variables, inherits correctly extracted
+  - SymbolKind mapping: 5=Class, 12=Function, 13=Variable, 2=Module(inherit) — verified against TS_KIND_TO_PIKE
+- All corpus files referenced by tests exist in corpus/files/ and match manifest.md
+- Test categories verified:
+  - Symbol comparison: tree-sitter vs Pike snapshots (bidirectional name checking)
+  - Parse error handling: partial results on broken input (KL-007)
+  - Performance: cold start < 2000ms, warm parse < 200ms
+  - Canary: deep symbol tree with range validation
+  - Determinism: 10 identical parses for 3 files
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-004 passes: true)
+- **Learnings for future iterations:**
+  - The test uses TS_ONLY_KINDS (Module, TypeParameter) to skip tree-sitter-only symbols when comparing to Pike
+  - Pike reports enums as 'unknown' kind, enum members as 'variable' — the test accounts for this
+  - The test verifies ranges within file bounds AND child ranges within parent ranges — good spatial validation
+---
