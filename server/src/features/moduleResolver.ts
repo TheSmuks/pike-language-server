@@ -356,7 +356,7 @@ export class ModuleResolver {
  * Falls back to well-known paths.
  */
 export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string): PikePaths {
-  const pike = pikeBinaryPath ?? "pike";
+  const pike = pikeBinaryPath ?? process.env.PIKE_BINARY ?? "pike";
   let pikeHome = "";
   let systemModulePath = "";
   let includePath = "";
@@ -364,7 +364,7 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
 
   // Try to get actual paths from the Pike binary
   try {
-    const output = execSync(`"${pike}" --show-paths`, {
+    const output = execSync(`"${pike}" --show-paths 2>&1`, {
       timeout: 5000,
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
@@ -373,16 +373,27 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
     for (const line of output.split("\n")) {
       const masterMatch = line.match(/^master\.pike\.\.\.\s*:\s*(.+)$/);
       if (masterMatch) {
-        // Derive pikeHome from master.pike path: /path/to/pike/VERSION/lib/master.pike
-        pikeHome = dirname(dirname(masterMatch[1].trim()));
+        const masterPath = masterMatch[1].trim();
+        // Source build layout: $PIKE_HOME/lib/master.pike
+        // Package layout:      $PIKE_HOME/master.pike
+        if (masterPath.endsWith("/lib/master.pike")) {
+          pikeHome = dirname(dirname(masterPath));
+        } else {
+          pikeHome = dirname(masterPath);
+        }
       }
 
       const moduleMatch = line.match(/^Module path\.\.\.\s*:\s*(.+)$/);
       if (moduleMatch) {
         systemModulePath = moduleMatch[1].trim();
         if (!pikeHome) {
-          // Fallback: derive pikeHome from module path
-          pikeHome = dirname(dirname(systemModulePath));
+          // Source build: $PIKE_HOME/lib/modules
+          // Package layout: $PIKE_HOME/modules
+          if (systemModulePath.endsWith("/lib/modules")) {
+            pikeHome = dirname(dirname(systemModulePath));
+          } else {
+            pikeHome = dirname(systemModulePath);
+          }
         }
       }
 
@@ -404,7 +415,7 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
   if (!pikeHome) {
     let detectedVersion = "";
     try {
-      const versionOutput = execSync(`"${pike}" --version`, {
+      const versionOutput = execSync(`"${pike}" --version 2>&1`, {
         timeout: 5000,
         encoding: "utf-8",
         stdio: ["pipe", "pipe", "pipe"],

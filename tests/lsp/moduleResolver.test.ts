@@ -17,6 +17,7 @@ import {
   type ResolveResult,
 } from "../../server/src/features/moduleResolver";
 import { join } from "node:path";
+import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 // ---------------------------------------------------------------------------
@@ -26,7 +27,10 @@ import { pathToFileURL } from "node:url";
 const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
 const CORPUS_URI = pathToFileURL(CORPUS_DIR).href;
 const PIKE_HOME = pikeHome ?? "/usr/local/pike/8.0.1116";
-const SYSTEM_MODULES = join(PIKE_HOME, "lib", "modules");
+// Source build: $PIKE_HOME/lib/modules; Package layout: $PIKE_HOME/modules
+const SYSTEM_MODULES = existsSync(join(PIKE_HOME, "lib", "modules"))
+  ? join(PIKE_HOME, "lib", "modules")
+  : join(PIKE_HOME, "modules");
 
 function makePikePaths(workspaceRoot: string): PikePaths {
   return {
@@ -241,7 +245,7 @@ describe.skipIf(!pikeAvailable)("detectPikePaths", () => {
   test("detects system Pike paths", () => {
     const paths = detectPikePaths(CORPUS_DIR);
     expect(paths.pikeHome).toBe(PIKE_HOME);
-    expect(paths.modulePaths).toContain(join(PIKE_HOME, "lib", "modules"));
+    expect(paths.modulePaths).toContain(SYSTEM_MODULES);
     expect(paths.modulePaths).toContain(CORPUS_DIR);
   });
 

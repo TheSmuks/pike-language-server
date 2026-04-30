@@ -44,7 +44,7 @@ const DEFAULT_CONFIG: PikeWorkerConfig = {
   maxActiveMinutes: 30,
   requestTimeoutMs: 5_000,
   niceValue: 5,
-  pikeBinaryPath: "pike",
+  pikeBinaryPath: process.env.PIKE_BINARY ?? "pike",
 };
 // ---------------------------------------------------------------------------
 // Types
