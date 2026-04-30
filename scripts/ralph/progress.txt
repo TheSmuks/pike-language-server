@@ -277,3 +277,20 @@ Thread: N/A (Ralph agent iteration)
   - Declaration scopeId + scopeById walk determines class scope context
   - The function→method promotion stops at function/lambda scope boundaries
 ---
+
+## 2026-04-30 - US-014
+Thread: N/A (Ralph agent iteration)
+- Semantic token LSP handler registration
+- Added semanticTokensProvider capability to initialize response with full=true
+- Registered textDocument/semanticTokens/full handler that calls produceSemanticTokens + deltaEncodeTokens
+- Fixed SEMANTIC_TOKENS_LEGEND type: removed 'as const' to satisfy LSP's mutable string[] type
+- Added 5 LSP protocol tests (class+methods, vars+params, unknown doc, enum, inherit)
+- Files changed:
+  - server/src/server.ts (capability + handler registration)
+  - server/src/features/semanticTokens.ts (type fix)
+  - tests/lsp/semanticTokens.test.ts (5 protocol tests)
+- **Learnings for future iterations:**
+  - LSP type definitions use mutable types — 'as const' on exported legends causes TS errors
+  - semanticTokens/full uses connection.onRequest() not a named handler like onHover
+  - Handler pattern: get doc → get symbol table → produce tokens → delta encode → return { data }
+---

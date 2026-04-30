@@ -29,6 +29,8 @@ import {
   CancellationToken,
   DidChangeWatchedFilesNotification,
   FileChangeType,
+  DocumentHighlight,
+  DocumentHighlightKind,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { LRUCache } from "./util/lruCache";
@@ -279,6 +281,7 @@ export function createPikeServer(connection: Connection): PikeServer {
           legend: SEMANTIC_TOKENS_LEGEND,
           full: true,
         },
+        documentHighlightProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -383,6 +386,64 @@ export function createPikeServer(connection: Connection): PikeServer {
     const data = deltaEncodeTokens(tokens);
 
     return { data };
+  });
+
+  // -----------------------------------------------------------------------
+  // textDocument/documentHighlight (US-015)
+  // -----------------------------------------------------------------------
+
+  connection.onDocumentHighlight(async (params) => {
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const refs = getReferencesTo(
+      table,
+      params.position.line,
+      params.position.character,
+    );
+
+    if (refs.length === 0) return null;
+
+    // Map references to DocumentHighlight
+    // Declaration sites → Write, reference sites → Read
+    // Find the target declaration to distinguish
+    const targetDecl = getDefinitionAt(
+      table,
+      params.position.line,
+      params.position.character,
+    );
+
+    const highlights: DocumentHighlight[] = [];
+
+    // Add the declaration itself as a Write highlight
+    if (targetDecl) {
+      highlights.push({
+        range: {
+          start: { line: targetDecl.nameRange.start.line, character: targetDecl.nameRange.start.character },
+          end: { line: targetDecl.nameRange.end.line, character: targetDecl.nameRange.end.character },
+        },
+        kind: DocumentHighlightKind.Write,
+      });
+    }
+
+    // Add all references as Read highlights
+    for (const ref of refs) {
+      // Skip if same position as declaration (already added as Write)
+      if (targetDecl && ref.loc.line === targetDecl.nameRange.start.line &&
+          ref.loc.character === targetDecl.nameRange.start.character) {
+        continue;
+      }
+
+      highlights.push({
+        range: {
+          start: { line: ref.loc.line, character: ref.loc.character },
+          end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+        },
+        kind: DocumentHighlightKind.Read,
+      });
+    }
+
+    return highlights.length > 0 ? highlights : null;
   });
   // -----------------------------------------------------------------------
   // textDocument/definition
