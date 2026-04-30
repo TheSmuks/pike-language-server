@@ -51,7 +51,7 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
           packages: pike8.0
-          version: 1.0
+          version: 2.0
       - run: bun test
         env:
           PIKE_BINARY: pike8.0
