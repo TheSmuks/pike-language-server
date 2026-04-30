@@ -25,7 +25,7 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 - **P1** — Required for Phase 2–3 (hover, completion, navigation)
 - **P2** — Required for Phase 4–5 (refactoring, advanced features)
 
-## Corpus Files (35 committed)
+## Corpus Files (39 committed)
 
 ### Basic Types and Variables
 
@@ -136,6 +136,14 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 |---|------|------------|----------|--------|
 | 35 | `enum-basic.pike` | `enum` declaration, enum values, typed enums | P0 | Valid |
 
+### Type Inference
+
+| # | File | Feature(s) | Priority | Status |
+|---|------|------------|----------|--------|
+| 36 | `inference-return.pike` | Return type inference: typed function returns, caller member access | P1 | Valid |
+| 37 | `inference-assign.pike` | Assignment inference: constructor/function assignment, member access | P1 | Valid |
+| 38 | `inference-chained.pike` | Chained inference: a()->b()->c() cascading access | P1 | Valid |
+| 39 | `inference-failure.pike` | Inference failure: mixed returns, unknown types, unresolvable | P1 | Error |
 ## Summary
 
 | Category | Count | Valid | Error |
@@ -154,7 +162,8 @@ type checking, cross-file resolution, diagnostics, and language semantics.
 | Preprocessor | 1 | 1 | 0 |
 | Enums/consts | 1 | 1 | 0 |
 | AutoDoc | 1 | 1 | 0 |
-| **Total** | **37** | **25** | **12** |
+| Type inference | 4 | 3 | 1 |
+| **Total** | **41** | **28** | **13** |
 
 ## Planned but Not Yet Created (P1/P2)
 

@@ -16,7 +16,10 @@ Started: Wed Apr 29 11:44:51 PM CEST 2026
 - local_declaration (function-body) is NOT wrapped in declaration node; variable_decl (top-level) IS wrapped
 - postfix_expr with childCount > 1 = call expression; childCount == 1 = simple reference
 - declaredType || assignedType is wrong when declaredType is 'mixed'; must check !PRIMITIVE_TYPES.has(declaredType) first
-- PRIMITIVE_TYPES is duplicated in symbolTable.ts, typeResolver.ts, and completion.ts — needs centralization
+- PRIMITIVE_TYPES is now centralized in symbolTable.ts (exported) and imported by typeResolver.ts, completion.ts, and server.ts
+- Hover has 4 tiers: AutoDoc → Stdlib → Predef builtins → tree-sitter. Tier 4 (PikeWorker typeof) is only for variables with declaredType absent/mixed/auto
+- declForHover() is synchronous; async operations (worker.typeof_) must be in the onHover handler, not inside declForHover
+- Test worker interactions by monkey-patching server.server.worker.typeof_ with a stub — no Pike dependency needed
 
 ## 2026-04-29 - US-001
 Thread: N/A (Ralph agent iteration)
@@ -158,4 +161,31 @@ Thread: N/A (Ralph agent iteration)
   - The initializer drilling in extractInitializerType must continue (not break) after extracting the callee from a call expression, because the callee itself may be wrapped in another postfix_expr.
   - PRIMITIVE_TYPES is now defined in three places: symbolTable.ts, typeResolver.ts, completion.ts. A future refactor should centralize this.
   - assignedType stores the callee name (e.g., 'Dog'), not the resolved type. The resolution happens at consumption time via resolveType().
+---
+
+## 2026-04-30 - US-009
+Thread: N/A (Ralph agent iteration)
+- PikeWorker typeof integration for hover on mixed/untyped variables
+- Added Tier 4 hover path: when a variable's declaredType is absent, 'mixed', or 'auto', the server calls worker.typeof_() to get the real type from Pike
+- Explicitly typed variables (int, string, Dog, etc.) skip the typeof call entirely
+- If the worker is unavailable or times out, falls back to tree-sitter hover (no error surface)
+- Exported PRIMITIVE_TYPES from symbolTable.ts; removed duplicates from typeResolver.ts and completion.ts
+- The typeof integration is in the onHover handler in server.ts, NOT inside declForHover (which is synchronous)
+- Added 3 tests with monkey-patched worker.typeof_ (no Pike dependency needed):
+  1. Mixed variable hover calls typeof and shows inferred type
+  2. Explicitly typed variable (int x) skips typeof
+  3. Worker timeout falls back to tree-sitter hover
+- Files changed:
+  - server/src/server.ts (Tier 4 typeof integration in onHover)
+  - server/src/features/symbolTable.ts (exported PRIMITIVE_TYPES)
+  - server/src/features/typeResolver.ts (imported PRIMITIVE_TYPES from symbolTable)
+  - server/src/features/completion.ts (imported PRIMITIVE_TYPES from symbolTable)
+  - tests/lsp/hover.test.ts (3 new tests)
+  - ralph/prd.json (US-009 passes: true)
+  - scripts/ralph/progress.txt (Codebase Patterns updated)
+- **Learnings for future iterations:**
+  - typeof_() is async but declForHover is sync — integration must be in onHover, not declForHover
+  - `assignedType` from US-008 can be a function name (e.g., 'makeDog'), not a class name — it's the callee identifier, not a resolved type
+  - The condition for typeof is: declaredType is absent/mixed/auto. Not just 'no declaredType' — 'mixed' means the user chose not to annotate.
+  - When testing worker interactions, monkey-patch worker.typeof_ with a stub function. This avoids needing Pike installed.
 ---

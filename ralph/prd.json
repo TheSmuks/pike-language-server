@@ -139,8 +139,8 @@
         "Typecheck passes"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Key files: server/src/server.ts (declForHover), server/src/features/pikeWorker.ts. PikeWorker already has a typeof method wired. The integration point is in declForHover() — after Tier 3 (tree-sitter) returns mixed, make an async call to worker.typeof() and use the result if available."
+      "passes": true,
+      "notes": "Key files: server/src/server.ts (declForHover), server/src/features/pikeWorker.ts. PikeWorker already has a typeof method wired. The integration point is in declForHover() \u2014 after Tier 3 (tree-sitter) returns mixed, make an async call to worker.typeof() and use the result if available."
     },
     {
       "id": "US-010",
@@ -219,7 +219,7 @@
       ],
       "priority": 14,
       "passes": false,
-      "notes": "Depends on US-012 and US-013. Key file: server/src/server.ts (add onSemanticTokens handler). Follow the pattern of onDocumentSymbol — get doc, parse, produce tokens, return."
+      "notes": "Depends on US-012 and US-013. Key file: server/src/server.ts (add onSemanticTokens handler). Follow the pattern of onDocumentSymbol \u2014 get doc, parse, produce tokens, return."
     },
     {
       "id": "US-015",
@@ -251,7 +251,7 @@
       ],
       "priority": 16,
       "passes": false,
-      "notes": "Key files: server/src/server.ts, server/src/parser.ts (tree-sitter parse). This uses the tree-sitter parse tree directly — walk the tree for nodes that have block-like children and produce FoldingRange objects."
+      "notes": "Key files: server/src/server.ts, server/src/parser.ts (tree-sitter parse). This uses the tree-sitter parse tree directly \u2014 walk the tree for nodes that have block-like children and produce FoldingRange objects."
     },
     {
       "id": "US-017",
@@ -286,7 +286,7 @@
       ],
       "priority": 18,
       "passes": false,
-      "notes": "Key files: server/src/server.ts, server/src/features/diagnosticManager.ts (diagnostics source). This is the simplest code action — start here before adding more complex ones."
+      "notes": "Key files: server/src/server.ts, server/src/features/diagnosticManager.ts (diagnostics source). This is the simplest code action \u2014 start here before adding more complex ones."
     },
     {
       "id": "US-019",
@@ -385,7 +385,7 @@
       ],
       "priority": 24,
       "passes": false,
-      "notes": "Key file: server/src/server.ts. The onCompletion handler already checks CancellationToken (Phase 6). Extend the pattern to all other handlers. Each handler's signature already includes CancellationToken — just add the checks."
+      "notes": "Key file: server/src/server.ts. The onCompletion handler already checks CancellationToken (Phase 6). Extend the pattern to all other handlers. Each handler's signature already includes CancellationToken \u2014 just add the checks."
     },
     {
       "id": "US-025",
@@ -411,7 +411,7 @@
         "Run LSP against Pike's lib/modules/ or equivalent 100+ file Pike codebase",
         "Test documentSymbol, definition, references, hover, completion, rename, semanticTokens, foldingRange, documentHighlight, signatureHelp across 14+ representative files",
         "Zero crashes (P1)",
-        "Zero wrong answers (P1) — any P1 found must be fixed before this story passes",
+        "Zero wrong answers (P1) \u2014 any P1 found must be fixed before this story passes",
         "All P2 findings documented with specific file, line, feature, expected vs actual",
         "Semantic token coverage measured: % of declarations with correct token type",
         "Typecheck passes"
