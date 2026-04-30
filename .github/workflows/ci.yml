@@ -30,6 +30,13 @@ jobs:
       - run: bun install
       - name: Install Pike
         run: sudo apt-get update && sudo apt-get install -y pike8.0
+      - name: Debug Pike paths
+        run: |
+          which pike && which pike8.0
+          pike --version 2>&1 || true
+          pike8.0 --version 2>&1 || true
+          pike --show-paths 2>&1 || true
+          pike8.0 --show-paths 2>&1 || true
       - run: bun test
         env:
           PIKE_BINARY: pike8.0
