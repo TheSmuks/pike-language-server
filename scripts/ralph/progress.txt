@@ -775,3 +775,25 @@ Thread: N/A (Ralph agent iteration)
   - Cross-file resolution requires indexing the base file first (wireInheritance uses index.getSymbolTable())
   - definition.test.ts has a dedicated 'cross-file inherited member' describe block using real LSP protocol
 ---
+
+## 2026-04-30 - US-009
+Thread: N/A (Ralph agent iteration)
+- Full audit of completion.ts (929 lines) and completion.test.ts (1097 lines)
+- completion.ts: 2 exports (getCompletions, resetCompletionCache). 4 completion sources: local scope, imported symbols, predef builtins, stdlib modules
+- Trigger context detection: arrow (->), dot (.), scope (::), unqualified
+- Scope filtering: getSymbolsInScope walks scope chain inner→outer; seenNames set deduplicates; local sort priority 0, imported 20, predef 30, stdlib 40
+- Predef builtins: loaded from predef-builtin-index.json, filtered by isCompletableIdentifier (removes backtick operators)
+- Stdlib autodoc: 21,885 lines in stdlib-autodoc.json, rendered as markdown documentation in completion items
+- Out-of-scope filtering: getSymbolsInScope excludes forward declarations (after cursor); test 'does not include declarations after cursor in block scope' verifies this
+- completion.test.ts: 8 describe blocks, 32 tests, 97 expect() calls. All real tree-sitter parsing
+- Coverage: member access (->), local variables, function parameters, scope shadowing, predef builtins, stdlib modules, LSP protocol structure, cancel request
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-009 passes: true)
+- **Learnings for future iterations:**
+  - Completion priority order: local (0) > imported (20) > predef (30) > stdlib (40)
+  - completeUnqualified uses 4 sources in sequence with seenNames deduplication
+  - isCompletableIdentifier filters out Pike operator identifiers (backtick-prefixed, brackets)
+  - resetCompletionCache is exported for test use only
+  - Stdlib top-level modules are cached via getStdlibTopLevel()
+---
