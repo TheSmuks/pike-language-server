@@ -211,3 +211,19 @@ Thread: N/A (Ralph agent iteration)
   - inference-failure.pike has exit_code=1 (compilation errors) — this is intentional for error-case corpus files
   - Corpus manifest counts in header (e.g., '39 committed') and summary table must be kept in sync
 ---
+
+## 2026-04-30 - US-011
+Thread: N/A (Ralph agent iteration)
+- Decision document for type inference and Phase 10 audit
+- Created docs/decisions/0019-type-inference.md covering: return type tracking, assignment narrowing, typeof integration, depth limits, fallback behavior
+- Created docs/decisions/0002-tier-3-scope.md with Phase 10/11 update section documenting US-008/009/010 improvements and remaining gaps
+- Updated docs/known-limitations.md: marked 2 items as partially resolved, added 4 new limitations from Phase 10/11
+- Files changed:
+  - docs/decisions/0019-type-inference.md (new)
+  - docs/decisions/0002-tier-3-scope.md (new)
+  - docs/known-limitations.md (updated)
+- **Learnings for future iterations:**
+  - Decision documents go in docs/decisions/ with 4-digit numbered prefix
+  - ADR template is at docs/decisions/0000-template.md
+  - known-limitations.md uses ✅ markers for resolved items and clearly notes partial resolution
+---

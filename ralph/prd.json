@@ -170,7 +170,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "This is a documentation-only story. No code changes. Follow the ADR template in decisions/0000-template.md."
     },
     {
