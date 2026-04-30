@@ -22,6 +22,7 @@ import {
   getSymbolsInScope,
   getDeclarationsInScope,
   findClassScopeAt,
+  PRIMITIVE_TYPES,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveType } from "./typeResolver";
@@ -779,12 +780,6 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   import: CompletionItemKind.Module,
 };
 
-/** Primitive Pike types that can never resolve to a class with members. */
-const PRIMITIVE_TYPES = new Set([
-  "void", "mixed", "zero", "int", "float", "string",
-  "array", "mapping", "multiset", "object", "function", "program",
-  "bool", "auto", "any",
-]);
 
 function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
   return {

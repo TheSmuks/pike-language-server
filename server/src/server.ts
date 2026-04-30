@@ -38,6 +38,7 @@ import { getParseDiagnostics } from "./features/diagnostics";
 import {
   getDefinitionAt,
   getReferencesTo,
+  PRIMITIVE_TYPES,
   type SymbolTable,
   type Declaration,
 } from "./features/symbolTable";
@@ -544,6 +545,32 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
 
       return null;
+    }
+
+    // Tier 4: PikeWorker typeof for untyped/mixed variables
+    // Only for variables/parameters where declaredType is absent or 'mixed'.
+    // Explicitly typed variables (int, string, Dog, etc.) skip entirely.
+    const isVariableLike = decl.kind === 'variable' || decl.kind === 'parameter';
+    const declType = (decl as Declaration).declaredType;
+    const needsPikeTypeof = isVariableLike && (!declType || declType === 'mixed' || declType === 'auto');
+    if (needsPikeTypeof) {
+      const source = doc.getText();
+      try {
+        const typeofResult = await worker.typeof_(source, decl.name);
+        if (typeofResult.type && typeofResult.type !== 'mixed' && !typeofResult.error) {
+          const baseHover = declForHover(decl, params.textDocument.uri);
+          if (baseHover) {
+            const inferredSig = `${typeofResult.type} ${decl.name}`;
+            return formatHover({
+              ...baseHover,
+              signature: `${baseHover.signature}  // inferred: ${typeofResult.type}`,
+              documentation: `Type inferred by Pike: \`${typeofResult.type}\``,
+            });
+          }
+        }
+      } catch {
+        // Worker unavailable or timed out — fall through to tree-sitter hover
+      }
     }
 
     return formatHover(declForHover(decl, params.textDocument.uri));

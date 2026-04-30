@@ -132,7 +132,7 @@ function extractTypeText(node: Node): string | undefined {
  * Primitive type names that can never have members.
  * Shared with typeResolver.ts — kept as a set for O(1) lookup.
  */
-const PRIMITIVE_TYPES = new Set([
+export const PRIMITIVE_TYPES = new Set([
   'void', 'mixed', 'zero', 'int', 'float', 'string',
   'array', 'mapping', 'multiset', 'object', 'function', 'program',
   'bool', 'auto', 'any',

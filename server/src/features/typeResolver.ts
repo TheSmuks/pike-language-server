@@ -11,6 +11,7 @@
  * 4. Stdlib type via prefix index
  */
 
+import { PRIMITIVE_TYPES } from "./symbolTable";
 import type { Declaration, SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
@@ -25,11 +26,6 @@ export interface TypeResolutionContext {
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
 }
 
-const PRIMITIVE_TYPES = new Set([
-  "void", "mixed", "zero", "int", "float", "string",
-  "array", "mapping", "multiset", "object", "function", "program",
-  "bool", "auto", "any",
-]);
 
 const MAX_RESOLUTION_DEPTH = 5;
 

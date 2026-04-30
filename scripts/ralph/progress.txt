@@ -12,7 +12,11 @@ Started: Wed Apr 29 11:44:51 PM CEST 2026
 - Corpus files are in corpus/files/ with naming convention: cross-inherit-*.pike, cross-import-*.pike
 - The Declaration interface has optional sourceUri field for synthetic declarations from cross-file inheritance
 - buildSymbolTable() accepts optional BuildOptions with index for cross-file inheritance wiring
----
+- Declaration.assignedType stores initializer callee name for variables with declaredType absent or 'mixed'
+- local_declaration (function-body) is NOT wrapped in declaration node; variable_decl (top-level) IS wrapped
+- postfix_expr with childCount > 1 = call expression; childCount == 1 = simple reference
+- declaredType || assignedType is wrong when declaredType is 'mixed'; must check !PRIMITIVE_TYPES.has(declaredType) first
+- PRIMITIVE_TYPES is duplicated in symbolTable.ts, typeResolver.ts, and completion.ts — needs centralization
 
 ## 2026-04-29 - US-001
 Thread: N/A (Ralph agent iteration)
@@ -130,4 +134,28 @@ Thread: N/A (Ralph agent iteration)
   - When the LHS of arrow access is a function call (postfix_expr ending with ()), need to extract the function name by drilling down through the tree
   - The `extractLhsIdentifier` pattern from US-004 could be reused here but the completion system uses a different code path
   - Completion positions: cursor ON the identifier (e.g., speak at col 13) triggers arrow context; cursor AFTER `->` without identifier falls through to unqualified
+---
+
+## 2026-04-30 - US-008
+Thread: N/A (Ralph agent iteration)
+- Assignment-based type narrowing in symbol table
+- Added `assignedType?: string` field to Declaration interface
+- Added `extractInitializerType()` function that drills through expression wrappers to find the innermost identifier in a variable initializer
+- For variable declarations where declaredType is absent or 'mixed', records the initializer's callee name as assignedType
+- Updated `resolveTypeMembers()` in completion.ts to use assignedType when declaredType is absent or a primitive
+- Updated `resolveMemberAccess()` in typeResolver.ts to use assignedType similarly
+- Updated rename type filtering in symbolTable.ts to also check assignedType
+- Key insight: tree-sitter-pike represents `Dog()` as postfix_expr with 3 children (callee, '(', ')') — the parentheses are unnamed children. A postfix_expr with childCount > 1 indicates a call expression.
+- Key insight: `declaredType || assignedType` doesn't work when declaredType is 'mixed' (truthy but useless). Must check `!PRIMITIVE_TYPES.has(declaredType)` before preferring declaredType.
+- Files changed:
+  - server/src/features/symbolTable.ts (assignedType field, extractInitializerType, PRIMITIVE_TYPES set, collectSimpleDecl recording, rename filter)
+  - server/src/features/typeResolver.ts (resolveMemberAccess uses assignedType)
+  - server/src/features/completion.ts (resolveTypeMembers uses assignedType)
+  - tests/lsp/completion.test.ts (4 new tests: constructor assignment, mixed+Dog(), no initializer, complex initializer)
+  - tests/lsp/definition.test.ts (1 new test: definition via assignedType)
+- **Learnings for future iterations:**
+  - `local_declaration` (inside function bodies) is NOT wrapped in a `declaration` node — it's a direct child of `block`. `variable_decl` (top-level) IS wrapped in `declaration`.
+  - The initializer drilling in extractInitializerType must continue (not break) after extracting the callee from a call expression, because the callee itself may be wrapped in another postfix_expr.
+  - PRIMITIVE_TYPES is now defined in three places: symbolTable.ts, typeResolver.ts, completion.ts. A future refactor should centralize this.
+  - assignedType stores the callee name (e.g., 'Dog'), not the resolved type. The resolution happens at consumption time via resolveType().
 ---

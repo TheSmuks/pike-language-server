@@ -124,7 +124,7 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-007. Key files: server/src/features/symbolTable.ts (Declaration type, buildSymbolTable), server/src/features/typeResolver.ts. The initializer is available in tree-sitter's local_declaration node (the RHS of the assignment). Only resolve if the RHS is a single identifier that resolves to a class."
     },
     {
