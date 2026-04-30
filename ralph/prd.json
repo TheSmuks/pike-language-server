@@ -400,7 +400,7 @@
         "Typecheck passes"
       ],
       "priority": 25,
-      "passes": false,
+      "passes": true,
       "notes": "Documentation-only story. No code changes. Read the existing docs before updating to ensure accuracy."
     },
     {

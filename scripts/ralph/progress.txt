@@ -517,3 +517,21 @@ Thread: N/A (Ralph agent iteration)
   - Each handler should return the 'empty' result type for its return (null, [], { data: [] })
   - Actual cancellation via $/cancelRequest requires matching request IDs — our tests verify the signature is correct
 ---
+
+## 2026-04-30 - US-025
+Thread: N/A (Ralph agent iteration)
+- Updated Decision 0002 (tier-3-scope): moved code actions from 'Out of Scope' to 'In Scope', added all new capabilities
+- Updated docs/state-of-project.md: version header, test counts (1,565), phases 10-14, capability table with 12 implemented features
+- Updated README.md: added 7 new features to the feature list
+- Updated CHANGELOG.md: 19 new entries under [Unreleased] Added section
+- Verified docs/other-editors.md is still current
+- Files changed:
+  - docs/decisions/0002-tier-3-scope.md
+  - docs/state-of-project.md
+  - README.md
+  - CHANGELOG.md
+- **Learnings for future iterations:**
+  - State-of-project has two section patterns: Phase History table + Capability table — update both
+  - CHANGELOG entries should be specific: mention the feature and key detail (e.g., '9 token types')
+  - docs/other-editors.md is stable — only needs updates when the standalone build changes
+---

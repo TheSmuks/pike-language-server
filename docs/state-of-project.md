@@ -148,7 +148,13 @@
 | Unqualified completion cold/warm | 6ms / 0.5ms (small file), 5.3ms / 2.6ms (large file) |
 | Dot completion (Stdio.) cold/warm | 8.3ms / 0.06ms |
 | Cross-file go-to-definition p50 | 0.001ms |
+| Semantic tokens (300-line file) | < 50ms |
+| Document symbols (300-line file) | < 30ms |
+| Workspace symbol search (300-line file) | < 20ms |
+| Folding ranges (300-line file) | < 20ms |
+| Document highlight | < 20ms |
 
+See tests/perf/benchmarks.test.ts for regression tests (3x slack for CI variability).
 ## Corpus
 
 37 committed files across 14 categories, 21 planned:
