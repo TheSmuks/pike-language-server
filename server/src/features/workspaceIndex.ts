@@ -194,6 +194,13 @@ export class WorkspaceIndex {
   }
 
   /**
+   * Get all indexed file entries.
+   */
+  getAllEntries(): FileEntry[] {
+    return [...this.files.values()];
+  }
+
+  /**
    * Get the number of indexed files.
    */
   get size(): number {

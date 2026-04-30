@@ -300,7 +300,7 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-018 (code action handler already registered). Key files: server/src/server.ts, server/src/features/workspaceIndex.ts (module map), server/src/data/stdlib-autodoc.json."
     },
     {

@@ -381,3 +381,25 @@ Thread: N/A (Ralph agent iteration)
   - The quick-fix registry pattern (DiagnosticMatcher + EditProducer) is extensible for US-019 and beyond
   - Last-line deletion needs special handling: delete from previous line's newline to end
 ---
+
+## 2026-04-30 - US-019
+Thread: N/A (Ralph agent iteration)
+- Code action: add missing import
+- Extended server/src/features/codeAction.ts with:
+  - MATCH_UNDEFINED_IDENTIFIER — matches diagnostics with source 'pike' and message 'Undefined identifier X'
+  - addMissingImport() — checks if identifier matches stdlib module, inserts import statement
+  - findImportInsertionLine() — finds insertion point after existing imports/inherits/#pike directives
+  - Refactored QuickFix type to support dynamic titles (function instead of string)
+  - Added CodeActionContext parameter with stdlibModules Set
+- Added buildStdlibModules() in server.ts to extract module names from autodoc index (74 modules)
+- 3 new tests: matching stdlib module, insertion after existing imports, unknown identifier no action
+- Files changed:
+  - server/src/features/codeAction.ts (extended)
+  - server/src/server.ts (stdlibModules extraction, context passing)
+  - tests/lsp/codeAction.test.ts (3 new tests, 8 total)
+- **Learnings for future iterations:**
+  - CodeActionContext pattern allows extending fixes without changing the handler signature
+  - The import insertion point must skip comments and blank lines before the first real directive
+  - Dynamic titles (function returning string) allow parameterized fix names like 'Add import Stdio'
+  - The stdlibAutodocIndex keys are FQNs like 'predef.Module.Class.method' — extract Module from parts[1]
+---

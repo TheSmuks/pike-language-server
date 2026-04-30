@@ -54,6 +54,7 @@ import {
 import { produceFoldingRanges } from "./features/foldingRange";
 import { produceSignatureHelp } from "./features/signatureHelp";
 import { produceCodeActions } from "./features/codeAction";
+import { searchWorkspaceSymbols } from "./features/workspaceSymbol";
 import {
   resolveAccessDeclaration,
   resolveAccessDefinition,
@@ -310,6 +311,7 @@ export function createPikeServer(connection: Connection): PikeServer {
           triggerCharacters: ['(', ','],
         },
         codeActionProvider: true,
+        workspaceSymbolProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -517,6 +519,15 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (!doc) return [];
 
     return produceCodeActions(params, doc.getText(), { stdlibModules });
+  });
+
+  // -----------------------------------------------------------------------
+  // workspace/symbol (US-020)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("workspace/symbol", async (params) => {
+    const query = params.query ?? "";
+    return searchWorkspaceSymbols(query, index);
   });
 
   // -----------------------------------------------------------------------
