@@ -156,7 +156,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: corpus/files/ (new .pike files), harness/snapshots/ (new JSON). Follow existing corpus file patterns. Run bun run harness:verify after adding files."
     },
     {

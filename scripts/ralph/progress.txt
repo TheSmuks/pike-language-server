@@ -189,3 +189,25 @@ Thread: N/A (Ralph agent iteration)
   - The condition for typeof is: declaredType is absent/mixed/auto. Not just 'no declaredType' — 'mixed' means the user chose not to annotate.
   - When testing worker interactions, monkey-patch worker.typeof_ with a stub function. This avoids needing Pike installed.
 ---
+
+## 2026-04-30 - US-010
+Thread: N/A (Ralph agent iteration)
+- Type inference corpus files and harness snapshots
+- Added 4 corpus files exercising type inference paths:
+  - inference-return.pike: functions returning typed objects, callers accessing members
+  - inference-assign.pike: variables assigned from constructors/functions, member access
+  - inference-chained.pike: chained a()->b()->c() access patterns
+  - inference-failure.pike: mixed returns, unknown types, unresolvable access
+- Generated harness snapshots for all 4 files (63 total)
+- Updated corpus/manifest.md with new Type Inference section and counts
+- Files changed:
+  - corpus/files/inference-*.pike (4 new files)
+  - harness/snapshots/inference-*.json (4 new snapshots)
+  - corpus/manifest.md (new section + updated counts)
+  - ralph/prd.json (US-010 passes: true)
+  - scripts/ralph/progress.txt (Codebase Patterns updated)
+- **Learnings for future iterations:**
+  - Harness snapshot generation: `bun run harness:snapshot` generates snapshots for ALL corpus files, not just new ones
+  - inference-failure.pike has exit_code=1 (compilation errors) — this is intentional for error-case corpus files
+  - Corpus manifest counts in header (e.g., '39 committed') and summary table must be kept in sync
+---
