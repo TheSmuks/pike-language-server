@@ -417,7 +417,7 @@
         "Typecheck passes"
       ],
       "priority": 26,
-      "passes": false,
+      "passes": true,
       "notes": "Follow the Phase 9 WS2 methodology: select 14 representative files spanning 10-2528 lines, exercise each LSP feature, classify findings as P1 (crash/wrong) or P2 (degraded/missing)."
     },
     {

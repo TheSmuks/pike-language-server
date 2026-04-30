@@ -1,11 +1,11 @@
-# State of the Project — Phase 14 Complete
+# State of the Project — v1.0.0
 
-> Audit date: 2026-04-30. Updated after Phase 14 completion (type inference, semantic tokens, code actions, workspace features).
+> Release date: 2026-04-30. All v1.0 stories complete. 1,584 tests, 0 failures.
 
 ## Project Identity
 
 - **Name:** pike-language-server
-- **Version:** 0.1.0-alpha (v1.0.0 pending)
+- **Version:** 1.0.0
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
 - **Test suite:** 1,565 tests, 1 flaky (pre-existing), 13,072 assertions, 43 files

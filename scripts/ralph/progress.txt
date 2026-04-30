@@ -553,3 +553,32 @@ Thread: N/A (Ralph agent iteration)
   - Generate large test sources programmatically — don't commit them
   - Performance baselines need slack factor for CI variability (3x is safe)
 ---
+
+## 2026-04-30 - US-026
+Thread: N/A (Ralph agent iteration)
+- Real-codebase verification against Pike stdlib
+- Created tests/lsp/real-codebase-verification.test.ts
+- Exercises all 10 LSP features against all corpus .pike files
+- Tests: documentSymbol, semanticTokens, foldingRange, hover, definition, completion, documentHighlight, rename, workspaceSymbol, codeAction
+- Zero crashes across all corpus files with all features
+- 10 tests with 422 assertions
+- Files changed:
+  - tests/lsp/real-codebase-verification.test.ts (new, 10 tests)
+- **Learnings for future iterations:**
+  - Running all features against all corpus files is the best crash regression test
+  - corpus/files/ has 37+ .pike files covering 14 categories — good coverage
+---
+
+## 2026-04-30 - US-028
+Thread: N/A (Ralph agent iteration)
+- Version bump and v1.0.0 release preparation
+- Bumped package.json version from 0.1.0-alpha to 1.0.0
+- Updated docs/state-of-project.md to v1.0.0 header with final test counts
+- Fixed standalone build: replaced Bun Glob with Node.js recursive directory walk
+- Standalone build succeeds (1.9MB server.js)
+- Remaining manual steps: VSIX build, VSCode test, Neovim test, GitHub release
+- Files changed:
+  - package.json (version 1.0.0)
+  - docs/state-of-project.md (v1.0.0 status)
+  - server/src/features/backgroundIndex.ts (Node.js compat: readdir instead of Bun Glob)
+---

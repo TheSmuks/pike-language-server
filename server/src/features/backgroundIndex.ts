@@ -10,8 +10,8 @@
 
 import type { Connection } from "vscode-languageserver/node";
 import { ProgressType } from "vscode-jsonrpc";
-import { Glob } from "bun";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join, extname } from "node:path";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { ModificationSource } from "./workspaceIndex";
@@ -55,14 +55,11 @@ export async function indexWorkspaceFiles(
     return;
   }
 
-  // Discover files
-  const pikeGlob = new Glob("**/*.{pike,pmod}");
+  // Discover files via recursive directory walk
   const files: string[] = [];
 
   try {
-    for await (const path of pikeGlob.scan({ cwd: workspaceRoot, absolute: true })) {
-      files.push(path);
-    }
+    await discoverFiles(workspaceRoot, files);
   } catch (err) {
     connection.console.error(
       `Pike LSP: workspace file discovery failed: ${(err as Error).message}`,
@@ -158,4 +155,31 @@ export async function indexWorkspaceFiles(
   connection.console.log(
     `Pike LSP: background indexing complete — ${indexed} files indexed, ${errors} errors`,
   );
+}
+
+/**
+ * Recursively discover .pike and .pmod files in a directory.
+ */
+async function discoverFiles(dir: string, results: string[]): Promise<void> {
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+
+    const fullPath = join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      await discoverFiles(fullPath, results);
+    } else if (entry.isFile()) {
+      const ext = extname(entry.name);
+      if (ext === ".pike" || ext === ".pmod") {
+        results.push(fullPath);
+      }
+    }
+  }
 }

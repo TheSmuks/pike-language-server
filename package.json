@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.1.0-alpha",
+  "version": "1.0.0",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
   "bin": {
@@ -40,8 +40,14 @@
     "languages": [
       {
         "id": "pike",
-        "extensions": [".pike", ".pmod", ".mmod"],
-        "aliases": ["Pike"]
+        "extensions": [
+          ".pike",
+          ".pmod",
+          ".mmod"
+        ],
+        "aliases": [
+          "Pike"
+        ]
       }
     ],
     "configuration": {
@@ -55,7 +61,11 @@
         },
         "pike.languageServer.diagnosticMode": {
           "type": "string",
-          "enum": ["realtime", "saveOnly", "off"],
+          "enum": [
+            "realtime",
+            "saveOnly",
+            "off"
+          ],
           "default": "realtime",
           "description": "Controls when diagnostics are generated.",
           "enumDescriptions": [
