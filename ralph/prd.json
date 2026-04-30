@@ -185,7 +185,7 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
+      "passes": true,
       "notes": "This is a data model and design story. No LSP handler yet. Key reference: LSP spec 3.16+ semantic tokens. Key file: server/src/features/symbolTable.ts (DeclKind, Declaration types). Each DeclKind maps to a SemanticTokenType."
     },
     {

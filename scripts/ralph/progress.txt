@@ -227,3 +227,27 @@ Thread: N/A (Ralph agent iteration)
   - ADR template is at docs/decisions/0000-template.md
   - known-limitations.md uses ✅ markers for resolved items and clearly notes partial resolution
 ---
+
+## 2026-04-30 - US-012
+Thread: N/A (Ralph agent iteration)
+- Semantic token type and modifier mapping
+- Created server/src/features/semanticTokens.ts with:
+  - TOKEN_TYPES array (9 types: class, enum, enumMember, function, method, variable, parameter, type, namespace)
+  - TOKEN_MODIFIERS array (5 modifiers: declaration, definition, readonly, static, deprecated)
+  - tokenTypeForDeclKind() function mapping DeclKind to token type index
+  - tokenModifiersForDecl() computing modifier bitmask
+  - SEMANTIC_TOKENS_LEGEND for capability response
+- Created docs/decisions/0020-semantic-tokens.md with mapping rationale
+- Key design decisions:
+  - function vs method distinction: scope-based (producer checks if function is in class scope)
+  - constant uses 'variable' type + 'readonly' modifier (follows TS/Python convention)
+  - inherit/import use 'namespace' type (closest LSP match)
+  - Legend indices are a wire contract — MUST NOT change after initialization
+- Files changed:
+  - server/src/features/semanticTokens.ts (new)
+  - docs/decisions/0020-semantic-tokens.md (new)
+- **Learnings for future iterations:**
+  - Semantic token indices are wire-format — cannot reorder after client init
+  - Method/function distinction requires scope context — token producer (US-013) handles this
+  - SEMANTIC_TOKENS_LEGEND must be exported for server capability registration (US-014)
+---
