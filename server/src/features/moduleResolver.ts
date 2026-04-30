@@ -356,7 +356,7 @@ export class ModuleResolver {
  * Falls back to well-known paths.
  */
 export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string): PikePaths {
-  const pike = pikeBinaryPath ?? "pike";
+  const pike = pikeBinaryPath ?? process.env.PIKE_BINARY ?? "pike";
   let pikeHome = "";
   let systemModulePath = "";
   let includePath = "";

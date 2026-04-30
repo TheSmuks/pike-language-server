@@ -1,17 +1,19 @@
 import { execSync } from "node:child_process";
 import { dirname } from "node:path";
 
+const PIKE_BINARY = process.env.PIKE_BINARY ?? "pike";
+
 let _available = false;
 let _version: string | null = null;
 let _pikeHome: string | null = null;
 
 try {
-  const output = execSync("pike --version", { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+  const output = execSync(`"${PIKE_BINARY}" --version`, { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
   _available = true;
   const match = output.match(/Pike v(\d+\.\d+\.\d+)/);
   if (match) _version = match[1];
 
-  const pathsOutput = execSync("pike --show-paths", { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+  const pathsOutput = execSync(`"${PIKE_BINARY}" --show-paths`, { timeout: 5000, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
   for (const line of pathsOutput.split("\n")) {
     const m = line.match(/^master\.pike\.\.\.\s*:\s*(.+)$/);
     if (m) {
