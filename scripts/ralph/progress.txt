@@ -582,3 +582,24 @@ Thread: N/A (Ralph agent iteration)
   - docs/state-of-project.md (v1.0.0 status)
   - server/src/features/backgroundIndex.ts (Node.js compat: readdir instead of Bun Glob)
 ---
+
+## 2026-04-30 - US-001
+Thread: N/A (Ralph agent iteration)
+- Full audit of test infrastructure: harness runner, introspect.pike, resolve.pike, snapshot.ts, corpus.json, harness.test.ts
+- Found and fixed bug: runResolve() accepted opts parameter but never forwarded opts.modulePath to resolve.pike. Cross-file corpus entries with custom modulePath (e.g., cross-lib-user.pike) now get the --module-path flag.
+- Verification results:
+  - introspect.pike output fields match IntrospectionResult type exactly (7 top-level fields, all nested structures match)
+  - resolve.pike output schema matches ResolutionResult interface (all fields accounted for)
+  - canonicalStringify uses recursive deepSortKeys — deterministic output at all nesting levels
+  - diffSnapshot correctly compares all top-level fields except pike_version (informational), using canonical string comparison
+  - corpus/corpus.json RunnerOptions correctly merged via getRunnerOptionsForFile() — base {strict:false} + manifest overrides
+  - harness.test.ts tests the right things: snapshot coverage, ground truth comparison, determinism, mutation detection, schema validation
+- Files changed:
+  - harness/src/runner.ts (fixed runResolve to forward opts.modulePath)
+  - scripts/ralph/prd.json (US-001 passes: true)
+- **Learnings for future iterations:**
+  - resolve.pike supports multiple --module-path flags (accumulates into array) — safe to pass both CORPUS_DIR and custom modulePath
+  - resolve.pike does NOT support --include-path (not needed for cross-file resolution, only for compilation)
+  - The harness test self-heals: if a snapshot is missing, writeSnapshot() generates it instead of failing
+  - The EXCLUDED_DIFF_FIELDS set in snapshot.ts only excludes pike_version — all other fields are compared strictly
+---
