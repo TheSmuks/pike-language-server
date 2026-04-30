@@ -202,7 +202,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/features/semanticTokens.ts (new), server/src/features/symbolTable.ts (SymbolTable, Declaration, Reference types). This story produces the data, NOT the LSP handler."
     },
     {

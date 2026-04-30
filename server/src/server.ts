@@ -45,6 +45,11 @@ import {
 import { getCompletions, type CompletionContext } from "./features/completion";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import {
+  SEMANTIC_TOKENS_LEGEND,
+  produceSemanticTokens,
+  deltaEncodeTokens,
+} from "./features/semanticTokens";
+import {
   resolveAccessDefinition,
   resolveAccessDeclaration,
   type ResolutionContext,
@@ -270,6 +275,10 @@ export function createPikeServer(connection: Connection): PikeServer {
         completionProvider: {
           triggerCharacters: ['.', '>', ':'],
         },
+        semanticTokensProvider: {
+          legend: SEMANTIC_TOKENS_LEGEND,
+          full: true,
+        },
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -359,6 +368,22 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
   });
 
+  // -----------------------------------------------------------------------
+  // textDocument/semanticTokens/full
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/semanticTokens/full", async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return { data: [] };
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return { data: [] };
+
+    const tokens = produceSemanticTokens(table);
+    const data = deltaEncodeTokens(tokens);
+
+    return { data };
+  });
   // -----------------------------------------------------------------------
   // textDocument/definition
   // -----------------------------------------------------------------------

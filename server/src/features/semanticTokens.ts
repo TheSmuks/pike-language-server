@@ -142,10 +142,10 @@ export function tokenModifiersForDecl(
  * capability during initialize. The client uses it to decode the numeric
  * token data into human-readable types and modifiers.
  */
-export const SEMANTIC_TOKENS_LEGEND = {
+export const SEMANTIC_TOKENS_LEGEND: { tokenTypes: string[]; tokenModifiers: string[] } = {
   tokenTypes: [...TOKEN_TYPES],
   tokenModifiers: [...TOKEN_MODIFIERS],
-} as const;
+};
 
 // ---------------------------------------------------------------------------
 // Token production (US-013)

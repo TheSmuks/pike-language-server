@@ -251,3 +251,29 @@ Thread: N/A (Ralph agent iteration)
   - Method/function distinction requires scope context — token producer (US-013) handles this
   - SEMANTIC_TOKENS_LEGEND must be exported for server capability registration (US-014)
 ---
+
+## 2026-04-30 - US-013
+Thread: N/A (Ralph agent iteration)
+- Semantic token production from symbol table
+- Added to server/src/features/semanticTokens.ts:
+  - SemanticToken interface (line, character, length, typeId, modifiers)
+  - produceSemanticTokens(table) — walks declarations and references, produces sorted tokens
+  - deltaEncodeTokens(tokens) — converts to LSP wire format [deltaLine, deltaChar, length, typeId, modifiers, ...]
+  - isInClassScope() — checks if a declaration is inside a class scope by walking scope chain
+  - resolveDeclTokenType() — promotes function→method when in class scope
+- Key design decisions:
+  - Only produces tokens for declarations and unresolved references
+  - Resolved references are skipped (clients handle reference highlighting separately)
+  - Unresolved type_ref references get 'type' token (index 7)
+  - Function declarations in class scope are promoted to method (index 4)
+  - Class members get 'static' modifier (bit 3)
+- Added 20 tests in tests/lsp/semanticTokens.test.ts
+- Files changed:
+  - server/src/features/semanticTokens.ts (production + delta encoding)
+  - tests/lsp/semanticTokens.test.ts (new, 20 tests)
+- **Learnings for future iterations:**
+  - LSP delta encoding: when line changes, character position is absolute (not relative to prev token)
+  - Tokens must be sorted by (line, character) before delta encoding
+  - Declaration scopeId + scopeById walk determines class scope context
+  - The function→method promotion stops at function/lambda scope boundaries
+---

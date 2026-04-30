@@ -8,6 +8,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Parser, Language } from "web-tree-sitter";
 import { buildSymbolTable, type SymbolTable } from "../../server/src/features/symbolTable";
+import { createTestServer, type TestServer } from "./helpers";
 import {
   produceSemanticTokens,
   deltaEncodeTokens,
@@ -287,5 +288,105 @@ describe("deltaEncodeTokens", () => {
 
   test("returns empty array for empty input", () => {
     expect(deltaEncodeTokens([])).toEqual([]);
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// LSP protocol tests — textDocument/semanticTokens/full (US-014)
+// ---------------------------------------------------------------------------
+
+
+describe("US-014: semanticTokens/full LSP protocol", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("returns tokens for class with methods", async () => {
+    const src = [
+      'class Dog {',
+      '  void speak() {}',
+      '  string get_name() { return ""; }',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/semantic-class.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.data).toBeDefined();
+    expect(result.data.length).toBeGreaterThan(0);
+    // Should have at least Dog (class), speak (method), get_name (method)
+    expect(result.data.length).toBeGreaterThanOrEqual(15); // 3 tokens × 5 ints each
+  });
+
+  test("returns tokens for variables and parameters", async () => {
+    const src = [
+      'int add(int a, int b) {',
+      '  int result = a + b;',
+      '  return result;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/semantic-vars.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.data).toBeDefined();
+    // Should have add (function), a (parameter), b (parameter), result (variable)
+    expect(result.data.length).toBeGreaterThanOrEqual(15);
+  });
+
+  test("returns empty data for unknown document", async () => {
+    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri: "file:///nonexistent.pike" },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.data).toEqual([]);
+  });
+
+  test("returns tokens for enum declarations", async () => {
+    const src = [
+      'enum Color { RED, GREEN, BLUE }',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/semantic-enum.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.data).toBeDefined();
+    // Color (enum) + RED, GREEN, BLUE (enumMember) = 4 tokens
+    expect(result.data.length).toBeGreaterThanOrEqual(20); // 4 tokens × 5 ints
+  });
+
+  test("returns tokens for inherit declarations", async () => {
+    const src = [
+      'class Base { int value; }',
+      'class Child {',
+      '  inherit Base;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/semantic-inherit.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    });
+
+    expect(result).toBeDefined();
+    expect(result.data).toBeDefined();
+    expect(result.data.length).toBeGreaterThan(0);
   });
 });
