@@ -15,7 +15,6 @@ permissions:
 
 env:
   PIKE_VERSION: "8.0.1116"
-  PIKE_PREFIX: "${{ github.workspace }}/.pike"
 
 jobs:
   typecheck:
@@ -34,39 +33,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
 
-  build-pike:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Cache pike install
-        id: cache-pike
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PIKE_PREFIX }}
-          key: pike-${{ env.PIKE_VERSION }}-${{ runner.os }}
-      - name: Install build dependencies
-        if: steps.cache-pike.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            make gcc g++ libgmp-dev nettle-dev bison \
-            libreadline-dev zlib1g-dev
-      - name: Download and build Pike
-        if: steps.cache-pike.outputs.cache-hit != 'true'
-        run: |
-          curl -sL "https://pike.lysator.liu.se/pub/pike/all/${PIKE_VERSION}/Pike-v${PIKE_VERSION}.tar.gz" \
-            | tar xz
-          mkdir -p "Pike-v${PIKE_VERSION}/build"
-          cd "Pike-v${PIKE_VERSION}/build"
-          ../src/configure \
-            --prefix="${PIKE_PREFIX}" \
-            --without-debug \
-            --without-mysql
-          make -j$(nproc)
-          make install
-
   test:
-    needs: build-pike
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -80,16 +47,37 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - name: Restore pike install
+
+      - name: Cache pike install
+        id: cache-pike
         uses: actions/cache@v4
         with:
-          path: ${{ env.PIKE_PREFIX }}
+          path: ~/.pike
           key: pike-${{ env.PIKE_VERSION }}-${{ runner.os }}
+      - name: Install build dependencies
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make gcc g++ libgmp-dev nettle-dev bison \
+            libreadline-dev zlib1g-dev
+      - name: Build Pike
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://pike.lysator.liu.se/pub/pike/all/${PIKE_VERSION}/Pike-v${PIKE_VERSION}.tar.gz" \
+            | tar xz
+          mkdir -p "Pike-v${PIKE_VERSION}/build"
+          cd "Pike-v${PIKE_VERSION}/build"
+          ../src/configure \
+            --prefix="$HOME/.pike" \
+            --without-debug \
+            --without-mysql
+          make -j$(nproc)
+          make install
       - name: Verify pike binary
         run: |
-          ls -la "${PIKE_BINARY}"
-          "${PIKE_BINARY}" --version 2>&1 || true
-          ldd "${PIKE_BINARY}" 2>&1 || true
+          "$HOME/.pike/pike/${PIKE_VERSION}/bin/pike" --version
+
       - run: bun test
         env:
-          PIKE_BINARY: ${{ env.PIKE_PREFIX }}/pike/${{ env.PIKE_VERSION }}/bin/pike
+          PIKE_BINARY: /home/runner/.pike/pike/8.0.1116/bin/pike
