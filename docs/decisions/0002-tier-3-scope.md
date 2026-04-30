@@ -42,14 +42,20 @@ The LSP is a **tier-3** implementation: it uses three complementary sources for 
 - Completion for stdlib, project-local symbols, declared-type member access
 - Go-to-definition and find-references via source-level parsing
 - Assignment-based type narrowing for local variables
+- Code actions: remove unused variable, add missing import
+- Workspace symbol search across indexed files
+- Semantic tokens (syntax highlighting) from symbol table
+- Document highlight, folding ranges, signature help
+- Background workspace indexing on startup
+- Persistent cache across LSP restarts
 
 ### Out of Scope (Tier-3 Boundary)
 
-- Code actions and refactoring beyond rename
 - Full control-flow type narrowing (if/else branch analysis)
 - Chained type inference across multiple assignments
 - Generic type instantiation (e.g., `array(int)` tracks as `array`)
 - Runtime value completion or evaluation
+- Complex refactoring (extract method, inline variable, move symbol)
 
 **MUST**: All type resolution must degrade gracefully — unavailable information shows the best available type, never blocks the response.
 
