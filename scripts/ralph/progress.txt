@@ -294,3 +294,20 @@ Thread: N/A (Ralph agent iteration)
   - semanticTokens/full uses connection.onRequest() not a named handler like onHover
   - Handler pattern: get doc → get symbol table → produce tokens → delta encode → return { data }
 ---
+
+## 2026-04-30 - US-015
+Thread: N/A (Ralph agent iteration)
+- Document highlight handler
+- Registered textDocument/documentHighlight handler and documentHighlightProvider capability
+- Uses getReferencesTo() for finding references and getDefinitionAt() for the declaration
+- Declaration sites → Write (kind=3), reference sites → Read (kind=2)
+- Skips references at the same position as the declaration to avoid duplicates
+- Added 6 tests: variable read/write, function call, class usage, parameter, unknown doc, empty position
+- Files changed:
+  - server/src/server.ts (handler + capability registration)
+  - tests/lsp/documentHighlight.test.ts (new, 6 tests)
+- **Learnings for future iterations:**
+  - DocumentHighlightKind values: Text=1, Read=2, Write=3 (NOT 0/1/2)
+  - getReferencesTo() returns both the declaration reference and actual references — need to skip duplicates with getDefinitionAt()
+  - Reference character positions: '  int result = add(1, 2);' → 'add' starts at column 15 (2+4+7+2)
+---

@@ -51,6 +51,7 @@ import {
   produceSemanticTokens,
   deltaEncodeTokens,
 } from "./features/semanticTokens";
+import { produceFoldingRanges } from "./features/foldingRange";
 import {
   resolveAccessDefinition,
   resolveAccessDeclaration,
@@ -282,6 +283,7 @@ export function createPikeServer(connection: Connection): PikeServer {
           full: true,
         },
         documentHighlightProvider: true,
+        foldingRangeProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -446,6 +448,18 @@ export function createPikeServer(connection: Connection): PikeServer {
     return highlights.length > 0 ? highlights : null;
   });
   // -----------------------------------------------------------------------
+  // textDocument/foldingRange (US-016)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/foldingRange", async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return [];
+
+    const tree = parse(doc.getText(), doc.uri);
+    if (!tree) return [];
+
+    return produceFoldingRanges(tree);
+  });
   // textDocument/definition
   // -----------------------------------------------------------------------
 

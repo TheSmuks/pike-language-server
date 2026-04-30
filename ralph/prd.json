@@ -234,7 +234,7 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts, server/src/features/symbolTable.ts (getReferencesTo). getReferencesTo already returns Reference objects with location data. Map them to DocumentHighlight with Read/Write kind based on the reference context."
     },
     {
