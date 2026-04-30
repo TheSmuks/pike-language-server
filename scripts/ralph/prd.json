@@ -96,7 +96,7 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": "This is the most critical correctness story — if diagnostics are wrong, users get wrong error reports."
     },
     {

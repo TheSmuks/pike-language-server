@@ -701,3 +701,28 @@ Thread: N/A (Ralph agent iteration)
   - The LRU cache is generic (LRUCache<T>) — used by parser.ts for trees and server.ts for worker responses
   - No dedicated parser.test.ts file — parser is tested indirectly via tree-sitter-symbol.test.ts and edge-cases.test.ts
 ---
+
+## 2026-04-30 - US-006
+Thread: N/A (Ralph agent iteration)
+- Full audit of diagnostics.ts (53 lines) and diagnosticManager.ts (489 lines)
+- diagnostics.ts: converts tree-sitter ERROR nodes to LSP Diagnostics with correct source='pike-lsp'
+- diagnosticManager.ts: debounce, version-gated supersession, cross-file propagation, content-hash caching
+- Verified key line number assertion against pike output:
+  - Source: '#pragma strict_types\nint main() {\n  int x = 1;\n  string y = x;\n  return 0;\n}'
+  - Pike output: line=4, severity=error, message='Bad type in assignment.', expected_type=string, actual_type=int
+  - Test assertion matches exactly
+- mergeDiagnostics correctly converts 1-based Pike lines to 0-based LSP lines
+- DiagnosticManager modes verified: realtime (debounced), saveOnly (on save only), off (parse diags only)
+- Test coverage verified:
+  - diagnostics.test.ts: 16 tests (2 unit + 14 protocol)
+  - diagnostics-verification.test.ts: V1-V5 (thrashing, responsiveness, propagation, mode switching, smoke)
+  - All tests use real PikeWorker (pikeAvailable check)
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-006 passes: true)
+- **Learnings for future iterations:**
+  - DiagnosticManager merges parse diagnostics (tree-sitter, immediate) with Pike diagnostics (worker, debounced)
+  - Cross-file propagation uses index.getDependents() to find files that inherit/import the edited file
+  - Content-hash caching (SHA-256) avoids redundant pike invocations when content hasn't changed
+  - The staleMs timer publishes an informational 'updating...' diagnostic when pike is slow
+---
