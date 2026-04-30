@@ -29,7 +29,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install
       - name: Install Pike
-        run: sudo apt-get update && sudo apt-get install -y pike8.0-core
+        run: sudo apt-get update && sudo apt-get install -y pike8.0
       - run: bun test
         env:
           PIKE_BINARY: pike8.0
