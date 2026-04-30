@@ -109,7 +109,6 @@ export async function saveCache(
     await mkdir(dirname(cachePath), { recursive: true });
     await writeFile(cachePath, JSON.stringify(cacheFile), "utf-8");
   } catch (err) {
-    // Cache save failure is non-critical — don't crash
     throw new Error(`Failed to save cache: ${(err as Error).message}`);
   }
 }

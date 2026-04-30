@@ -436,6 +436,10 @@ export function createPikeServer(connection: Connection): PikeServer {
       diagnosticManager.setDebounceMs(config.diagnosticDebounceMs);
     }
 
+    if (config.path) {
+      worker.updateConfig({ pikeBinaryPath: config.path });
+    }
+
     if (config.maxNumberOfProblems && config.maxNumberOfProblems > 0) {
       diagnosticManager.setMaxNumberOfProblems(config.maxNumberOfProblems);
     }
@@ -584,7 +588,16 @@ export function createPikeServer(connection: Connection): PikeServer {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
 
-    return produceCodeActions(params, doc.getText(), { stdlibModules });
+    // Build workspace module names from indexed files
+    const workspaceModules = new Set<string>();
+    for (const entry of index.getAllEntries()) {
+      if (!entry.symbolTable) continue;
+      const fileName = entry.uri.split("/").pop() ?? "";
+      const baseName = fileName.replace(/\.(pike|pmod)$/, "");
+      if (baseName) workspaceModules.add(baseName);
+    }
+
+    return produceCodeActions(params, doc.getText(), { stdlibModules, workspaceModules });
   });
 
   // -----------------------------------------------------------------------
