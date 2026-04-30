@@ -1121,4 +1121,26 @@ describe("definition LSP: cross-file inherited member (US-001)", () => {
     expect(result.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
     expect(result.range.start.line).toBe(18); // speak() is declared at line 18 in file A
   });
+
+  test("definition: d->speak() resolves via assignedType when declaredType is mixed (US-008)", async () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-assigned.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 3, character: 5 }, // on 'speak'
+    });
+
+    // assignedType='Dog' should let the resolver find Dog.speak
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should point to the speak method inside Dog class
+    expect(result.range.start.line).toBe(0); // Dog class is at line 0
+  });
 });

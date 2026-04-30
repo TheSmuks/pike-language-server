@@ -980,4 +980,118 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const labels = completionLabels(result);
     expect(labels).toContain("speak");
   });
+
+  // ---------------------------------------------------------------
+  // US-008: Assignment-based type narrowing
+  // ---------------------------------------------------------------
+
+  test("assignment inference: Dog d = makeDog(); d-> shows Dog members (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  Dog d = makeDog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 4, col 5)
+    const result = getCompletions(table, tree, 4, 5, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via declaredType (explicitly typed)
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("assignment inference: mixed d = Dog(); d-> shows Dog members (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has assignedType set to 'Dog' (the constructor name)
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('mixed');
+    expect(dDecl!.assignedType).toBe('Dog');
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 3, col 5)
+    const result = getCompletions(table, tree, 3, 5, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via assignedType since declaredType is 'mixed'
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("assignment inference: no initializer produces no assignedType (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  Dog d;',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has declaredType but no assignedType
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('Dog');
+    expect(dDecl!.assignedType).toBeUndefined();
+  });
+
+  test("assignment inference: complex initializer ignored (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = 42;',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has no assignedType for a literal initializer
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('mixed');
+    // Integer literal is not an identifier — no assignedType
+    expect(dDecl!.assignedType).toBeUndefined();
+  });
 });

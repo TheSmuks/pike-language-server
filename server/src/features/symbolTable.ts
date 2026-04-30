@@ -25,6 +25,8 @@ export interface Declaration {
   alias?: string;
   /** For variables and parameters: the declared type annotation text, if present. */
   declaredType?: string;
+  /** For variables: type inferred from assignment initializer (e.g., Dog d = makeDog()). */
+  assignedType?: string;
   /** For synthetic declarations from cross-file inheritance: URI of the origin file. */
   sourceUri?: string;
 }
@@ -126,7 +128,79 @@ function extractTypeText(node: Node): string | undefined {
   return typeNode?.text;
 }
 
-// ---------------------------------------------------------------------------
+/**
+ * Primitive type names that can never have members.
+ * Shared with typeResolver.ts — kept as a set for O(1) lookup.
+ */
+const PRIMITIVE_TYPES = new Set([
+  'void', 'mixed', 'zero', 'int', 'float', 'string',
+  'array', 'mapping', 'multiset', 'object', 'function', 'program',
+  'bool', 'auto', 'any',
+]);
+
+/**
+ * Extract the type name from a variable initializer, if the RHS is a simple
+ * identifier that could be a class name (e.g., Dog d = makeDog() → makeDog).
+ *
+ * Drills through expression wrappers (comma_expr, assign_expr, cond_expr,
+ * postfix_expr) to find the innermost identifier. Returns undefined for
+ * literals, complex expressions, or call expressions whose callee is not
+ * a simple identifier.
+ */
+function extractInitializerType(node: Node): string | undefined {
+  // Only variable_decl or local_declaration has a 'value' field with an initializer
+  if (node.type !== 'variable_decl' && node.type !== 'local_declaration') return undefined;
+
+  const valueNode = node.childForFieldName('value');
+  if (!valueNode) return undefined;
+
+  // Drill through expression wrappers to find the innermost meaningful node.
+  // The tree wraps expressions: comma_expr > assign_expr > cond_expr > ... >
+  // postfix_expr > primary_expr > identifier_expr > identifier
+  // For call expressions like makeDog(), we want the callee name (makeDog).
+  // For simple references like someVar, we want the identifier.
+  let inner: Node | null = valueNode;
+  while (inner !== null) {
+    if (inner.type === 'postfix_expr') {
+      // postfix_expr is a call expression if it has more than 1 child
+      // (the extra children are ( and ) or an argument_list).
+      // For calls, extract the callee name (first child) and stop.
+      // For simple references, keep drilling into the single child.
+      if (inner.childCount > 1) {
+        // Call expression: extract the callee (first child)
+        inner = inner.child(0);
+        // Continue drilling — callee may be wrapped in another postfix_expr
+        continue;
+      }
+      // Single child: keep drilling
+      inner = inner.child(0);
+      continue;
+    }
+
+    if (inner.type === 'identifier_expr' || inner.type === 'primary_expr') {
+      inner = inner.namedChild(0);
+      continue;
+    }
+
+    // Expression wrappers: drill into first named child
+    if (inner.namedChildCount === 1) {
+      inner = inner.namedChild(0);
+      continue;
+    }
+
+    // identifier, literal, etc. — stop drilling
+    break;
+  }
+
+  if (!inner || inner.type !== 'identifier') return undefined;
+
+  const name = inner.text;
+  // Skip primitive types and keywords
+  if (PRIMITIVE_TYPES.has(name)) return undefined;
+
+  return name;
+}
+
 // Builder state
 // ---------------------------------------------------------------------------
 
@@ -707,6 +781,10 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
   // Multi-name declarations (variable, constant)
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
+  // Only extract assignedType for variable declarations without a useful declared type
+  const assignedType = (actualKind === 'variable' && (!typeText || typeText === 'mixed'))
+    ? extractInitializerType(decl)
+    : undefined;
   if (nameNodes.length > 0) {
     for (const nameNode of nameNodes) {
       addDeclaration(state, {
@@ -716,6 +794,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         range: toRange(decl),
         scopeId,
         declaredType: typeText,
+        assignedType,
       });
     }
   } else {
@@ -729,6 +808,7 @@ function collectSimpleDecl(node: Node, state: BuildState): void {
         range: toRange(decl),
         scopeId,
         declaredType: typeText,
+        assignedType,
       });
     }
   }
@@ -1379,11 +1459,15 @@ export function getReferencesTo(
       if (ref.resolvesTo === null && ref.name === targetName &&
           (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
         if (ref.lhsName) {
-          // Type-aware filtering: check if LHS's declared type contains the target.
+          // Type-aware filtering: check if LHS's type contains the target.
+          // Uses declaredType first, falls back to assignedType.
           const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
-          if (lhsDecl?.declaredType) {
+          const lhsTypeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
+            ? lhsDecl.declaredType
+            : lhsDecl?.assignedType;
+          if (lhsTypeName) {
             const typeClass = table.declarations.find(
-              d => d.kind === 'class' && d.name === lhsDecl.declaredType,
+              d => d.kind === 'class' && d.name === lhsTypeName,
             );
             if (typeClass) {
               // Check if target declaration is a member of the LHS's type class.

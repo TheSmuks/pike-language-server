@@ -847,12 +847,15 @@ function resolveTypeMembers(
     }
   }
 
-  // If the declaration is a variable/parameter/function, resolve its declared type
+  // If the declaration is a variable/parameter/function, resolve its type
   // Functions have declaredType set to their return type
-  if ((decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") && decl.declaredType) {
-    const typeName = decl.declaredType;
-    // Skip primitive types that can never have members
-    if (!PRIMITIVE_TYPES.has(typeName)) {
+  // Variables with assignedType use that when declaredType is absent/mixed
+  if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") {
+    // Use assignedType when declaredType is absent or a primitive like 'mixed'
+    const typeName = (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
+      ? decl.declaredType
+      : decl.assignedType;
+    if (typeName) {
       // Use typeResolver for same-file, cross-file, and qualified type resolution
       const result = resolveType(typeName, {
         table,
