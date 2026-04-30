@@ -85,6 +85,11 @@ jobs:
         with:
           path: ${{ env.PIKE_PREFIX }}
           key: pike-${{ env.PIKE_VERSION }}-${{ runner.os }}
+      - name: Verify pike binary
+        run: |
+          ls -la "${PIKE_BINARY}"
+          "${PIKE_BINARY}" --version 2>&1 || true
+          ldd "${PIKE_BINARY}" 2>&1 || true
       - run: bun test
         env:
           PIKE_BINARY: ${{ env.PIKE_PREFIX }}/pike/${{ env.PIKE_VERSION }}/bin/pike
