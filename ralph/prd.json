@@ -432,7 +432,7 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: tests/perf/ (new directory), .github/workflows/benchmark.yml (new). Use Bun's built-in test runner with performance measurement. Baselines: completion warm p50 <2ms, hover <1ms, semantic tokens full <50ms."
     },
     {

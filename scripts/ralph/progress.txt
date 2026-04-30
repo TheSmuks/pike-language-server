@@ -535,3 +535,21 @@ Thread: N/A (Ralph agent iteration)
   - CHANGELOG entries should be specific: mention the feature and key detail (e.g., '9 token types')
   - docs/other-editors.md is stable — only needs updates when the standalone build changes
 ---
+
+## 2026-04-30 - US-027
+Thread: N/A (Ralph agent iteration)
+- Performance regression test suite
+- Created tests/perf/benchmarks.test.ts with 9 benchmarks:
+  - Completion (cold and warm), hover, definition, semantic tokens
+  - Document symbol, workspace symbol, folding range, document highlight
+- Uses a generated 300-line Pike source with 50 classes for stress testing
+- Baselines set with 3x slack for CI variability
+- Updated docs/state-of-project.md with new performance measurements
+- Files changed:
+  - tests/perf/benchmarks.test.ts (new, 9 benchmarks)
+  - docs/state-of-project.md (performance baseline table)
+- **Learnings for future iterations:**
+  - Use process.hrtime.bigint() for sub-millisecond measurements in Bun
+  - Generate large test sources programmatically — don't commit them
+  - Performance baselines need slack factor for CI variability (3x is safe)
+---
