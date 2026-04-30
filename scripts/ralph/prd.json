@@ -112,7 +112,7 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": "symbolTable.ts is the largest module at 1881 lines. This story may surface bugs just from reading carefully."
     },
     {

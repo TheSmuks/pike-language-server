@@ -726,3 +726,30 @@ Thread: N/A (Ralph agent iteration)
   - Content-hash caching (SHA-256) avoids redundant pike invocations when content hasn't changed
   - The staleMs timer publishes an informational 'updating...' diagnostic when pike is slow
 ---
+
+## 2026-04-30 - US-007
+Thread: N/A (Ralph agent iteration)
+- Full audit of symbolTable.ts (1881 lines) — focused on core extraction, PRIMITIVE_TYPES, scopes, generics
+- PRIMITIVE_TYPES verified against Pike 8.0: void, mixed, zero, int, float, string, array, mapping, multiset, object, function, program, bool, auto, any — all correct
+- Symbol extraction verified for 5 corpus files:
+  - basic-types.pike: 17 declarations, 3 scopes (file → function), correct types (int, float, string, mixed, int(0..1), program, object)
+  - class-single-inherit.pike: 30 declarations, 13 scopes (file → class → function), inheritance hierarchy correct
+  - fn-lambda.pike: 21 declarations, 9 scopes (file → function → lambda), function type annotations preserved
+  - enum-basic.pike: 27 declarations, enums with members correctly extracted
+  - basic-generics.pike: 28 declarations, generic types parsed correctly (array(int), mapping(string:int), function(int:int))
+- Scope handling verified:
+  - Local variables scoped to function (not visible at file scope)
+  - Class members scoped to class (Animal.name in scope 2, Dog.breed in scope 14)
+  - Inheritance declarations scoped correctly
+  - Lambda scopes nested inside function scopes
+- Generic type handling verified: array(int), mapping(string:int), multiset(string), function(int:int), function(int:string) all preserved as declaredType strings
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-007 passes: true)
+- **Learnings for future iterations:**
+  - table.declarations is an Array (not a function), table.scopes is also an Array
+  - Enum members appear twice in declarations — once as declaration, once as reference — this is expected
+  - Lambda scopes have kind='lambda' and are children of function scopes
+  - foreach creates its own scope (kind='foreach') with iteration variables as parameters
+  - The ScopeKind type includes: file, class, function, lambda, block, foreach, for, while, do_while, switch
+---
