@@ -753,3 +753,25 @@ Thread: N/A (Ralph agent iteration)
   - foreach creates its own scope (kind='foreach') with iteration variables as parameters
   - The ScopeKind type includes: file, class, function, lambda, block, foreach, for, while, do_while, switch
 ---
+
+## 2026-04-30 - US-008
+Thread: N/A (Ralph agent iteration)
+- Full audit of definition and references correctness
+- getDefinitionAt (lines 1258-1297): checks references first (position match → resolvesTo), then declarations (nameRange match); inherit/import → resolve to target class
+- getReferencesTo (lines 1410-1497): finds target decl, collects all resolving references, includes arrow/dot fallback with type-aware filtering, prepends declaration itself
+- definition.test.ts: 16 describe blocks, 63 tests, 200 expect() calls. All use real tree-sitter parsing (no mocks). Covers: local vars, params, class members, inherited members, cross-file references
+- references.test.ts: 9 describe blocks, 25 tests, 62 expect() calls. All real tree-sitter parsing. Covers: variable refs, function calls, class instantiation, member access, arrow access, parameters
+- Traced 3 definition lookups:
+  - class-single-inherit.pike: scope_access (::describe) resolves correctly; arrow_access (d->describe) has resolvesTo=null (expected for untyped arrow access)
+  - fn-lambda.pike: square lambda variable resolves to declaration at line 8 with type function(int : int); getReferencesTo returns 2 (decl + ref)
+  - fn-callbacks.pike: str_len function resolves correctly; getReferencesTo returns 3 (decl + 2 refs at lines 24, 35)
+- Cross-file resolution verified: cross-inherit-simple-b.pike inherits from cross-inherit-simple-a.pike; d->speak() resolves to Animal.speak in file A at line 18
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-008 passes: true)
+- **Learnings for future iterations:**
+  - Arrow access references (d->method) have resolvesTo=null for untyped variables — the type-aware fallback in getReferencesTo handles this
+  - getDefinitionAt returns null for arrow_access with null resolvesTo — this is a known limitation, not a bug
+  - Cross-file resolution requires indexing the base file first (wireInheritance uses index.getSymbolTable())
+  - definition.test.ts has a dedicated 'cross-file inherited member' describe block using real LSP protocol
+---
