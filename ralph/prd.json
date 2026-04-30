@@ -250,7 +250,7 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts, server/src/parser.ts (tree-sitter parse). This uses the tree-sitter parse tree directly \u2014 walk the tree for nodes that have block-like children and produce FoldingRange objects."
     },
     {

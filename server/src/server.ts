@@ -52,6 +52,7 @@ import {
   deltaEncodeTokens,
 } from "./features/semanticTokens";
 import { produceFoldingRanges } from "./features/foldingRange";
+import { produceSignatureHelp } from "./features/signatureHelp";
 import {
   resolveAccessDefinition,
   resolveAccessDeclaration,
@@ -284,6 +285,9 @@ export function createPikeServer(connection: Connection): PikeServer {
         },
         documentHighlightProvider: true,
         foldingRangeProvider: true,
+        signatureHelpProvider: {
+          triggerCharacters: ['(', ','],
+        },
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -459,6 +463,27 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (!tree) return [];
 
     return produceFoldingRanges(tree);
+  });
+  // -----------------------------------------------------------------------
+  // textDocument/signatureHelp (US-017)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest("textDocument/signatureHelp", async (params) => {
+    const doc = documents.get(params.textDocument.uri);
+    if (!doc) return null;
+
+    const table = getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const tree = parse(doc.getText(), doc.uri);
+    if (!tree) return null;
+
+    return produceSignatureHelp(
+      tree, table,
+      params.position.line,
+      params.position.character,
+      stdlibIndex,
+    );
   });
   // textDocument/definition
   // -----------------------------------------------------------------------

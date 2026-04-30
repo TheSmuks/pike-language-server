@@ -311,3 +311,22 @@ Thread: N/A (Ralph agent iteration)
   - getReferencesTo() returns both the declaration reference and actual references — need to skip duplicates with getDefinitionAt()
   - Reference character positions: '  int result = add(1, 2);' → 'add' starts at column 15 (2+4+7+2)
 ---
+
+## 2026-04-30 - US-016
+Thread: N/A (Ralph agent iteration)
+- Folding range handler
+- Created server/src/features/foldingRange.ts with produceFoldingRanges()
+- Foldable structures: class_body, block (functions, if/for/foreach/while/switch), comment groups
+- Registered textDocument/foldingRange handler and foldingRangeProvider capability
+- Comment groups: consecutive line_comment nodes spanning multiple lines get 'comment' kind
+- Single-line blocks are not foldable (only spans > 1 line)
+- Added 8 tests: 6 unit tests + 2 protocol tests
+- Files changed:
+  - server/src/features/foldingRange.ts (new)
+  - server/src/server.ts (handler + capability)
+  - tests/lsp/foldingRange.test.ts (new, 8 tests)
+- **Learnings for future iterations:**
+  - tree-sitter node.child(i) can return null — must null-check
+  - Foldable ranges are determined by node types: class_body and block cover all Pike block structures
+  - Comment groups need manual grouping logic — tree-sitter has no 'comment_group' node
+---
