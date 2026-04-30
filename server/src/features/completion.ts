@@ -17,6 +17,7 @@ import {
 import {
   type SymbolTable,
   type Declaration,
+  getEffectiveTypeName,
   type DeclKind,
   type Range,
   getSymbolsInScope,
@@ -846,10 +847,7 @@ function resolveTypeMembers(
   // Functions have declaredType set to their return type
   // Variables with assignedType use that when declaredType is absent/mixed
   if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") {
-    // Use assignedType when declaredType is absent or a primitive like 'mixed'
-    const typeName = (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
-      ? decl.declaredType
-      : decl.assignedType;
+    const typeName = getEffectiveTypeName(decl);
     if (typeName) {
       // Use typeResolver for same-file, cross-file, and qualified type resolution
       const result = resolveType(typeName, {

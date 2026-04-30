@@ -201,6 +201,19 @@ function extractInitializerType(node: Node): string | undefined {
   return name;
 }
 
+/**
+ * Get the effective type name from a declaration.
+ *
+ * Uses assignedType when declaredType is absent or a primitive like 'mixed'.
+ * Shared logic for type resolution across typeResolver, completion, and rename.
+ */
+export function getEffectiveTypeName(decl: Declaration | null | undefined): string | undefined {
+  if (!decl) return undefined;
+  return (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
+    ? decl.declaredType
+    : decl.assignedType;
+}
+
 // Builder state
 // ---------------------------------------------------------------------------
 
@@ -1462,9 +1475,7 @@ export function getReferencesTo(
           // Type-aware filtering: check if LHS's type contains the target.
           // Uses declaredType first, falls back to assignedType.
           const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
-          const lhsTypeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
-            ? lhsDecl.declaredType
-            : lhsDecl?.assignedType;
+          const lhsTypeName = getEffectiveTypeName(lhsDecl);
           if (lhsTypeName) {
             const typeClass = table.declarations.find(
               d => d.kind === 'class' && d.name === lhsTypeName,

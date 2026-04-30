@@ -64,6 +64,11 @@ export function createSilentStream(): PassThrough {
 // Types
 // ---------------------------------------------------------------------------
 
+export interface TestServerOptions {
+  /** Workspace root URI (e.g., file:///path/to/dir). Defaults to null. */
+  rootUri?: string | null;
+}
+
 export interface TestServer {
   /** Client-side JSON-RPC connection for sending requests. */
   client: MessageConnection;
@@ -91,7 +96,7 @@ let nextDocVersion = 1;
  * The server is initialized (sends initialize + initialized) before returning.
  * The caller can immediately send requests.
  */
-export async function createTestServer(): Promise<TestServer> {
+export async function createTestServer(options?: TestServerOptions): Promise<TestServer> {
   // Two silent PassThrough streams: client→server and server→client
   const c2s = createSilentStream();
   const s2c = createSilentStream();
@@ -114,8 +119,7 @@ export async function createTestServer(): Promise<TestServer> {
 
   // Perform LSP initialization handshake
   await client.sendRequest("initialize", {
-    processId: null,
-    rootUri: null,
+    rootUri: options?.rootUri ?? null,
     capabilities: {},
   });
   // The initialized notification triggers parser init

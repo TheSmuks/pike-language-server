@@ -11,7 +11,7 @@
  * 4. Stdlib type via prefix index
  */
 
-import { PRIMITIVE_TYPES } from "./symbolTable";
+import { getEffectiveTypeName, PRIMITIVE_TYPES } from "./symbolTable";
 import type { Declaration, SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
@@ -96,9 +96,7 @@ export function resolveMemberAccess(
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
   // Use assignedType when declaredType is absent or a primitive like 'mixed'
-  const typeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
-    ? lhsDecl.declaredType
-    : lhsDecl?.assignedType;
+  const typeName = getEffectiveTypeName(lhsDecl);
   if (typeName) {
     const result = resolveType(typeName, context, depth + 1);
     if (result?.decl.kind === "class") {

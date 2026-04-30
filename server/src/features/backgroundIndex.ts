@@ -77,12 +77,20 @@ export async function indexWorkspaceFiles(
   // Report progress start
   let progressToken: string | number | undefined;
   try {
-    const result = await connection.sendRequest("window/workDoneProgress/create", {
-      token: `pike-index-${Date.now()}`,
-    });
+    // Compute token once — reuse in both create and progress calls.
     progressToken = `pike-index-${Date.now()}`;
+    // Timeout: if the client doesn't respond within 2s, skip progress reporting.
+    await Promise.race([
+      connection.sendRequest("window/workDoneProgress/create", {
+        token: progressToken,
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("workDoneProgress timeout")), 2000),
+      ),
+    ]);
   } catch {
-    // Client doesn't support workDoneProgress — that's fine
+    // Client doesn't support workDoneProgress or didn't respond — that's fine
+    progressToken = undefined;
   }
 
   if (progressToken) {

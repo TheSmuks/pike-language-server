@@ -14,7 +14,7 @@ The server needs to discover, parse, and index all `.pike` and `.pmod` files in 
 
 ### File Discovery
 
-Use Bun's `Glob` class to discover files matching `**/*.{pike,pmod}` relative to the workspace root. This is fast and async-native.
+Use a recursive directory walk with `node:fs/promises.readdir` to discover files matching `*.pike` and `*.pmod` relative to the workspace root. Each directory entry is checked for the file extension; subdirectories are walked recursively. Entries starting with `.` are skipped.
 
 ### Indexing Strategy
 
