@@ -816,3 +816,23 @@ Thread: N/A (Ralph agent iteration)
   - Pike //! comments are AutoDoc style, not JavaDoc /** */ style
   - The corpus file autodoc-documented.pike only exercises //! style — no /** */ tests exist
 ---
+
+## 2026-04-30 - US-011
+Thread: N/A (Ralph agent iteration)
+- Full audit of rename.ts (260 lines), accessResolver.ts (169 lines), and rename.test.ts (872 lines)
+- rename.ts: exports prepareRename, getRenameLocations, buildWorkspaceEdit, validateRenameName
+- accessResolver.ts: resolves arrow/dot member access to target declarations for rename scoping
+- buildProtectedNames (server.ts:91): blocks all predef builtin names + stdlib FQN short names
+- prepareRename: checks if position is on a renamable symbol (not protected, not keyword, not operator)
+- buildWorkspaceEdit: uses getReferencesTo for all rename locations, produces 0-based LSP ranges
+- rename.test.ts: 11 describe blocks, 33 tests, 129 expect() calls. Covers: local rename, member rename, cross-file rename (3-file chain), protected name rejection, invalid name rejection, prepareRename, LSP protocol
+- Range correctness verified in 2 tests with explicit start/end assertions
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-011 passes: true)
+- **Learnings for future iterations:**
+  - buildProtectedNames is in server.ts, not rename.ts — it blocks predef + stdlib short names
+  - Cross-file rename uses WorkspaceIndex to find references across open documents
+  - validateRenameName rejects Pike keywords, operators, and identifiers starting with backtick
+  - The rename corpus files (rename-base.pike, rename-child.pike, rename-main.pike) form a 3-file chain for cross-file testing
+---
