@@ -25,7 +25,8 @@ try {
       }
       break;
     }
-} catch {
+  }
+} catch (_) {
   // Pike not available
 }
 

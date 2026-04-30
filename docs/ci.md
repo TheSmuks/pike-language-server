@@ -11,6 +11,21 @@ This project uses separate GitHub Actions workflow files, one concern per file. 
 | `changelog-check.yml` | Require changelog entries on pull requests |
 | `blob-size-policy.yml` | Reject large files in pull requests |
 
+
+### Pike build from source
+
+The test job depends on a `build-pike` job that compiles Pike 8.0.1116 from the official source tarball. This ensures CI runs against the same Pike version used locally, avoiding snapshot and behavior drift between Pike releases.
+
+The build is cached with `actions/cache` keyed on `pike-8.0.1116-$RUNNER_OS`. Since the version is pinned, the cache always hits after the first build on a given runner image. Subsequent CI runs restore the ~52MB install prefix in seconds.
+
+Build steps:
+1. Download `Pike-v8.0.1116.tar.gz` from `pike.lysator.liu.se` (16MB)
+2. Configure with `--without-debug --without-mysql` (minimal release build)
+3. `make -j$(nproc) && make install` into the workspace
+4. Cache the install prefix (e.g., `.pike/pike/8.0.1116/`)
+
+The test job sets `PIKE_BINARY` to the cached binary path. No system-wide `pike8.0` apt package is needed.
+
 ## 2. Workflow Structure
 
 Separating workflows into individual files provides three advantages:
