@@ -678,3 +678,26 @@ Thread: N/A (Ralph agent iteration)
   - Pike reports enums as 'unknown' kind, enum members as 'variable' — the test accounts for this
   - The test verifies ranges within file bounds AND child ranges within parent ranges — good spatial validation
 ---
+
+## 2026-04-30 - US-005
+Thread: N/A (Ralph agent iteration)
+- Full audit of parser.ts (133 lines) and lruCache.ts (128 lines)
+- initParser correctly tries 4 candidate paths: explicit arg, same dir, parent dir, grandparent dir
+- parse() correctly retrieves oldTree from LRU cache and passes to tree-sitter for incremental parsing
+- deleteTree and clearTreeCache correctly evict entries with onEvict callback (tree.delete())
+- LRU cache behavior verified:
+  - Fixed maxEntries (50) and maxBytes (50MB) ceilings
+  - Evicts least-recently-used entry (lowest seq number) when either ceiling exceeded
+  - get() updates LRU order (increments seq)
+  - onEvict callback called on eviction, delete, and clear
+- Parser tests: 200 tree-sitter-symbol tests + 18 edge-cases tests + 3 LRU cache tests = 221 tests
+- All tests use real parse() (no mocks)
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-005 passes: true)
+- **Learnings for future iterations:**
+  - parser.ts stores both the tree and sourceLength in the cache — sourceLength used for memory estimation
+  - estimateTreeBytes uses conservative estimate: max(sourceLength, descendantCount * 200)
+  - The LRU cache is generic (LRUCache<T>) — used by parser.ts for trees and server.ts for worker responses
+  - No dedicated parser.test.ts file — parser is tested indirectly via tree-sitter-symbol.test.ts and edge-cases.test.ts
+---
