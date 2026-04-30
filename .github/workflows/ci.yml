@@ -13,13 +13,24 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PIKE_BINARY: pike8.0
+
 jobs:
   typecheck:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
       - run: bun run typecheck
 
   test:
@@ -28,9 +39,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
-      - run: bun install
-      - name: Install Pike
-        run: sudo apt-get update && sudo apt-get install -y pike8.0
+      - name: Cache bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Cache pike8.0 apt package
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: pike8.0
+          version: 1.0
       - run: bun test
         env:
           PIKE_BINARY: pike8.0
