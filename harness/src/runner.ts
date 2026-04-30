@@ -29,6 +29,10 @@ export const RESOLVE_SNAPSHOTS_DIR = join(PROJECT_ROOT, "harness", "resolve-snap
 export const INTROSPECT_SCRIPT = join(PROJECT_ROOT, "harness", "introspect.pike");
 export const RESOLVE_SCRIPT = join(PROJECT_ROOT, "harness", "resolve.pike");
 
+/** Pike binary name/path. Configurable via PIKE_BINARY env var, defaults to "pike". */
+export const PIKE_BINARY = process.env.PIKE_BINARY ?? "pike";
+
+
 // ---------------------------------------------------------------------------
 // Runner options
 // ---------------------------------------------------------------------------
@@ -91,7 +95,7 @@ export async function runIntrospect(
   }
   args.push(absCorpusFile);
 
-  const proc = Bun.spawn(["pike", INTROSPECT_SCRIPT, ...args], {
+  const proc = Bun.spawn([PIKE_BINARY, INTROSPECT_SCRIPT, ...args], {
     stdout: "pipe",
     stderr: "pipe",
     cwd: PROJECT_ROOT,
@@ -228,7 +232,7 @@ export async function runResolve(
   }
   args.push(absCorpusFile);
 
-  const proc = Bun.spawn(["pike", RESOLVE_SCRIPT, ...args], {
+  const proc = Bun.spawn([PIKE_BINARY, RESOLVE_SCRIPT, ...args], {
     stdout: "pipe",
     stderr: "pipe",
     cwd: PROJECT_ROOT,
