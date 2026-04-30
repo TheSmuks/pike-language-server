@@ -351,7 +351,7 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts (onShutdown, onInitialized), server/src/features/workspaceIndex.ts. Cache format: JSON files keyed by URI. Each entry: URI, version, contentHash, symbolTable (serialized declarations/scopes/references)."
     },
     {

@@ -450,3 +450,30 @@ Thread: N/A (Ralph agent iteration)
   - ast_edit with $$$ARGS pattern can eat the rest of the function body — prefer manual edit for complex calls
   - Pre-existing flaky test: PikeWorker FIFO queue '5 concurrent diagnose' test is timing-sensitive
 ---
+
+## 2026-04-30 - US-022
+Thread: N/A (Ralph agent iteration)
+- Persistent cache across LSP restarts
+- Created server/src/features/persistentCache.ts with:
+  - saveCache() — serializes index to .pike-lsp/cache.json
+  - loadCache() — deserializes and validates format version + WASM hash
+  - deleteCache() — removes cache file
+  - deserializeSymbolTable() — rebuilds Map fields from serialized arrays
+  - computeWasmHash() — hashes tree-sitter-pike.wasm for invalidation
+- Added upsertCachedFile() to WorkspaceIndex for restoring from cache
+- Integrated into server lifecycle:
+  - onInitialized: loads cache before background indexing
+  - onShutdown: saves cache before clearing index
+- 5 tests: roundtrip, WASM hash invalidation, corrupt recovery, partial rebuild, hash function
+- Files changed:
+  - server/src/features/persistentCache.ts (new)
+  - server/src/features/workspaceIndex.ts (upsertCachedFile)
+  - server/src/server.ts (cache load/save in lifecycle)
+  - tests/lsp/persistentCache.test.ts (new, 5 tests)
+  - .gitignore (.pike-lsp/ added)
+- **Learnings for future iterations:**
+  - SymbolTable has Map fields (declById, scopeById) that need manual serialization/deserialization
+  - Cache invalidation must check both format version AND WASM hash
+  - Corrupt cache should be deleted, not leave stale data
+  - onShutdown is now async — cache save runs before index.clear()
+---

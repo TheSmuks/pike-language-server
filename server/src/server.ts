@@ -418,6 +418,30 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   // -----------------------------------------------------------------------
+  // Configuration changes (US-023)
+  // -----------------------------------------------------------------------
+
+  connection.onDidChangeConfiguration(async (settings) => {
+    const config = settings.settings?.pike?.languageServer;
+    if (!config) return;
+
+    if (config.diagnosticMode) {
+      const mode = config.diagnosticMode;
+      if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
+        diagnosticManager.setDiagnosticMode(mode);
+      }
+    }
+
+    if (config.diagnosticDebounceMs && config.diagnosticDebounceMs > 0) {
+      diagnosticManager.setDebounceMs(config.diagnosticDebounceMs);
+    }
+
+    if (config.maxNumberOfProblems && config.maxNumberOfProblems > 0) {
+      diagnosticManager.setMaxNumberOfProblems(config.maxNumberOfProblems);
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // documentSymbol
   // -----------------------------------------------------------------------
 
