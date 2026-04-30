@@ -1,0 +1,69 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 29,
+      "message": "Unused local variable desc.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 39,
+      "message": "Unused local variable m.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/inference-return.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 7,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "describe"
+        },
+        {
+          "kind": "variable",
+          "name": "kind"
+        },
+        {
+          "kind": "variable",
+          "name": "sides"
+        }
+      ],
+      "name": "Shape"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "make_triangle"
+    },
+    {
+      "kind": "function",
+      "line": 27,
+      "name": "test_explicit_return"
+    },
+    {
+      "kind": "function",
+      "line": 34,
+      "name": "make_shape_mixed"
+    },
+    {
+      "kind": "function",
+      "line": 38,
+      "name": "test_mixed_return"
+    }
+  ]
+}

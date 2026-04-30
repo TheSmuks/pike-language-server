@@ -813,3 +813,60 @@ describe("rename across 3-file inheritance chain", () => {
     expect(mainEdits.length).toBeGreaterThanOrEqual(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// US-004: Type-aware rename filtering (arrow/dot deduplication)
+// ---------------------------------------------------------------------------
+
+describe("US-004: rename scope precision for same-name methods", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  test("renaming Dog.bark does NOT rename Cat.bark (same file, typed LHS)", () => {
+    const src = [
+      'class Dog {',
+      '  void bark() {}',
+      '}',
+      'class Cat {',
+      '  void bark() {}',
+      '}',
+      'void test() {',
+      '  Dog d = Dog();',
+      '  Cat c = Cat();',
+      '  d->bark();',
+      '  c->bark();',
+      '}',
+    ].join('\n');
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    wireInheritance(table);
+
+    // Find Dog.bark declaration — it's on line 1 (void bark)
+    const dogBark = table.declarations.find(
+      d => d.name === "bark" && d.kind === "function" && d.nameRange.start.line === 1,
+    );
+    expect(dogBark).toBeDefined();
+
+    const result = getRenameLocations(
+      table, "file:///test.pike",
+      dogBark!.nameRange.start.line,
+      dogBark!.nameRange.start.character,
+      null,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("bark");
+
+    // Should have exactly 2 locations: Dog.bark declaration + d->bark() call site
+    // Should NOT include c->bark() — Cat.bark is a different method
+    expect(result!.locations).toHaveLength(2);
+
+    // Verify one is the declaration, one is d->bark()
+    const lines = result!.locations.map(l => l.line);
+    expect(lines).toContain(dogBark!.nameRange.start.line);
+    // d->bark() is on line 9 (0-indexed)
+    const callLine = src.split('\n')[9];
+    expect(callLine).toContain('d->bark');
+    expect(lines).toContain(9);
+  });
+});

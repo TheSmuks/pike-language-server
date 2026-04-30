@@ -1,6 +1,25 @@
 ## [Unreleased]
 
+### Added
+
+- Type inference: assignment-based type narrowing (`assignedType` field on Declaration, `extractInitializerType`, `PRIMITIVE_TYPES` set)
+- PikeWorker typeof integration for hover on mixed/auto-typed variables
+- Type inference corpus files (4 new .pike files) and harness snapshots
+- Semantic tokens: 9 token types + 5 modifiers, function→method promotion in class scope
+- Semantic token LSP handler (textDocument/semanticTokens/full) with delta encoding
+- Document highlight handler (textDocument/documentHighlight) with Write/Read kinds
+- Folding range handler (textDocument/foldingRange) for blocks, classes, comment groups
+- Signature help handler (textDocument/signatureHelp) with parameter tracking
+- Code actions: remove unused variable, add missing stdlib import (extensible quick-fix registry)
+- Workspace symbol search (workspace/symbol) with case-insensitive prefix matching
+- Background workspace indexing on startup with progress reporting
+- Persistent cache across LSP restarts (symbol table serialization + WASM hash invalidation)
+- VSCode configuration change handler (didChangeConfiguration) for diagnostic settings
+- Cancellation token propagation to all LSP request handlers
+- Decision documents: 0019 (type inference), 0020 (semantic tokens), 0021 (signature help), 0022 (background indexing)
+
 ### Changed
+
 
 - Audit remediation round 2: correctness and robustness fixes across 10 files:
   - `symbolTable.ts`: for-init and foreach-lvalue collection now use grammar field names (`childrenForFieldName('name')`, `childrenForFieldName('key'/'value')`) instead of walking bare `identifier` children, preventing type identifiers from being registered as variable names (C5, C6)

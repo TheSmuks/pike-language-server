@@ -1,0 +1,116 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 56,
+      "message": "Unused local variable info.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 63,
+      "message": "Unused local variable make.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 69,
+      "message": "Unused local variable v.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/inference-chained.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "class",
+      "line": 7,
+      "members": [
+        {
+          "kind": "variable",
+          "name": "brand"
+        },
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "diameter"
+        },
+        {
+          "kind": "function",
+          "name": "info"
+        }
+      ],
+      "name": "Wheel"
+    },
+    {
+      "kind": "class",
+      "line": 21,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "get_make"
+        },
+        {
+          "kind": "function",
+          "name": "get_wheel"
+        },
+        {
+          "kind": "variable",
+          "name": "make"
+        },
+        {
+          "kind": "variable",
+          "name": "wheel"
+        }
+      ],
+      "name": "Vehicle"
+    },
+    {
+      "kind": "class",
+      "line": 39,
+      "members": [
+        {
+          "kind": "function",
+          "name": "build"
+        },
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "name"
+        }
+      ],
+      "name": "Factory"
+    },
+    {
+      "kind": "function",
+      "line": 52,
+      "name": "test_chained"
+    },
+    {
+      "kind": "function",
+      "line": 61,
+      "name": "test_inline_chain"
+    },
+    {
+      "kind": "function",
+      "line": 68,
+      "name": "test_mixed_chain"
+    }
+  ]
+}

@@ -1,0 +1,337 @@
+{
+  "project": "Pike Language Server",
+  "branchName": "ralph/lsp-v1-roadmap",
+  "description": "Pre-merge audit of 28 user stories, 9,200 lines across 60 files. Verifies implementation correctness, test integrity, and architectural soundness before merging to main.",
+  "audit_date": "2026-04-30",
+  "summary": {
+    "total_stories": 28,
+    "verified_pass": 24,
+    "questionable": 2,
+    "failed": 2,
+    "critical_findings": 4,
+    "high_findings": 6,
+    "medium_findings": 8,
+    "low_findings": 7,
+    "verdict": "DO NOT MERGE — 4 critical findings must be resolved first"
+  },
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "CRITICAL",
+      "category": "implementation_bug",
+      "story": "US-021",
+      "title": "progressToken mismatch in backgroundIndex.ts",
+      "description": "backgroundIndex.ts computes the progress token using `Date.now()` in two separate statements (lines 81 and 83). The token sent in the workDoneProgress/create request and the token stored for subsequent progress/report calls are different values. If even 1ms elapses between the two Date.now() calls, progress reports reference a token the client never accepted. Progress reporting is silently broken.",
+      "evidence": "backgroundIndex.ts lines 81-83: `pike-index-${Date.now()}` is computed twice",
+      "fix": "Compute the token string once into a const, then use that const in both the create call and the stored progressToken field.",
+      "test_gap": "backgroundIndex.test.ts does not test background indexing at all — it tests workspaceSymbol instead. The test admits the server doesn't have a real workspace root."
+    },
+    {
+      "id": "F-002",
+      "severity": "CRITICAL",
+      "category": "fake_test",
+      "story": "US-024",
+      "title": "Cancellation tests do not test cancellation",
+      "description": "All 5 tests in cancellation.test.ts send normal (non-cancelled) requests and verify the response is defined. The cancel notification in test 1 uses a Date.now() requestId that doesn't match the actual JSON-RPC auto-assigned request ID. The cancellation is never actually exercised. All 5 tests would pass identically if every CancellationToken check were removed from all handlers.",
+      "evidence": "cancellation.test.ts: cancel notification uses fabricated request ID; tests only check `result != null`",
+      "fix": "Rewrite cancellation tests using raw JSON-RPC (pattern from completion.test.ts lines 427-509): send request, capture its ID, send $/cancelRequest with that same ID, verify empty/null response.",
+      "test_gap": "US-024 'passes: true' but the tests do not verify the feature works."
+    },
+    {
+      "id": "F-003",
+      "severity": "CRITICAL",
+      "category": "fake_test",
+      "story": "US-021",
+      "title": "Background indexing tests do not test background indexing",
+      "description": "backgroundIndex.test.ts test 1 opens a file and checks workspace/symbol finds it — this tests workspaceSymbol, not background indexing. Test 3 checks concurrent requests respond with defined results, which is trivially true. Neither test verifies that workspace files are discovered and indexed on startup.",
+      "evidence": "backgroundIndex.test.ts test comments admit the server doesn't have a real workspace root",
+      "fix": "Either (a) create a test server with workspaceRoot pointing to a temp directory containing .pike files, or (b) test indexWorkspaceFiles/discoverFiles functions directly by providing a real directory and verifying the workspace index is populated."
+    },
+    {
+      "id": "F-004",
+      "severity": "CRITICAL",
+      "category": "implementation_bug",
+      "story": "US-018",
+      "title": "removeUnusedVariableLine produces invalid edit on single-line files",
+      "description": "codeAction.ts removeUnusedVariableLine computes `line - 1` for the start position when deleting a line. For a single-line file (line 0), this produces start.line = -1, which is an invalid LSP Position. The optional chaining (`lines[line - 1]?.length`) prevents a crash but the resulting TextEdit has a negative line number.",
+      "evidence": "codeAction.ts lines 73-80: `line - 1` when line === 0",
+      "fix": "Add guard: if line === 0, the start position should be { line: 0, character: 0 } (start of file)."
+    },
+    {
+      "id": "F-005",
+      "severity": "HIGH",
+      "category": "acceptance_criteria_unmet",
+      "story": "US-026",
+      "title": "Real-codebase verification only tests crash resistance, not correctness",
+      "description": "US-026 acceptance criteria require testing against Pike's 555-file stdlib with 14+ representative files, zero wrong answers (P1), documented P2 findings, and measured semantic token coverage. The actual tests use ~30 corpus files and only verify `expect(result).toBeDefined()`. They cannot detect wrong answers. No P2 findings documented. No token coverage measured.",
+      "evidence": "real-codebase-verification.test.ts: all assertions are `toBeDefined()` or `toBe(true)` (Array.isArray)",
+      "fix": "Add correctness spot-checks for at least 3 representative files: verify documentSymbol returns expected symbol names, definition resolves to expected locations, hover contains expected type signatures.",
+      "note": "US-026 should be marked 'passes: false' until corrected."
+    },
+    {
+      "id": "F-006",
+      "severity": "HIGH",
+      "category": "acceptance_criteria_unmet",
+      "story": "US-028",
+      "title": "Version bump reverted, release criteria not met",
+      "description": "Version was explicitly reverted from 1.0.0 to 0.1.0-alpha per user request. This is intentional. However, the remaining US-028 criteria (VSIX build, standalone build, GitHub release) are also not met. The story should be marked 'passes: false' or decomposed into a post-merge task.",
+      "evidence": "Commit 093d8b4 'chore: revert version bump, keep 0.1.0-alpha'",
+      "fix": "Mark US-028 as 'passes: false'. Create a separate post-merge task for the actual release process."
+    },
+    {
+      "id": "F-007",
+      "severity": "HIGH",
+      "category": "acceptance_criteria_unmet",
+      "story": "US-019",
+      "title": "Add-missing-import only matches stdlib modules, not workspace modules",
+      "description": "US-019 acceptance criterion requires matching workspace modules as well as stdlib modules. codeAction.ts:154 only checks ctx.stdlibModules. No workspace module matching is implemented.",
+      "evidence": "codeAction.ts line 154: `ctx.stdlibModules.has(identifier)`",
+      "fix": "Add workspace module lookup via WorkspaceIndex.getAllEntries() or a pre-built module name set."
+    },
+    {
+      "id": "F-008",
+      "severity": "HIGH",
+      "category": "stale_documentation",
+      "story": "US-022",
+      "title": "Cache invalidation does not check Pike version",
+      "description": "US-022 acceptance criterion requires cache invalidation when Pike version changes. persistentCache.ts only checks WASM hash, not `pike --version`. If Pike is upgraded without tree-sitter-pike changing, the cache will be stale.",
+      "evidence": "persistentCache.ts: loadCache validates wasmHash but not pike version",
+      "fix": "Add pike version to cache metadata. Compute via `pike --version` at startup and compare with cached value."
+    },
+    {
+      "id": "F-009",
+      "severity": "HIGH",
+      "category": "stale_documentation",
+      "story": "US-025",
+      "title": "known-limitations.md has stale cross-file inheritance entry",
+      "description": "known-limitations.md states 'wireInheritance() only resolves same-file inheritance -- cross-file inherited scopes remain empty in the symbol table'. This is now false — wireCrossFileInheritance() explicitly handles cross-file inheritance.",
+      "evidence": "symbolTable.ts:1754-1870 wireCrossFileInheritance creates synthetic scopes for cross-file classes",
+      "fix": "Remove or update the stale entry in known-limitations.md."
+    },
+    {
+      "id": "F-010",
+      "severity": "HIGH",
+      "category": "misleading_documentation",
+      "story": "US-022",
+      "title": "Decision 0022 says 'Bun Glob class' but implementation uses readdir",
+      "description": "docs/decisions/0022-background-indexing.md says 'Use Bun Glob class' for file discovery. The actual implementation (backgroundIndex.ts discoverFiles) uses node:fs/promises readdir with a manual recursive walk.",
+      "evidence": "backgroundIndex.ts: discoverFiles uses readdir; decision 0022 says 'Bun Glob'",
+      "fix": "Update decision 0022 to match implementation: 'recursive directory walk with node:fs/promises readdir'."
+    },
+    {
+      "id": "F-011",
+      "severity": "MEDIUM",
+      "category": "acceptance_criteria_partially_unmet",
+      "story": "US-014",
+      "title": "No incremental semantic token support",
+      "description": "US-014 acceptance criterion requires 'Incremental token updates on didChange (delta encoding per LSP spec)'. Only full token requests are supported. The capability registers full: true but no delta support.",
+      "evidence": "server.ts:308-311 semanticTokensProvider: { legend, full: true } — no delta property",
+      "fix": "Remove the acceptance criterion or implement delta support. For v0.1.0-alpha, documenting this as a known limitation is acceptable."
+    },
+    {
+      "id": "F-012",
+      "severity": "MEDIUM",
+      "category": "acceptance_criteria_partially_unmet",
+      "story": "US-025",
+      "title": "other-editors.md not verified",
+      "description": "US-025 acceptance criterion requires 'docs/other-editors.md verified current for Neovim and generic LSP clients'. No changes were made to this file.",
+      "evidence": "No diff for other-editors.md in the branch",
+      "fix": "Read other-editors.md, verify Neovim and generic LCP instructions are current with the new capabilities, update if needed."
+    },
+    {
+      "id": "F-013",
+      "severity": "MEDIUM",
+      "category": "acceptance_criteria_partially_unmet",
+      "story": "US-027",
+      "title": "No CI workflow for benchmarks",
+      "description": "US-027 acceptance criterion requires 'CI workflow added that runs benchmarks'. No .github/workflows/benchmark.yml or equivalent exists.",
+      "evidence": "No workflow file in the branch diff",
+      "fix": "Add benchmark workflow or remove the criterion."
+    },
+    {
+      "id": "F-014",
+      "severity": "MEDIUM",
+      "category": "implementation_concern",
+      "story": "US-017",
+      "title": "Signature help only resolves predef.* stdlib functions",
+      "description": "signatureHelp.ts resolveSignature only looks up `predef.${calleeName}` in the stdlib index. Module-qualified functions (e.g., Stdio.read_file) are not resolved. Cross-file workspace functions are not resolved.",
+      "evidence": "signatureHelp.ts:221-244 resolveSignature builds key as `predef.${calleeName}`",
+      "fix": "For v1, document as known limitation. For future: resolve module-qualified names via workspace index."
+    },
+    {
+      "id": "F-015",
+      "severity": "MEDIUM",
+      "category": "implementation_concern",
+      "story": "US-020",
+      "title": "Workspace symbol search has no result limit",
+      "description": "workspaceSymbol.ts returns all matching results with no upper bound. A workspace with thousands of files matching a short prefix could produce very large responses.",
+      "evidence": "workspaceSymbol.ts:57-103 collects all matches without limit",
+      "fix": "Add a configurable maxResults limit (e.g., 100). Return partial results with an indicator if truncated."
+    },
+    {
+      "id": "F-016",
+      "severity": "MEDIUM",
+      "category": "code_quality",
+      "story": "US-008",
+      "title": "Type resolution fallback ternary duplicated in 3 files",
+      "description": "The pattern `declaredType && !PRIMITIVE_TYPES.has(declaredType) ? declaredType : assignedType` appears in typeResolver.ts, completion.ts, and server.ts. If the fallback logic changes, all three must be updated in lockstep.",
+      "evidence": "typeResolver.ts:98-101, completion.ts (similar pattern), server.ts hover handler",
+      "fix": "Extract a shared helper (e.g., getEffectiveTypeName(decl: Declaration) in symbolTable.ts) and use it in all three consumers."
+    },
+    {
+      "id": "F-017",
+      "severity": "MEDIUM",
+      "category": "api_contract",
+      "story": "US-022",
+      "title": "persistentCache.saveCache JSDoc says 'never throws' but it does throw",
+      "description": "persistentCache.ts line 113 comment says 'Errors are caught and logged -- never throws' but the function throws new Error() on write failure. The caller (server.ts onShutdown) wraps in try/catch, so no runtime bug, but the API contract is misleading.",
+      "evidence": "persistentCache.ts line 113: throws on write failure despite JSDoc saying otherwise",
+      "fix": "Either make the function truly non-throwing (catch and log) or update the JSDoc to document the throw."
+    },
+    {
+      "id": "F-018",
+      "severity": "MEDIUM",
+      "category": "configuration_gap",
+      "story": "US-023",
+      "title": "pikeBinaryPath not wired through didChangeConfiguration",
+      "description": "server.ts reads initOpts?.pikeBinaryPath during onInitialize but onDidChangeConfiguration only wires diagnosticMode, diagnosticDebounceMs, and maxNumberOfProblems. Users changing the Pike binary path in settings must restart the server.",
+      "evidence": "server.ts:429-441 onDidChangeConfiguration — no pikeBinaryPath handling",
+      "fix": "Wire pike.languageServer.path through onDidChangeConfiguration to worker.updateConfig(). One-line fix."
+    },
+    {
+      "id": "F-019",
+      "severity": "LOW",
+      "category": "test_weakness",
+      "story": "US-013",
+      "title": "Semantic token LSP tests use rough lower bounds",
+      "description": "semanticTokens.test.ts protocol tests check `result.data.length >= 15` or `>= 20`. These rough bounds could pass with incorrect tokens (e.g., all tokens being 'variable' type). The unit tests are more precise.",
+      "evidence": "semanticTokens.test.ts LSP protocol test assertions",
+      "fix": "Decode the delta-encoded token array and assert specific token types at specific positions for at least one test case."
+    },
+    {
+      "id": "F-020",
+      "severity": "LOW",
+      "category": "test_weakness",
+      "story": "US-003",
+      "title": "definition.test.ts has conditional assertions that silently skip",
+      "description": "Lines 419, 444-450, 456-462, 755-762 wrap assertions in `if (variable)` blocks. If tree-sitter fails to resolve the variable, the assertion is silently skipped rather than failing.",
+      "evidence": "definition.test.ts: conditional assertions inside if-blocks",
+      "fix": "Add `else { fail('expected to find ...') }` to make skipped assertions explicit failures."
+    },
+    {
+      "id": "F-021",
+      "severity": "LOW",
+      "category": "test_weakness",
+      "story": "US-002",
+      "title": "completion.test.ts has conditional sortText assertion",
+      "description": "Line 287-289: the sortText comparison is inside `if (localWrite && predefWrite)` — if tree-sitter doesn't resolve both, the key assertion is silently skipped.",
+      "evidence": "completion.test.ts lines 287-289",
+      "fix": "Add else clause with explicit fail."
+    },
+    {
+      "id": "F-022",
+      "severity": "LOW",
+      "category": "code_quality",
+      "story": "US-022",
+      "title": "persistentCache uses synchronous require('node:fs').readFileSync in ESM module",
+      "description": "computeWasmHash uses require('node:fs').readFileSync to read the WASM file. This blocks the event loop during startup/shutdown for a ~1MB file. The rest of the module uses async fs.",
+      "evidence": "persistentCache.ts: computeWasmHash uses require('node:fs').readFileSync",
+      "fix": "Convert to async fs.readFile. The callers (server.ts startup/shutdown) are already async."
+    },
+    {
+      "id": "F-023",
+      "severity": "LOW",
+      "category": "stale_comment",
+      "story": "US-022",
+      "title": "computeWasmHash comment says 'simple marker' but actually hashes the WASM file",
+      "evidence": "persistentCache.ts line 199: stale comment",
+      "fix": "Update comment to describe what the code actually does."
+    },
+    {
+      "id": "F-024",
+      "severity": "LOW",
+      "category": "acceptance_criteria_partially_unmet",
+      "story": "US-005",
+      "title": "No dedicated scope-leak tests for while/switch/do-while",
+      "description": "US-005 acceptance criterion requires 'Add 3+ tests: one per construct, verifying variables don't leak'. No dedicated test file or test case was found that explicitly verifies scope isolation for while, switch, or do-while blocks. Correctness is implicitly tested through the broader suite.",
+      "evidence": "No test file explicitly testing while/switch/do-while scope isolation found in diff",
+      "fix": "Add 3 explicit tests: declare a variable inside a while/switch/do-while block, verify it's not visible outside."
+    },
+    {
+      "id": "F-025",
+      "severity": "LOW",
+      "category": "changelog",
+      "story": "N/A",
+      "title": "CHANGELOG.md has duplicate headers",
+      "description": "CHANGELOG.md has duplicate ## Phase 5 AutoDoc Redesign headers and duplicate ### Fixed / ### Added subsections, suggesting mechanical merging without cleanup.",
+      "evidence": "CHANGELOG.md duplicate headers",
+      "fix": "Deduplicate CHANGELOG headers."
+    }
+  ],
+  "stories_assessment": [
+    {"id": "US-001", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-002", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-003", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-004", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-005", "verdict": "PASS", "confidence": "medium", "note": "No dedicated scope-leak tests (F-024)"},
+    {"id": "US-006", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-007", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-008", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-009", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-010", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-011", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-012", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-013", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-014", "verdict": "PASS", "confidence": "medium", "note": "No incremental token support (F-011)"},
+    {"id": "US-015", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-016", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-017", "verdict": "PASS", "confidence": "medium", "note": "Only predef.* stdlib, no cross-file (F-014)"},
+    {"id": "US-018", "verdict": "PASS_WITH_FINDING", "confidence": "high", "note": "Single-line file edge case (F-004)"},
+    {"id": "US-019", "verdict": "PARTIAL", "confidence": "high", "note": "Workspace module matching missing (F-007)"},
+    {"id": "US-020", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-021", "verdict": "PARTIAL", "confidence": "high", "note": "progressToken bug (F-001), fake tests (F-003)"},
+    {"id": "US-022", "verdict": "PASS_WITH_FINDING", "confidence": "medium", "note": "No pike version invalidation (F-008)"},
+    {"id": "US-023", "verdict": "PASS", "confidence": "high"},
+    {"id": "US-024", "verdict": "PARTIAL", "confidence": "high", "note": "Code correct but tests are fake (F-002)"},
+    {"id": "US-025", "verdict": "PARTIAL", "confidence": "high", "note": "other-editors.md not verified (F-012), stale docs (F-009, F-010)"},
+    {"id": "US-026", "verdict": "FAIL", "confidence": "high", "note": "Tests only check crashes, not correctness (F-005)"},
+    {"id": "US-027", "verdict": "PARTIAL", "confidence": "high", "note": "No CI workflow (F-013)"},
+    {"id": "US-028", "verdict": "FAIL", "confidence": "high", "note": "Version reverted, release criteria not met (F-006)"}
+  ],
+  "file_size_violations": [
+    {"file": "server/src/features/symbolTable.ts", "lines": 1882, "limit": 500, "ratio": "3.7x"},
+    {"file": "server/src/server.ts", "lines": 1074, "limit": 500, "ratio": "2.1x"},
+    {"file": "server/src/features/completion.ts", "lines": 929, "limit": 500, "ratio": "1.9x"},
+    {"file": "server/src/features/workspaceIndex.ts", "lines": 582, "limit": 500, "ratio": "1.2x"}
+  ],
+  "architecture_assessment": {
+    "dependency_graph": "Clean DAG — no circular dependencies. Leaf features depend only on types from symbolTable. server.ts is composition root.",
+    "layering": "Sound. Each feature module has clear single responsibility. Consistent handler-registration pattern.",
+    "god_objects": "symbolTable.ts (1882 lines) is a near-god module housing types, builder, inheritance wiring, query API, and type inference helpers.",
+    "overall": "sound"
+  },
+  "required_fixes_before_merge": [
+    "F-001: Fix progressToken mismatch in backgroundIndex.ts",
+    "F-004: Fix single-line file edge case in codeAction.ts",
+    "F-002: Rewrite cancellation tests to actually test cancellation",
+    "F-003: Rewrite background index tests to actually test background indexing",
+    "F-009: Remove stale cross-file inheritance entry from known-limitations.md",
+    "F-010: Fix decision 0022 to match implementation"
+  ],
+  "recommended_fixes_before_merge": [
+    "F-005: Add correctness spot-checks to real-codebase-verification.test.ts",
+    "F-007: Add workspace module matching to add-missing-import code action",
+    "F-016: Extract shared getEffectiveTypeName helper",
+    "F-017: Fix persistentCache.saveCache JSDoc or behavior",
+    "F-018: Wire pikeBinaryPath through didChangeConfiguration"
+  ],
+  "deferred_to_post_merge": [
+    "F-006: US-028 release process (separate task)",
+    "F-008: Pike version cache invalidation",
+    "F-011: Incremental semantic tokens",
+    "F-013: Benchmark CI workflow",
+    "F-014: Module-qualified signature help",
+    "F-015: Workspace symbol result limit",
+    "F-019-F-025: Low-severity test improvements and cleanup"
+  ]
+}

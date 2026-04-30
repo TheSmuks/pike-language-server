@@ -375,3 +375,133 @@ describe("Cross-file incremental update — transitive invalidation", () => {
     expect(index.getSymbolTable(uriA)).not.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Cross-file inheritance wiring (US-001)
+// ---------------------------------------------------------------------------
+
+describe("Cross-file inheritance wiring — US-001", () => {
+  let index: WorkspaceIndex;
+
+  beforeAll(async () => {
+    await initParser();
+    index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    indexFile(index, "cross-inherit-simple-a.pike");
+    indexFile(index, "cross-inherit-simple-b.pike");
+  });
+
+  test("Dog class scope has cross-file inherited scope from Animal", () => {
+    const uriB = corpusUri("cross-inherit-simple-b.pike");
+    const tableB = index.getSymbolTable(uriB);
+    expect(tableB).not.toBeNull();
+
+    // Find Dog class
+    const dogDecl = tableB!.declarations.find(d => d.kind === "class" && d.name === "Dog");
+    expect(dogDecl).toBeDefined();
+
+    // Find Dog's class scope
+    const dogScope = tableB!.scopes.find(s =>
+      s.kind === "class" && s.parentId === dogDecl!.scopeId &&
+      s.range.start.line >= dogDecl!.range.start.line &&
+      s.range.end.line <= dogDecl!.range.end.line,
+    );
+    expect(dogScope).toBeDefined();
+
+    // Dog should have at least one inherited scope (Animal)
+    expect(dogScope!.inheritedScopes.length).toBeGreaterThanOrEqual(1);
+
+    // Check that the inherited scope contains Animal's members
+    const inheritedScopeId = dogScope!.inheritedScopes[0];
+    const inheritedScope = tableB!.scopeById.get(inheritedScopeId);
+    expect(inheritedScope).toBeDefined();
+
+    const inheritedNames = inheritedScope!.declarations.map(id => {
+      const decl = tableB!.declById.get(id);
+      return decl?.name;
+    });
+
+    // Animal's members should be present in the inherited scope
+    expect(inheritedNames).toContain("speak");
+    expect(inheritedNames).toContain("get_name");
+    expect(inheritedNames).toContain("create");
+  });
+
+  test("same-file inheritance still works — class-single-inherit", () => {
+    const singleIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    indexFile(singleIndex, "class-single-inherit.pike");
+
+    const uri = corpusUri("class-single-inherit.pike");
+    const table = singleIndex.getSymbolTable(uri);
+    expect(table).not.toBeNull();
+
+    // Find Dog class
+    const dogDecl = table!.declarations.find(d => d.kind === "class" && d.name === "Dog");
+    expect(dogDecl).toBeDefined();
+
+    const dogScope = table!.scopes.find(s =>
+      s.kind === "class" && s.parentId === dogDecl!.scopeId &&
+      s.range.start.line >= dogDecl!.range.start.line &&
+      s.range.end.line <= dogDecl!.range.end.line,
+    );
+    expect(dogScope).toBeDefined();
+
+    // Dog inherits Animal (same file) — should have inherited scope
+    expect(dogScope!.inheritedScopes.length).toBeGreaterThanOrEqual(1);
+
+    // Verify Animal's members are in the inherited scope
+    const inheritedScopeId = dogScope!.inheritedScopes[0];
+    const inheritedScope = table!.scopeById.get(inheritedScopeId);
+    expect(inheritedScope).toBeDefined();
+
+    const inheritedNames = inheritedScope!.declarations.map(id => {
+      const decl = table!.declById.get(id);
+      return decl?.name;
+    });
+
+    expect(inheritedNames).toContain("describe");
+    expect(inheritedNames).toContain("get_name");
+    expect(inheritedNames).toContain("create");
+  });
+});
+
+describe("Cross-file inheritance chain wiring", () => {
+  let index: WorkspaceIndex;
+
+  beforeAll(async () => {
+    await initParser();
+    index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    indexFile(index, "cross-inherit-chain-a.pike");
+    indexFile(index, "cross-inherit-chain-b.pike");
+  });
+
+  test("Middle class inherits Base members from cross-file", () => {
+    const uriB = corpusUri("cross-inherit-chain-b.pike");
+    const tableB = index.getSymbolTable(uriB);
+    expect(tableB).not.toBeNull();
+
+    const middleDecl = tableB!.declarations.find(d => d.kind === "class" && d.name === "Middle");
+    expect(middleDecl).toBeDefined();
+
+    const middleScope = tableB!.scopes.find(s =>
+      s.kind === "class" && s.parentId === middleDecl!.scopeId &&
+      s.range.start.line >= middleDecl!.range.start.line &&
+      s.range.end.line <= middleDecl!.range.end.line,
+    );
+    expect(middleScope).toBeDefined();
+    expect(middleScope!.inheritedScopes.length).toBeGreaterThanOrEqual(1);
+
+    const inheritedScopeId = middleScope!.inheritedScopes[0];
+    const inheritedScope = tableB!.scopeById.get(inheritedScopeId);
+    expect(inheritedScope).toBeDefined();
+
+    const inheritedNames = inheritedScope!.declarations.map(id => {
+      const decl = tableB!.declById.get(id);
+      return decl?.name;
+    });
+
+    // Base has: label, create, identify
+    expect(inheritedNames).toContain("identify");
+    expect(inheritedNames).toContain("create");
+    expect(inheritedNames).toContain("label");
+  });
+});

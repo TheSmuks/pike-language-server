@@ -1,0 +1,84 @@
+{
+  "project": "Pike Language Server",
+  "branchName": "ralph/lsp-v1-roadmap",
+  "description": "Roadmap from v0.1.0-alpha to v1.0: close correctness gaps (cross-file inheritance, type inference, scope leaks), add LSP capabilities (semantic tokens, document highlights, folding, signature help, code actions, workspace symbol), and harden infrastructure (incremental rebuilds, background indexing, persistent cache, config UI).",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Cross-file inheritance lookup in wireInheritance",
+      "description": "As a developer, I need wireInheritance() to look up inherited classes via WorkspaceIndex when not found in the same file, so that Dog d; d->speak() resolves speak() when Animal is in a different file.",
+      "acceptanceCriteria": [
+        "wireInheritance() calls WorkspaceIndex to find classes not present in the current file's symbol table",
+        "When Animal is in file_b.pike and Dog inherits Animal in file_a.pike, Dog's inheritedScopes includes Animal's scope",
+        "Existing same-file inheritance tests still pass (backward compatible)",
+        "Add at least 3 tests: cross-file inherit completion, cross-file inherit definition, cross-file inherit hover",
+        "Tests use existing corpus files (cross_inherit_chain.pike, class-single-inherit.pike)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Key file: server/src/features/workspaceIndex.ts (wireInheritance method). Depends on existing WorkspaceIndex.getFile() and ModuleResolver. See known limitation in docs/known-limitations.md section 'Cross-file inherited member completion not supported'."
+    },
+    {
+      "id": "US-002",
+      "title": "Cross-file inherited member completion",
+      "description": "As a user, I want Dog d; d-> to show inherited members like speak() from Animal, even when Animal is defined in another file.",
+      "acceptanceCriteria": [
+        "Completion after d-> includes members from cross-file inherited classes",
+        "No duplicate entries when member exists in both same-file and inherited class",
+        "Add test: Dog in file_a inherits Animal in file_b, d-> returns speak() from Animal",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Depends on US-001. Key file: server/src/features/completion.ts (resolveMemberAccess usage). After US-001 wires cross-file inheritance, completion should automatically pick up inherited members."
+    },
+    {
+      "id": "US-003",
+      "title": "Cross-file inherited member definition and hover",
+      "description": "As a user, I want go-to-definition on Dog d; d->speak() to jump to Animal.speak() in the other file, and hover to show Animal's speak documentation.",
+      "acceptanceCriteria": [
+        "Go-to-definition on d->speak() jumps to the file containing Animal and highlights speak()",
+        "Hover on d->speak() shows the signature/documentation from Animal.speak()",
+        "Add test for cross-file inherited definition resolution",
+        "Add test for cross-file inherited hover resolution",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Depends on US-001. Key files: server/src/features/accessResolver.ts (resolveAccessDefinition, resolveAccessDeclaration), server/src/server.ts (onDefinition, onHover handlers)."
+    },
+    {
+      "id": "US-004",
+      "title": "Cross-file inherited member rename scope precision",
+      "description": "As a user, I want renaming bark() on Dog to NOT rename bark() on Cat when they share the same method name.",
+      "acceptanceCriteria": [
+        "When renaming bark() on Dog, arrow/dot access references are filtered by resolved type where type is known",
+        "If type is unresolved, keep current name-based matching (no behavior change for unresolvable cases)",
+        "Add test: two classes with same method name, rename one does not affect the other",
+        "Existing rename tests still pass",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Key file: server/src/features/rename.ts (getRenameLocations). The arrow/dot access references currently use name-based matching. After US-001 wires cross-file types, use resolveMemberAccess to check if the reference's type resolves to the target class."
+    },
+    {
+      "id": "US-005",
+      "title": "Scope handlers for while, switch, and do-while blocks",
+      "description": "As a developer, I need per-construct scope handlers for while, switch, and do-while blocks so variables declared inside don't leak to the enclosing scope.",
+      "acceptanceCriteria": [
+        "Add collectWhileStatement() in symbolTable.ts that creates a block scope for while_statement body",
+        "Add collectDoWhileStatement() in symbolTable.ts that creates a block scope for do_while_statement body",
+        "Add collectSwitchStatement() in symbolTable.ts that creates a block scope for switch_statement body",
+        "Variables declared inside while/switch/do-while blocks are scoped to that block",
+        "All existing 1,311+ tests pass (backward compatible)",
+        "Add 3+ tests: one per construct, verifying variables don't leak",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Key file: server/src/features/symbolTable.ts. Follow the pattern of collectIfStatement() and collectForStatement(). Upstream issue: tree-sitter-pike#4. These are workarounds since tree-sitter doesn't provide scope-introducing nodes for these constructs."
+    }
+  ]
+}

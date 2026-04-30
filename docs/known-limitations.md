@@ -101,13 +101,13 @@ Pike's CompilationHandler reports line numbers but not column positions. LSP dia
 
 **Impact**: Underlines span the entire line rather than the specific token. Parse diagnostics (from tree-sitter) do have column-level positions.
 
-### Hover does not use Pike runtime for type inference
+### ~~Hover does not use Pike runtime for type inference~~ — PARTIALLY RESOLVED (US-009)
 
-Hover uses tree-sitter declarations for type information. The `typeof` method in the Pike worker is wired but not yet connected to hover responses.
+**US-009 update**: The `typeof_()` method is now connected to hover responses (`server.ts`). When a variable is declared as `mixed` or has no type annotation, hover calls `typeof_()` to get the runtime-inferred type. Variables with explicit type annotations still use declared types.
 
-**Impact**: Hover shows declared types, not inferred types. A variable declared as `mixed` shows `mixed` even if Pike would infer a more specific type.
+**Remaining gap**: `typeof_()` is only invoked for hover, not for completion or go-to-definition. Member access completion on `mixed`-typed variables still cannot resolve through the runtime.
 
-**Phase 7 update**: Arrow/dot access hover now uses `resolveMemberAccess()` to resolve through declared types. Variables with explicit type annotations (`Animal a;`) resolve to class members. Variables typed as `mixed` still show `mixed`.
+**Impact**: Hover on `mixed`/untyped variables now shows the inferred type in many cases. Member completion and definition lookup on the same variables remain unresolved.
 
 ### Stdlib hover: C-level builtins not indexed
 
@@ -133,11 +133,13 @@ AutoDoc hover only works for symbols documented with `//!` comments. PikeExtract
 
 ## Phase 7: Type Resolution Limitations
 
-### Type resolution requires explicit type annotations
+### ~~Type resolution requires explicit type annotations~~ — PARTIALLY RESOLVED (US-008)
 
-Type resolution only works for variables and parameters with explicit type annotations (`Animal a;`). Variables declared without types (`a;`) or typed as `mixed` cannot be resolved to specific classes.
+**US-008 update**: The symbol table now captures `assignedType` from simple initializer expressions. When a variable is declared as `mixed x = Dog()`, `assignedType` is set to `Dog`, enabling type resolution through the existing `resolveType()` pipeline.
 
-**Impact**: Arrow/dot member completion and go-to-definition only work for explicitly typed variables. This covers the common Pike pattern of `ClassName var;` but misses dynamically typed variables.
+**Remaining gap**: `assignedType` only captures simple constructor calls (`Dog()`, `makeDog()`). Complex expressions (ternary, arithmetic, function calls returning untyped results) are not handled. Variables initialized by assignment (not declaration) are also not covered.
+
+**Impact**: Arrow/dot member completion and go-to-definition now work for variables initialized with simple constructors, even when declared as `mixed`. Complex initializers still require explicit type annotations.
 
 ### Type resolution is same-file only for direct class lookup
 
@@ -145,9 +147,9 @@ Type resolution only works for variables and parameters with explicit type annot
 
 ### No inference through function return types
 
-### No inference through function return types
-
 If a function returns `Animal`, calling `f()->speak()` cannot resolve `speak` because the return type is not tracked. Only direct declared types on variables and parameters are used.
+
+**US-008 note**: `assignedType` captures initializer types for variables, but function return type propagation is not implemented. Chained inference (`a()->b()->c()`) requires multiple `resolveType` hops with no caching, and the `MAX_RESOLUTION_DEPTH` (5) limits deeply chained calls.
 
 ## Phase 8: Rename Limitations
 
@@ -168,3 +170,29 @@ When renaming `bark()` on class `Dog`, all `->bark` call sites are included rega
 ### Rename does not rename through function return types
 
 If `makeDog()` returns `Dog`, renaming `Dog` class won't update the return type annotation of `makeDog()`. Type annotation renaming is not implemented.
+
+## Phase 10/11: Type Inference Gaps (US-008/009/010)
+
+### assignedType only captures simple constructor calls
+
+`extractInitializerType()` in `symbolTable.ts` extracts types from initializers, but only handles simple constructor patterns (`Dog()`, `makeDog()`). Complex expressions — ternary operators, arithmetic, function calls returning untyped results, chained calls — are not parsed for type information.
+
+**Impact**: Variables like `mixed x = condition ? Dog() : Cat();` get no `assignedType`. Only the straightforward `mixed x = Dog();` pattern is covered.
+
+### typeof_() is only called for hover, not completion or definition
+
+US-009 connected `typeof_()` to the hover pipeline, but the completion and go-to-definition features do not invoke it. A `mixed`-typed variable with a runtime-inferred type will show the correct type on hover but still produce no completions after `->`.
+
+**Impact**: Hover is type-aware for `mixed` variables; completion and definition remain annotation-only.
+
+### PRIMITIVE_TYPES centralization is incomplete
+
+`PRIMITIVE_TYPES` is defined once in `symbolTable.ts` and imported by `completion.ts`, `typeResolver.ts`, and `server.ts` (3 import sites). This works but means any modification to the primitive set requires verifying all consumers. No single canonical source of truth beyond the one definition.
+
+**Impact**: Low — the set is stable. But the pattern of `declaredType && !PRIMITIVE_TYPES.has(declaredType) ? declaredType : assignedType` is duplicated in three files, creating a maintenance risk if the fallback logic changes.
+
+### Chained inference requires multiple resolveType hops with no caching
+
+For chained member access like `a()->b()->c()`, `resolveType()` is called recursively up to `MAX_RESOLUTION_DEPTH` (5). Each call re-traverses the symbol table and workspace index. There is no memoization of intermediate results.
+
+**Impact**: Performance degrades on deeply chained access. The depth limit (5) caps the worst case but also limits correctness for legitimate deep chains.

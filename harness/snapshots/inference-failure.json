@@ -1,0 +1,31 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "syntax_error",
+      "line": 16,
+      "message": "syntax error, unexpected '('",
+      "severity": "error"
+    },
+    {
+      "category": "syntax_error",
+      "line": 18,
+      "message": "syntax error, unexpected '}'",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 18,
+      "message": "Missing ';'.",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/inference-failure.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

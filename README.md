@@ -15,6 +15,14 @@ A tier-3 Language Server Protocol implementation for Pike. Works with VS Code, N
 - **Completion** — local scope, class members, stdlib (5,500+ symbols), predef builtins (283)
 - **Rename** — workspace-wide, scope-aware, cross-file
 - **Document symbols** — classes, functions, variables, enums
+- **Semantic tokens** — syntax highlighting with 9 token types + 5 modifiers
+- **Signature help** — parameter hints with active parameter tracking
+- **Code actions** — remove unused variable, add missing import
+- **Workspace symbol search** — cross-file, prefix matching, case-insensitive
+- **Document highlights** — read/write highlighting for declarations and references
+- **Folding ranges** — blocks, classes, comment groups
+- **Background indexing** — workspace files indexed on startup
+- **Persistent cache** — analysis reused across sessions
 
 ## Requirements
 

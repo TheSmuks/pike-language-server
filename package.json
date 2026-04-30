@@ -40,8 +40,14 @@
     "languages": [
       {
         "id": "pike",
-        "extensions": [".pike", ".pmod", ".mmod"],
-        "aliases": ["Pike"]
+        "extensions": [
+          ".pike",
+          ".pmod",
+          ".mmod"
+        ],
+        "aliases": [
+          "Pike"
+        ]
       }
     ],
     "configuration": {
@@ -55,7 +61,11 @@
         },
         "pike.languageServer.diagnosticMode": {
           "type": "string",
-          "enum": ["realtime", "saveOnly", "off"],
+          "enum": [
+            "realtime",
+            "saveOnly",
+            "off"
+          ],
           "default": "realtime",
           "description": "Controls when diagnostics are generated.",
           "enumDescriptions": [

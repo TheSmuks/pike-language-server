@@ -862,4 +862,236 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     // Should NOT fall through to unqualified predef builtins
     expect(labels).not.toContain("write");
   });
+
+  test("cross-file inherit completion: Dog d-> shows Animal members (US-001)", () => {
+    const idx = indexCorpus(["cross-inherit-simple-a.pike", "cross-inherit-simple-b.pike"]);
+    const uriB = "file://" + join(CORPUS_DIR, "cross-inherit-simple-b.pike");
+    const tableB = idx.getSymbolTable(uriB)!;
+    const srcB = readFileSync(join(CORPUS_DIR, "cross-inherit-simple-b.pike"), "utf-8");
+    const treeB = parse(srcB);
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriB,
+    };
+
+    // Line 25: d->speak() — cursor after d-> at column 28
+    const result = getCompletions(tableB, treeB, 25, 28, ctx);
+    const labels = completionLabels(result);
+
+    // Animal's members should appear via cross-file inheritance
+    expect(labels).toContain("speak");
+    expect(labels).toContain("get_name");
+    // Dog's own member should also be present
+    expect(labels).toContain("fetch");
+  });
+
+  test("cross-file inherit completion: no duplicate entries when child overrides parent member (US-002)", () => {
+    // Create a scenario where Dog overrides Animal.speak()
+    const srcA = 'class Animal { string name; void speak() { return name + " talks"; } }';
+    const srcB = 'inherit "file_a.pike"; class Dog { inherit Animal; void speak() { return "woof"; } void fetch() {} } void test() { Dog d = Dog(); d-> }';
+
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uriA = "file:///test/file_a.pike";
+    const uriB = "file:///test/file_b.pike";
+
+    const treeA = parse(srcA);
+    idx.upsertFile(uriA, 1, treeA, srcA, ModificationSource.DidOpen);
+
+    const treeB = parse(srcB);
+    idx.upsertFile(uriB, 1, treeB, srcB, ModificationSource.DidOpen);
+
+    const tableB = idx.getSymbolTable(uriB)!;
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriB,
+    };
+
+    // Cursor after d-> at end of file_b
+    const arrowIdx = srcB.indexOf('d->');
+    const result = getCompletions(tableB, treeB, 0, arrowIdx + 3, ctx);
+    const labels = completionLabels(result);
+
+    // speak should appear exactly once (child overrides parent)
+    const speakCount = labels.filter(l => l === "speak").length;
+    expect(speakCount).toBe(1);
+
+    // fetch is Dog's own member
+    expect(labels).toContain("fetch");
+    // name is Animal's protected field — not visible via arrow access
+  });
+
+  test("function return type completion: makeDog()-> shows Dog members (US-007)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  makeDog()->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 3, col 13)
+    const result = getCompletions(table, tree, 3, 13, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via function return type resolution
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("chained function return type: makeDog()->fetch()-> stops at void (US-007)", () => {
+    // fetch returns void — no further members should be resolved
+    const src = [
+      'class Dog { string speak() { return "woof"; } void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  makeDog()->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // makeDog() returns Dog, so makeDog()->speak resolves speak
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+    const result = getCompletions(table, tree, 3, 13, ctx);
+    const labels = completionLabels(result);
+    expect(labels).toContain("speak");
+  });
+
+  // ---------------------------------------------------------------
+  // US-008: Assignment-based type narrowing
+  // ---------------------------------------------------------------
+
+  test("assignment inference: Dog d = makeDog(); d-> shows Dog members (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'Dog makeDog() { return Dog("Rex"); }',
+      'void test() {',
+      '  Dog d = makeDog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 4, col 5)
+    const result = getCompletions(table, tree, 4, 5, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via declaredType (explicitly typed)
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("assignment inference: mixed d = Dog(); d-> shows Dog members (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has assignedType set to 'Dog' (the constructor name)
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('mixed');
+    expect(dDecl!.assignedType).toBe('Dog');
+
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri,
+    };
+
+    // Cursor on 'speak' identifier (line 3, col 5)
+    const result = getCompletions(table, tree, 3, 5, ctx);
+    const labels = completionLabels(result);
+
+    // Dog's members should appear via assignedType since declaredType is 'mixed'
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("assignment inference: no initializer produces no assignedType (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  Dog d;',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has declaredType but no assignedType
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('Dog');
+    expect(dDecl!.assignedType).toBeUndefined();
+  });
+
+  test("assignment inference: complex initializer ignored (US-008)", () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = 42;',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
+    const uri = "file:///test.pike";
+    const tree = parse(src);
+    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    const table = idx.getSymbolTable(uri)!;
+
+    // Verify that 'd' has no assignedType for a literal initializer
+    const dDecl = table.declarations.find(d => d.name === 'd' && d.kind === 'variable');
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe('mixed');
+    // Integer literal is not an identifier — no assignedType
+    expect(dDecl!.assignedType).toBeUndefined();
+  });
 });

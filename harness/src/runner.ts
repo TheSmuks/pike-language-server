@@ -222,6 +222,10 @@ export async function runResolve(
   const args: string[] = [];
   // Always pass the corpus directory as module path so .pmod resolution works
   args.push("--module-path", CORPUS_DIR);
+  // Forward additional module paths from corpus.json
+  if (opts.modulePath) {
+    args.push("--module-path", resolve(PROJECT_ROOT, opts.modulePath));
+  }
   args.push(absCorpusFile);
 
   const proc = Bun.spawn(["pike", RESOLVE_SCRIPT, ...args], {

@@ -26,6 +26,7 @@ export enum ModificationSource {
   DidChangeWatchedFiles = "didChangeWatchedFiles",
   DidSave = "didSave",
   DidClose = "didClose",
+  BackgroundIndex = "backgroundIndex",
   DidChangeConfiguration = "didChangeConfiguration",
 }
 
@@ -111,8 +112,8 @@ export class WorkspaceIndex {
       this.removeDependencies(existing);
     }
 
-    // Build symbol table
-    const symbolTable = buildSymbolTable(tree, uri, version);
+    // Build symbol table — pass self for cross-file inheritance wiring
+    const symbolTable = buildSymbolTable(tree, uri, version, { index: this });
 
     // Parse #pike version directive
     const pikeVersion = this.parsePikeVersion(tree);
@@ -130,6 +131,44 @@ export class WorkspaceIndex {
       pikeVersion,
       dependencies,
       lastModSource: modSource,
+      contentHash,
+      stale: false,
+    };
+
+    this.files.set(uri, entry);
+
+    // Register reverse dependencies
+    for (const depUri of dependencies) {
+      let depSet = this.dependents.get(depUri);
+      if (!depSet) {
+        depSet = new Set();
+        this.dependents.set(depUri, depSet);
+      }
+      depSet.add(uri);
+    }
+
+    return entry;
+  }
+
+  /**
+   * Insert a file entry from persistent cache (no tree or content needed).
+   * Used when restoring from cache on startup.
+   */
+  upsertCachedFile(
+    uri: string,
+    version: number,
+    symbolTable: SymbolTable,
+    contentHash: string,
+  ): FileEntry {
+    const dependencies = this.extractDependencies(symbolTable, uri);
+
+    const entry: FileEntry = {
+      uri,
+      version,
+      symbolTable,
+      pikeVersion: null,
+      dependencies,
+      lastModSource: ModificationSource.DidOpen,
       contentHash,
       stale: false,
     };
@@ -191,6 +230,13 @@ export class WorkspaceIndex {
    */
   getAllUris(): string[] {
     return [...this.files.keys()];
+  }
+
+  /**
+   * Get all indexed file entries.
+   */
+  getAllEntries(): FileEntry[] {
+    return [...this.files.values()];
   }
 
   /**
