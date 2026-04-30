@@ -255,4 +255,138 @@ describe("US-018: textDocument/codeAction", () => {
     expect(result).not.toBeNull();
     expect(result!.length).toBe(0);
   });
+
+  test("provides 'add import' for undefined identifier matching stdlib module", async () => {
+    const src = [
+      "int main() {",
+      "  Stdio.File f = Stdio.STDOUT;",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/codeaction-import.pike", src);
+
+    const result = await server.client.sendRequest(
+      "textDocument/codeAction",
+      {
+        textDocument: { uri },
+        range: {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 6 },
+        },
+        context: {
+          diagnostics: [
+            {
+              range: {
+                start: { line: 1, character: 2 },
+                end: { line: 1, character: 6 },
+              },
+              message: "Undefined identifier 'Stdio'",
+              source: "pike",
+              severity: 1,
+            },
+          ],
+        },
+      },
+    ) as CodeActionResult[] | null;
+
+    // Should produce two actions: remove-unused and add-import
+    expect(result).not.toBeNull();
+    const importAction = result!.find(a => a.title.startsWith("Add import"));
+    expect(importAction).toBeDefined();
+    expect(importAction!.title).toBe("Add import Stdio");
+
+    const edits = importAction!.edit!.changes![uri];
+    expect(edits).toBeDefined();
+    expect(edits.length).toBe(1);
+
+    const edit = edits[0];
+    expect(edit.newText).toBe("import Stdio;\n");
+    expect(edit.range.start.line).toBe(0);
+    expect(edit.range.start.character).toBe(0);
+  });
+
+  test("add import inserts after existing imports and directives", async () => {
+    const src = [
+      "#pike 8.1",
+      "import Array;",
+      "",
+      "int main() {",
+      "  Stdio.File f;",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/codeaction-import-after.pike", src);
+
+    const result = await server.client.sendRequest(
+      "textDocument/codeAction",
+      {
+        textDocument: { uri },
+        range: {
+          start: { line: 4, character: 2 },
+          end: { line: 4, character: 6 },
+        },
+        context: {
+          diagnostics: [
+            {
+              range: {
+                start: { line: 4, character: 2 },
+                end: { line: 4, character: 6 },
+              },
+              message: "Undefined identifier 'Stdio'",
+              source: "pike",
+              severity: 1,
+            },
+          ],
+        },
+      },
+    ) as CodeActionResult[] | null;
+
+    expect(result).not.toBeNull();
+    const importAction = result!.find(a => a.title.startsWith("Add import"));
+    expect(importAction).toBeDefined();
+
+    const edits = importAction!.edit!.changes![uri];
+    const edit = edits[0];
+    // Insert after 'import Array;' (line 1) → line 2
+    expect(edit.range.start.line).toBe(2);
+    expect(edit.newText).toBe("import Stdio;\n");
+  });
+
+  test("no import action for unknown identifier", async () => {
+    const src = [
+      "int main() {",
+      "  Foobar x;",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/codeaction-no-import.pike", src);
+
+    const result = await server.client.sendRequest(
+      "textDocument/codeAction",
+      {
+        textDocument: { uri },
+        range: {
+          start: { line: 1, character: 2 },
+          end: { line: 1, character: 8 },
+        },
+        context: {
+          diagnostics: [
+            {
+              range: {
+                start: { line: 1, character: 2 },
+                end: { line: 1, character: 8 },
+              },
+              message: "Undefined identifier 'Foobar'",
+              source: "pike",
+              severity: 1,
+            },
+          ],
+        },
+      },
+    ) as CodeActionResult[] | null;
+
+    expect(result).not.toBeNull();
+    const importAction = result!.find(a => a.title.startsWith("Add import"));
+    expect(importAction).toBeUndefined();
+  });
 });

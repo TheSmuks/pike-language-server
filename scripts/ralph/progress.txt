@@ -360,3 +360,24 @@ Thread: N/A (Ralph agent iteration)
   - Class methods: the class scope contains the function declaration; the function body scope (child) has parameters. Must match by range, not just first child.
   - Stdlib autodoc uses qualified names (predef.X.Y) — simple name matching won't find them. Predef builtins use a separate index.
 ---
+
+## 2026-04-30 - US-018
+Thread: N/A (Ralph agent iteration)
+- Code action: remove unused variable
+- Created server/src/features/codeAction.ts with:
+  - produceCodeActions() — produces CodeAction objects from diagnostics
+  - MATCH_UNUSED_LOCAL — matches diagnostics with source 'pike' and message 'Unused local variable'
+  - removeUnusedVariableLine() — produces TextEdit to delete the declaration line
+  - QuickFix registry pattern for extensibility
+- Registered textDocument/codeAction handler and codeActionProvider capability
+- Added missing resolveAccessDefinition import (pre-existing type error fix)
+- 5 tests: unused var gets action, non-matching diagnostic, other source, last line edge case
+- Files changed:
+  - server/src/features/codeAction.ts (new)
+  - server/src/server.ts (handler, capability, import fix)
+  - tests/lsp/codeAction.test.ts (new, 5 tests)
+- **Learnings for future iterations:**
+  - Code action receives diagnostics from the client context — the server doesn't need to store them
+  - The quick-fix registry pattern (DiagnosticMatcher + EditProducer) is extensible for US-019 and beyond
+  - Last-line deletion needs special handling: delete from previous line's newline to end
+---

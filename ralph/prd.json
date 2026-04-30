@@ -285,7 +285,7 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: server/src/server.ts, server/src/features/diagnosticManager.ts (diagnostics source). This is the simplest code action \u2014 start here before adding more complex ones."
     },
     {

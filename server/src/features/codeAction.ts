@@ -22,22 +22,28 @@ import type {
 // Types
 // ---------------------------------------------------------------------------
 
+/** Context needed by code actions that depend on workspace state. */
+export interface CodeActionContext {
+  /** Known stdlib top-level module names (e.g., "Stdio", "Array"). */
+  stdlibModules: Set<string>;
+}
+
 /** Matcher function: returns true if this diagnostic should trigger an action. */
 type DiagnosticMatcher = (diag: Diagnostic) => boolean;
 
-/** Edit producer: given a diagnostic, returns text edits. */
-type EditProducer = (diag: Diagnostic, text: string) => TextEdit[];
+/** Edit producer: given a diagnostic and source text, returns text edits. */
+type EditProducer = (diag: Diagnostic, text: string, ctx: CodeActionContext) => TextEdit[];
 
 /** A registered quick-fix. */
 interface QuickFix {
-  title: string;
+  title: string | ((diag: Diagnostic, ctx: CodeActionContext) => string);
   match: DiagnosticMatcher;
   produceEdits: EditProducer;
   kind: string;
 }
 
 // ---------------------------------------------------------------------------
-// Built-in quick-fixes
+// Built-in quick-fixes: remove unused variable
 // ---------------------------------------------------------------------------
 
 /** Match Pike compiler "Unused local variable" warning. */
@@ -46,7 +52,7 @@ const MATCH_UNUSED_LOCAL: DiagnosticMatcher = (diag) =>
   /^Unused local variable\b/.test(diag.message);
 
 /** Produce edit: delete the line containing the diagnostic. */
-function removeUnusedVariableLine(diag: Diagnostic, text: string): TextEdit[] {
+function removeUnusedVariableLine(diag: Diagnostic, text: string, _ctx: CodeActionContext): TextEdit[] {
   const line = diag.range.start.line;
   const lines = text.split("\n");
 
@@ -75,6 +81,91 @@ function removeUnusedVariableLine(diag: Diagnostic, text: string): TextEdit[] {
 }
 
 // ---------------------------------------------------------------------------
+// Built-in quick-fixes: add missing import
+// ---------------------------------------------------------------------------
+
+/** Regex to extract identifier from "Undefined identifier 'X'" messages. */
+const UNDEFINED_IDENTIFIER_RE = /^Undefined identifier '([^']+)'/;
+
+/** Match Pike compiler undefined identifier error. */
+const MATCH_UNDEFINED_IDENTIFIER: DiagnosticMatcher = (diag) =>
+  diag.source === "pike" &&
+  UNDEFINED_IDENTIFIER_RE.test(diag.message);
+
+/**
+ * Extract the identifier name from an undefined identifier diagnostic.
+ * Returns null if the message doesn't match.
+ */
+function extractUndefinedIdentifier(diag: Diagnostic): string | null {
+  const match = UNDEFINED_IDENTIFIER_RE.exec(diag.message);
+  if (!match) return null;
+  return match[1];
+}
+
+/**
+ * Find the insertion point for a new import statement.
+ * After any existing imports, inherits, or #pike directives.
+ * Returns the line number where the import should be inserted.
+ */
+function findImportInsertionLine(text: string): number {
+  const lines = text.split("\n");
+  let lastDirectiveLine = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+
+    // Skip empty lines and comments before directives
+    if (trimmed === "" || trimmed.startsWith("//") || trimmed.startsWith("/*")) {
+      continue;
+    }
+
+    // #pike directive
+    if (trimmed.startsWith("#pike")) {
+      lastDirectiveLine = i;
+      continue;
+    }
+
+    // import statement
+    if (trimmed.startsWith("import ")) {
+      lastDirectiveLine = i;
+      continue;
+    }
+
+    // inherit statement
+    if (trimmed.startsWith("inherit ")) {
+      lastDirectiveLine = i;
+      continue;
+    }
+
+    // Non-directive, non-comment — stop scanning
+    break;
+  }
+
+  // Insert after the last directive line, or at line 0 if none found
+  return lastDirectiveLine + 1;
+}
+
+/** Produce edit: insert import statement at the top of the file. */
+function addMissingImport(diag: Diagnostic, text: string, ctx: CodeActionContext): TextEdit[] {
+  const identifier = extractUndefinedIdentifier(diag);
+  if (!identifier) return [];
+
+  // Check if identifier matches a known stdlib module
+  if (!ctx.stdlibModules.has(identifier)) return [];
+
+  const insertLine = findImportInsertionLine(text);
+  const insertText = `import ${identifier};\n`;
+
+  return [{
+    range: {
+      start: { line: insertLine, character: 0 },
+      end: { line: insertLine, character: 0 },
+    },
+    newText: insertText,
+  }];
+}
+
+// ---------------------------------------------------------------------------
 // Quick-fix registry
 // ---------------------------------------------------------------------------
 
@@ -83,6 +174,15 @@ const QUICK_FIXES: QuickFix[] = [
     title: "Remove unused variable",
     match: MATCH_UNUSED_LOCAL,
     produceEdits: removeUnusedVariableLine,
+    kind: "quickfix",
+  },
+  {
+    title: (diag, ctx) => {
+      const identifier = extractUndefinedIdentifier(diag);
+      return `Add import ${identifier}`;
+    },
+    match: MATCH_UNDEFINED_IDENTIFIER,
+    produceEdits: addMissingImport,
     kind: "quickfix",
   },
 ];
@@ -100,6 +200,7 @@ const QUICK_FIXES: QuickFix[] = [
 export function produceCodeActions(
   params: CodeActionParams,
   text: string,
+  ctx: CodeActionContext,
 ): CodeAction[] {
   const actions: CodeAction[] = [];
 
@@ -109,15 +210,18 @@ export function produceCodeActions(
   for (const diag of diagnostics) {
     for (const fix of QUICK_FIXES) {
       if (fix.match(diag)) {
-        const edits = fix.produceEdits(diag, text);
+        const edits = fix.produceEdits(diag, text, ctx);
         if (edits.length > 0) {
           const changes: Record<string, TextEdit[]> = {};
           changes[uri] = edits;
 
           const workspaceEdit: WorkspaceEdit = { changes };
+          const title = typeof fix.title === "function"
+            ? fix.title(diag, ctx)
+            : fix.title;
 
           actions.push({
-            title: fix.title,
+            title,
             kind: fix.kind,
             diagnostics: [diag],
             edit: workspaceEdit,

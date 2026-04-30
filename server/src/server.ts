@@ -106,6 +106,26 @@ const protectedNames: Set<string> = buildProtectedNames(
   predefBuiltins,
 );
 
+/**
+ * Extract top-level stdlib module names from the autodoc index.
+ * Keys are 'predef.Module.Class.method' — we extract the 'Module' segment.
+ */
+function buildStdlibModules(stdlibAutodoc: Record<string, unknown>): Set<string> {
+  const modules = new Set<string>();
+  for (const fqn of Object.keys(stdlibAutodoc)) {
+    const parts = fqn.split('.');
+    // predef.X.Y... → X is the module name
+    if (parts.length >= 2) {
+      modules.add(parts[1]);
+    }
+  }
+  return modules;
+}
+
+const stdlibModules: Set<string> = buildStdlibModules(
+  stdlibAutodocIndex as Record<string, unknown>,
+);
+
 // ---------------------------------------------------------------------------
 // Server factory — reusable for production and tests
 // ---------------------------------------------------------------------------
@@ -496,7 +516,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return [];
 
-    return produceCodeActions(params, doc.getText());
+    return produceCodeActions(params, doc.getText(), { stdlibModules });
   });
 
   // -----------------------------------------------------------------------
