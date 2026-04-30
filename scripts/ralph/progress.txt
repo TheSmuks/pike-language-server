@@ -797,3 +797,22 @@ Thread: N/A (Ralph agent iteration)
   - resetCompletionCache is exported for test use only
   - Stdlib top-level modules are cached via getStdlibTopLevel()
 ---
+
+## 2026-04-30 - US-010
+Thread: N/A (Ralph agent iteration)
+- Full audit of hover.test.ts (439 lines, 11 tests, 34 expect() calls) and autodocRenderer.ts (918 lines)
+- hover.test.ts: 8 describe blocks covering 3-tier hover routing (AutoDoc XML → Stdlib → tree-sitter fallback), hover range, cross-file inherited members, typeof integration
+- autodocRenderer.ts: custom XML parser, type renderer, signature renderer, block/inline markdown renderer. Supports @param, @returns, @throws, @note, @deprecated
+- autodoc-documented.pike: 5 documented declarations with //! comments, @param (2), @returns (2). No @throws/@note/@deprecated
+- Verified typed variables show declared types: int, string, array(int) — NOT 'mixed' for typed variables
+- Stdlib documentation rendered from stdlib-autodoc.json (21,885 lines) — verified the data file exists and contains proper entries
+- Key gap: no explicit stdlib documentation rendering tests in hover.test.ts (but the autodocRenderer handles it generically)
+- No code changes needed
+- Files changed:
+  - scripts/ralph/prd.json (US-010 passes: true)
+- **Learnings for future iterations:**
+  - Hover uses a 3-tier fallback: AutoDoc XML cache → Stdlib index → tree-sitter symbol table
+  - autodocRenderer.ts has its own custom XML parser (no dependency on external XML library)
+  - Pike //! comments are AutoDoc style, not JavaDoc /** */ style
+  - The corpus file autodoc-documented.pike only exercises //! style — no /** */ tests exist
+---
