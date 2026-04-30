@@ -366,7 +366,7 @@
         "Typecheck passes"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": "Key files: extension.package.json (contributes.configuration), server/src/server.ts (onDidChangeConfiguration handler). The server already reads initializationOptions; extend to also read workspace/configuration."
     },
     {

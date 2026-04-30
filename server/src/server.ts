@@ -470,7 +470,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/semanticTokens/full
   // -----------------------------------------------------------------------
 
-  connection.onRequest("textDocument/semanticTokens/full", async (params) => {
+  connection.onRequest("textDocument/semanticTokens/full", async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return { data: [] };
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return { data: [] };
 
@@ -599,7 +600,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/definition
   // -----------------------------------------------------------------------
 
-  connection.onDefinition(async (params) => {
+  connection.onDefinition(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -629,6 +631,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     );
 
     if (crossFile) {
+      if (token.isCancellationRequested) return null;
       const loc: LspLocation = {
         uri: crossFile.uri,
         range: {
@@ -649,7 +652,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/references
   // -----------------------------------------------------------------------
 
-  connection.onReferences(async (params) => {
+  connection.onReferences(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return [];
 
@@ -690,7 +694,8 @@ export function createPikeServer(connection: Connection): PikeServer {
   // textDocument/rename (decision 0016)
   // -----------------------------------------------------------------------
 
-  connection.onPrepareRename(async (params) => {
+  connection.onPrepareRename(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -706,7 +711,8 @@ export function createPikeServer(connection: Connection): PikeServer {
     };
   });
 
-  connection.onRenameRequest(async (params) => {
+  connection.onRenameRequest(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -749,7 +755,8 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   const stdlibIndex = stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>;
 
-  connection.onHover(async (params) => {
+  connection.onHover(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const doc = documents.get(params.textDocument.uri);
     if (!doc) return null;
 

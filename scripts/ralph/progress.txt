@@ -477,3 +477,22 @@ Thread: N/A (Ralph agent iteration)
   - Corrupt cache should be deleted, not leave stale data
   - onShutdown is now async — cache save runs before index.clear()
 ---
+
+## 2026-04-30 - US-023
+Thread: N/A (Ralph agent iteration)
+- VSCode configuration schema and settings UI
+- Configuration schema already existed in package.json with all 4 settings
+- Added onDidChangeConfiguration handler in server.ts that reads pike.languageServer.* settings
+- Maps settings to diagnosticManager methods:
+  - diagnosticMode → setDiagnosticMode (with validation)
+  - diagnosticDebounceMs → setDebounceMs
+  - maxNumberOfProblems → setMaxNumberOfProblems
+- 3 tests: mode change, invalid mode ignored, empty notification safe
+- Files changed:
+  - server/src/server.ts (onDidChangeConfiguration handler)
+  - tests/lsp/configuration.test.ts (new, 3 tests)
+- **Learnings for future iterations:**
+  - Configuration path in settings is pike.languageServer.* (matching package.json contributes.configuration)
+  - Invalid enum values should be silently ignored, not crash
+  - Test server exposes diagnosticManager for direct state verification
+---
