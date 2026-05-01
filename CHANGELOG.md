@@ -1,11 +1,27 @@
 ## [Unreleased]
 
-### Fixed
+### Added
 
-- Fixed harness/introspect.pike using hardcoded 'pike' for extract_autodoc
-  subprocess instead of PIKE_BINARY, causing autodoc snapshot test failure in CI
-- Suppressed 'Connection is closed' errors during LSP test teardown
-- Relaxed hover latency threshold for CI runners with variable CPU performance
+- Type-aware arrow/dot rename: rename now checks receiver type before including
+  arrow/dot references, preventing cross-class rename of same-name methods
+- Runtime type inference for completion and definition: `typeof_()` is called
+  when static type resolution fails for `mixed`/`auto` variables
+- `resolveTypeName()` utility: centralized type priority chain (declaredType >
+  assignedType > null), replacing duplicated ternary in 3 files
+- `collectClassMembers()` and exported `findClassScope()` from typeResolver
+  for correct class scope lookup using `containsRange`
+- `typeInferrer` callback on TypeResolutionContext and CompletionContext
+  for async runtime type inference through PikeWorker
+
+### Changed
+
+- `findMemberInClass()` and `findMemberInInheritedScopes()` now use
+  `containsRange(classDecl.range, scope.range)` instead of
+  `posInRange(scope.range, nameRange.start)`, fixing nested class disambiguation
+- `getRenameLocations()` is now async for type-aware filtering
+- All 28 empty `catch {}` blocks in server/src/ now have explanatory comments
+- Removed dead `rangeContains()` from completionTrigger.ts
+- Removed unused imports (`Range`, `getDeclarationsInScope`) from completionTrigger.ts
 
 ### Added
 

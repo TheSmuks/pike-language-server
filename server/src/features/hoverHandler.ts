@@ -233,12 +233,24 @@ export function registerHoverHandler(
   connection: Connection,
   ctx: HoverContext,
 ): void {
-  const resolutionCtx: ResolutionContext = {
+  /** Build a source-aware type inferrer using PikeWorker.typeof_(). */
+  const makeTypeInferrer = (source: string): ((varName: string) => Promise<string | null>) => {
+    return async (varName: string) => {
+      try {
+        const result = await ctx.worker.typeof_(source, varName);
+        if (result.type && !result.error) return result.type;
+      } catch {
+        // Worker unavailable — fall through
+      }
+      return null;
+    };
+  };
+
+  const baseResolutionCtx: ResolutionContext = {
     documents: ctx.documents,
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
   };
-
   connection.onHover(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
     const doc = ctx.documents.get(params.textDocument.uri);
@@ -267,8 +279,12 @@ export function registerHoverHandler(
 
       // Try arrow/dot access resolution for hover
       const hoverTree = parse(doc.getText(), params.textDocument.uri);
+      const hoverResolutionCtx: ResolutionContext = {
+        ...baseResolutionCtx,
+        typeInferrer: makeTypeInferrer(doc.getText()),
+      };
       const accessDecl = await resolveAccessDeclaration(
-        resolutionCtx,
+        hoverResolutionCtx,
         table,
         params.textDocument.uri,
         params.position.line,

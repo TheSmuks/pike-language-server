@@ -115,13 +115,13 @@ export interface BuildState {
 // Re-exports from extracted modules
 // ---------------------------------------------------------------------------
 
-export { PRIMITIVE_TYPES, wireInheritance, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from './scopeBuilder';
+export { PRIMITIVE_TYPES, resolveTypeName, wireInheritance, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from './scopeBuilder';
 
 // ---------------------------------------------------------------------------
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { pushScope, popScope, toRange, PRIMITIVE_TYPES, wireInheritance } from './scopeBuilder';
+import { pushScope, popScope, toRange, wireInheritance, resolveTypeName } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 
@@ -413,9 +413,7 @@ export function getReferencesTo(
           // Type-aware filtering: check if LHS's type contains the target.
           // Uses declaredType first, falls back to assignedType.
           const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
-          const lhsTypeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
-            ? lhsDecl.declaredType
-            : lhsDecl?.assignedType;
+          const lhsTypeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
           if (lhsTypeName) {
             const typeClass = table.declarations.find(
               d => d.kind === 'class' && d.name === lhsTypeName,

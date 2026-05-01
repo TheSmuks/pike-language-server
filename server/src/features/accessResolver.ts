@@ -26,6 +26,8 @@ export interface ResolutionContext {
   documents: TextDocuments<TextDocument>;
   index: WorkspaceIndex;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
+  /** Optional runtime type inferrer (PikeWorker.typeof_()). */
+  typeInferrer?: (varName: string) => Promise<string | null>;
 }
 
 export interface AccessResult {
@@ -85,7 +87,7 @@ export async function resolveAccessCore(
   const lhsNode = findLhsNode(postfixNode, node);
   if (!lhsNode) return null;
 
-  const typeCtx: TypeResolutionContext = { table, uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex };
+  const typeCtx: TypeResolutionContext = { table, uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex, typeInferrer: ctx.typeInferrer };
   const lhsDecl = await resolveLhsDeclaration(lhsNode, table, typeCtx, 0);
   if (!lhsDecl) return null;
 

@@ -14,13 +14,11 @@ import {
   type SymbolTable,
   type Declaration,
   type DeclKind,
-  type Range,
   getSymbolsInScope,
-  getDeclarationsInScope,
-  PRIMITIVE_TYPES,
+  resolveTypeName,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-import { resolveType } from "./typeResolver";
+import { resolveType, collectClassMembers } from "./typeResolver";
 import { stripScopeWrapper } from "../util/stripScope";
 
 // ---------------------------------------------------------------------------
@@ -37,6 +35,8 @@ export interface CompletionContext {
   stdlibIndex: Record<string, StdlibEntry>;
   predefBuiltins: Record<string, string>;
   uri: string;
+  /** Optional runtime type inferrer (PikeWorker.typeof_()). */
+  typeInferrer?: (varName: string) => Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -482,18 +482,11 @@ export async function resolveTypeMembers(
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
 
-  // If the declaration is a class, find its class scope
+  // If the declaration is a class, collect its members
   if (decl.kind === "class") {
-    const classScope = table.scopes.find(s =>
-      s.kind === "class" &&
-      s.parentId === decl.scopeId &&
-      rangeContains(s.range, decl.nameRange.start),
-    );
-    if (classScope) {
-      const classDecls = getDeclarationsInScope(table, classScope.id);
-      for (const cd of classDecls) {
-        items.push(declToCompletionItem(cd, 5));
-      }
+    const memberDecls = collectClassMembers(table, decl);
+    for (const cd of memberDecls) {
+      items.push(declToCompletionItem(cd, 5));
     }
   }
 
@@ -502,51 +495,39 @@ export async function resolveTypeMembers(
   // Variables with assignedType use that when declaredType is absent/mixed
   if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") {
     // Use assignedType when declaredType is absent or a primitive like 'mixed'
-    const typeName = (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
-      ? decl.declaredType
-      : decl.assignedType;
+    let typeName = resolveTypeName(decl);
+
+    // If static type resolution yields nothing, try runtime inference
+    if (!typeName && decl.name && ctx.typeInferrer) {
+      if (decl.kind === 'variable' || decl.kind === 'parameter') {
+        try {
+          typeName = await ctx.typeInferrer(decl.name);
+        } catch {
+          // Worker unavailable — proceed without inferred type
+        }
+      }
+    }
+
     if (typeName) {
-      // Use typeResolver for same-file, cross-file, and qualified type resolution
-      const result = await resolveType(typeName, {
+      const typeCtx = {
         table,
         uri: ctx.uri,
         index: ctx.index,
         stdlibIndex: ctx.stdlibIndex,
-      });
+        typeInferrer: ctx.typeInferrer,
+      };
+      const result = await resolveType(typeName, typeCtx);
       if (result?.decl.kind === "class") {
         const ownerTable = result.table;
-        // Find the class body scope — it's a child of the scope containing the class declaration
-        const classScope = ownerTable.scopes.find(s =>
-          s.kind === "class" && s.parentId === result.decl.scopeId &&
-          rangeContains(s.range, result.decl.nameRange.start),
-        );
-        if (classScope) {
-          const classDecls = getDeclarationsInScope(ownerTable, classScope.id);
-          for (const cd of classDecls) {
-            items.push(declToCompletionItem(cd, 5));
-          }
-          // Include inherited members
-          for (const inheritedId of classScope.inheritedScopes) {
-            const inheritedDecls = getDeclarationsInScope(ownerTable, inheritedId);
-            for (const cd of inheritedDecls) {
-              items.push(declToCompletionItem(cd, 5));
-            }
-          }
+        const memberDecls = collectClassMembers(ownerTable, result.decl);
+        for (const cd of memberDecls) {
+          items.push(declToCompletionItem(cd, 5));
         }
       }
     }
   }
 
   return items;
-}
-
-/** Check if a position is within a range (inclusive start, exclusive end). */
-function rangeContains(range: Range, pos: { line: number; character: number }): boolean {
-  const { start, end } = range;
-  if (pos.line < start.line || pos.line > end.line) return false;
-  if (pos.line === start.line && pos.character < start.character) return false;
-  if (pos.line === end.line && pos.character > end.character) return false;
-  return true;
 }
 
 /**
