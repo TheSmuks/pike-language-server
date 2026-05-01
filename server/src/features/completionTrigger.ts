@@ -17,7 +17,7 @@ import {
   type Range,
   getSymbolsInScope,
   getDeclarationsInScope,
-  PRIMITIVE_TYPES,
+  resolveTypeName,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveType } from "./typeResolver";
@@ -502,9 +502,7 @@ export async function resolveTypeMembers(
   // Variables with assignedType use that when declaredType is absent/mixed
   if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "function") {
     // Use assignedType when declaredType is absent or a primitive like 'mixed'
-    const typeName = (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType))
-      ? decl.declaredType
-      : decl.assignedType;
+    const typeName = resolveTypeName(decl);
     if (typeName) {
       // Use typeResolver for same-file, cross-file, and qualified type resolution
       const result = await resolveType(typeName, {

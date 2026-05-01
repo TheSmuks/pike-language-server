@@ -56,6 +56,23 @@ export const PRIMITIVE_TYPES = new Set([
 ]);
 
 /**
+ * Resolve the effective type name for a declaration.
+ *
+ * Priority: declaredType (if present and not primitive) > assignedType > null.
+ * Primitives (int, float, mixed, etc.) have no members, so we skip them
+ * and fall through to assignedType or null.
+ */
+export function resolveTypeName(decl: { declaredType?: string; assignedType?: string }): string | null {
+  if (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType)) {
+    return decl.declaredType;
+  }
+  if (decl.assignedType) {
+    return decl.assignedType;
+  }
+  return null;
+}
+
+/**
  * Extract the type name from a variable initializer, if the RHS is a simple
  * identifier that could be a class name (e.g., Dog d = makeDog() → makeDog).
  *

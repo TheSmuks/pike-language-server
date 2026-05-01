@@ -11,8 +11,9 @@
  * 4. Stdlib type via prefix index
  */
 
-import { PRIMITIVE_TYPES } from "./symbolTable";
-import type { Declaration, SymbolTable } from "./symbolTable";
+import { PRIMITIVE_TYPES, resolveTypeName } from "./symbolTable";
+import type { Declaration, Scope, SymbolTable } from "./symbolTable";
+import { containsRange } from "./scopeBuilder";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 let nextSyntheticId = -1;
@@ -98,9 +99,7 @@ export async function resolveMemberAccess(
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
   // Use assignedType when declaredType is absent or a primitive like 'mixed'
-  const typeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
-    ? lhsDecl.declaredType
-    : lhsDecl?.assignedType;
+  const typeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
   if (typeName) {
     const result = await resolveType(typeName, context, depth + 1);
     if (result?.decl.kind === "class") {
@@ -215,6 +214,28 @@ async function resolveCrossFileType(
 }
 
 // ---------------------------------------------------------------------------
+// Class scope lookup
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the class body scope that belongs to a class declaration.
+ *
+ * Uses `containsRange` to ensure the scope is *within* the declaration's
+ * full range, which correctly disambiguates nested classes (multiple class
+ * scopes may share the same parentId with overlapping ranges).
+ */
+function findClassScope(table: SymbolTable, classDecl: Declaration): Scope | null {
+  for (const scope of table.scopes) {
+    if (scope.kind !== 'class') continue;
+    if (scope.parentId !== classDecl.scopeId) continue;
+    if (containsRange(classDecl.range, scope.range)) {
+      return scope;
+    }
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Member lookup helpers
 // ---------------------------------------------------------------------------
 
@@ -223,12 +244,7 @@ function findMemberInClass(
   classDecl: Declaration,
   table: SymbolTable,
 ): Declaration | null {
-  // Find the class body scope — it's a child of the scope containing the class declaration,
-  // and its range overlaps with the class declaration's name range.
-  const classScope = table.scopes.find(s =>
-    s.kind === 'class' && s.parentId === classDecl.scopeId &&
-    posInRange(s.range, classDecl.nameRange.start),
-  );
+  const classScope = findClassScope(table, classDecl);
   if (!classScope) return null;
 
   // Look for the member in the class scope's declarations
@@ -248,10 +264,7 @@ function findMemberInInheritedScopes(
   classDecl: Declaration,
   table: SymbolTable,
 ): Declaration | null {
-  const classScope = table.scopes.find(s =>
-    s.kind === 'class' && s.parentId === classDecl.scopeId &&
-    posInRange(s.range, classDecl.nameRange.start),
-  );
+  const classScope = findClassScope(table, classDecl);
   if (!classScope) return null;
 
   for (const inheritedId of classScope.inheritedScopes) {
@@ -267,11 +280,3 @@ function findMemberInInheritedScopes(
   return null;
 }
 
-
-/** Check if a position falls within a range (inclusive start, exclusive end). */
-function posInRange(range: { start: { line: number; character: number }; end: { line: number; character: number } }, pos: { line: number; character: number }): boolean {
-  if (pos.line < range.start.line || pos.line > range.end.line) return false;
-  if (pos.line === range.start.line && pos.character < range.start.character) return false;
-  if (pos.line === range.end.line && pos.character > range.end.character) return false;
-  return true;
-}

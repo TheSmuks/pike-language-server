@@ -165,6 +165,7 @@ async function discoverFiles(dir: string, results: string[]): Promise<void> {
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
+    // Directory unreadable (permissions, deleted during scan) — skip silently
     return;
   }
 
