@@ -523,7 +523,7 @@ export function registerNavigationHandlers(
       return null;
     }
 
-    const renameResult = getRenameLocations(
+    const renameResult = await getRenameLocations(
       table,
       params.textDocument.uri,
       params.position.line,
