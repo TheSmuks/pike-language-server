@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Fixed
+
+- Fixed harness/introspect.pike using hardcoded 'pike' for extract_autodoc
+  subprocess instead of PIKE_BINARY, causing autodoc snapshot test failure in CI
+- Suppressed 'Connection is closed' errors during LSP test teardown
+- Relaxed hover latency threshold for CI runners with variable CPU performance
+
 ### Added
 
 - Type inference: assignment-based type narrowing (`assignedType` field on Declaration, `extractInitializerType`, `PRIMITIVE_TYPES` set)

@@ -311,9 +311,14 @@ export function createPikeServer(connection: Connection): PikeServer {
       index,
       workspaceRoot: index.workspaceRoot,
     }).catch((err) => {
-      connection.console.error(
-        `Pike LSP: background indexing failed: ${(err as Error).message}`,
-      );
+      // Connection may be closed during shutdown — do not re-throw.
+      try {
+        connection.console.error(
+          `Pike LSP: background indexing failed: ${(err as Error).message}`,
+        );
+      } catch {
+        // Connection already closed during teardown.
+      }
     });
   });
 
