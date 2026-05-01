@@ -148,9 +148,13 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
       return index.getSymbolTable(uri);
     } catch (err) {
-      connection.console.error(
-        `symbolTable build failed: ${(err as Error).message}`,
-      );
+      try {
+        connection.console.error(
+          `symbolTable build failed: ${(err as Error).message}`,
+        );
+      } catch {
+        // Connection may be closed during teardown
+      }
       return null;
     }
   }
@@ -254,9 +258,13 @@ export function createPikeServer(connection: Connection): PikeServer {
       await initParser();
       connection.console.log("Pike LSP: parser initialized");
     } catch (err) {
-      connection.console.error(
-        `Pike LSP: parser init failed: ${(err as Error).message}`,
-      );
+      try {
+        connection.console.error(
+          `Pike LSP: parser init failed: ${(err as Error).message}`,
+        );
+      } catch {
+        // Connection may be closed during teardown
+      }
     }
 
     // Register file watchers for .pike and .pmod files.
@@ -300,7 +308,11 @@ export function createPikeServer(connection: Connection): PikeServer {
         connection.console.log(`Pike LSP: restored ${restored} files from cache`);
       }
     } catch (err) {
-      connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
+      try {
+        connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
+      } catch {
+        // Connection may be closed during teardown
+      }
     }
 
     // Background workspace indexing — fire-and-forget
@@ -311,9 +323,14 @@ export function createPikeServer(connection: Connection): PikeServer {
       index,
       workspaceRoot: index.workspaceRoot,
     }).catch((err) => {
-      connection.console.error(
-        `Pike LSP: background indexing failed: ${(err as Error).message}`,
-      );
+      // Connection may be closed during shutdown — do not re-throw.
+      try {
+        connection.console.error(
+          `Pike LSP: background indexing failed: ${(err as Error).message}`,
+        );
+      } catch {
+        // Connection already closed during teardown.
+      }
     });
   });
 
@@ -420,9 +437,13 @@ export function createPikeServer(connection: Connection): PikeServer {
         );
       }
     } catch (err) {
-      connection.console.error(
-        `parse failed: ${(err as Error).message}`,
-      );
+      try {
+        connection.console.error(
+          `parse failed: ${(err as Error).message}`,
+        );
+      } catch {
+        // Connection may be closed during teardown
+      }
     }
 
     // Delegate real-time diagnostics to DiagnosticManager

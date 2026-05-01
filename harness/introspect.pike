@@ -17,6 +17,7 @@ string get_pike_version() {
 int main(int argc, array(string) argv) {
   string filepath;
   int strict = 0;
+  string pike_binary = "pike";
   array(string) module_paths = ({});
   array(string) include_paths = ({});
 
@@ -26,6 +27,9 @@ int main(int argc, array(string) argv) {
     if (argv[i] == "--strict") {
       strict = 1;
       i++;
+    } else if (argv[i] == "--pike-binary" && i + 1 < sizeof(argv)) {
+      pike_binary = argv[i + 1];
+      i += 2;
     } else if (argv[i] == "--module-path" && i + 1 < sizeof(argv)) {
       module_paths += ({ argv[i + 1] });
       i += 2;
@@ -112,7 +116,7 @@ int main(int argc, array(string) argv) {
     // Clean up any stale artifacts
     rm(xml_path);
     rm(stamp_path);
-    Process.run(({"pike", "-x", "extract_autodoc", rel}));
+    Process.run(({pike_binary, "-x", "extract_autodoc", rel}));
     if (file_stat(xml_path)) {
       string raw = Stdio.read_file(xml_path);
       if (raw && sizeof(String.trim_all_whites(raw)) > 0) {
