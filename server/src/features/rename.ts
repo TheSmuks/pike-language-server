@@ -23,7 +23,8 @@ import {
   getReferencesTo,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-
+import { resolveTypeName } from "./scopeBuilder";
+import { resolveType } from "./typeResolver";
 // ---------------------------------------------------------------------------
 // Pike reserved words — cannot be used as identifiers (rename targets/new names)
 // Source: Pike lexer src/lexer.h keyword switch + Pike manual ch2-7
@@ -112,6 +113,73 @@ export interface PrepareRenameResult {
 export type ProtectedNames = ReadonlySet<string>;
 
 // ---------------------------------------------------------------------------
+// Type-aware rename filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Check if an arrow/dot access receiver matches the declaration's class.
+ *
+ * When renaming Dog.bark(), we want to include d->bark where d is a Dog,
+ * but exclude c->bark where c is a Cat (even if Cat also has bark()).
+ *
+ * Resolution strategy:
+ * 1. Find the LHS variable's declaration
+ * 2. Resolve its type (declared or assigned)
+ * 3. Check if that type resolves to the same class as the target decl
+ *
+ * If resolution fails (unknown type, unresolvable), we include the
+ * reference — false negatives (missing renames) are worse than false
+ * positives (extra renames that the user can reject in preview).
+ */
+async function isReceiverTypeMatch(
+  table: SymbolTable,
+  uri: string,
+  lhsName: string,
+  targetDecl: Declaration,
+  index: WorkspaceIndex,
+): Promise<boolean> {
+  // Find the LHS variable declaration
+  const lhsDecl = table.declarations.find(
+    d => d.name === lhsName && (d.kind === 'variable' || d.kind === 'parameter'),
+  );
+  if (!lhsDecl) return true; // Unknown LHS — include conservatively
+
+  const lhsTypeName = resolveTypeName(lhsDecl);
+  if (!lhsTypeName) return true; // No type info — include conservatively
+
+  // Resolve the LHS type to a class declaration
+  const lhsTypeResult = await resolveType(lhsTypeName, {
+    table,
+    uri,
+    index,
+    stdlibIndex: {}, // Stdlib types don't have user-defined members
+  });
+
+  if (!lhsTypeResult) return true; // Can't resolve — include conservatively
+
+  // The LHS type must resolve to the same class scope as the target declaration.
+  // For methods, the targetDecl's scopeId is the class body scope.
+  // For the class itself, the targetDecl IS the class.
+  if (targetDecl.kind === 'class') {
+    // Renaming the class itself — lhs type should be this class
+    return lhsTypeResult.decl.id === targetDecl.id;
+  }
+
+  // For members (methods, variables), check if lhs type is the same class
+  // or a class that inherits from the target's class.
+  // Simple check: does the LHS type resolve to the class that contains targetDecl?
+  const targetClassScope = table.scopes.find(s =>
+    s.kind === 'class' && s.declarations.includes(targetDecl.id),
+  );
+  if (!targetClassScope) return true; // Can't determine owning class
+
+  // Check if LHS type's class scope is the same
+  return lhsTypeResult.decl.scopeId === targetClassScope.parentId ||
+    lhsTypeResult.decl.id === targetDecl.id;
+}
+
+
+// ---------------------------------------------------------------------------
 // Rename logic
 // ---------------------------------------------------------------------------
 /**
@@ -122,14 +190,14 @@ export type ProtectedNames = ReadonlySet<string>;
  * 3. Otherwise, use `getReferencesTo()` for same-file
  * 4. Build the list of all locations (declaration + references)
  */
-export function getRenameLocations(
+export async function getRenameLocations(
   table: SymbolTable,
   uri: string,
   line: number,
   character: number,
   index: WorkspaceIndex | null,
   protectedNames?: ProtectedNames,
-): RenameResult | null {
+): Promise<RenameResult | null> {
   // Find the declaration at cursor
   const decl = getDefinitionAt(table, line, character);
   if (!decl) {
@@ -175,11 +243,21 @@ export function getRenameLocations(
   // Same-file references
   const refs = getReferencesTo(table, line, character);
   for (const ref of refs) {
-    // Skip any ref that coincides with the declaration (should not happen post-unshift removal, but defensive)
+    // Skip any ref that coincides with the declaration
     if (ref.loc.line === decl.nameRange.start.line &&
         ref.loc.character === decl.nameRange.start.character) {
       continue;
     }
+
+    // Type-aware filtering for arrow/dot access:
+    // If we're renaming a member on class Dog, exclude cat->bark
+    // where cat's type resolves to Cat, not Dog.
+    if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName && index) {
+      if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, index)) {
+        continue;
+      }
+    }
+
     locations.push({
       uri,
       line: ref.loc.line,

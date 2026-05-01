@@ -371,17 +371,17 @@ export class ModuleResolver {
 
 /** Check that a path exists on disk (file or directory). */
 async function pathExists(p: string): Promise<boolean> {
-  try { await stat(p); return true; } catch { return false; }
+  try { await stat(p); return true; } catch { /* stat() throws if path doesn't exist */ return false; }
 }
 
 /** Check that a path exists and is a directory. */
 async function isDir(p: string): Promise<boolean> {
-  try { const s = await stat(p); return s.isDirectory(); } catch { return false; }
+  try { const s = await stat(p); return s.isDirectory(); } catch { /* stat() throws if path doesn't exist */ return false; }
 }
 
 /** Check that a path exists and is a regular file. */
 async function isFile(p: string): Promise<boolean> {
-  try { const s = await stat(p); return s.isFile(); } catch { return false; }
+  try { const s = await stat(p); return s.isFile(); } catch { /* stat() throws if path doesn't exist */ return false; }
 }
 
 

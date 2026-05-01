@@ -446,6 +446,7 @@ export class DiagnosticManager {
     try {
       return getParseDiagnostics(parse(source));
     } catch {
+      // Tree-sitter parse threw (OOM or invalid input) — return no diagnostics
       return [];
     }
   }

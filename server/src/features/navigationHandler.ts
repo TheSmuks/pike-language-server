@@ -140,6 +140,18 @@ export function registerNavigationHandlers(
     stdlibIndex: ctx.stdlibIndex,
   };
 
+  /** Build a source-aware type inferrer using PikeWorker.typeof_(). */
+  const makeTypeInferrer = (source: string): ((varName: string) => Promise<string | null>) => {
+    return async (varName: string) => {
+      try {
+        const result = await ctx.worker.typeof_(source, varName);
+        if (result.type && !result.error) return result.type;
+      } catch {
+        // Worker unavailable — fall through
+      }
+      return null;
+    };
+  };
   const completionCtx = {
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
@@ -381,15 +393,17 @@ export function registerNavigationHandlers(
     const accessTree = doc
       ? parse(doc.getText(), params.textDocument.uri)
       : undefined;
+    const accessResolutionCtx: ResolutionContext = doc
+      ? { ...resolutionCtx, typeInferrer: makeTypeInferrer(doc.getText()) }
+      : resolutionCtx;
     const accessResult = await resolveAccessDefinition(
-      resolutionCtx,
+      accessResolutionCtx,
       table,
       params.textDocument.uri,
       params.position.line,
       params.position.character,
       accessTree,
     );
-    if (accessResult) return accessResult;
 
     return null;
   });
@@ -509,7 +523,7 @@ export function registerNavigationHandlers(
       return null;
     }
 
-    const renameResult = getRenameLocations(
+    const renameResult = await getRenameLocations(
       table,
       params.textDocument.uri,
       params.position.line,
@@ -548,6 +562,7 @@ export function registerNavigationHandlers(
       return await getCompletions(table, tree, params.position.line, params.position.character, {
         ...completionCtx,
         uri: params.textDocument.uri,
+        typeInferrer: makeTypeInferrer(doc.getText()),
       });
     } catch (err) {
       connection.console.error(
