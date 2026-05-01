@@ -77,20 +77,12 @@ export async function indexWorkspaceFiles(
   // Report progress start
   let progressToken: string | number | undefined;
   try {
-    // Compute token once — reuse in both create and progress calls.
+    const result = await connection.sendRequest("window/workDoneProgress/create", {
+      token: `pike-index-${Date.now()}`,
+    });
     progressToken = `pike-index-${Date.now()}`;
-    // Timeout: if the client doesn't respond within 2s, skip progress reporting.
-    await Promise.race([
-      connection.sendRequest("window/workDoneProgress/create", {
-        token: progressToken,
-      }),
-      new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("workDoneProgress timeout")), 2000),
-      ),
-    ]);
   } catch {
-    // Client doesn't support workDoneProgress or didn't respond — that's fine
-    progressToken = undefined;
+    // Client doesn't support workDoneProgress — that's fine
   }
 
   if (progressToken) {
@@ -111,7 +103,7 @@ export async function indexWorkspaceFiles(
   for (const filepath of files) {
     try {
       // Skip already-indexed files (open documents)
-      const uri = `file://${filepath}`;
+      const uri = 'file://' + encodeURI(filepath);
       if (index.getFile(uri)) {
         indexed++;
         continue;

@@ -106,9 +106,8 @@ describe("edge case: inner block variable shadows outer", () => {
 
     // Line 4 (inside if) should resolve to inner x (line 3)
     const innerResolved = findResolvedRef(table, "x", 4);
-    if (innerResolved) {
-      expect(innerResolved.decl.nameRange.start.line).toBe(3);
-    }
+    expect(innerResolved).not.toBeNull();
+    expect(innerResolved!.decl.nameRange.start.line).toBe(3);
   });
 
   test("x outside if-block resolves to outer declaration", () => {
@@ -124,9 +123,8 @@ describe("edge case: inner block variable shadows outer", () => {
 
     // Line 6 (outside if) should resolve to outer x (line 1)
     const outerResolved = findResolvedRef(table, "x", 6);
-    if (outerResolved) {
-      expect(outerResolved.decl.nameRange.start.line).toBe(1);
-    }
+    expect(outerResolved).not.toBeNull();
+    expect(outerResolved!.decl.nameRange.start.line).toBe(1);
   });
 });
 
@@ -377,11 +375,10 @@ describe("edge case: for-loop init variable scoping", () => {
     // References to i inside the loop should resolve to the for-init declaration
     const iRefs = table.references.filter((r) => r.name === "i");
     for (const ref of iRefs) {
-      if (ref.resolvesTo !== null) {
-        const decl = table.declarations.find((d) => d.id === ref.resolvesTo);
-        expect(decl).toBeDefined();
-        expect(decl!.name).toBe("i");
-      }
+      expect(ref.resolvesTo).not.toBeNull();
+      const decl = table.declarations.find((d) => d.id === ref.resolvesTo);
+      expect(decl).toBeDefined();
+      expect(decl!.name).toBe("i");
     }
   });
 
@@ -405,9 +402,7 @@ describe("edge case: for-loop init variable scoping", () => {
     const afterLoopRef = findRef(table, "i", 5);
     expect(afterLoopRef).toBeDefined();
     // After the loop, the for scope has ended, so it should resolve to outer i.
-    if (afterLoopRef!.resolvesTo !== null) {
-      expect(afterLoopRef!.resolvesTo).toBe(outerI!.id);
-    }
+    expect(afterLoopRef!.resolvesTo).toBe(outerI!.id);
   });
 });
 

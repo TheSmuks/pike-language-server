@@ -57,7 +57,7 @@ export function produceSignatureHelp(
   if (!node) return null;
 
   // Walk up to find enclosing call expression
-  const callExpr = findEnclosingCall(node);
+  const callExpr = findEnclosingCall(node, line, character);
   if (!callExpr) return null;
 
   // Get callee name and argument list
@@ -90,20 +90,38 @@ export function produceSignatureHelp(
  * In tree-sitter-pike, calls are represented as postfix_expr nodes
  * where child 0 is the callee and there are parenthesized arguments.
  */
-function findEnclosingCall(node: Node): Node | null {
+function findEnclosingCall(node: Node, line?: number, character?: number): Node | null {
   let current: Node | null = node;
   while (current) {
     if (current.type === "postfix_expr") {
-      // Check if this postfix_expr has parenthesized arguments
       const children = current.children;
-      let hasParens = false;
+      let openParen: Node | null = null;
+      let closeParen: Node | null = null;
       for (let i = 1; i < children.length; i++) {
-        if (children[i].type === "(") {
-          hasParens = true;
-          break;
+        if (children[i].type === "(" && !openParen) {
+          openParen = children[i];
+        }
+        if (children[i].type === ")") {
+          closeParen = children[i];
         }
       }
-      if (hasParens) return current;
+      if (!openParen || !closeParen) {
+        current = current.parent;
+        continue;
+      }
+      if (line !== undefined && character !== undefined) {
+        const openStart = openParen.startPosition;
+        const closeStart = closeParen.startPosition;
+        const cursorBeforeOpen =
+          line < openStart.row || (line === openStart.row && character < openStart.column);
+        const cursorAtOrAfterClose =
+          line > closeStart.row || (line === closeStart.row && character >= closeStart.column);
+        if (cursorBeforeOpen || cursorAtOrAfterClose) {
+          current = current.parent;
+          continue;
+        }
+      }
+      return current;
     }
     current = current.parent;
   }
@@ -332,7 +350,7 @@ function buildSignatureFromStdlib(
 /**
  * Split parameter text by commas, respecting nested parentheses.
  */
-function splitParams(text: string): string[] {
+export function splitParams(text: string): string[] {
   const result: string[] = [];
   let depth = 0;
   let start = 0;
@@ -374,4 +392,15 @@ function countCommasInNode(node: Node, line: number, character: number): number 
     }
   }
   return count;
+}
+
+/**
+ * Produce signature help for a position in the source.
+ *
+ * Exported for direct unit testing.
+ */
+export function findEnclosingCallExport(tree: Tree, line: number, character: number): Node | null {
+  const node = tree.rootNode.descendantForPosition({ row: line, column: character });
+  if (!node) return null;
+  return findEnclosingCall(node, line, character);
 }

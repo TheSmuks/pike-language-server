@@ -404,21 +404,14 @@ describe("definition API: inheritance scope", () => {
 
 describe("definition API: scope-aware shadowing", () => {
   test("parameter shadows outer variable of same name", () => {
-    // Use fn-types.pike: parameter 'a' in add() is separate from any
-    // local variable named 'a'
+    // Use fn-types.pike: parameter 'a' in add() is separate from 'a' in map_ints()
     const table = buildTable("fn-types.pike");
-    const paramA = table.declarations.find(
+    const paramAs = table.declarations.filter(
       (d) => d.name === "a" && d.kind === "parameter",
     );
-    const localA = table.declarations.find(
-      (d) => d.name === "a" && d.kind === "variable",
-    );
-    expect(paramA).toBeDefined();
-    // There should be a parameter 'a' — it may also have local 'a' elsewhere
-    // but they must have different scope IDs
-    if (localA) {
-      expect(paramA!.scopeId).not.toBe(localA.scopeId);
-    }
+    expect(paramAs.length).toBeGreaterThanOrEqual(2);
+    // Same-named parameters in different functions must have different scope IDs
+    expect(paramAs[0].scopeId).not.toBe(paramAs[1].scopeId);
   });
 
   test("inline Pike — inner block variable shadows outer", () => {
@@ -441,25 +434,25 @@ describe("definition API: scope-aware shadowing", () => {
     const innerRef = table.references.find(
       (r) => r.name === "x" && r.loc.line === 4,
     );
-    if (innerRef && innerRef.resolvesTo !== null) {
-      const innerDecl = table.declarations.find(
-        (d) => d.id === innerRef.resolvesTo,
-      );
-      expect(innerDecl).toBeDefined();
-      expect(innerDecl!.nameRange.start.line).toBe(3); // inner x at line 3
-    }
+    expect(innerRef).toBeDefined();
+    expect(innerRef!.resolvesTo).not.toBeNull();
+    const innerDecl = table.declarations.find(
+      (d) => d.id === innerRef!.resolvesTo,
+    );
+    expect(innerDecl).toBeDefined();
+    expect(innerDecl!.nameRange.start.line).toBe(3); // inner x at line 3
 
     // Reference at line 6 (outside if block) should resolve to outer x
     const outerRef = table.references.find(
       (r) => r.name === "x" && r.loc.line === 6,
     );
-    if (outerRef && outerRef.resolvesTo !== null) {
-      const outerDecl = table.declarations.find(
-        (d) => d.id === outerRef.resolvesTo,
-      );
-      expect(outerDecl).toBeDefined();
-      expect(outerDecl!.nameRange.start.line).toBe(1); // outer x at line 1
-    }
+    expect(outerRef).toBeDefined();
+    expect(outerRef!.resolvesTo).not.toBeNull();
+    const outerDecl = table.declarations.find(
+      (d) => d.id === outerRef!.resolvesTo,
+    );
+    expect(outerDecl).toBeDefined();
+    expect(outerDecl!.nameRange.start.line).toBe(1); // outer x at line 1
   });
 });
 
@@ -752,14 +745,13 @@ describe("definition API: getDefinitionAt", () => {
     const table = buildTable("basic-types.pike");
     // Stdio is at line 46, char 12, but resolvesTo is null
     const stdioRef = table.references.find((r) => r.name === "Stdio");
-    if (stdioRef) {
-      const decl = getDefinitionAt(
-        table,
-        stdioRef.loc.line,
-        stdioRef.loc.character,
-      );
-      expect(decl).toBeNull();
-    }
+    expect(stdioRef).toBeDefined();
+    const decl = getDefinitionAt(
+      table,
+      stdioRef!.loc.line,
+      stdioRef!.loc.character,
+    );
+    expect(decl).toBeNull();
   });
 
   test("class member reference resolves via getDefinitionAt", () => {
@@ -1142,5 +1134,117 @@ describe("definition LSP: cross-file inherited member (US-001)", () => {
     expect(result.uri).toBe(uri);
     // Should point to the speak method inside Dog class
     expect(result.range.start.line).toBe(0); // Dog class is at line 0
+  });
+});
+
+// ===========================================================================
+// 17. Chained access resolution (a->b->c)
+// ===========================================================================
+
+describe("definition: chained access resolution", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("obj->field->member resolves through two arrow accesses", async () => {
+    const src = [
+      'class Inner { int x = 1; }',
+      'class Outer { Inner val = Inner(); }',
+      'void test() {',
+      '  Outer obj = Outer();',
+      '  int v = obj->val->x;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-chain-2level.pike", src);
+
+    // Resolve 'x' in obj->val->x (at line 4, char 20)
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 4, character: 20 },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should resolve to Inner.x (variable at line 0)
+    expect(result.range.start.line).toBe(0);
+  });
+
+  test("obj->field resolves intermediate member in chain", async () => {
+    const src = [
+      'class Inner { int x = 1; }',
+      'class Outer { Inner val = Inner(); }',
+      'void test() {',
+      '  Outer obj = Outer();',
+      '  int v = obj->val->x;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-chain-intermediate.pike", src);
+
+    // Resolve 'val' in obj->val->x (at line 4, char 15)
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 4, character: 15 },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should resolve to Outer.val (variable at line 1)
+    expect(result.range.start.line).toBe(1);
+  });
+
+  test("a->b->c->d resolves three-level chained arrow access", async () => {
+    const src = [
+      'class D { string name = "d"; }',
+      'class C { D dd = D(); }',
+      'class B { C cc = C(); }',
+      'class A { B bb = B(); }',
+      'void test() {',
+      '  A a = A();',
+      '  string s = a->bb->cc->dd->name;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-chain-4level.pike", src);
+
+    // Resolve 'name' in a->bb->cc->dd->name (at line 6, char 28)
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 6, character: 28 },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should resolve to D.name (variable at line 0)
+    expect(result.range.start.line).toBe(0);
+  });
+
+  test("mixed d = Dog(); d->bark()->name resolves via assignedType chain", async () => {
+    const src = [
+      'class Name { string val = ""; }',
+      'class Dog {',
+      '  Name bark() { return Name(); }',
+      '}',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  string s = d->bark()->val;',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-chain-mixed.pike", src);
+
+    // Resolve 'val' in d->bark()->val (at line 6, char 24)
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 6, character: 24 },
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    // Should resolve to Name.val (variable at line 0)
+    expect(result.range.start.line).toBe(0);
   });
 });

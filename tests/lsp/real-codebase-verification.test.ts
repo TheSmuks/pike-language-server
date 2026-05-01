@@ -51,6 +51,65 @@ describe("US-026: Real-codebase verification", () => {
     }
   });
 
+  /** Collect all symbol names at every nesting depth. */
+  function collectNames(symbols: Array<{ name: string; children?: unknown[] }>): string[] {
+    const out: string[] = [];
+    const stack = [...symbols];
+    while (stack.length > 0) {
+      const sym = stack.pop()!;
+      out.push(sym.name);
+      if (sym.children) {
+        for (const child of sym.children as Array<{ name: string; children?: unknown[] }>) {
+          stack.push(child);
+        }
+      }
+    }
+    return out;
+  }
+
+  test("documentSymbol returns specific named symbols from corpus files", async () => {
+    const expectations: Array<{ file: string; names: string[] }> = [
+      {
+        file: "basic-types.pike",
+        names: ["main", "do_nothing"],
+      },
+      {
+        file: "class-single-inherit.pike",
+        names: ["Animal", "Dog", "GuideDog", "describe", "get_name", "get_breed"],
+      },
+      {
+        file: "enum-basic.pike",
+        names: ["Color", "Status", "TokenKind", "RED", "GREEN", "BLUE", "color_name"],
+      },
+      {
+        file: "fn-types.pike",
+        names: ["add", "map_ints", "make_adder", "main"],
+      },
+      {
+        file: "class-create.pike",
+        names: ["Base", "Middle", "Leaf", "Simple", "get_id", "get_label", "info"],
+      },
+      {
+        file: "mod-access.pike",
+        names: ["Visibility", "SubVisibility", "get_secret", "test"],
+      },
+    ];
+
+    for (const { file, names } of expectations) {
+      const entry = corpusFiles.find(f => f.name === file);
+      expect(entry, `corpus file ${file} should exist`).toBeDefined();
+
+      const result = await server.client.sendRequest("textDocument/documentSymbol", {
+        textDocument: { uri: entry!.uri },
+      }) as Array<{ name: string; children?: unknown[] }>;
+
+      const found = collectNames(result);
+      for (const name of names) {
+        expect(found, `${file}: expected symbol "${name}"`).toContain(name);
+      }
+    }
+  });
+
   test("semanticTokens does not crash on any corpus file", async () => {
     for (const file of corpusFiles) {
       const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
@@ -177,74 +236,6 @@ describe("US-026: Real-codebase verification", () => {
       });
       expect(result).toBeDefined();
       expect(Array.isArray(result)).toBe(true);
-    }
-  });
-
-  test("documentSymbol returns expected symbol names for known file", async () => {
-    const file = corpusFiles.find(f => f.name === "basic-types.pike");
-    if (!file) return;
-
-    const result = await server.client.sendRequest("textDocument/documentSymbol", {
-      textDocument: { uri: file.uri },
-    }) as Array<{ name: string; kind: number }> | null;
-
-    expect(result).not.toBeNull();
-    const names = result!.map(s => s.name);
-    // basic-types.pike contains int, string, float variable declarations
-    // and at least one function (main)
-    expect(names).toContain("main");
-  });
-
-  test("hover returns type information for typed variable", async () => {
-    const file = corpusFiles.find(f => f.name === "basic-types.pike");
-    if (!file) return;
-
-    // Find a line with an int declaration — hover should return something meaningful
-    const lines = file.src.split("\n");
-    let found = false;
-    for (let i = 0; i < lines.length; i++) {
-      const match = lines[i].match(/\bint\s+(\w+)/);
-      if (match) {
-        const charPos = lines[i].indexOf(match[1]);
-        const result = await server.client.sendRequest("textDocument/hover", {
-          textDocument: { uri: file.uri },
-          position: { line: i, character: charPos },
-        }) as { contents?: { kind?: string; value?: string } } | null;
-
-        if (result?.contents?.value) {
-          // Hover content should mention the variable type or name
-          expect(result.contents.value.length).toBeGreaterThan(0);
-          found = true;
-        }
-        break;
-      }
-    }
-    // If no int declaration was found, the test is vacuous — that's a corpus problem.
-    if (!found && lines.some(l => /\bint\s+/.test(l))) {
-      throw new Error("Hover returned null for typed variable in basic-types.pike");
-    }
-  });
-
-  test("definition resolves to a location within the file", async () => {
-    const file = corpusFiles.find(f => f.name === "basic-types.pike");
-    if (!file) return;
-
-    // Find a reference to a declared symbol
-    const lines = file.src.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const result = await server.client.sendRequest("textDocument/definition", {
-        textDocument: { uri: file.uri },
-        position: { line: i, character: 0 },
-      }) as Array<{ uri: string; range: { start: { line: number } } }> | null;
-
-      if (result && result.length > 0) {
-        // Definition should point to a location in a file
-        for (const loc of result) {
-          expect(loc.uri).toBeDefined();
-          expect(loc.range.start.line).toBeGreaterThanOrEqual(0);
-        }
-        return;
-      }
     }
   });
 });

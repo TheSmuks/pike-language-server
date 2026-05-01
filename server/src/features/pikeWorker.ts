@@ -18,7 +18,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-
+import type { CancellationToken } from "vscode-languageserver/node";
 // ---------------------------------------------------------------------------
 // Configuration (tunable per deployment)
 // ---------------------------------------------------------------------------
@@ -96,6 +96,7 @@ interface QueueItem {
   resolve: (response: PikeResponse) => void;
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
+  token?: CancellationToken;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +125,7 @@ export class PikeWorker {
 
   // FIFO queue — ensures exactly one write to stdin at a time
   private readonly queue: QueueItem[] = [];
+  private headIdx = 0;
   private sending = false;
 
   // Idle eviction
@@ -201,6 +203,7 @@ export class PikeWorker {
           item.reject(error);
         }
         this.queue.length = 0;
+        this.headIdx = 0;
         this.sending = false;
         this.proc = null;
       }
@@ -219,6 +222,7 @@ export class PikeWorker {
       this.proc = null;
     }
     this.queue.length = 0;
+    this.headIdx = 0;
     this.sending = false;
   }
 
@@ -241,7 +245,7 @@ export class PikeWorker {
    * written to stdin at any time.  Returns a promise that resolves with
    * the Pike worker's response.
    */
-  private enqueue(method: string, params: Record<string, unknown> = {}): Promise<PikeResponse> {
+  private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken): Promise<PikeResponse> {
     // Check if forced restart is needed before queuing
     if (this.shouldForceRestart()) {
       this.restarting = true;
@@ -290,6 +294,7 @@ export class PikeWorker {
           reject(error);
         },
         timeout,
+        token,
       };
 
       // Register in pending map so processBuffer can resolve it
@@ -313,7 +318,25 @@ export class PikeWorker {
     if (!this.proc || this.proc.killed) return;
 
     this.sending = true;
-    const item = this.queue.shift()!;
+    const item = this.queue[this.headIdx++];
+    if (this.headIdx >= this.queue.length) {
+      this.queue.length = 0;
+      this.headIdx = 0;
+    }
+
+    // Check cancellation before writing to subprocess
+    if (item.token?.isCancellationRequested) {
+      const parsed: { id: number } = JSON.parse(item.payload);
+      const pending = this.pending.get(parsed.id);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        this.pending.delete(parsed.id);
+      }
+      item.resolve({ id: parsed.id, error: { code: -32800, message: "Request cancelled" } });
+      this.sending = false;
+      this.drainQueue();
+      return;
+    }
 
     this.writeToStdin(item.payload).then(
       () => {
@@ -371,6 +394,7 @@ export class PikeWorker {
       includePaths?: string[];
       programPaths?: string[];
     },
+    token?: CancellationToken,
   ): Promise<DiagnoseResult> {
     try {
       const response = await this.enqueue("diagnose", {
@@ -380,7 +404,7 @@ export class PikeWorker {
         module_paths: options?.modulePaths ?? [],
         include_paths: options?.includePaths ?? [],
         program_paths: options?.programPaths ?? [],
-      });
+      }, token);
 
       if (response.error) {
         throw new Error(`Pike diagnose failed: ${response.error.message}`);
@@ -401,11 +425,11 @@ export class PikeWorker {
   }
 
   /** Extract AutoDoc XML from Pike source. */
-  async autodoc(source: string, file?: string): Promise<AutodocResult> {
+  async autodoc(source: string, file?: string, token?: CancellationToken): Promise<AutodocResult> {
     const response = await this.enqueue("autodoc", {
       source,
       file: file ?? "<autodoc>",
-    });
+    }, token);
 
     if (response.error) {
       return { xml: "", error: response.error.message };
@@ -415,11 +439,11 @@ export class PikeWorker {
   }
 
   /** Get the type of an expression in context. */
-  async typeof_(source: string, expression: string): Promise<TypeofResult> {
+  async typeof_(source: string, expression: string, token?: CancellationToken): Promise<TypeofResult> {
     const response = await this.enqueue("typeof", {
       source,
       expression,
-    });
+    }, token);
 
     if (response.error) {
       return { type: "mixed", error: response.error.message };
@@ -452,14 +476,21 @@ export class PikeWorker {
     this.start();
     this.restarting = false;
 
-    // Give the process a moment to initialize before pinging
-    await new Promise((r) => setTimeout(r, 100));
-
-    try {
-      await this.ping();
-    } catch {
-      throw new Error("Pike worker failed to restart");
+    // Retry loop: up to 3 ping attempts with increasing backoff
+    const delays = [100, 200, 300];
+    for (const delay of delays) {
+      await new Promise((r) => setTimeout(r, delay));
+      try {
+        await this.ping();
+        return;
+      } catch {
+        // Continue to next attempt
+      }
     }
+
+    const message = 'Pike worker failed to restart after 3 ping attempts';
+    console.error(`[pike-worker] ${message}`);
+    throw new Error(message);
   }
 
   // ---------------------------------------------------------------------------

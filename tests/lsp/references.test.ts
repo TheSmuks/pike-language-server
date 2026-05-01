@@ -61,11 +61,7 @@ describe("references to top-level functions", () => {
 
     // Query from declaration position
     const refs = getReferencesTo(table, decl!.nameRange.start.line, decl!.nameRange.start.character);
-    expect(refs.length).toBeGreaterThanOrEqual(2);
-
-    // First entry should be the declaration itself (synthetic reference)
-    expect(refs[0].name).toBe("str_len");
-    expect(refs[0].loc.line).toBe(decl!.nameRange.start.line);
+    expect(refs.length).toBeGreaterThanOrEqual(1);
 
     // Count raw references in the table that resolve to this declaration
     const rawCount = countRefsTo(table, decl!.id);
@@ -79,7 +75,7 @@ describe("references to top-level functions", () => {
     expect(decl).toBeDefined();
 
     const refs = getReferencesTo(table, decl!.nameRange.start.line, decl!.nameRange.start.character);
-    expect(refs.length).toBeGreaterThanOrEqual(2); // decl + at least one call
+    expect(refs.length).toBeGreaterThanOrEqual(1); // at least one call
   });
 
   test("finds references to join_strings in fn-varargs.pike", () => {
@@ -89,7 +85,7 @@ describe("references to top-level functions", () => {
     expect(decl).toBeDefined();
 
     const refs = getReferencesTo(table, decl!.nameRange.start.line, decl!.nameRange.start.character);
-    expect(refs.length).toBeGreaterThanOrEqual(2); // declaration + call in main
+    expect(refs.length).toBeGreaterThanOrEqual(1); // call in main
   });
 
   test("finds references to add in fn-types.pike", () => {
@@ -110,7 +106,7 @@ describe("references to top-level functions", () => {
     expect(decl).toBeDefined();
 
     const refs = getReferencesTo(table, decl!.nameRange.start.line, decl!.nameRange.start.character);
-    expect(refs.length).toBeGreaterThanOrEqual(2); // declaration + call in main
+    expect(refs.length).toBeGreaterThanOrEqual(1); // call in main
   });
 });
 
@@ -181,8 +177,8 @@ describe("references to parameters", () => {
     expect(cbDecl).toBeDefined();
 
     const refs = getReferencesTo(table, cbDecl!.nameRange.start.line, cbDecl!.nameRange.start.character);
-    // Declaration synthetic ref + usage `cb(val)`
-    expect(refs.length).toBeGreaterThanOrEqual(2);
+    // Usage `cb(val)`
+    expect(refs.length).toBeGreaterThanOrEqual(1);
   });
 
   test("finds references to parameter s in str_len (fn-callbacks.pike)", () => {
@@ -281,14 +277,10 @@ describe("references to class members", () => {
       return scope?.kind === "class";
     });
     expect(animalCreate).toBeDefined();
-
-    // References to one create should not resolve to another create
-    if (animalCreate) {
-      const refs = refsTo(table, animalCreate.id);
-      // All refs to Animal.create should resolve to Animal.create's id
-      for (const r of refs) {
-        expect(r.resolvesTo).toBe(animalCreate.id);
-      }
+    const refs = refsTo(table, animalCreate!.id);
+    // All refs to Animal.create should resolve to Animal.create's id
+    for (const r of refs) {
+      expect(r.resolvesTo).toBe(animalCreate!.id);
     }
   });
 });
@@ -326,14 +318,10 @@ describe("no references for unknown positions", () => {
     const unresolved = table.references.find(
       (r) => r.resolvesTo === null && r.confidence === "low",
     );
-    if (unresolved) {
-      const refs = getReferencesTo(table, unresolved.loc.line, unresolved.loc.character);
-      // Unresolved → targetDeclId will be null → empty array
-      expect(refs).toEqual([]);
-    } else {
-      // If no unresolved ref, just verify the table is valid
-      expect(table.references.length).toBeGreaterThanOrEqual(0);
-    }
+    expect(unresolved).toBeDefined();
+    const refs = getReferencesTo(table, unresolved!.loc.line, unresolved!.loc.character);
+    // Unresolved → targetDeclId will be null → empty array
+    expect(refs).toEqual([]);
   });
 });
 
@@ -350,14 +338,13 @@ describe("cross-scope disambiguation", () => {
     const counterDecls = table.declarations.filter(
       (d) => d.name === "counter" && d.kind === "variable",
     );
-    if (counterDecls.length >= 1) {
-      // All references to counter should resolve to the same declaration
-      // (lambda captures the enclosing scope variable)
-      const counterDecl = counterDecls[0];
-      const refs = refsTo(table, counterDecl.id);
-      // counter is incremented inside the lambda — should have refs
-      expect(refs.length).toBeGreaterThanOrEqual(1);
-    }
+    expect(counterDecls.length).toBeGreaterThanOrEqual(1);
+    // All references to counter should resolve to the same declaration
+    // (lambda captures the enclosing scope variable)
+    const counterDecl = counterDecls[0];
+    const refs = refsTo(table, counterDecl.id);
+    // counter is incremented inside the lambda — should have refs
+    expect(refs.length).toBeGreaterThanOrEqual(1);
   });
 
   test("parameter name does not conflict with same-name in other function", () => {
@@ -368,12 +355,11 @@ describe("cross-scope disambiguation", () => {
     const valDecls = table.declarations.filter(
       (d) => d.name === "val" && d.kind === "parameter",
     );
-    if (valDecls.length >= 2) {
-      // Each should be distinct
-      const ids = valDecls.map((d) => d.id);
-      const uniqueIds = new Set(ids);
-      expect(uniqueIds.size).toBe(ids.length);
-    }
+    expect(valDecls.length).toBeGreaterThanOrEqual(2);
+    // Each should be distinct
+    const ids = valDecls.map((d) => d.id);
+    const uniqueIds = new Set(ids);
+    expect(uniqueIds.size).toBe(ids.length);
   });
 });
 
@@ -402,8 +388,9 @@ describe("references to enum members", () => {
     expect(statusDecl).toBeDefined();
 
     const refs = getReferencesTo(table, statusDecl!.nameRange.start.line, statusDecl!.nameRange.start.character);
-    // Declaration itself is always included as synthetic ref
-    expect(refs.length).toBeGreaterThanOrEqual(1);
+    // With declaration no longer included, only actual references remain
+    // STATUS_UNKNOWN may have no references beyond the declaration itself
+    expect(refs.length).toBeGreaterThanOrEqual(0);
   });
 });
 

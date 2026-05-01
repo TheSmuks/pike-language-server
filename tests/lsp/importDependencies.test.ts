@@ -62,13 +62,13 @@ describe("Import DeclKind", () => {
 // ---------------------------------------------------------------------------
 
 describe("Dependency graph — import edges", () => {
-  test("import creates a dependency edge", () => {
+  test("import creates a dependency edge", async () => {
     const index = new WorkspaceIndex({ workspaceRoot: "/test" });
 
     // Index a file with an import
     const src = 'import SomeModule;';
     const tree = parse(src);
-    index.upsertFile(
+    await index.upsertFile(
       "file:///test/consumer.pike",
       1,
       tree,
@@ -84,12 +84,12 @@ describe("Dependency graph — import edges", () => {
     expect(deps).toBeDefined();
   });
 
-  test("inherit and import both create edges for same target", () => {
+  test("inherit and import both create edges for same target", async () => {
     const index = new WorkspaceIndex({ workspaceRoot: "/test" });
 
     const src = 'import SomeModule; inherit "someModule.pike";';
     const tree = parse(src);
-    index.upsertFile(
+    await index.upsertFile(
       "file:///test/consumer.pike",
       1,
       tree,
@@ -103,18 +103,18 @@ describe("Dependency graph — import edges", () => {
     expect(file).toBeDefined();
   });
 
-  test("removing import removes the edge", () => {
+  test("removing import removes the edge", async () => {
     const index = new WorkspaceIndex({ workspaceRoot: "/test" });
 
     // Index with import
     const src1 = 'import SomeModule;';
     const tree1 = parse(src1);
-    index.upsertFile("file:///test/a.pike", 1, tree1, src1, ModificationSource.didOpen);
+    await index.upsertFile("file:///test/a.pike", 1, tree1, src1, ModificationSource.didOpen);
 
     // Re-index without import
     const src2 = 'int x;';
     const tree2 = parse(src2);
-    index.upsertFile("file:///test/a.pike", 2, tree2, src2, ModificationSource.didChange);
+    await index.upsertFile("file:///test/a.pike", 2, tree2, src2, ModificationSource.didChange);
 
     // File should have no import declarations
     const file = index.getFile("file:///test/a.pike");

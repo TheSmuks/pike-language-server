@@ -34,11 +34,11 @@ function loadResolveSnapshot(corpusFile: string): ResolutionResult | null {
 }
 
 /** Index a file into the workspace */
-function indexFile(index: WorkspaceIndex, name: string): void {
+async function indexFile(index: WorkspaceIndex, name: string): Promise<void> {
   const uri = corpusUri(name);
   const content = readCorpus(name);
   const tree = parse(content);
-  index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
+  await index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
 }
 
 // Map of corpus file → its resolution snapshot
@@ -67,11 +67,11 @@ beforeAll(async () => {
 });
 
 describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
-  test("all cross-file corpus files have resolution snapshots", () => {
+  test("all cross-file corpus files have resolution snapshots", async () => {
     expect(crossFileCases.length).toBe(7);
   });
 
-  test("inherit resolution targets match Pike", () => {
+  test("inherit resolution targets match Pike", async () => {
     const index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
 
     // Index all cross-file corpus files
@@ -88,7 +88,7 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
       "cross_pmod_dir.pmod/helpers.pike",
     ];
     for (const f of allFiles) {
-      indexFile(index, f);
+      await indexFile(index, f);
     }
 
     const disagreements: string[] = [];
@@ -123,11 +123,9 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
         }
 
         // Use the LSP's cross-file resolution
-        const lspResult = index.resolveCrossFileDefinition(
-          uri,
-          inheritDecl.nameRange.start.line,
-          inheritDecl.nameRange.start.character,
-        );
+        const lspResult = await index.resolveCrossFileDefinition(uri,
+        inheritDecl.nameRange.start.line,
+        inheritDecl.nameRange.start.character,);
 
         if (!lspResult) {
           disagreements.push(
@@ -168,7 +166,7 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
     expect(disagreements).toEqual([]);
   });
 
-  test("inherited symbols are available in the symbol table", () => {
+  test("inherited symbols are available in the symbol table", async () => {
     const index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
 
     const allFiles = [
@@ -181,7 +179,7 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
       "cross_import_a.pmod", "cross_lib_module.pmod",
     ];
     for (const f of allFiles) {
-      indexFile(index, f);
+      await indexFile(index, f);
     }
 
     // For each cross-file case, verify that the symbols Pike reports
@@ -231,7 +229,7 @@ describe("Cross-file resolution oracle — LSP agrees with Pike", () => {
 });
 
 describe("Cross-file resolution oracle — .pmod directory", () => {
-  test("cross_pmod_dir resolves to the directory module path", () => {
+  test("cross_pmod_dir resolves to the directory module path", async () => {
     const snapshot = loadResolveSnapshot("cross-pmod-user.pike");
     expect(snapshot).not.toBeNull();
 
@@ -240,7 +238,7 @@ describe("Cross-file resolution oracle — .pmod directory", () => {
     expect(importRes!.target_file).toBe("corpus/files/cross_pmod_dir.pmod");
   });
 
-  test("cross_pmod_dir exposes expected symbols from Pike", () => {
+  test("cross_pmod_dir exposes expected symbols from Pike", async () => {
     const snapshot = loadResolveSnapshot("cross-pmod-user.pike");
     const importRes = snapshot!.resolutions.find(r => r.reference === "cross_pmod_dir");
     expect(importRes).toBeDefined();
