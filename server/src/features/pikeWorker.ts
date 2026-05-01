@@ -253,6 +253,7 @@ export class PikeWorker {
         this.stop();
         this.start();
       } catch {
+        // stop() may throw if worker is already dead — ensure we still start
         this.start();
       }
       this.restarting = false;

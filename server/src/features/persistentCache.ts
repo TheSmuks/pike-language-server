@@ -201,6 +201,7 @@ export function computeWasmHash(wasmPath: string): string {
     const content = readFileSync(wasmPath);
     return createHash("sha256").update(content).digest("hex").slice(0, 16);
   } catch {
+    // WASM file unreadable (not found or permissions) — use fallback hash
     return "unknown";
   }
 }
