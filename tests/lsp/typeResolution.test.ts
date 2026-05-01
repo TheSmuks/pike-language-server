@@ -60,83 +60,83 @@ function makeTypeCtx(
 // ---------------------------------------------------------------------------
 
 describe("resolveType — same-file", () => {
-  test("resolves same-file class by name", () => {
+  test("resolves same-file class by name", async () => {
     const src = 'class Animal { string name; } Animal a;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table, "file:///test/a.pike");
 
-    const result = resolveType("Animal", ctx);
+    const result = await resolveType("Animal", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("Animal");
     expect(result!.decl.kind).toBe("class");
     expect(result!.uri).toBe("file:///test/a.pike");
   });
 
-  test("returns null for primitive types", () => {
+  test("returns null for primitive types", async () => {
     const src = 'int x;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
     for (const t of ["int", "string", "mixed", "void", "float", "bool", "zero"]) {
-      expect(resolveType(t, ctx)).toBeNull();
+      expect(await resolveType(t, ctx)).toBeNull();
     }
   });
 
-  test("returns null for unknown types", () => {
+  test("returns null for unknown types", async () => {
     const src = 'NonExistent x;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("NonExistent", ctx)).toBeNull();
+    expect(await resolveType("NonExistent", ctx)).toBeNull();
   });
 
-  test("returns null for empty type name", () => {
+  test("returns null for empty type name", async () => {
     const src = 'int x;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("", ctx)).toBeNull();
+    expect(await resolveType("", ctx)).toBeNull();
   });
 
-  test("resolves correct class when multiple exist", () => {
+  test("resolves correct class when multiple exist", async () => {
     const src = 'class Dog { void bark() {} } class Cat { void meow() {} }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    const dog = resolveType("Dog", ctx);
+    const dog = await resolveType("Dog", ctx);
     expect(dog).not.toBeNull();
     expect(dog!.decl.name).toBe("Dog");
 
-    const cat = resolveType("Cat", ctx);
+    const cat = await resolveType("Cat", ctx);
     expect(cat).not.toBeNull();
     expect(cat!.decl.name).toBe("Cat");
   });
 
-  test("returns null for object/function/program types", () => {
+  test("returns null for object/function/program types", async () => {
     const src = 'object a; function b; program c;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("object", ctx)).toBeNull();
-    expect(resolveType("function", ctx)).toBeNull();
-    expect(resolveType("program", ctx)).toBeNull();
+    expect(await resolveType("object", ctx)).toBeNull();
+    expect(await resolveType("function", ctx)).toBeNull();
+    expect(await resolveType("program", ctx)).toBeNull();
   });
 
-  test("returns null for compound types (array, mapping, multiset)", () => {
+  test("returns null for compound types (array, mapping, multiset)", async () => {
     const src = 'array a; mapping b; multiset c;';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("array", ctx)).toBeNull();
-    expect(resolveType("mapping", ctx)).toBeNull();
-    expect(resolveType("multiset", ctx)).toBeNull();
+    expect(await resolveType("array", ctx)).toBeNull();
+    expect(await resolveType("mapping", ctx)).toBeNull();
+    expect(await resolveType("multiset", ctx)).toBeNull();
   });
 });
 
@@ -145,7 +145,7 @@ describe("resolveType — same-file", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveMemberAccess — same-file", () => {
-  test("resolves member through declared type variable", () => {
+  test("resolves member through declared type variable", async () => {
     const src = 'class Animal { string name; int age; void speak() {} } void test() { Animal a; a->name }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -155,12 +155,12 @@ describe("resolveMemberAccess — same-file", () => {
     const varA = table.declarations.find(d => d.name === "a" && d.kind === "variable");
     expect(varA).not.toBeUndefined();
 
-    const member = resolveMemberAccess("a", "name", varA!, ctx);
+    const member = await resolveMemberAccess("a", "name", varA!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("name");
   });
 
-  test("resolves method through declared type parameter", () => {
+  test("resolves method through declared type parameter", async () => {
     const src = 'class Dog { void bark() {} } void train(Dog d) { d->bark }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -170,12 +170,12 @@ describe("resolveMemberAccess — same-file", () => {
     const paramD = table.declarations.find(d => d.name === "d" && d.kind === "parameter");
     expect(paramD).not.toBeUndefined();
 
-    const member = resolveMemberAccess("d", "bark", paramD!, ctx);
+    const member = await resolveMemberAccess("d", "bark", paramD!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("bark");
   });
 
-  test("resolves inherited member through class LHS", () => {
+  test("resolves inherited member through class LHS", async () => {
     const src = 'class Base { void greet() {} } class Child { inherit Base; void child_method() {} }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -185,12 +185,12 @@ describe("resolveMemberAccess — same-file", () => {
     const childClass = table.declarations.find(d => d.name === "Child" && d.kind === "class");
     expect(childClass).not.toBeUndefined();
 
-    const member = resolveMemberAccess("c", "greet", childClass!, ctx);
+    const member = await resolveMemberAccess("c", "greet", childClass!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("greet");
   });
 
-  test("returns null for mixed type variable", () => {
+  test("returns null for mixed type variable", async () => {
     const src = 'void test() { mixed x; x->something }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -200,11 +200,11 @@ describe("resolveMemberAccess — same-file", () => {
     const varX = table.declarations.find(d => d.name === "x" && d.kind === "variable");
     expect(varX).not.toBeUndefined();
 
-    const member = resolveMemberAccess("x", "something", varX!, ctx);
+    const member = await resolveMemberAccess("x", "something", varX!, ctx);
     expect(member).toBeNull();
   });
 
-  test("returns null when member does not exist in class", () => {
+  test("returns null when member does not exist in class", async () => {
     const src = 'class Animal { string name; } void test() { Animal a; a->nonexistent }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -214,21 +214,21 @@ describe("resolveMemberAccess — same-file", () => {
     const varA = table.declarations.find(d => d.name === "a" && d.kind === "variable");
     expect(varA).not.toBeUndefined();
 
-    const member = resolveMemberAccess("a", "nonexistent", varA!, ctx);
+    const member = await resolveMemberAccess("a", "nonexistent", varA!, ctx);
     expect(member).toBeNull();
   });
 
-  test("returns null when no lhs declaration provided", () => {
+  test("returns null when no lhs declaration provided", async () => {
     const src = 'void test() { x->method }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    const member = resolveMemberAccess("x", "method", null, ctx);
+    const member = await resolveMemberAccess("x", "method", null, ctx);
     expect(member).toBeNull();
   });
 
-  test("resolves member when LHS is a class declaration", () => {
+  test("resolves member when LHS is a class declaration", async () => {
     const src = 'class Utils { void helper() {} }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
@@ -237,7 +237,7 @@ describe("resolveMemberAccess — same-file", () => {
     const utilsClass = table.declarations.find(d => d.name === "Utils" && d.kind === "class");
     expect(utilsClass).not.toBeUndefined();
 
-    const member = resolveMemberAccess("Utils", "helper", utilsClass!, ctx);
+    const member = await resolveMemberAccess("Utils", "helper", utilsClass!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("helper");
   });
@@ -248,34 +248,34 @@ describe("resolveMemberAccess — same-file", () => {
 // ---------------------------------------------------------------------------
 
 describe("Recursion guards", () => {
-  test("resolveType returns null at max depth", () => {
+  test("resolveType returns null at max depth", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("Foo", ctx, 5)).toBeNull();
+    expect(await resolveType("Foo", ctx, 5)).toBeNull();
   });
 
-  test("resolveType succeeds at depth 4 (same-file is step 1)", () => {
+  test("resolveType succeeds at depth 4 (same-file is step 1)", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    const result = resolveType("Foo", ctx, 4);
+    const result = await resolveType("Foo", ctx, 4);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("Foo");
   });
 
-  test("resolveMemberAccess returns null at max depth", () => {
+  test("resolveMemberAccess returns null at max depth", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
     const ctx = makeTypeCtx(table);
 
     const fooClass = table.declarations.find(d => d.name === "Foo" && d.kind === "class")!;
-    expect(resolveMemberAccess("foo", "x", fooClass, ctx, 5)).toBeNull();
+    expect(await resolveMemberAccess("foo", "x", fooClass, ctx, 5)).toBeNull();
   });
 });
 
@@ -342,43 +342,43 @@ describe("resolveType — cross-file", () => {
   const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
   let crossFileIndex: WorkspaceIndex;
 
-  function indexFile(name: string): void {
+  async function indexFile(name: string): Promise<void> {
     const uri = `file://${join(CORPUS_DIR, name)}`;
     const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
     const tree = parse(src);
-    crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
   }
 
   beforeAll(async () => {
     crossFileIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile("cross_import_a.pmod");
-    indexFile("cross-import-b.pike");
+    await indexFile("cross_import_a.pmod");
+    await indexFile("cross-import-b.pike");
   });
 
-  test("resolves class from imported module", () => {
+  test("resolves class from imported module", async () => {
     const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
     const tableB = crossFileIndex.getSymbolTable(uriB)!;
     const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
 
-    const result = resolveType("Greeter", ctx);
+    const result = await resolveType("Greeter", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("Greeter");
     expect(result!.decl.kind).toBe("class");
     expect(result!.uri).toContain("cross_import_a.pmod");
   });
 
-  test("resolves qualified type cross_import_a.Greeter", () => {
+  test("resolves qualified type cross_import_a.Greeter", async () => {
     const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
     const tableB = crossFileIndex.getSymbolTable(uriB)!;
     const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
 
-    const result = resolveType("cross_import_a.Greeter", ctx);
+    const result = await resolveType("cross_import_a.Greeter", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("Greeter");
     expect(result!.decl.kind).toBe("class");
   });
 
-  test("resolves member of imported module class through declared type", () => {
+  test("resolves member of imported module class through declared type", async () => {
     const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
     const tableB = crossFileIndex.getSymbolTable(uriB)!;
     const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
@@ -387,28 +387,28 @@ describe("resolveType — cross-file", () => {
     expect(varG).not.toBeUndefined();
     expect(varG!.declaredType).toBe("Greeter");
 
-    const member = resolveMemberAccess("g", "greet", varG!, ctx);
+    const member = await resolveMemberAccess("g", "greet", varG!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("greet");
   });
 
-  test("resolves member of imported module class create method", () => {
+  test("resolves member of imported module class create method", async () => {
     const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
     const tableB = crossFileIndex.getSymbolTable(uriB)!;
     const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
 
     const varG = tableB.declarations.find(d => d.name === "g" && d.kind === "variable");
-    const member = resolveMemberAccess("g", "create", varG!, ctx);
+    const member = await resolveMemberAccess("g", "create", varG!, ctx);
     expect(member).not.toBeNull();
     expect(member!.name).toBe("create");
   });
 
-  test("returns null for unknown type in cross-file context", () => {
+  test("returns null for unknown type in cross-file context", async () => {
     const uriB = `file://${join(CORPUS_DIR, "cross-import-b.pike")}`;
     const tableB = crossFileIndex.getSymbolTable(uriB)!;
     const ctx = makeTypeCtx(tableB, uriB, crossFileIndex);
 
-    expect(resolveType("NonExistentClass", ctx)).toBeNull();
+    expect(await resolveType("NonExistentClass", ctx)).toBeNull();
   });
 });
 
@@ -420,61 +420,61 @@ describe("resolveType — qualified types", () => {
   const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
   let crossFileIndex: WorkspaceIndex;
 
-  function indexFile(name: string): void {
+  async function indexFile(name: string): Promise<void> {
     const uri = `file://${join(CORPUS_DIR, name)}`;
     const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
     const tree = parse(src);
-    crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
   }
 
-  beforeAll(() => {
+  beforeAll(async () => {
     crossFileIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile("cross_import_a.pmod");
+    await indexFile("cross_import_a.pmod");
   });
 
-  test("resolves cross_import_a.Greeter as qualified type", () => {
+  test("resolves cross_import_a.Greeter as qualified type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
     const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
 
-    const result = resolveType("cross_import_a.Greeter", ctx);
+    const result = await resolveType("cross_import_a.Greeter", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("Greeter");
     expect(result!.decl.kind).toBe("class");
   });
 
-  test("resolves Stdio.File as stdlib type", () => {
+  test("resolves Stdio.File as stdlib type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    const result = resolveType("Stdio.File", ctx);
+    const result = await resolveType("Stdio.File", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("File");
     expect(result!.uri).toBe("stdlib://Stdio.File");
   });
 
-  test("resolves Stdio.File as stdlib type via WorkspaceIndex context", () => {
+  test("resolves Stdio.File as stdlib type via WorkspaceIndex context", async () => {
     const src = "void test() {}";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
     const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
 
     // WorkspaceIndex does not have Stdio, so it falls through to stdlib index
-    const result = resolveType("Stdio.File", ctx);
+    const result = await resolveType("Stdio.File", ctx);
     expect(result).not.toBeNull();
     expect(result!.decl.name).toBe("File");
   });
 
-  test("returns null for non-existent qualified type", () => {
+  test("returns null for non-existent qualified type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
     const ctx = makeTypeCtx(table);
 
-    expect(resolveType("NonExistent.Module", ctx)).toBeNull();
+    expect(await resolveType("NonExistent.Module", ctx)).toBeNull();
   });
 });
 
@@ -487,7 +487,7 @@ describe("resolveType depth limit", () => {
     await initParser();
   });
 
-  test("resolveType returns null when depth exceeds MAX_RESOLUTION_DEPTH", () => {
+  test("resolveType returns null when depth exceeds MAX_RESOLUTION_DEPTH", async () => {
     // Build a symbol table with a chain of classes that reference each other:
     //   class A { A next; }
     //   class B { B next; }
@@ -502,11 +502,11 @@ describe("resolveType depth limit", () => {
 
     // Calling resolveType with depth >= MAX_RESOLUTION_DEPTH should return null
     // even if the type exists, because the depth guard fires before any lookup.
-    const result = resolveType("A", ctx, 5);
+    const result = await resolveType("A", ctx, 5);
     expect(result).toBeNull();
   });
 
-  test("resolveMemberAccess terminates at depth limit", () => {
+  test("resolveMemberAccess terminates at depth limit", async () => {
     // Build: class Wrapper { Wrapper inner; }
     // Resolving inner->inner->inner->... should terminate at depth 5.
     const src = "class Wrapper { Wrapper inner; void fetch() {} }";
@@ -521,11 +521,11 @@ describe("resolveType depth limit", () => {
     expect(innerDecl!.declaredType).toBe("Wrapper");
 
     // Resolving member access at depth 5 should return null
-    const result = resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 5);
+    const result = await resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 5);
     expect(result).toBeNull();
   });
 
-  test("resolveMemberAccess works within depth limit", () => {
+  test("resolveMemberAccess works within depth limit", async () => {
     const src = "class Wrapper { Wrapper inner; void fetch() {} }";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/depth-ok.pike", 1);
@@ -534,7 +534,7 @@ describe("resolveType depth limit", () => {
 
     const innerDecl = table.declarations.find(d => d.name === "inner");
     // Depth 0 should work: inner is Wrapper -> resolve Wrapper -> find fetch
-    const result = resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 0);
+    const result = await resolveMemberAccess("inner", "fetch", innerDecl!, ctx, 0);
     expect(result).not.toBeNull();
     expect(result!.name).toBe("fetch");
   });

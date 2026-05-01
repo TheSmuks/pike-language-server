@@ -345,7 +345,7 @@ describe("getRenameLocations — cross-file", () => {
 
   const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
 
-  function makeIndexWithFiles(filenames: string[]): { index: WorkspaceIndex; uris: Map<string, string> } {
+  async function makeIndexWithFiles(filenames: string[]): Promise<{ index: WorkspaceIndex; uris: Map<string, string> }> {
     const index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     const uris = new Map<string, string>();
     for (const name of filenames) {
@@ -353,13 +353,13 @@ describe("getRenameLocations — cross-file", () => {
       uris.set(name, uri);
       const src = readCorpus(name);
       const tree = parse(src);
-      index.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await index.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
     }
     return { index, uris };
   }
 
-  test("cross-file rename updates all files containing references", () => {
-    const { index, uris } = makeIndexWithFiles([
+  test("cross-file rename updates all files containing references", async () => {
+    const { index, uris } = await makeIndexWithFiles([
       "cross-inherit-simple-a.pike",
       "cross-inherit-simple-b.pike",
     ]);
@@ -697,7 +697,7 @@ describe("rename across 3-file inheritance chain", () => {
 
   const RENAME_FILES = ["rename-base.pike", "rename-child.pike", "rename-main.pike"];
 
-  function makeRenameIndex(): { index: WorkspaceIndex; uris: Map<string, string> } {
+  async function makeRenameIndex(): Promise<{ index: WorkspaceIndex; uris: Map<string, string> }> {
     const idx = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     const uris = new Map<string, string>();
     for (const name of RENAME_FILES) {
@@ -705,13 +705,13 @@ describe("rename across 3-file inheritance chain", () => {
       uris.set(name, uri);
       const src = readCorpus(name);
       const tree = parse(src);
-      idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
     }
     return { index: idx, uris };
   }
 
-  test("renaming BaseShape.describe updates all three files", () => {
-    const { index, uris } = makeRenameIndex();
+  test("renaming BaseShape.describe updates all three files", async () => {
+    const { index, uris } = await makeRenameIndex();
     const uriBase = uris.get("rename-base.pike")!;
     const tableBase = index.getSymbolTable(uriBase)!;
 
@@ -753,8 +753,8 @@ describe("rename across 3-file inheritance chain", () => {
     expect(mainEdits.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("renaming DEFAULT_COLOR constant updates base and main", () => {
-    const { index, uris } = makeRenameIndex();
+  test("renaming DEFAULT_COLOR constant updates base and main", async () => {
+    const { index, uris } = await makeRenameIndex();
     const uriBase = uris.get("rename-base.pike")!;
     const tableBase = index.getSymbolTable(uriBase)!;
 
@@ -783,8 +783,8 @@ describe("rename across 3-file inheritance chain", () => {
     expect(mainEdits.length).toBeGreaterThanOrEqual(1);
   });
 
-  test("renaming area method updates base, child, and main", () => {
-    const { index, uris } = makeRenameIndex();
+  test("renaming area method updates base, child, and main", async () => {
+    const { index, uris } = await makeRenameIndex();
     const uriBase = uris.get("rename-base.pike")!;
     const tableBase = index.getSymbolTable(uriBase)!;
 

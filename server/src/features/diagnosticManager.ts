@@ -23,7 +23,6 @@ import { PikeWorker, type PikeDiagnostic } from "./pikeWorker";
 import { getParseDiagnostics } from "./diagnostics";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
-import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -460,7 +459,7 @@ export function mergeDiagnostics(
   const result = [...parseDiags];
 
   for (const pd of pikeDiags) {
-    const line = pd.line - 1; // Pike: 1-based → LSP: 0-based
+    const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based; clamp negative/zero
 
     let message = pd.message;
     if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
@@ -483,7 +482,12 @@ export function mergeDiagnostics(
   return result;
 }
 
-/** Compute SHA-256 content hash. */
+/** Compute FNV-1a 64-bit content hash (fast, non-cryptographic). */
 export function computeContentHash(source: string): string {
-  return createHash("sha256").update(source).digest("hex");
+  let hash = 14695981039346656037n;
+  for (let i = 0; i < source.length; i++) {
+    hash ^= BigInt(source.charCodeAt(i));
+    hash = (hash * 1099511628211n) & 0xffffffffffffffffn;
+  }
+  return hash.toString(36);
 }

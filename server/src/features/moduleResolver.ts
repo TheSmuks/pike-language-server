@@ -18,8 +18,8 @@
  */
 
 import { join, dirname, resolve, basename, sep } from "node:path";
-import { existsSync, statSync, readdirSync } from "node:fs";
-import { execSync } from "node:child_process";
+import { stat, readdir } from "node:fs/promises";
+import { execFile } from "node:child_process";
 import { pathToFileURL, fileURLToPath } from "node:url";
 
 // ---------------------------------------------------------------------------
@@ -76,15 +76,32 @@ export class ModuleResolver {
   }
 
   /**
+   * Synchronous cache-only lookup for a module path.
+   * Returns the cached ResolveResult or undefined if not cached.
+   * Used by WorkspaceIndex to provide a sync interface to symbolTable.ts.
+   */
+  getCachedModule(modulePath: string, currentFile: string): ResolveResult | null | undefined {
+    return this.cache.get(`mod:${modulePath}:${currentFile}`);
+  }
+
+  /**
+   * Synchronous cache-only lookup for an inherit path.
+   * Returns the cached ResolveResult or undefined if not cached.
+   */
+  getCachedInherit(pathText: string, isStringLiteral: boolean, currentFile: string): ResolveResult | null | undefined {
+    return this.cache.get(`inh:${pathText}:${isStringLiteral}:${currentFile}`);
+  }
+
+  /**
    * Resolve a module path like "Stdio.File" or "cross_import_a".
    * Returns null if unresolvable.
    */
-  resolveModule(modulePath: string, currentFile: string): ResolveResult | null {
+  async resolveModule(modulePath: string, currentFile: string): Promise<ResolveResult | null> {
     const cacheKey = `mod:${modulePath}:${currentFile}`;
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
 
-    const result = this.doResolveModule(modulePath, currentFile);
+    const result = await this.doResolveModule(modulePath, currentFile);
     this.cache.set(cacheKey, result);
     return result;
   }
@@ -96,7 +113,7 @@ export class ModuleResolver {
    * - Dot-path: `inherit Foo.Bar` → resolve module, find class
    * - Relative: `inherit .Foo` → resolve relative to current file dir
    */
-  resolveInherit(pathText: string, isStringLiteral: boolean, currentFile: string): ResolveResult | null {
+  async resolveInherit(pathText: string, isStringLiteral: boolean, currentFile: string): Promise<ResolveResult | null> {
     const cacheKey = `inh:${pathText}:${isStringLiteral}:${currentFile}`;
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
@@ -106,14 +123,14 @@ export class ModuleResolver {
     if (isStringLiteral) {
       // Strip quotes from string literal
       const rawPath = pathText.replace(/^"|"$/g, "");
-      result = this.resolveInheritString(rawPath, currentFile);
+      result = await this.resolveInheritString(rawPath, currentFile);
     } else if (pathText.startsWith(".")) {
       // Relative: .Foo → Foo.pike/Foo.pmod in same directory
       const relativeName = pathText.slice(1);
-      result = this.resolveRelativeModule(relativeName, currentFile);
+      result = await this.resolveRelativeModule(relativeName, currentFile);
     } else {
       // Identifier or dot-path: resolve as module
-      result = this.resolveModule(pathText, currentFile);
+      result = await this.resolveModule(pathText, currentFile);
     }
 
     this.cache.set(cacheKey, result);
@@ -124,7 +141,7 @@ export class ModuleResolver {
    * Resolve an import path like "Stdio" or "Stdio.File".
    * Import brings all symbols from the module into scope.
    */
-  resolveImport(importPath: string, currentFile: string): ResolveResult | null {
+  async resolveImport(importPath: string, currentFile: string): Promise<ResolveResult | null> {
     // Import resolution is the same as module resolution
     return this.resolveModule(importPath, currentFile);
   }
@@ -133,12 +150,12 @@ export class ModuleResolver {
   // Internal: module resolution
   // ---------------------------------------------------------------------------
 
-  private doResolveModule(modulePath: string, currentFile: string): ResolveResult | null {
+  private async doResolveModule(modulePath: string, currentFile: string): Promise<ResolveResult | null> {
     const segments = modulePath.split(".");
     if (segments.length === 0) return null;
 
     // Build the search paths for this file
-    const searchPaths = this.getSearchPaths(currentFile);
+    const searchPaths = await this.getSearchPaths(currentFile);
 
     // Resolve first segment as a module/file
     const firstName = segments[0];
@@ -151,9 +168,9 @@ export class ModuleResolver {
     // Search paths in order
     for (const searchPath of searchPaths) {
       // Try original name first, then normalized (hyphens→underscores)
-      let found = this.findModuleInPath(firstName, searchPath);
+      let found = await this.findModuleInPath(firstName, searchPath);
       if (!found && normalizedName !== firstName) {
-        found = this.findModuleInPath(normalizedName, searchPath);
+        found = await this.findModuleInPath(normalizedName, searchPath);
       }
       if (found) {
         currentUri = found;
@@ -174,7 +191,7 @@ export class ModuleResolver {
     // Resolve subsequent segments by indexing into the found module
     for (let i = 1; i < segments.length; i++) {
       const segment = segments[i];
-      const segmentResult = this.resolveSubModule(currentUri, segment);
+      const segmentResult = await this.resolveSubModule(currentUri, segment);
       if (!segmentResult) return null;
       currentUri = segmentResult;
     }
@@ -186,7 +203,7 @@ export class ModuleResolver {
   // Internal: inherit resolution
   // ---------------------------------------------------------------------------
 
-  private resolveInheritString(rawPath: string, currentFile: string): ResolveResult | null {
+  private async resolveInheritString(rawPath: string, currentFile: string): Promise<ResolveResult | null> {
     const currentDir = dirname(currentFile);
 
     let candidate: string;
@@ -199,10 +216,10 @@ export class ModuleResolver {
     } else {
       // Pike's cast_to_program: search current dir first, then program paths
       const relativeToDir = resolve(currentDir, rawPath);
-      if (existsSync(relativeToDir)) {
+      if (await pathExists(relativeToDir)) {
         return { uri: pathToFileURL(relativeToDir).href, source: "relative" };
       }
-      const withExtDir = this.findWithExtension(relativeToDir);
+      const withExtDir = await this.findWithExtension(relativeToDir);
       if (withExtDir) {
         return { uri: pathToFileURL(withExtDir).href, source: "relative" };
       }
@@ -210,13 +227,13 @@ export class ModuleResolver {
       // Then search program paths
       for (const progPath of this.pikePaths.programPaths) {
         const full = resolve(progPath, rawPath);
-        if (existsSync(full)) {
+        if (await pathExists(full)) {
           return { uri: pathToFileURL(full).href, source: "workspace_program" };
         }
       }
       // Try with extensions
       for (const progPath of this.pikePaths.programPaths) {
-        const found = this.findWithExtension(resolve(progPath, rawPath));
+        const found = await this.findWithExtension(resolve(progPath, rawPath));
         if (found) {
           return { uri: pathToFileURL(found).href, source: "workspace_program" };
         }
@@ -224,12 +241,12 @@ export class ModuleResolver {
       return null;
     }
 
-    if (existsSync(candidate)) {
+    if (await pathExists(candidate)) {
       return { uri: pathToFileURL(candidate).href, source: "relative" };
     }
 
     // Try adding extension
-    const withExt = this.findWithExtension(candidate);
+    const withExt = await this.findWithExtension(candidate);
     if (withExt) {
       return { uri: pathToFileURL(withExt).href, source: "relative" };
     }
@@ -237,9 +254,9 @@ export class ModuleResolver {
     return null;
   }
 
-  private resolveRelativeModule(name: string, currentFile: string): ResolveResult | null {
+  private async resolveRelativeModule(name: string, currentFile: string): Promise<ResolveResult | null> {
     const currentDir = dirname(currentFile);
-    const found = this.findModuleInPath(name, currentDir);
+    const found = await this.findModuleInPath(name, currentDir);
     return found ? { uri: found, source: "relative" } : null;
   }
 
@@ -251,7 +268,7 @@ export class ModuleResolver {
    * Get the ordered list of module search paths for the current file.
    * Includes #pike version-specific paths if applicable.
    */
-  private getSearchPaths(currentFile: string): string[] {
+  private async getSearchPaths(currentFile: string): Promise<string[]> {
     const paths: string[] = [];
 
     // 1. Current file's directory (for relative resolution)
@@ -270,25 +287,26 @@ export class ModuleResolver {
         `${this.pikeVersion.major}.${this.pikeVersion.minor}`,
         "modules",
       );
-      if (existsSync(versionPath) && !paths.includes(versionPath)) {
+      if (await pathExists(versionPath) && !paths.includes(versionPath)) {
         paths.push(versionPath);
       }
     }
 
     return paths;
   }
+
   /**
    * Find a module named `name` within the given search path.
    * Tries directory module (.pmod/), then file module (.pmod), then .pike.
    * Priority: .pmod > .pike (same as Pike, minus .so).
    */
-  private findModuleInPath(name: string, searchPath: string): string | null {
+  private async findModuleInPath(name: string, searchPath: string): Promise<string | null> {
     // 1. Directory module: name.pmod/module.pmod
     const dirPath = join(searchPath, `${name}.pmod`);
-    if (existsSync(dirPath) && statSync(dirPath).isDirectory()) {
+    if (await isDir(dirPath)) {
       // Return the module.pmod if it exists, otherwise the directory itself
       const moduleFile = join(dirPath, "module.pmod");
-      if (existsSync(moduleFile)) {
+      if (await pathExists(moduleFile)) {
         return pathToFileURL(moduleFile).href;
       }
       // Directory module without module.pmod — still a valid module
@@ -297,13 +315,13 @@ export class ModuleResolver {
 
     // 2. File module: name.pmod
     const fileModulePath = join(searchPath, `${name}.pmod`);
-    if (existsSync(fileModulePath) && statSync(fileModulePath).isFile()) {
+    if (await isFile(fileModulePath)) {
       return pathToFileURL(fileModulePath).href;
     }
 
     // 3. Pike file: name.pike
     const pikePath = join(searchPath, `${name}.pike`);
-    if (existsSync(pikePath)) {
+    if (await pathExists(pikePath)) {
       return pathToFileURL(pikePath).href;
     }
 
@@ -315,7 +333,7 @@ export class ModuleResolver {
    * If parent is a .pmod directory, look for child.pike, child.pmod, child.pmod/module.pmod.
    * If parent is a .pike file, sub-module doesn't apply (it's a program, not a module).
    */
-  private resolveSubModule(parentUri: string, segment: string): string | null {
+  private async resolveSubModule(parentUri: string, segment: string): Promise<string | null> {
     const parentPath = fileURLToPath(parentUri);
 
     // If parent is a directory module, search inside it
@@ -338,25 +356,60 @@ export class ModuleResolver {
   /**
    * Try to find a file with .pike or .pmod extension appended.
    */
-  private findWithExtension(basePath: string): string | null {
+  private async findWithExtension(basePath: string): Promise<string | null> {
     for (const ext of [".pike", ".pmod"]) {
       const candidate = basePath + ext;
-      if (existsSync(candidate)) return candidate;
+      if (await pathExists(candidate)) return candidate;
     }
     return null;
   }
 }
 
 // ---------------------------------------------------------------------------
+// Async fs helpers (module-level)
+// ---------------------------------------------------------------------------
+
+/** Check that a path exists on disk (file or directory). */
+async function pathExists(p: string): Promise<boolean> {
+  try { await stat(p); return true; } catch { return false; }
+}
+
+/** Check that a path exists and is a directory. */
+async function isDir(p: string): Promise<boolean> {
+  try { const s = await stat(p); return s.isDirectory(); } catch { return false; }
+}
+
+/** Check that a path exists and is a regular file. */
+async function isFile(p: string): Promise<boolean> {
+  try { const s = await stat(p); return s.isFile(); } catch { return false; }
+}
+
+
+// ---------------------------------------------------------------------------
 // Factory: detect Pike paths from system
 // ---------------------------------------------------------------------------
+
+/**
+ * Promisified execFile for async child process execution.
+ */
+const execFileAsync = (
+  cmd: string,
+  args: string[],
+  opts: { timeout: number }
+): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    execFile(cmd, args, { ...opts, encoding: "utf-8" }, (err: Error | null, stdout: string, stderr: string) => {
+      if (err) { reject(err); return; }
+      resolve(stdout + stderr);
+    });
+  });
 
 /**
  * Detect Pike installation paths from the running Pike binary.
  * Falls back to well-known paths.
  */
-export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string): PikePaths {
-  const pike = pikeBinaryPath ?? process.env.PIKE_BINARY ?? "pike";
+export async function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string): Promise<PikePaths> {
+  const pike = pikeBinaryPath ?? "pike";
   let pikeHome = "";
   let systemModulePath = "";
   let includePath = "";
@@ -364,11 +417,7 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
 
   // Try to get actual paths from the Pike binary
   try {
-    const output = execSync(`"${pike}" --show-paths 2>&1`, {
-      timeout: 5000,
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-    });
+    const output = await execFileAsync(pike, ["--show-paths"], { timeout: 5000 });
 
     for (const line of output.split("\n")) {
       const masterMatch = line.match(/^master\.pike\.\.\.\s*:\s*(.+)$/);
@@ -415,11 +464,7 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
   if (!pikeHome) {
     let detectedVersion = "";
     try {
-      const versionOutput = execSync(`"${pike}" --version 2>&1`, {
-        timeout: 5000,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-      });
+      const versionOutput = await execFileAsync(pike, ["--version"], { timeout: 5000 });
       const versionMatch = versionOutput.match(/Pike v(\d+\.\d+) release (\d+)/);
       if (versionMatch) {
         detectedVersion = `${versionMatch[1]}.${versionMatch[2]}`;
@@ -437,7 +482,7 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
         `/usr/local/Cellar/pike/${detectedVersion}`,
       ];
       for (const candidate of versionCandidates) {
-        if (existsSync(candidate)) {
+        if (await pathExists(candidate)) {
           pikeHome = candidate;
           break;
         }
@@ -449,9 +494,9 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
   if (!pikeHome) {
     const scanDirs = ["/usr/local/pike", "/opt/pike", "/usr/lib/pike", "/opt/homebrew/opt/pike", "/usr/local/Cellar/pike"];
     for (const scanDir of scanDirs) {
-      if (!existsSync(scanDir)) continue;
+      if (!(await isDir(scanDir))) continue;
       try {
-        const entries = readdirSync(scanDir, { withFileTypes: true })
+        const entries = (await readdir(scanDir, { withFileTypes: true }))
           .filter(d => d.isDirectory())
           .sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
         if (entries.length > 0) {
@@ -489,4 +534,21 @@ export function detectPikePaths(workspaceRoot: string, pikeBinaryPath?: string):
     includePaths,
     programPaths,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Lazy singleton: cached Pike paths promise
+// ---------------------------------------------------------------------------
+
+let pikePathsPromise: Promise<PikePaths> | null = null;
+
+/**
+ * Get Pike installation paths (lazy, cached).
+ * Safe to call repeatedly; the detection runs only once.
+ */
+export function getPikePaths(workspaceRoot: string, pikeBinaryPath?: string): Promise<PikePaths> {
+  if (!pikePathsPromise) {
+    pikePathsPromise = detectPikePaths(workspaceRoot, pikeBinaryPath);
+  }
+  return pikePathsPromise;
 }

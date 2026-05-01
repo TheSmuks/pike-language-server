@@ -47,11 +47,20 @@ describe("lifecycle: shutdown and exit", () => {
     await teardown();
   });
 
-  // NOTE: After exit notification, the server's connection enters a state
-  // where teardown hangs in bun:test. Verified that shutdown+exit works
-  // correctly in direct Node.js execution. This test is a canary for
-  // future fixes to the teardown path.
-  test.todo("exit after shutdown does not throw");
+  test("exit after shutdown does not throw", async () => {
+    const { client, c2s, s2c } = await createTestServer();
+
+    const result = await client.sendRequest("shutdown");
+    expect(result).toBeNull();
+
+    // exit is a notification (no response); must not throw
+    client.sendNotification("exit");
+
+    // Clean up streams directly — skip teardown() which re-sends
+    // shutdown/exit and can hang when the connection is already gone.
+    c2s.destroy();
+    s2c.destroy();
+  });
 });
 
 // ---------------------------------------------------------------------------

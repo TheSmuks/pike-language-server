@@ -82,12 +82,18 @@ export class WorkspaceIndex {
 
   constructor(options: WorkspaceIndexOptions) {
     this.workspaceRoot = options.workspaceRoot;
-    this.pikePaths = options.pikePaths ?? detectPikePaths(this.workspaceRoot);
+    this.pikePaths = options.pikePaths ?? { pikeHome: "", modulePaths: [options.workspaceRoot], includePaths: [options.workspaceRoot], programPaths: [options.workspaceRoot] };
     this.resolver = new ModuleResolver({
       workspaceRoot: `file://${this.workspaceRoot}`,
       pikePaths: this.pikePaths,
       pikeVersion: null, // Set per-file during resolution
     });
+  }
+
+  /** Create a WorkspaceIndex with auto-detected Pike paths. */
+  static async create(workspaceRoot: string, pikeBinaryPath?: string): Promise<WorkspaceIndex> {
+    const pikePaths = await detectPikePaths(workspaceRoot, pikeBinaryPath);
+    return new WorkspaceIndex({ workspaceRoot, pikePaths });
   }
 
   // ---------------------------------------------------------------------------
@@ -98,13 +104,13 @@ export class WorkspaceIndex {
    * Add or update a file in the index.
    * Rebuilds the symbol table and updates dependency links.
    */
-  upsertFile(
+  async upsertFile(
     uri: string,
     version: number,
     tree: Tree,
     content: string,
     modSource: ModificationSource,
-  ): FileEntry {
+  ): Promise<FileEntry> {
     const existing = this.files.get(uri);
 
     // Remove old dependency links
@@ -112,8 +118,15 @@ export class WorkspaceIndex {
       this.removeDependencies(existing);
     }
 
-    // Build symbol table — pass self for cross-file inheritance wiring
-    const symbolTable = buildSymbolTable(tree, uri, version, { index: this });
+    // Pre-warm the ModuleResolver cache by resolving all inherit/import
+    // declarations in this file. This must happen before buildSymbolTable
+    // because symbolTable.ts has a synchronous interface and relies on
+    // the cache being populated for cross-file inheritance wiring.
+    await this.warmResolverCache(tree, uri);
+
+    // Build symbol table — pass sync cache-only adapter for cross-file inheritance wiring
+    // (symbolTable.ts has a sync interface; full async resolution happens via extractDependencies)
+    const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
 
     // Parse #pike version directive
     const pikeVersion = this.parsePikeVersion(tree);
@@ -122,7 +135,7 @@ export class WorkspaceIndex {
     const contentHash = this.hashContent(content);
 
     // Extract forward dependencies from symbol table
-    const dependencies = this.extractDependencies(symbolTable, uri);
+    const dependencies = await this.extractDependencies(symbolTable, uri);
 
     const entry: FileEntry = {
       uri,
@@ -154,13 +167,13 @@ export class WorkspaceIndex {
    * Insert a file entry from persistent cache (no tree or content needed).
    * Used when restoring from cache on startup.
    */
-  upsertCachedFile(
+  async upsertCachedFile(
     uri: string,
     version: number,
     symbolTable: SymbolTable,
     contentHash: string,
-  ): FileEntry {
-    const dependencies = this.extractDependencies(symbolTable, uri);
+  ): Promise<FileEntry> {
+    const dependencies = await this.extractDependencies(symbolTable, uri);
 
     const entry: FileEntry = {
       uri,
@@ -327,7 +340,7 @@ export class WorkspaceIndex {
   /**
    * Resolve a module path from the perspective of a given file.
    */
-  resolveModule(modulePath: string, fromUri: string): string | null {
+  async resolveModule(modulePath: string, fromUri: string): Promise<string | null> {
     const entry = this.files.get(fromUri);
     const fromPath = this.uriToPath(fromUri);
 
@@ -340,28 +353,86 @@ export class WorkspaceIndex {
         })
       : this.resolver;
 
-    const result = resolver.resolveModule(modulePath, fromPath);
+    const result = await resolver.resolveModule(modulePath, fromPath);
     return result?.uri ?? null;
   }
 
   /**
    * Resolve an inherit path from the perspective of a given file.
    */
-  resolveInherit(pathText: string, isStringLiteral: boolean, fromUri: string): string | null {
+  async resolveInherit(pathText: string, isStringLiteral: boolean, fromUri: string): Promise<string | null> {
     const fromPath = this.uriToPath(fromUri);
-    const result = this.resolver.resolveInherit(pathText, isStringLiteral, fromPath);
+    const result = await this.resolver.resolveInherit(pathText, isStringLiteral, fromPath);
     return result?.uri ?? null;
   }
 
   /**
    * Resolve an import path from the perspective of a given file.
    */
-  resolveImport(importPath: string, fromUri: string): string | null {
+  async resolveImport(importPath: string, fromUri: string): Promise<string | null> {
     const fromPath = this.uriToPath(fromUri);
-    const result = this.resolver.resolveImport(importPath, fromPath);
+    const result = await this.resolver.resolveImport(importPath, fromPath);
     return result?.uri ?? null;
   }
+
   // ---------------------------------------------------------------------------
+  // Sync resolution (cache-only, for symbolTable.ts compatibility)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Create a sync cache-only adapter for buildSymbolTable.
+   * symbolTable.ts has a synchronous interface; this adapter reads from
+   * the ModuleResolver cache. Cache misses return null (graceful degradation).
+   */
+  private createSyncIndexAdapter(fromUri: string): {
+    getSymbolTable(uri: string): SymbolTable | null;
+    resolveImport(mod: string, from: string): string | null;
+    resolveInherit(path: string, isString: boolean, from: string): string | null;
+  } {
+    const self = this;
+    return {
+      getSymbolTable(uri: string): SymbolTable | null {
+        return self.getSymbolTable(uri);
+      },
+      resolveImport(mod: string, from: string): string | null {
+        return self.resolveImportSync(mod, from);
+      },
+      resolveInherit(path: string, isString: boolean, from: string): string | null {
+        return self.resolveInheritSync(path, isString, from);
+      },
+    };
+  }
+
+  /** Sync cache-only module resolution. Returns null on cache miss. */
+  resolveModuleSync(modulePath: string, fromUri: string): string | null {
+    const entry = this.files.get(fromUri);
+    const fromPath = this.uriToPath(fromUri);
+
+    const resolver = (entry?.pikeVersion && entry.pikeVersion !== this.resolver["pikeVersion"])
+      ? new ModuleResolver({
+          workspaceRoot: `file://${this.workspaceRoot}`,
+          pikePaths: this.pikePaths,
+          pikeVersion: entry.pikeVersion,
+        })
+      : this.resolver;
+
+    const cached = resolver.getCachedModule(modulePath, fromPath);
+    return cached?.uri ?? null;
+  }
+
+  /** Sync cache-only inherit resolution. Returns null on cache miss. */
+  resolveInheritSync(pathText: string, isStringLiteral: boolean, fromUri: string): string | null {
+    const fromPath = this.uriToPath(fromUri);
+    const cached = this.resolver.getCachedInherit(pathText, isStringLiteral, fromPath);
+    return cached?.uri ?? null;
+  }
+
+  /** Sync cache-only import resolution. Returns null on cache miss. */
+  resolveImportSync(importPath: string, fromUri: string): string | null {
+    const fromPath = this.uriToPath(fromUri);
+    const cached = this.resolver.getCachedModule(importPath, fromPath);
+    return cached?.uri ?? null;
+  }
   // Cross-file resolution
   // ---------------------------------------------------------------------------
 
@@ -370,9 +441,9 @@ export class WorkspaceIndex {
    * Given a position in a file, attempt to find the definition across files.
    * Returns the target URI and declaration, or null.
    */
-  resolveCrossFileDefinition(uri: string, line: number, character: number): {
+  async resolveCrossFileDefinition(uri: string, line: number, character: number): Promise<{
     uri: string; decl: Declaration;
-  } | null {
+  } | null> {
     const entry = this.files.get(uri);
     if (!entry?.symbolTable) return null;
 
@@ -420,12 +491,19 @@ export class WorkspaceIndex {
     let targetDecl = getDefinitionAt(entry.symbolTable, line, character);
     if (!targetDecl) return results;
 
-    // Search other files for references to the same symbol
-    // (files that inherit from this file will have the symbol in their scope)
+    // Search other files for references to the same symbol.
+    // Source-file filter: only consider dependents that have the source file
+    // in their direct dependency set. This prevents matching same-name symbols
+    // from unrelated files (e.g., two independent files each defining 'process').
     const dependents = this.getDependents(uri);
     for (const depUri of dependents) {
       const depEntry = this.files.get(depUri);
       if (!depEntry?.symbolTable) continue;
+
+      // Source-file filter: the dependent must actually depend on this file.
+      // While the reverse-dependency graph already implies this, checking
+      // explicitly guards against stale or inconsistently updated graph entries.
+      if (!depEntry.dependencies.has(uri)) continue;
 
       for (const ref of depEntry.symbolTable.references) {
         // Match by name. Inherited/imported symbols have resolvesTo=null because
@@ -445,11 +523,11 @@ export class WorkspaceIndex {
   // Internal: cross-file resolution helpers
   // ---------------------------------------------------------------------------
 
-  private resolveInheritTarget(decl: Declaration, fromUri: string): {
+  private async resolveInheritTarget(decl: Declaration, fromUri: string): Promise<{
     uri: string; decl: Declaration;
-  } | null {
+  } | null> {
     const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
-    const targetUri = this.resolveInherit(decl.name, isStringLit, fromUri);
+    const targetUri = await this.resolveInherit(decl.name, isStringLit, fromUri);
     if (!targetUri) return null;
 
     const targetEntry = this.files.get(targetUri);
@@ -483,15 +561,15 @@ export class WorkspaceIndex {
     return null;
   }
 
-  private resolveUnresolvedReference(
+  private async resolveUnresolvedReference(
     ref: Reference,
     table: SymbolTable,
     uri: string,
-  ): { uri: string; decl: Declaration } | null {
+  ): Promise<{ uri: string; decl: Declaration } | null> {
     // Try to find the name through inheritance chains
     for (const decl of table.declarations) {
       if (decl.kind === "inherit" || decl.kind === "import") {
-        const target = this.resolveInheritTarget(decl, uri);
+        const target = await this.resolveInheritTarget(decl, uri);
         if (target) {
           // Check if the target file has a declaration matching the reference name
           const targetEntry = this.files.get(target.uri);
@@ -522,20 +600,52 @@ export class WorkspaceIndex {
       }
     }
   }
+  /**
+   * Pre-warm the ModuleResolver cache by resolving all inherit/import
+   * declarations in the tree. This ensures the sync cache-only adapter
+   * used by buildSymbolTable can find entries for cross-file wiring.
+   */
+  private async warmResolverCache(tree: Tree, uri: string): Promise<void> {
+    const fromPath = this.uriToPath(uri);
+    const promises: Promise<import('./moduleResolver').ResolveResult | null>[] = [];
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const walk = (node: any): void => {
+      if (node.type === 'inherit_decl' || node.type === 'import_decl') {
+        const pathNode = node.childForFieldName('path');
+        if (pathNode) {
+          const name = pathNode.text;
+          const isStringLit = name.startsWith('"') && name.endsWith('"');
+          if (isStringLit) {
+            promises.push(this.resolver.resolveInherit(name, true, fromPath));
+          } else {
+            promises.push(this.resolver.resolveImport(name, fromPath));
+            promises.push(this.resolver.resolveInherit(name, false, fromPath));
+          }
+        }
+      }
+      for (let i = 0; i < node.childCount; i++) {
+        const child = node.child(i);
+        if (child) walk(child);
+      }
+    };
+
+    walk(tree.rootNode);
+    await Promise.all(promises);
+  }
 
   /**
    * Extract forward dependencies (inherit/import targets) from a symbol table.
    */
-  private extractDependencies(table: SymbolTable, currentUri: string): Set<string> {
+  private async extractDependencies(table: SymbolTable, currentUri: string): Promise<Set<string>> {
     const deps = new Set<string>();
 
     for (const decl of table.declarations) {
       if (decl.kind === "inherit" || decl.kind === "import") {
         const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
-        // Imports and identifier inherits use resolveImport/resolveInherit respectively
         const targetUri = isStringLit
-          ? this.resolveInherit(decl.name, true, currentUri)
-          : this.resolveImport(decl.name, currentUri) ?? this.resolveInherit(decl.name, false, currentUri);
+          ? await this.resolveInherit(decl.name, true, currentUri)
+          : (await this.resolveImport(decl.name, currentUri)) ?? await this.resolveInherit(decl.name, false, currentUri);
         if (targetUri && targetUri !== currentUri) {
           deps.add(targetUri);
         }
@@ -550,7 +660,9 @@ export class WorkspaceIndex {
    * Format: #pike <major>[.<minor>]
    */
   private parsePikeVersion(tree: Tree): PikeVersionDirective | null {
-    const text = tree.rootNode.text;
+    const root = tree.rootNode;
+    if (!root) return null;
+    const text = root.text;
     const match = text.match(/#pike\s+(\d+)(?:\.(\d+))?/);
     if (!match) return null;
 
@@ -567,7 +679,7 @@ export class WorkspaceIndex {
     // DJB2 hash — fast, good distribution for cache invalidation
     let hash = 5381;
     for (let i = 0; i < content.length; i++) {
-      hash = ((hash << 5) + hash + content.charCodeAt(i)) & 0xffffffff;
+      hash = ((hash << 5) + hash + content.charCodeAt(i)) >>> 0;
     }
     return hash.toString(16);
   }

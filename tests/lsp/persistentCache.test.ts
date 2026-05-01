@@ -66,7 +66,7 @@ describe("US-022: Persistent cache", () => {
     const wasmHash = "abc123";
 
     // Add entries to index
-    index.upsertCachedFile(
+    await index.upsertCachedFile(
       "file:///test/a.pike",
       1,
       makeTestSymbolTable("file:///test/a.pike", ["Animal", "Dog"]),
@@ -95,7 +95,7 @@ describe("US-022: Persistent cache", () => {
     const wasmHash1 = "hash-v1";
     const wasmHash2 = "hash-v2";
 
-    index.upsertCachedFile(
+    await index.upsertCachedFile(
       "file:///test/b.pike",
       1,
       makeTestSymbolTable("file:///test/b.pike", ["Foo"]),
@@ -133,7 +133,7 @@ describe("US-022: Persistent cache", () => {
     const wasmHash = "partial-test";
 
     // Save with one entry
-    index.upsertCachedFile(
+    await index.upsertCachedFile(
       "file:///test/old.pike",
       1,
       makeTestSymbolTable("file:///test/old.pike", ["OldClass"]),
@@ -153,7 +153,7 @@ describe("US-022: Persistent cache", () => {
     for (const entry of loaded!) {
       if (entry.symbolTable) {
         const table = deserializeSymbolTable(entry.symbolTable);
-        newIndex.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
+        await newIndex.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
       }
     }
 

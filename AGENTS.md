@@ -20,9 +20,6 @@ bun run build
 # Run tests
 bun test
 
-# Lint
-bun run lint
-
 # Type check
 bun run typecheck
 ```
@@ -127,7 +124,7 @@ We do not defer known defects. When we find showstoppers, we solve them. We may 
 
 ```
 server/           # LSP server (TypeScript, vscode-languageserver-node)
-extension/        # VSCode extension that hosts the LSP server
+client/          # VSCode extension that hosts the LSP server
 harness/          # Test harness — invokes pike, captures ground truth, compares LSP output
 corpus/           # Pike files covering language features the LSP must handle
   files/          # Actual Pike source files

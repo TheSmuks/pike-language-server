@@ -204,7 +204,7 @@ describe("getSymbolsInScope", () => {
 // ---------------------------------------------------------------------------
 
 describe("getCompletions — unqualified", () => {
-  test("returns local variables and functions in scope", () => {
+  test("returns local variables and functions in scope", async () => {
     const src = [
       "int alpha = 1;",
       "void beta() {}",
@@ -220,7 +220,7 @@ describe("getCompletions — unqualified", () => {
     const table = buildSymbolTable(tree, "file:///test/unqual.pike", 1);
     wireInheritance(table);
 
-    const realResult = getCompletions(table, tree, 4, 3, ctx);
+    const realResult = await getCompletions(table, tree, 4, 3, ctx);
     const labels = completionLabels(realResult);
 
     expect(labels).toContain("alpha");
@@ -229,7 +229,7 @@ describe("getCompletions — unqualified", () => {
     expect(labels).toContain("local_var");
   });
 
-  test("includes predef builtins", () => {
+  test("includes predef builtins", async () => {
     const src = "void foo() { wr }";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/predef.pike", 1);
@@ -237,7 +237,7 @@ describe("getCompletions — unqualified", () => {
     const ctx = makeCtx();
 
     // Cursor at line 0, char 15 — after "wr"
-    const result = getCompletions(table, tree, 0, 15, ctx);
+    const result = await getCompletions(table, tree, 0, 15, ctx);
     const labels = completionLabels(result);
 
     // 'write' is a C-level predef builtin
@@ -246,14 +246,14 @@ describe("getCompletions — unqualified", () => {
     expect(labels).toContain("werror");
   });
 
-  test("includes stdlib top-level module names", () => {
+  test("includes stdlib top-level module names", async () => {
     const src = "void foo() { Std }";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/stdlib.pike", 1);
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 0, 16, ctx);
+    const result = await getCompletions(table, tree, 0, 16, ctx);
     const labels = completionLabels(result);
 
     // 'Stdio' is a top-level stdlib module
@@ -262,7 +262,7 @@ describe("getCompletions — unqualified", () => {
     expect(labels).toContain("String");
   });
 
-  test("local symbols rank higher than predef builtins", () => {
+  test("local symbols rank higher than predef builtins", async () => {
     const src = [
       "void foo() {",
       "  int write = 42;",  // shadows predef 'write'
@@ -274,7 +274,7 @@ describe("getCompletions — unqualified", () => {
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 2, 3, ctx);
+    const result = await getCompletions(table, tree, 2, 3, ctx);
     const writeItems = result.items.filter(i => i.label === "write");
 
     // Should have both, but local should come first (lower sortText)
@@ -513,14 +513,14 @@ describe("textDocument/completion (LSP protocol)", () => {
 // ---------------------------------------------------------------------------
 
 describe("Audit fixes", () => {
-  test("no operator symbols in completion list", () => {
+  test("no operator symbols in completion list", async () => {
     const src = "void foo(int a) { }";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/ops.pike", 1);
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 0, 18, ctx);
+    const result = await getCompletions(table, tree, 0, 18, ctx);
     const ops = result.items.filter(i =>
       i.label.startsWith("`") ||
       /^[<>!=&|^~%/*+-]+$/.test(i.label) ||
@@ -529,14 +529,14 @@ describe("Audit fixes", () => {
     expect(ops).toHaveLength(0);
   });
 
-  test("Stdio. returns module members (not unqualified)", () => {
+  test("Stdio. returns module members (not unqualified)", async () => {
     const src = 'void test() { Stdio.\n }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/stdio-dot.pike", 1);
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 0, 20, ctx);
+    const result = await getCompletions(table, tree, 0, 20, ctx);
     const labels = completionLabels(result);
 
     expect(labels).toContain("File");
@@ -546,7 +546,7 @@ describe("Audit fixes", () => {
     expect(labels).not.toContain("write");
   });
 
-  test("Array. returns module members", () => {
+  test("Array. returns module members", async () => {
     const src = 'void test() { Array.\n }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/array-dot.pike", 1);
@@ -554,7 +554,7 @@ describe("Audit fixes", () => {
     const ctx = makeCtx();
 
     // Cursor at char 20 (after the dot) — LSP sends position after trigger char
-    const result = getCompletions(table, tree, 0, 20, ctx);
+    const result = await getCompletions(table, tree, 0, 20, ctx);
     const labels = completionLabels(result);
 
     // Array module members from the stdlib index
@@ -579,7 +579,7 @@ describe("Audit fixes", () => {
     expect(names).toContain("items");
   });
 
-  test("arrow access on trailing line does not fall through to unqualified", () => {
+  test("arrow access on trailing line does not fall through to unqualified", async () => {
     const src = 'void test() { mixed x = "hello"; x->\n }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/arrow-trail.pike", 1);
@@ -587,12 +587,12 @@ describe("Audit fixes", () => {
     const ctx = makeCtx();
 
     // Cursor at char 36 (after '>')
-    const result = getCompletions(table, tree, 0, 36, ctx);
+    const result = await getCompletions(table, tree, 0, 36, ctx);
     // mixed type has no known members — should return 0, not all builtins
     expect(result.items.length).toBe(0);
   });
 
-  test("scope access Base:: returns inherited members", () => {
+  test("scope access Base:: returns inherited members", async () => {
     const src = [
       'class Base {',
       '  void base_method() {}',
@@ -607,12 +607,12 @@ describe("Audit fixes", () => {
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 5, 25, ctx);
+    const result = await getCompletions(table, tree, 5, 25, ctx);
     const labels = completionLabels(result);
     expect(labels).toContain("base_method");
   });
 
-  test("dot completion on same-file class name returns its members", () => {
+  test("dot completion on same-file class name returns its members", async () => {
     const src = [
       'class Animal {',
       '  string name;',
@@ -628,7 +628,7 @@ describe("Audit fixes", () => {
 
     // Cursor after the dot on line 5: 'void test() { Animal. }'
     // The dot is at column 20, cursor at column 21
-    const result = getCompletions(table, tree, 5, 21, ctx);
+    const result = await getCompletions(table, tree, 5, 21, ctx);
     const labels = completionLabels(result);
 
     expect(labels).toContain("name");
@@ -642,7 +642,7 @@ describe("Audit fixes", () => {
 // ---------------------------------------------------------------------------
 
 describe("Completion ranking", () => {
-  test("local scope symbols rank above predef builtins", () => {
+  test("local scope symbols rank above predef builtins", async () => {
     const src = [
       'int alpha = 1;',
       'void foo(int param) {',
@@ -655,7 +655,7 @@ describe("Completion ranking", () => {
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 3, 2, ctx);
+    const result = await getCompletions(table, tree, 3, 2, ctx);
     const labels = completionLabels(result);
 
     const localIdx = labels.indexOf("local_var");
@@ -672,14 +672,14 @@ describe("Completion ranking", () => {
     expect(writeIdx).toBeLessThan(stdioIdx);
   });
 
-  test("ranking uses sortText with priority tiers", () => {
+  test("ranking uses sortText with priority tiers", async () => {
     const src = 'void foo(int x) { }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/sort.pike", 1);
     wireInheritance(table);
     const ctx = makeCtx();
 
-    const result = getCompletions(table, tree, 0, 18, ctx);
+    const result = await getCompletions(table, tree, 0, 18, ctx);
 
     // All items should have sortText
     for (const item of result.items) {
@@ -698,7 +698,7 @@ describe("Completion ranking", () => {
 // ---------------------------------------------------------------------------
 
 describe("stdlib secondary index", () => {
-  test("Stdio.File has known members", () => {
+  test("Stdio.File has known members", async () => {
     const ctx = makeCtx();
     // Trigger a completion that forces index building
     const src = "void foo() {}";
@@ -706,7 +706,7 @@ describe("stdlib secondary index", () => {
     const table = buildSymbolTable(tree, "file:///test/idx.pike", 1);
     wireInheritance(table);
 
-    const result = getCompletions(table, tree, 0, 0, ctx);
+    const result = await getCompletions(table, tree, 0, 0, ctx);
     // Just verify the index builds — check that Stdio is in the top-level
     const labels = completionLabels(result);
     expect(labels).toContain("Stdio");
@@ -728,7 +728,7 @@ describe("stdlib secondary index", () => {
 // ---------------------------------------------------------------------------
 
 describe("Declared-type member completion", () => {
-  test("typed variable arrow access resolves class members", () => {
+  test("typed variable arrow access resolves class members", async () => {
     const src = 'class Animal { string name; int age; void speak() {} } void test() { Animal a = Animal(); a-> }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-var.pike", 1);
@@ -736,7 +736,7 @@ describe("Declared-type member completion", () => {
     const ctx = makeCtx();
 
     const arrowIdx = src.indexOf('a->');
-    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
     const labels = completionLabels(result);
 
     expect(labels).toContain("name");
@@ -746,7 +746,7 @@ describe("Declared-type member completion", () => {
     expect(labels).not.toContain("write");
   });
 
-  test("typed parameter arrow access resolves class members", () => {
+  test("typed parameter arrow access resolves class members", async () => {
     const src = 'class Dog { void bark() {} } void train(Dog d) { d-> }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-param.pike", 1);
@@ -754,13 +754,13 @@ describe("Declared-type member completion", () => {
     const ctx = makeCtx();
 
     const arrowIdx = src.indexOf('d->');
-    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
     const labels = completionLabels(result);
 
     expect(labels).toContain("bark");
   });
 
-  test("inherited members appear in typed variable completion", () => {
+  test("inherited members appear in typed variable completion", async () => {
     const src = 'class Base { void base_method() {} } class Child { inherit Base; void child_method() {} } void test(Child c) { c-> }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-inherit.pike", 1);
@@ -768,14 +768,14 @@ describe("Declared-type member completion", () => {
     const ctx = makeCtx();
 
     const arrowIdx = src.indexOf('c->');
-    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
     const labels = completionLabels(result);
 
     expect(labels).toContain("child_method");
     expect(labels).toContain("base_method");
   });
 
-  test("primitive types produce no member completions", () => {
+  test("primitive types produce no member completions", async () => {
     const src = 'void foo(string s, int i) { s-> }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/primitive.pike", 1);
@@ -783,11 +783,11 @@ describe("Declared-type member completion", () => {
     const ctx = makeCtx();
 
     const arrowIdx = src.indexOf('s->');
-    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
     expect(result.items).toHaveLength(0);
   });
 
-  test("mixed type produces no member completions", () => {
+  test("mixed type produces no member completions", async () => {
     const src = 'void foo(mixed x) { x-> }';
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/mixed-type.pike", 1);
@@ -795,7 +795,7 @@ describe("Declared-type member completion", () => {
     const ctx = makeCtx();
 
     const arrowIdx = src.indexOf('x->');
-    const result = getCompletions(table, tree, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
     expect(result.items).toHaveLength(0);
   });
 
@@ -826,19 +826,19 @@ describe("Cross-file completion via WorkspaceIndex", () => {
 
   const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
 
-  function indexCorpus(filenames: string[]): WorkspaceIndex {
+  async function indexCorpus(filenames: string[]): Promise<WorkspaceIndex> {
     const idx = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     for (const name of filenames) {
       const uri = "file://" + join(CORPUS_DIR, name);
       const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
       const tree = parse(src);
-      idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
     }
     return idx;
   }
 
-  test("cross-file arrow completion returns members from imported class", () => {
-    const idx = indexCorpus(["cross_import_a.pmod", "cross-import-b.pike"]);
+  test("cross-file arrow completion returns members from imported class", async () => {
+    const idx = await indexCorpus(["cross_import_a.pmod", "cross-import-b.pike"]);
     const uriB = "file://" + join(CORPUS_DIR, "cross-import-b.pike");
     const tableB = idx.getSymbolTable(uriB)!;
     const srcB = readFileSync(join(CORPUS_DIR, "cross-import-b.pike"), "utf-8");
@@ -852,7 +852,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
 
     // Line 18 (0-indexed 17): "    write(\"greet: %s\\n\", g->greet(\"Alice\"));"
     // Cursor after g-> at column 27
-    const result = getCompletions(tableB, treeB, 17, 27, ctx);
+    const result = await getCompletions(tableB, treeB, 17, 27, ctx);
     const labels = completionLabels(result);
 
     // greet is a method of class Greeter defined in cross_import_a.pmod
@@ -863,8 +863,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).not.toContain("write");
   });
 
-  test("cross-file inherit completion: Dog d-> shows Animal members (US-001)", () => {
-    const idx = indexCorpus(["cross-inherit-simple-a.pike", "cross-inherit-simple-b.pike"]);
+  test("cross-file inherit completion: Dog d-> shows Animal members (US-001)", async () => {
+    const idx = await indexCorpus(["cross-inherit-simple-a.pike", "cross-inherit-simple-b.pike"]);
     const uriB = "file://" + join(CORPUS_DIR, "cross-inherit-simple-b.pike");
     const tableB = idx.getSymbolTable(uriB)!;
     const srcB = readFileSync(join(CORPUS_DIR, "cross-inherit-simple-b.pike"), "utf-8");
@@ -877,7 +877,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     };
 
     // Line 25: d->speak() — cursor after d-> at column 28
-    const result = getCompletions(tableB, treeB, 25, 28, ctx);
+    const result = await getCompletions(tableB, treeB, 25, 28, ctx);
     const labels = completionLabels(result);
 
     // Animal's members should appear via cross-file inheritance
@@ -887,7 +887,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("fetch");
   });
 
-  test("cross-file inherit completion: no duplicate entries when child overrides parent member (US-002)", () => {
+  test("cross-file inherit completion: no duplicate entries when child overrides parent member (US-002)", async () => {
     // Create a scenario where Dog overrides Animal.speak()
     const srcA = 'class Animal { string name; void speak() { return name + " talks"; } }';
     const srcB = 'inherit "file_a.pike"; class Dog { inherit Animal; void speak() { return "woof"; } void fetch() {} } void test() { Dog d = Dog(); d-> }';
@@ -897,10 +897,10 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const uriB = "file:///test/file_b.pike";
 
     const treeA = parse(srcA);
-    idx.upsertFile(uriA, 1, treeA, srcA, ModificationSource.DidOpen);
+    await idx.upsertFile(uriA, 1, treeA, srcA, ModificationSource.DidOpen);
 
     const treeB = parse(srcB);
-    idx.upsertFile(uriB, 1, treeB, srcB, ModificationSource.DidOpen);
+    await idx.upsertFile(uriB, 1, treeB, srcB, ModificationSource.DidOpen);
 
     const tableB = idx.getSymbolTable(uriB)!;
     const ctx: CompletionContext = {
@@ -912,7 +912,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
 
     // Cursor after d-> at end of file_b
     const arrowIdx = srcB.indexOf('d->');
-    const result = getCompletions(tableB, treeB, 0, arrowIdx + 3, ctx);
+    const result = await getCompletions(tableB, treeB, 0, arrowIdx + 3, ctx);
     const labels = completionLabels(result);
 
     // speak should appear exactly once (child overrides parent)
@@ -924,7 +924,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     // name is Animal's protected field — not visible via arrow access
   });
 
-  test("function return type completion: makeDog()-> shows Dog members (US-007)", () => {
+  test("function return type completion: makeDog()-> shows Dog members (US-007)", async () => {
     const src = [
       'class Dog { void speak() {} void fetch(string item) {} }',
       'Dog makeDog() { return Dog("Rex"); }',
@@ -935,7 +935,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     const ctx: CompletionContext = {
@@ -946,7 +946,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     };
 
     // Cursor on 'speak' identifier (line 3, col 13)
-    const result = getCompletions(table, tree, 3, 13, ctx);
+    const result = await getCompletions(table, tree, 3, 13, ctx);
     const labels = completionLabels(result);
 
     // Dog's members should appear via function return type resolution
@@ -954,7 +954,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("fetch");
   });
 
-  test("chained function return type: makeDog()->fetch()-> stops at void (US-007)", () => {
+  test("chained function return type: makeDog()->fetch()-> stops at void (US-007)", async () => {
     // fetch returns void — no further members should be resolved
     const src = [
       'class Dog { string speak() { return "woof"; } void fetch(string item) {} }',
@@ -966,7 +966,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     // makeDog() returns Dog, so makeDog()->speak resolves speak
@@ -976,7 +976,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri,
     };
-    const result = getCompletions(table, tree, 3, 13, ctx);
+    const result = await getCompletions(table, tree, 3, 13, ctx);
     const labels = completionLabels(result);
     expect(labels).toContain("speak");
   });
@@ -985,7 +985,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
   // US-008: Assignment-based type narrowing
   // ---------------------------------------------------------------
 
-  test("assignment inference: Dog d = makeDog(); d-> shows Dog members (US-008)", () => {
+  test("assignment inference: Dog d = makeDog(); d-> shows Dog members (US-008)", async () => {
     const src = [
       'class Dog { void speak() {} void fetch(string item) {} }',
       'Dog makeDog() { return Dog("Rex"); }',
@@ -997,7 +997,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     const ctx: CompletionContext = {
@@ -1008,7 +1008,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     };
 
     // Cursor on 'speak' identifier (line 4, col 5)
-    const result = getCompletions(table, tree, 4, 5, ctx);
+    const result = await getCompletions(table, tree, 4, 5, ctx);
     const labels = completionLabels(result);
 
     // Dog's members should appear via declaredType (explicitly typed)
@@ -1016,7 +1016,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("fetch");
   });
 
-  test("assignment inference: mixed d = Dog(); d-> shows Dog members (US-008)", () => {
+  test("assignment inference: mixed d = Dog(); d-> shows Dog members (US-008)", async () => {
     const src = [
       'class Dog { void speak() {} void fetch(string item) {} }',
       'void test() {',
@@ -1027,7 +1027,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     // Verify that 'd' has assignedType set to 'Dog' (the constructor name)
@@ -1044,7 +1044,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     };
 
     // Cursor on 'speak' identifier (line 3, col 5)
-    const result = getCompletions(table, tree, 3, 5, ctx);
+    const result = await getCompletions(table, tree, 3, 5, ctx);
     const labels = completionLabels(result);
 
     // Dog's members should appear via assignedType since declaredType is 'mixed'
@@ -1052,7 +1052,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("fetch");
   });
 
-  test("assignment inference: no initializer produces no assignedType (US-008)", () => {
+  test("assignment inference: no initializer produces no assignedType (US-008)", async () => {
     const src = [
       'class Dog { void speak() {} }',
       'void test() {',
@@ -1063,7 +1063,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     // Verify that 'd' has declaredType but no assignedType
@@ -1073,7 +1073,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(dDecl!.assignedType).toBeUndefined();
   });
 
-  test("assignment inference: complex initializer ignored (US-008)", () => {
+  test("assignment inference: complex initializer ignored (US-008)", async () => {
     const src = [
       'class Dog { void speak() {} }',
       'void test() {',
@@ -1084,7 +1084,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     const idx = new WorkspaceIndex({ workspaceRoot: "/test" });
     const uri = "file:///test.pike";
     const tree = parse(src);
-    idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
+    await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     const table = idx.getSymbolTable(uri)!;
 
     // Verify that 'd' has no assignedType for a literal initializer
@@ -1093,5 +1093,64 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(dDecl!.declaredType).toBe('mixed');
     // Integer literal is not an identifier — no assignedType
     expect(dDecl!.assignedType).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Private member filtering (dot vs arrow access)
+// ---------------------------------------------------------------------------
+
+describe("Private member filtering", () => {
+  test("dot access filters out __-prefixed private members", async () => {
+    const src = [
+      'class Vault {',
+      '  int public_count;',
+      '  int __secret;',
+      '  void reveal() {}',
+      '  void __hidden() {}',
+      '}',
+      'void test() { Vault. }',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/dot-private.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    // Cursor after 'Vault.' on line 6
+    const result = await getCompletions(table, tree, 6, 20, ctx);
+    const labels = completionLabels(result);
+
+    expect(labels).toContain("public_count");
+    expect(labels).toContain("reveal");
+    // Private members (__ prefix) should be hidden via dot access
+    expect(labels).not.toContain("__secret");
+    expect(labels).not.toContain("__hidden");
+  });
+
+  test("arrow access shows all members including __-prefixed", async () => {
+    const src = [
+      'class Vault {',
+      '  int public_count;',
+      '  int __secret;',
+      '  void reveal() {}',
+      '  void __hidden() {}',
+      '}',
+      'void test() { Vault v = Vault(); v-> }',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/arrow-private.pike", 1);
+    wireInheritance(table);
+    const ctx = makeCtx();
+
+    const line6 = src.split('\n')[6];
+    const arrowCol = line6.indexOf('v->') + 3;
+    const result = await getCompletions(table, tree, 6, arrowCol, ctx);
+    const labels = completionLabels(result);
+
+    // Arrow access shows all members, public and private
+    expect(labels).toContain("public_count");
+    expect(labels).toContain("reveal");
+    expect(labels).toContain("__secret");
+    expect(labels).toContain("__hidden");
   });
 });

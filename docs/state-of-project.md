@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 1,565 tests, 1 flaky (pre-existing), 13,072 assertions, 43 files
+- **Test suite:** 1,612 tests, 0 fail, 1 todo, 13,072 assertions, 43 files
 
 ## Phase History
 
@@ -157,5 +157,5 @@
 See tests/perf/benchmarks.test.ts for regression tests (3x slack for CI variability).
 ## Corpus
 
-37 committed files across 14 categories, 21 planned:
+64 committed files across 14 categories, 21 planned:
 - Basic types (4), Classes (5), Functions (4), Imports (2), Type errors (4), Undefined identifiers (4), Arity errors (3), Syntax/recovery (1), Modifiers (2), Cross-file (4+directory), Stdlib (1), Preprocessor (1), Enums (1), AutoDoc (1)

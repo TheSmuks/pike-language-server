@@ -77,6 +77,11 @@ function createOracle(): PikeOracle {
 }
 ```
 
+
+## Supersession Note
+
+The `PikeOracle` MCP-backed interface described above was superseded by the `PikeWorker` long-lived subprocess (introduced in Phase 5, Decision 0011). PikeWorker communicates directly with the `pike` binary over stdio using a JSON-based protocol, eliminating the MCP layer. The fallback strategy and oracle abstraction concepts remain valid, but the implementation path diverged from the original MCP-first design.
+
 ## Consequences
 
 - The oracle interface is abstracted; the LSP server code never directly calls pike or pike-ai-kb.

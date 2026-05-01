@@ -24,7 +24,7 @@ graph TD
 
 ```
 server/           # LSP server (TypeScript, vscode-languageserver-node)
-extension/        # VSCode extension that hosts the LSP server
+client/          # VSCode extension that hosts the LSP server
 harness/          # Test harness — invokes pike, captures ground truth, compares LSP output
 corpus/           # Pike files covering language features the LSP must handle
   files/          # Actual Pike source files
@@ -40,7 +40,7 @@ decisions/        # Root-level decision documents (template convention)
 
 TypeScript application using `vscode-languageserver-node`. Handles LSP protocol, manages document state, coordinates between tree-sitter parsing and pike oracle queries.
 
-### VSCode Extension (`extension/`)
+### VSCode Extension (`client/`)
 
 Hosts the LSP server as a subprocess. Registers Pike as a language for `.pike`, `.pmod`, `.mmod` files. Provides configuration UI.
 

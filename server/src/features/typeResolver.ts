@@ -11,9 +11,11 @@
  * 4. Stdlib type via prefix index
  */
 
-import { getEffectiveTypeName, PRIMITIVE_TYPES } from "./symbolTable";
+import { PRIMITIVE_TYPES } from "./symbolTable";
 import type { Declaration, SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
+
+let nextSyntheticId = -1;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -47,11 +49,11 @@ export interface TypeResolutionResult {
  * - A Declaration if the type resolves to a known class
  * - null if the type is primitive, unknown, or resolution fails
  */
-export function resolveType(
+export async function resolveType(
   typeName: string,
   context: TypeResolutionContext,
   depth = 0,
-): TypeResolutionResult | null {
+): Promise<TypeResolutionResult | null> {
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
   if (PRIMITIVE_TYPES.has(typeName)) return null;
   if (!typeName) return null;
@@ -66,11 +68,11 @@ export function resolveType(
 
   // 2. Qualified type (e.g., "Stdio.File") — resolve first segment as module
   if (typeName.includes(".")) {
-    return resolveQualifiedType(typeName, context, depth);
+    return await resolveQualifiedType(typeName, context, depth);
   }
 
   // 3. Cross-file class via inherit/import declarations
-  const crossFileClass = resolveCrossFileType(typeName, context);
+  const crossFileClass = await resolveCrossFileType(typeName, context);
   if (crossFileClass) return crossFileClass;
 
   // 4. Stdlib type — check if "predef.<typeName>" has children in stdlib index
@@ -86,19 +88,21 @@ export function resolveType(
  * For `obj->member`: resolves obj's declared type → class scope → find member
  * For `Module.member`: resolves Module → target file → find member
  */
-export function resolveMemberAccess(
+export async function resolveMemberAccess(
   lhsName: string,
   memberName: string,
   lhsDecl: Declaration | null,
   context: TypeResolutionContext,
   depth = 0,
-): Declaration | null {
+): Promise<Declaration | null> {
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
   // Use assignedType when declaredType is absent or a primitive like 'mixed'
-  const typeName = getEffectiveTypeName(lhsDecl);
+  const typeName = (lhsDecl?.declaredType && !PRIMITIVE_TYPES.has(lhsDecl.declaredType))
+    ? lhsDecl.declaredType
+    : lhsDecl?.assignedType;
   if (typeName) {
-    const result = resolveType(typeName, context, depth + 1);
+    const result = await resolveType(typeName, context, depth + 1);
     if (result?.decl.kind === "class") {
       const member = findMemberInClass(memberName, result.decl, result.table);
       if (member) return member;
@@ -127,16 +131,16 @@ export function resolveMemberAccess(
 /**
  * Resolve a qualified type like "Stdio.File" through the workspace index and stdlib.
  */
-function resolveQualifiedType(
+async function resolveQualifiedType(
   typeName: string,
   context: TypeResolutionContext,
   depth: number,
-): TypeResolutionResult | null {
+): Promise<TypeResolutionResult | null> {
   const segments = typeName.split(".");
   if (segments.length < 2) return null;
 
   // Try resolving first segment as a module via WorkspaceIndex
-  const moduleUri = context.index.resolveModule(segments[0], context.uri);
+  const moduleUri = await context.index.resolveModule(segments[0], context.uri);
   if (moduleUri) {
     const moduleTable = context.index.getSymbolTable(moduleUri);
     if (moduleTable) {
@@ -160,7 +164,7 @@ function resolveQualifiedType(
     // so callers (e.g., completion) can enumerate members via the stdlib prefix index.
     const lastSegment = segments[segments.length - 1];
     const syntheticDecl: Declaration = {
-      id: -1,
+      id: nextSyntheticId--,
       name: lastSegment,
       kind: "class",
       nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
@@ -180,10 +184,10 @@ function resolveQualifiedType(
 /**
  * Resolve a type name through cross-file inherit/import declarations.
  */
-function resolveCrossFileType(
+async function resolveCrossFileType(
   typeName: string,
   context: TypeResolutionContext,
-): TypeResolutionResult | null {
+): Promise<TypeResolutionResult | null> {
   for (const decl of context.table.declarations) {
     if (decl.kind !== "inherit" && decl.kind !== "import") continue;
 
@@ -191,8 +195,8 @@ function resolveCrossFileType(
     if (decl.name.startsWith('"') && decl.name.endsWith('"')) continue;
 
     // Resolve this inherit/import to a target file
-    const targetUri = context.index.resolveImport(decl.name, context.uri)
-      ?? context.index.resolveInherit(decl.name, false, context.uri);
+    const targetUri = (await context.index.resolveImport(decl.name, context.uri))
+      ?? await context.index.resolveInherit(decl.name, false, context.uri);
     if (!targetUri) continue;
 
     const targetTable = context.index.getSymbolTable(targetUri);
@@ -263,9 +267,6 @@ function findMemberInInheritedScopes(
   return null;
 }
 
-function containsDecl(scope: { declarations: number[] }, decl: Declaration): boolean {
-  return scope.declarations.includes(decl.id);
-}
 
 /** Check if a position falls within a range (inclusive start, exclusive end). */
 function posInRange(range: { start: { line: number; character: number }; end: { line: number; character: number } }, pos: { line: number; character: number }): boolean {

@@ -342,28 +342,7 @@ The path text is the module path to resolve.
 
 ## Harness Extension
 
-### Status: NOT IMPLEMENTED
-
-The cross-file resolution introspection harness (`harness/resolve.pike`) described below was planned but not built during Phase 4. Phase 4 testing uses structural expectations (see Ground Truth section).
-
-### Planned cross-file resolution introspection
-
-The harness will extend `introspect.pike` to report:
-
-1. **For each `inherit` declaration**: What file/program does Pike resolve it to? (via `handle_inherit` or `cast_to_program`)
-2. **For each `import` declaration**: What module does Pike resolve it to? (via `resolv`)
-3. **For each external reference**: What file does Pike resolve it to? (via `Program.defined` on the resolved value)
-
-This provides ground truth for cross-file resolution tests.
-
-### Implementation approach
-
-Add a second Pike script `harness/resolve.pike` that:
-1. Takes a file path and module path configuration.
-2. Compiles the file with a custom `CompilationHandler` that intercepts `handle_inherit` and `resolv` calls.
-3. For each cross-file reference found, reports the resolved target file path.
-
-This is separate from `introspect.pike` because the cross-file introspection requires a different compilation strategy (the handler needs to intercept the resolution process, not just the diagnostics).
+The cross-file resolution introspection harness (`harness/resolve.pike`) was planned during Phase 4 but superseded. Cross-file testing uses structural expectations validated against the WorkspaceIndex (see Ground Truth section). Semantic cross-file correctness is verified through the integration test suite and PikeWorker subprocess.
 
 ### Phase 5 prerequisite
 

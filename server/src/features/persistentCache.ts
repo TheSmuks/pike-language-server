@@ -11,7 +11,7 @@
  */
 
 import { mkdir, readFile, writeFile, rm } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import type {
   Declaration,
@@ -109,6 +109,7 @@ export async function saveCache(
     await mkdir(dirname(cachePath), { recursive: true });
     await writeFile(cachePath, JSON.stringify(cacheFile), "utf-8");
   } catch (err) {
+    // Cache save failure is non-critical — don't crash
     throw new Error(`Failed to save cache: ${(err as Error).message}`);
   }
 }
@@ -197,7 +198,7 @@ export function computeWasmHash(wasmPath: string): string {
   // For now, use a simple marker. Real implementation would hash the WASM file.
   // This is sufficient for cache invalidation when the grammar changes.
   try {
-    const content = require("node:fs").readFileSync(wasmPath);
+    const content = readFileSync(wasmPath);
     return createHash("sha256").update(content).digest("hex").slice(0, 16);
   } catch {
     return "unknown";

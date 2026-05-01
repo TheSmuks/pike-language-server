@@ -1,0 +1,528 @@
+{
+  "project": "pike-language-server",
+  "branchName": "ralph/audit-remediation",
+  "description": "Full audit remediation and roadmap for the Pike Language Server. 34 findings across 7 phases: critical bugs (5), high-priority fixes (9), medium-priority fixes (6), documentation corrections (1), test integrity (5), TigerStyle file splits (4), architectural improvements (4). All stories start as passes: false. Ralph picks the highest priority false story, implements it, verifies, commits, and marks passes: true.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix extractInitializerType returning function name instead of type",
+      "description": "As a Pike developer using the LSP, I want type inference from call expressions to resolve to the actual return type, so that completion and hover show correct types. Currently Dog d = makeDog() sets assignedType to 'makeDog' (the function name), not 'Dog' (the return type).",
+      "acceptanceCriteria": [
+        "extractInitializerType in symbolTable.ts does not assign the callee function name as assignedType",
+        "For Dog d = makeDog(), assignedType is either resolved to Dog (if resolvable) or left unset — never 'makeDog'",
+        "Add a test: parse 'class Dog {} Dog d = makeDog();' and verify assignedType is not 'makeDog'",
+        "All existing tests pass (1588+)",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Audit finding A-001. Key file: server/src/features/symbolTable.ts extractInitializerType(). The function drills through postfix_expr to find the callee name for call expressions, but returns the callee FUNCTION name instead of the type. Fix: do not assign assignedType from call expressions unless the return type can be statically resolved."
+    },
+    {
+      "id": "US-002",
+      "title": "Fix PikeWorker requestCount never resetting after forced restart",
+      "description": "As a developer, I want the PikeWorker request counter to reset after a forced restart, so that the worker doesn't restart on every subsequent request. After shouldForceRestart() triggers, requestCount stays above ceiling forever.",
+      "acceptanceCriteria": [
+        "requestCount is reset to 0 in restart() method after the new process is confirmed healthy",
+        "Add a test: force requestCount above ceiling, trigger restart, verify it resets to 0",
+        "Worker does not restart on every request after a forced restart",
+        "All existing tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Audit finding A-002. Key file: server/src/features/pikeWorker.ts. shouldForceRestart() checks requestCount against maxRequestsBeforeRestart, but restart() never resets requestCount to 0. Add this.requestCount = 0 after successful ping in restart()."
+    },
+    {
+      "id": "US-003",
+      "title": "Replace PikeWorker queue Array.shift with proper deque",
+      "description": "As a developer, I want the PikeWorker request queue to process in O(1) per dequeue, so that rapid edit bursts don't create visible latency. Array.shift() is O(n) per call, making total queue processing O(n^2).",
+      "acceptanceCriteria": [
+        "Replace this.queue.shift() with index-based dequeue (maintain head index, reset when empty)",
+        "Or use a simple ring buffer pattern",
+        "Existing worker tests still pass",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "Audit finding A-003. Key file: server/src/features/pikeWorker.ts drainQueue(). Replace const item = this.queue.shift() with const item = this.queue[this.head++]; if (this.head >= this.queue.length) { this.queue = []; this.head = 0; }. Simple index-based approach, no external dependency."
+    },
+    {
+      "id": "US-004",
+      "title": "Encode file URIs in backgroundIndex",
+      "description": "As a Pike developer with spaces in file paths, I want background indexing to produce valid URIs so that workspace symbols are discoverable. Currently file://${filepath} does not encode spaces or special characters.",
+      "acceptanceCriteria": [
+        "backgroundIndex.ts uses encodeURI or a proper URI constructor for file URIs",
+        "Add a test: create temp directory with space in name, verify workspace/symbol returns valid URI with %20 encoding",
+        "Existing background index tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "Audit finding A-004. Key file: server/src/features/backgroundIndex.ts. Replace file://${filepath} with a proper URI encoding. Use encodeURIComponent on path segments or use vscode-uri's URI.file() if available."
+    },
+    {
+      "id": "US-005",
+      "title": "Convert moduleResolver sync filesystem calls to async",
+      "description": "As a developer, I want module resolution to not block the event loop, so that LSP startup and file resolution don't freeze the server. detectPikePaths uses execSync, existsSync, statSync — all block the event loop during onInitialize.",
+      "acceptanceCriteria": [
+        "detectPikePaths uses execFile (async) instead of execSync",
+        "findModuleInPath uses fs.promises.access and fs.promises.stat instead of sync variants",
+        "onInitialize handler awaits the async path detection",
+        "All callers of moduleResolver methods updated to handle async",
+        "Existing module resolver tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": "Audit finding A-005. Key file: server/src/features/moduleResolver.ts. This is the worst offender for event loop blocking. detectPikePaths is called during WorkspaceIndex construction which happens in onInitialize. Convert detectPikePaths to async, make resolve* methods async, update all callers to await."
+    },
+    {
+      "id": "US-006",
+      "title": "Fix declForHover signature extraction including trailing semicolons",
+      "description": "As a Pike developer using hover, I want to see clean function/class signatures without trailing semicolons or comments. Currently declForHover extracts the full source line which includes trailing junk.",
+      "acceptanceCriteria": [
+        "declForHover in server.ts extracts the declaration node range from the tree-sitter AST instead of splitting source by newline",
+        "Signatures do not include trailing ;, {, or inline comments",
+        "Add a test: hover over 'int x = 5; // comment' and verify signature is 'int x = 5' not 'int x = 5; // comment'",
+        "Existing hover tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Audit finding A-006. Key file: server/src/server.ts declForHover(). Currently uses source.split('\\n')[decl.range.start.line] which grabs the entire line. Instead, use the tree-sitter node's range to extract only the declaration text. For nodes without precise ranges, trim trailing semicolons and whitespace."
+    },
+    {
+      "id": "US-007",
+      "title": "Deduplicate and fix scope-stripping regex for nested scope() calls",
+      "description": "As a developer, I want a single correct scope-stripping utility, so that nested scope() calls render correctly and the logic isn't duplicated between server.ts and completion.ts.",
+      "acceptanceCriteria": [
+        "Extract scope-stripping logic to a shared utility function in server/src/util/",
+        "Handle nested scope() calls correctly (e.g., scope(0, scope(1, function(...))))",
+        "Replace both usages in server.ts renderPredefSignature and completion.ts cleanPredefSignature",
+        "Add tests for: simple scope(), nested scope(), scope with complex inner types, no scope wrapper",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": "Audit finding A-007. The naive regex breaks on nested scope() calls. Need a recursive descent approach: parse the scope(...) wrapper, strip it, then check if the result is also a scope wrapper and strip that too. Key files: server/src/server.ts renderPredefSignature, server/src/features/completion.ts cleanPredefSignature."
+    },
+    {
+      "id": "US-008",
+      "title": "Distinguish dot vs arrow member access in completion",
+      "description": "As a Pike developer, I want the LSP to respect Pike's access control — '.' shows only public members, '->' shows all members. Currently completeMemberAccess ignores the accessType parameter entirely.",
+      "acceptanceCriteria": [
+        "completeMemberAccess uses the accessType parameter (currently _accessType, ignored)",
+        "For '.' access, filter to public declarations only (no private/protected modifier)",
+        "For '->' access, show all declarations regardless of visibility",
+        "Add tests for both access types on a class with mixed public/private members",
+        "Existing completion tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Audit finding A-008. Key file: server/src/features/completion.ts completeMemberAccess(). The parameter is already there but prefixed with underscore (ignored). Remove the underscore prefix and add visibility filtering."
+    },
+    {
+      "id": "US-009",
+      "title": "Fix typeResolver synthetic Declaration ID collisions and remove dead code",
+      "description": "As a developer, I want synthetic declarations to have unique IDs, so that declById lookups don't collide. Currently all synthetic declarations use id: -1. Also remove the dead containsDecl function.",
+      "acceptanceCriteria": [
+        "Use a monotonically decreasing counter for synthetic declaration IDs (starting from -1, decrementing)",
+        "Remove dead containsDecl function from typeResolver.ts",
+        "Existing type resolution tests pass",
+        "Add a test: create multiple synthetic declarations and verify they have different IDs in declById",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Audit finding A-010. Key file: server/src/features/typeResolver.ts resolveQualifiedType(). Creates synthetic Declaration with id: -1, colliding if multiple exist. Fix: use a module-level counter that decrements. The containsDecl function is defined but never called."
+    },
+    {
+      "id": "US-010",
+      "title": "Fix signatureHelp for chained calls and nested function types",
+      "description": "As a Pike developer using signature help, I want correct parameter tracking for chained calls and function-type parameters. Currently findEnclosingCall doesn't verify cursor position inside args, and splitParams breaks on function type signatures.",
+      "acceptanceCriteria": [
+        "findEnclosingCall verifies cursor is inside the argument list (between '(' and matching ')')",
+        "For chained calls a.b().c(), correctly identifies c as the callee",
+        "splitParams handles nested function type signatures function(int, string: void) as a single parameter",
+        "Add tests for chained calls and function-type parameters",
+        "Existing signature help tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": "Audit findings A-011, A-012. Key file: server/src/features/signatureHelp.ts. findEnclosingCall should track paren depth to verify cursor is inside args. splitParams should track paren/bracket depth and not split on commas inside nested function types."
+    },
+    {
+      "id": "US-011",
+      "title": "Fix accessResolver chained access and redundant re-parsing",
+      "description": "As a developer, I want chained access a.b.c to resolve correctly, and I want accessResolver to accept a pre-parsed tree to avoid redundant parsing.",
+      "acceptanceCriteria": [
+        "resolveAccessCore accepts optional pre-parsed tree parameter to avoid re-parsing",
+        "Chained access correctly unwraps nested postfix_expr nodes",
+        "Add tests for a.b.c, a->b->c, and mixed a.b->c patterns",
+        "Existing access resolver and definition/hover tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Audit findings A-013, A-014. Key file: server/src/features/accessResolver.ts. For a.b.c, the postfix_expr is nested — children[i-1] may be another postfix_expr rather than an identifier. Need to recursively unwrap. resolveAccessCore parses the document again even though the caller already has a parsed tree — add an optional tree parameter."
+    },
+    {
+      "id": "US-012",
+      "title": "Fix workspaceIndex hash sign and cross-file false positives",
+      "description": "As a developer, I want content hashes to always be positive hex strings and cross-file references to not produce false positives from same-name symbols in different files.",
+      "acceptanceCriteria": [
+        "hashContent uses >>> 0 (unsigned right shift) to ensure unsigned 32-bit result",
+        "getCrossFileReferences adds file-path scoping to prevent same-name symbol false positives",
+        "Existing workspace index tests pass",
+        "Add a test: two files with unrelated same-name symbols, verify getCrossFileReferences does not match them",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": "Audit findings A-015, A-016. Key file: server/src/features/workspaceIndex.ts. hashContent's & 0xffffffff produces signed int32 in JS. Use (hash >>> 0).toString(16) instead. getCrossFileReferences matches by name with ref.resolvesTo === null — needs file-path scoping."
+    },
+    {
+      "id": "US-013",
+      "title": "Fix PikeWorker restart health check race condition",
+      "description": "As a developer, I want worker restart to be reliable, so that the server recovers cleanly from worker crashes. Currently restart() waits a fixed 100ms then pings — the process may not be ready.",
+      "acceptanceCriteria": [
+        "restart() replaces fixed 100ms sleep with a health-check loop (ping with exponential backoff, max 3 attempts, 500ms total)",
+        "If health check fails after max attempts, surface error to client via window/showMessage",
+        "Add a test for restart health check success and failure",
+        "Existing worker tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Audit finding A-017. Key file: server/src/features/pikeWorker.ts restart(). Replace setTimeout(100) with a retry loop: for (let i = 0; i < 3; i++) { try { await ping(); return; } catch { await sleep(100 * (i + 1)); } }. Surface failure via connection.window.showErrorMessage()."
+    },
+    {
+      "id": "US-014",
+      "title": "Fix rename reserved pattern and protected name validation",
+      "description": "As a developer, I want rename to correctly reject all reserved identifiers and check protected names at validation time, not just at getRenameLocations time.",
+      "acceptanceCriteria": [
+        "__foo__ regex uses /^__[a-zA-Z].*__$/ to match uppercase patterns like __FOO__",
+        "validateRenameName checks against protectedNames set, not just PIKE_KEYWORDS",
+        "Add tests for __FOO__ rejection and protected name rejection at validation time",
+        "Existing rename tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": "Audit findings A-025, A-026. Key file: server/src/features/rename.ts. The regex /^__[a-z].*__$/ misses uppercase. validateRenameName only checks PIKE_KEYWORDS, not the protectedNames set that gets checked later in getRenameLocations."
+    },
+    {
+      "id": "US-015",
+      "title": "Fix parser cache LRU recency update",
+      "description": "As a developer, I want cached parse trees to have their recency updated on access, so that frequently-used trees aren't prematurely evicted.",
+      "acceptanceCriteria": [
+        "getCachedTree in parser.ts calls the LRU get method instead of raw map access",
+        "Add a test: fill cache to capacity, access oldest entry, add new entry, verify oldest entry is NOT evicted",
+        "Existing parser tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": "Audit finding A-018. Key file: server/src/parser.ts getCachedTree(). Currently uses treeCache.entries.get(key)?.tree which bypasses the LRU's get() method that updates recency. Change to use the LRU cache's proper get method."
+    },
+    {
+      "id": "US-016",
+      "title": "Add WASM load error reporting",
+      "description": "As a developer debugging a broken installation, I want to see which WASM candidate paths were tried and why each failed, instead of silent swallowing.",
+      "acceptanceCriteria": [
+        "initParser logs each candidate path and the error before trying the next",
+        "If all candidates fail, throws an error listing all attempted paths and their errors",
+        "Add a test: all candidate paths fail, verify the error message lists all paths",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": "Audit finding A-019. Key file: server/src/parser.ts initParser(). Currently catches all errors silently. Collect errors in an array during the candidate loop, then throw a descriptive error if none succeed."
+    },
+    {
+      "id": "US-017",
+      "title": "Clarify getReferencesTo return semantics",
+      "description": "As a developer consuming the symbol table API, I want getReferencesTo to return only actual references, not include the declaration itself via unshift, so that callers don't have to know the first element is special.",
+      "acceptanceCriteria": [
+        "getReferencesTo returns only actual references, not the declaration itself",
+        "Audit all callers — update any that relied on the declaration being included",
+        "Add or update a test verifying getReferencesTo returns only references",
+        "Existing reference tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Audit finding A-020. Key file: server/src/features/symbolTable.ts getReferencesTo(). Currently does results.unshift(decl.range) to include the declaration. This is surprising behavior. Remove the unshift. Check all callers in server.ts to see if any rely on the declaration being first."
+    },
+    {
+      "id": "US-018",
+      "title": "Remove unreachable duplicate case in autodocRenderer",
+      "description": "As a developer, I want no unreachable code in the autodoc renderer.",
+      "acceptanceCriteria": [
+        "Remove duplicate case 'group' in renderBlocks in autodocRenderer.ts",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": "Audit finding A-024. Key file: server/src/features/autodocRenderer.ts renderBlocks(). Has two case 'group' handlers — the second is unreachable dead code."
+    },
+    {
+      "id": "US-019",
+      "title": "Replace diagnosticManager SHA-256 with fast hash and guard line conversion",
+      "description": "As a developer, I want content hashing to be fast and Pike-to-LSP line conversion to be safe against edge cases.",
+      "acceptanceCriteria": [
+        "Replace SHA-256 in computeContentHash with a fast non-crypto hash (FNV-1a or DJB2)",
+        "Guard pd.line - 1 conversion in mergeDiagnostics against pd.line <= 0",
+        "Existing diagnostic tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Audit findings A-027, A-028. Key file: server/src/features/diagnosticManager.ts. SHA-256 is overkill for cache invalidation — use a simple fast hash. The line conversion pd.line - 1 can produce negative values if Pike reports line 0."
+    },
+    {
+      "id": "US-020",
+      "title": "Fix persistentCache ESM/CJS mismatch and sync read",
+      "description": "As a developer, I want cache code to work in both Bun and strict ESM environments, and not block the event loop.",
+      "acceptanceCriteria": [
+        "Replace require('node:fs') with import { readFileSync } from 'node:fs'",
+        "Or convert to async readFile to avoid blocking the event loop",
+        "Existing cache tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": "Audit finding A-029. Key file: server/src/features/persistentCache.ts computeWasmHash(). Uses require('node:fs') (CommonJS) in an ESM module. Fix with a top-level import. Also consider making it async."
+    },
+    {
+      "id": "US-021",
+      "title": "Fix all documentation inaccuracies",
+      "description": "As a developer reading the docs, I want every document to accurately reflect the current state of the codebase.",
+      "acceptanceCriteria": [
+        "AGENTS.md: change extension/ to client/ in project structure",
+        "AGENTS.md: remove 'bun run lint' from build instructions or add a lint script to package.json",
+        "docs/architecture.md: change extension/ to client/",
+        "docs/ci.md: replace npm ci and setup-node with Bun equivalents",
+        "docs/existing-tooling.md: add note that tree-sitter-pike now exists, mark 'no grammar' claim as historical",
+        "docs/state-of-project.md: update test count to 1588, corpus count to 66",
+        "decisions/0002-tier-3-scope.md: update 'out of scope' to note rename and code actions were implemented",
+        "decisions/0010-cross-file-resolution.md: remove 'NOT IMPLEMENTED' note for resolve.pike",
+        "decisions/0003-pike-ai-kb-integration.md: add note that PikeOracle MCP was replaced by PikeWorker per decision 0011",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "Audit findings D-001 through D-009. Documentation-only story, no code changes. All 9 inaccuracies fixed in one pass."
+    },
+    {
+      "id": "US-022",
+      "title": "Remove mock from hover tests",
+      "description": "As a developer, I want hover tests to use real Pike responses, not monkey-patched worker methods. The hover.test.ts US-009 tests violate the project's no-mock rule.",
+      "acceptanceCriteria": [
+        "Replace worker.typeof_ = async (...) => ... with real Pike subprocess invocation (gated on pikeAvailable)",
+        "Add describe.skipIf(!pikeAvailable) for typeof tests",
+        "Or: use pre-recorded Pike responses from harness snapshots as fixtures",
+        "No monkey-patching of server internals",
+        "All hover tests pass when Pike is available",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": "Audit finding T-001. Key file: tests/lsp/hover.test.ts. The typeof_ monkey-patch simulates Pike responses. Replace with either real Pike invocation (skipIf unavailable) or pre-recorded JSON fixtures from harness snapshots."
+    },
+    {
+      "id": "US-023",
+      "title": "Harden vacuous conditional assertions in test suite",
+      "description": "As a developer, I want tests that fail when the tested behavior is wrong, not tests that pass silently. Multiple tests use 'if (result) { expect... }' patterns that pass vacuously when result is null/undefined.",
+      "acceptanceCriteria": [
+        "Audit all tests in references.test.ts, edge-cases.test.ts, definition.test.ts for if (result) { expect... } patterns",
+        "Replace with expect(result).toBeDefined() followed by unconditional expect(result!.xxx)",
+        "Or use assert(result) before expectations",
+        "Verify no test count change (same tests, stronger assertions)",
+        "All tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": "Audit findings T-002, T-003, T-004. Key files: tests/lsp/references.test.ts, tests/lsp/edge-cases.test.ts, tests/lsp/definition.test.ts. About 15% of tests have these patterns. The fix is mechanical but requires reading each test to determine the correct non-vacuous assertion."
+    },
+    {
+      "id": "US-024",
+      "title": "Remove or implement integration test stubs",
+      "description": "As a developer, I want no empty test files inflating the file count. Four integration test files export nothing.",
+      "acceptanceCriteria": [
+        "Delete tests/integration/activation.test.ts (empty stub)",
+        "Delete tests/integration/documentSymbol.test.ts (empty stub)",
+        "Delete tests/integration/error-recovery.test.ts (empty stub)",
+        "For tests/integration/crossFilePropagation.test.ts: implement real cross-file propagation tests using existing corpus files and PikeWorker, or delete it",
+        "Run full test suite — verify 0 fail",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": "Audit findings T-005, T-006, T-007, T-008. Three files are 9-11 lines of comments with export {}. crossFilePropagation.test.ts has 45 lines of comments describing what to test but no implementation. Decision: delete the 3 minimal stubs; for crossFilePropagation, either implement or delete."
+    },
+    {
+      "id": "US-025",
+      "title": "Implement lifecycle todo test",
+      "description": "As a developer, I want the exit-after-shutdown test to exist and pass. Currently lifecycle.test.ts has one test.todo that was never implemented.",
+      "acceptanceCriteria": [
+        "Convert test.todo('exit after shutdown does not throw') to a real test",
+        "Test sends shutdown request, then exit notification, verifies no thrown error",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Audit finding T-009. Key file: tests/lsp/lifecycle.test.ts. Simple test: await client.sendRequest('shutdown'), then send 'exit' notification, verify clean shutdown."
+    },
+    {
+      "id": "US-026",
+      "title": "Add correctness assertions to real-codebase-verification tests",
+      "description": "As a developer, I want the corpus-wide smoke tests to verify semantic correctness, not just 'didn't crash.' Currently 11 tests mostly check toBeDefined().",
+      "acceptanceCriteria": [
+        "For each corpus file, verify at least one semantic property: symbol count matches expected range, or specific symbol names are present",
+        "Verify hover returns non-empty markdown for at least one symbol per file",
+        "Verify definition returns a valid location for at least one identifier per file",
+        "Existing tests pass with stronger assertions",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": "Audit finding T-010. Key file: tests/lsp/real-codebase-verification.test.ts. Currently crash-only testing. Add semantic spot-checks that verify actual content, not just existence."
+    },
+    {
+      "id": "US-027",
+      "title": "Split symbolTable.ts from 1892 lines to multiple focused modules",
+      "description": "As a developer, I want the symbol table module to be within TigerStyle 500-line limits, so that each file has a single responsibility. Currently 3.8x over the limit.",
+      "acceptanceCriteria": [
+        "Extract scope construction into scopeBuilder.ts",
+        "Extract declaration collection into declarationCollector.ts",
+        "Extract reference collection into referenceCollector.ts",
+        "Extract cross-file wiring into crossFileResolver.ts",
+        "Keep core types and buildSymbolTable orchestrator in symbolTable.ts",
+        "All resulting files are <= 500 lines",
+        "All existing tests pass with only import path changes",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "TigerStyle violation. Key file: server/src/features/symbolTable.ts (1892 lines). Deferred to a follow-up phase per user preference. The 4-pass buildSymbolTable architecture naturally splits along pass boundaries."
+    },
+    {
+      "id": "US-028",
+      "title": "Split server.ts from 1087 lines to multiple handler modules",
+      "description": "As a developer, I want the server entry point to be within TigerStyle 500-line limits. Currently 2.2x over the limit.",
+      "acceptanceCriteria": [
+        "Extract hover handler logic into hoverHandler.ts",
+        "Extract completion handler wiring into completionHandler.ts",
+        "Extract definition/references handlers into navigationHandler.ts",
+        "Keep createPikeServer wiring and lifecycle in server.ts",
+        "All resulting files are <= 500 lines",
+        "All existing tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": "TigerStyle violation. Key file: server/src/server.ts (1087 lines). Deferred phase. Split along handler boundaries — each LSP feature's handler logic goes into its own file."
+    },
+    {
+      "id": "US-029",
+      "title": "Split completion.ts from 927 lines to focused modules",
+      "description": "As a developer, I want completion to be within TigerStyle 500-line limits. Currently 1.9x over the limit.",
+      "acceptanceCriteria": [
+        "Extract detectTriggerContext (~200 lines) into completionTrigger.ts",
+        "Extract member/stdlib completion providers into completionProviders.ts",
+        "Keep core getCompletions orchestrator in completion.ts",
+        "All resulting files are <= 500 lines",
+        "All existing completion tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": "TigerStyle violation. Key file: server/src/features/completion.ts (927 lines). Deferred phase. The detectTriggerContext function alone is ~200 lines of AST pattern matching."
+    },
+    {
+      "id": "US-030",
+      "title": "Split autodocRenderer.ts from 918 lines to focused modules",
+      "description": "As a developer, I want the autodoc renderer to be within TigerStyle 500-line limits. Currently 1.8x over the limit.",
+      "acceptanceCriteria": [
+        "Extract XML parser into xmlParser.ts",
+        "Extract block/inline rendering into autodocBlocks.ts",
+        "Keep main render entry point in autodocRenderer.ts",
+        "All resulting files are <= 500 lines",
+        "All existing autodoc tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": "TigerStyle violation. Key file: server/src/features/autodocRenderer.ts (918 lines). Deferred phase. Clean split: XML parsing is self-contained, rendering is the bulk."
+    },
+    {
+      "id": "US-031",
+      "title": "Add immutable workspace snapshot pattern",
+      "description": "As a developer, I want each LSP request to operate on a consistent snapshot of workspace state, so that concurrent edits don't produce inconsistent results. Inspired by gopls's Snapshot type.",
+      "acceptanceCriteria": [
+        "Design a WorkspaceSnapshot type that holds immutable references to: parse trees, symbol tables, workspace index, PikeWorker cache",
+        "Each didChange creates a new snapshot; in-flight requests reference the old one",
+        "Handlers receive snapshot as parameter instead of accessing mutable globals",
+        "Reference: gopls internal/cache/snapshot.go",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": "Missing capability M-001. Long-term architectural improvement inspired by gopls. Current mutable state lives in: documents map (server.ts), autodocCache (LRU), workspaceIndex (WorkspaceIndex), pikeWorker (PikeWorker). This is the biggest architectural gap vs mature LSPs."
+    },
+    {
+      "id": "US-032",
+      "title": "Add CancellationToken propagation to PikeWorker",
+      "description": "As a developer, I want cancellation requests to abort Pike subprocess work, so that stale diagnostics don't consume resources.",
+      "acceptanceCriteria": [
+        "PikeWorker.enqueue accepts an optional CancellationToken",
+        "Check token before writing to stdin; if cancelled, resolve immediately with empty result",
+        "Reference: gopls context-based cancellation",
+        "Existing worker tests pass",
+        "Add a test: enqueue with already-cancelled token returns immediately",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": "Missing capability M-013. Key file: server/src/features/pikeWorker.ts. The FIFO queue should check the cancellation token before processing each queued item."
+    },
+    {
+      "id": "US-033",
+      "title": "Add inlay hints support",
+      "description": "As a Pike developer, I want to see inferred types displayed inline, so that I can understand code without hovering. Inspired by rust-analyzer's inlay hints.",
+      "acceptanceCriteria": [
+        "Implement textDocument/inlayHint handler",
+        "Show inferred types for mixed declarations where assignedType is resolved",
+        "Show parameter names at call sites when available from declarations",
+        "Register inlayHintProvider capability in initialize response",
+        "Add 5+ tests: type hint on mixed var, parameter name at call site, no hint on typed var, chained inference hint, disabled by configuration",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": "Missing capability M-003. New feature. Key files: server/src/server.ts (handler registration), new file server/src/features/inlayHints.ts. Reference: rust-analyzer inlay hints implementation."
+    },
+    {
+      "id": "US-034",
+      "title": "Add go-to-implementation support",
+      "description": "As a Pike developer, I want to find all implementations of a class method or navigate inheritance hierarchies. Inspired by rust-analyzer and gopls.",
+      "acceptanceCriteria": [
+        "Implement textDocument/implementation handler",
+        "For a class, find all classes that inherit from it across the workspace",
+        "For a method, find all overrides in subclasses",
+        "Uses existing WorkspaceIndex dependency graph and cross-file resolution",
+        "Register implementationProvider capability in initialize response",
+        "Add 5+ tests: class implementers, method overrides, no implementers, cross-file implementation, interface-like pattern",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": "Missing capability M-005, M-006. New feature. Key files: server/src/server.ts (handler), server/src/features/workspaceIndex.ts (dependency graph). The workspace index already tracks inherit dependencies — walk the reverse dependency graph to find implementers."
+    }
+  ]
+}

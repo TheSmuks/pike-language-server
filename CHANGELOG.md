@@ -18,19 +18,8 @@
 - Cancellation token propagation to all LSP request handlers
 - Decision documents: 0019 (type inference), 0020 (semantic tokens), 0021 (signature help), 0022 (background indexing)
 
-### Fixed
-
-- CI: commit-lint no longer rejects uppercase subjects (e.g. "US-001")
-- CI: test job installs pike8.0-core so harness tests can run
-- Harness pike binary is now configurable via `PIKE_BINARY` env var (default: `pike`)
-
-### Fixed
-
-- CI: Pike 8.0.1116 now built from source tarball instead of Ubuntu `pike8.0` package,
-  ensuring CI and local dev run the same Pike version (8.0.1116 vs 8.0.1738)
-- CI: Removed `pike8.0` apt package dependency; `build-pike` job compiles from source and caches
-
 ### Changed
+
 
 - Audit remediation round 2: correctness and robustness fixes across 10 files:
   - `symbolTable.ts`: for-init and foreach-lvalue collection now use grammar field names (`childrenForFieldName('name')`, `childrenForFieldName('key'/'value')`) instead of walking bare `identifier` children, preventing type identifiers from being registered as variable names (C5, C6)
