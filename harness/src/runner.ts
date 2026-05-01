@@ -87,6 +87,7 @@ export async function runIntrospect(
   }
   const args: string[] = [];
   if (opts.strict) args.push("--strict");
+  args.push("--pike-binary", PIKE_BINARY);
   if (opts.modulePath) {
     args.push("--module-path", resolve(PROJECT_ROOT, opts.modulePath));
   }

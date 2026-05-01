@@ -84,3 +84,4 @@ htmlcov/
 logs/
 PLAN.md
 standalone/
+.pike-lsp/

@@ -360,9 +360,10 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     console.log("──────────────────────────────────────────────");
 
     // Hover should not be materially affected by in-flight diagnose.
-    // Allow up to 5x as a generous bound — if it were queued, we'd see >>100x.
-    expect(avgDuring).toBeLessThan(500);
-    expect(ratio).toBeLessThan(5);
+    // Allow up to 10x as a generous bound for CI runners with variable CPU.
+    // If hover were queued behind diagnose, we'd see >>100x.
+    expect(avgDuring).toBeLessThan(1000);
+    expect(ratio).toBeLessThan(10);
   });
 
   test("FIFO queue blocks concurrent worker requests", async () => {

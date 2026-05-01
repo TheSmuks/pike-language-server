@@ -107,6 +107,18 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
     new StreamMessageWriter(s2c),
   );
 
+  // Suppress "Connection is closed" errors that occur during teardown.
+  // These are expected when streams are destroyed while background tasks
+  // (diagnostics, indexing) are still running.
+  const origError = serverConn.console.error.bind(serverConn.console);
+  serverConn.console.error = (...args: unknown[]) => {
+    try {
+      origError(...args);
+    } catch {
+      // Connection closed during teardown — swallow
+    }
+  };
+
   const server = createPikeServer(serverConn);
   serverConn.listen();
 
@@ -156,6 +168,9 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
       } catch {
         // ignore
       }
+      // Drain pending events before destroying streams to avoid
+      // "Connection is closed" errors from in-flight notifications.
+      await new Promise((r) => setTimeout(r, 50));
       c2s.destroy();
       s2c.destroy();
     },
