@@ -112,8 +112,8 @@ Based on the Phase 0 investigation (`docs/pike-interface.md`) and verification:
 
 ### Out of scope (not achievable without substantial new infrastructure)
 
-12. **Rename refactoring** — text-based heuristics only. Pike has no rename support.
-13. **Code actions** — would be entirely custom.
+12. **Rename refactoring** — *Implemented in Phase 8.* textDocument/rename + prepareRename. Scope-aware, cross-file via WorkspaceIndex. Keyword validation. Decision 0016.
+13. **Code actions** — *Implemented in Phase 14.* Remove unused variable, add missing import. Extensible quick-fix registry. Decision 0021.
 14. **Full column-accurate diagnostics** — pike does not report columns.
 15. **Incremental compilation** — pike does not support it.
 

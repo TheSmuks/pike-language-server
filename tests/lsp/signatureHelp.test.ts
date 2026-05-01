@@ -1,3 +1,5 @@
+import { splitParams } from "../../server/src/features/signatureHelp";
+
 /**
  * Signature help tests (US-017).
  *
@@ -141,5 +143,64 @@ describe("US-017: textDocument/signatureHelp", () => {
     });
 
     expect(result).toBeNull();
+  });
+
+  test("returns null when cursor is before opening paren", async () => {
+    const src = [
+      "int add(int a, int b) { return a + b; }",
+      "int main() {",
+      "  int result = add(1, 2);",
+      "  return result;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/sig-before-paren.pike", src);
+
+    // Position on 'd' of 'add' (before the '(')
+    // Line 2: "  int result = add(1, 2);"
+    // 'add' starts at col 15, '(' is at col 18
+    const result = await server.client.sendRequest("textDocument/signatureHelp", {
+      textDocument: { uri },
+      position: { line: 2, character: 17 },
+    });
+
+    expect(result).toBeNull();
+  });
+
+  test("returns call when cursor is between parentheses", async () => {
+    const src = [
+      "int add(int a, int b) { return a + b; }",
+      "int main() {",
+      "  int result = add(1, 2);",
+      "  return result;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/sig-between-parens.pike", src);
+
+    // Position right after '(' — between ( and )
+    // Line 2: "  int result = add(1, 2);"
+    // '(' is at col 18, cursor at col 19 (just inside)
+    const result = await server.client.sendRequest("textDocument/signatureHelp", {
+      textDocument: { uri },
+      position: { line: 2, character: 19 },
+    }) as SignatureHelpResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.signatures[0].label).toContain("add");
+  });
+});
+
+describe("splitParams: nested type parsing", () => {
+  test("function type with inner commas stays as single param", () => {
+    const parts = splitParams("function(int, string: void)");
+    expect(parts).toHaveLength(1);
+    expect(parts[0]).toBe("function(int, string: void)");
+  });
+
+  test("mixed params with nested function types split correctly", () => {
+    const parts = splitParams("int a, function(int, string: void), string b");
+    expect(parts).toHaveLength(3);
+    expect(parts[0]).toBe("int a");
+    expect(parts[1]).toBe(" function(int, string: void)");
+    expect(parts[2]).toBe(" string b");
   });
 });

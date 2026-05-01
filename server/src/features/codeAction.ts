@@ -26,8 +26,6 @@ import type {
 export interface CodeActionContext {
   /** Known stdlib top-level module names (e.g., "Stdio", "Array"). */
   stdlibModules: Set<string>;
-  /** Known workspace module names from indexed files. */
-  workspaceModules: Set<string>;
 }
 
 /** Matcher function: returns true if this diagnostic should trigger an action. */
@@ -72,19 +70,7 @@ function removeUnusedVariableLine(diag: Diagnostic, text: string, _ctx: CodeActi
     }];
   }
 
-  // Last line — delete from previous line's newline to end.
-  // Edge case: if this is the only line (line 0 and no other lines),
-  // delete from start of file to end.
-  if (line === 0) {
-    return [{
-      range: {
-        start: { line: 0, character: 0 },
-        end: { line: 0, character: lines[0].length },
-      },
-      newText: "",
-    }];
-  }
-
+  // Last line — delete from previous line's newline to end
   return [{
     range: {
       start: { line: line - 1, character: lines[line - 1]?.length ?? 0 },
@@ -93,6 +79,7 @@ function removeUnusedVariableLine(diag: Diagnostic, text: string, _ctx: CodeActi
     newText: "",
   }];
 }
+
 // ---------------------------------------------------------------------------
 // Built-in quick-fixes: add missing import
 // ---------------------------------------------------------------------------
@@ -163,8 +150,8 @@ function addMissingImport(diag: Diagnostic, text: string, ctx: CodeActionContext
   const identifier = extractUndefinedIdentifier(diag);
   if (!identifier) return [];
 
-  // Check if identifier matches a known stdlib or workspace module
-  if (!ctx.stdlibModules.has(identifier) && !ctx.workspaceModules.has(identifier)) return [];
+  // Check if identifier matches a known stdlib module
+  if (!ctx.stdlibModules.has(identifier)) return [];
 
   const insertLine = findImportInsertionLine(text);
   const insertText = `import ${identifier};\n`;

@@ -86,21 +86,20 @@ concurrency:
 
 Dependency caching avoids re-downloading unchanged packages on every run. Configure per language.
 
-### Node.js
+### Bun
 
 ```yaml
 steps:
   - uses: actions/checkout@v6
 
-  - uses: actions/setup-node@v4
+  - uses: oven-sh/setup-bun@v2
     with:
-      node-version: 20
-      cache: npm
+      bun-version: latest
 
-  - run: npm ci
+  - run: bun install --frozen-lockfile
 ```
 
-`actions/setup-node` restores `~/.npm` keyed on `package-lock.json`. `npm ci` installs from the lockfile and skips resolution, making it the correct choice for CI.
+`setup-bun` installs Bun and restores `~/.bun/install/cache` keyed on `bun.lockb`. `bun install --frozen-lockfile` installs from the lockfile and fails if it is out of date, making it the correct choice for CI.
 
 ### Python
 
@@ -158,8 +157,6 @@ Rust has no official setup action with built-in caching, so `actions/cache` is u
 
 ## 4. Parallelization
 
-### Job dependencies with `needs`
-
 Jobs run in parallel by default. Use `needs` to create a dependency graph:
 
 ```yaml
@@ -168,23 +165,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: npm run lint
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - run: npm run typecheck
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
 
   test:
-    needs: [lint, typecheck]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - run: npm test
+      - run: bun install --frozen-lockfile
+      - run: bun test
 ```
 
-`lint` and `typecheck` run in parallel. `test` starts only after both succeed. If either fails, `test` is skipped.
+`lint` runs first. `test` starts only after `lint` succeeds. If `lint` fails, `test` is skipped.
 
 ### Matrix builds for multi-version testing
 
@@ -194,20 +187,25 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+```yaml
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        bun-version: ["1.1", "1.2"]
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ matrix.node-version }}
-          cache: npm
+          bun-version: ${{ matrix.bun-version }}
 
-      - run: npm ci
-      - run: npm test
+      - run: bun install --frozen-lockfile
+      - run: bun test
 ```
 
-This creates three parallel jobs — one per Node version. Each job runs independently and all must pass for the workflow to succeed.
+This creates two parallel jobs — one per Bun version. Each job runs independently and all must pass for the workflow to succeed.
 
 ## 5. Reusable Workflows
 
@@ -215,27 +213,27 @@ This creates three parallel jobs — one per Node version. Each job runs indepen
 
 A workflow triggered by `workflow_call` can be invoked as a job:
 
+
 ```yaml
 # .github/workflows/test.yml
 on:
   workflow_call:
     inputs:
-      node-version:
+      bun-version:
         required: false
         type: string
-        default: "20"
+        default: "latest"
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ inputs.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm test
+          bun-version: ${{ inputs.bun-version }}
+      - run: bun install --frozen-lockfile
+      - run: bun test
 ```
 
 ```yaml
@@ -244,7 +242,7 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
     with:
-      node-version: "22"
+      bun-version: "1.2"
 ```
 
 ### Sharing across repositories
@@ -254,7 +252,7 @@ jobs:
   test:
     uses: my-org/shared-workflows/.github/workflows/test.yml@v1
     with:
-      node-version: "22"
+      bun-version: "1.2"
 ```
 
 The `@ref` can be a tag, branch, or SHA. Tagged refs (`@v1`, `@v1.2.3`) are recommended for stability.
@@ -276,6 +274,7 @@ on:
         description: "Measured coverage percentage"
         value: ${{ jobs.test.outputs.coverage-pct }}
 
+```yaml
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -283,9 +282,9 @@ jobs:
       coverage-pct: ${{ steps.coverage.outputs.pct }}
     steps:
       - uses: actions/checkout@v6
-      - run: npm ci
+      - run: bun install --frozen-lockfile
       - id: coverage
-        run: echo "pct=$(npm run test:coverage --silent)" >> "$GITHUB_OUTPUT"
+        run: echo "pct=$(bun test --coverage --silent 2>/dev/null | tail -1)" >> "$GITHUB_OUTPUT"
 ```
 
 Callers read outputs from the job's `outputs` context: `${{ needs.test.outputs.coverage-pct }}`.
@@ -305,52 +304,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
-
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run typecheck
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
 
   test:
-    needs: [lint, typecheck]
+    needs: [lint]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm test
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
 
   coverage:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run test:coverage
-      - name: Enforce threshold
-        run: npm run test:coverage -- --check-coverage --lines 80 --branches 80
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test --coverage
 ```
 
-The `coverage` job depends on `test`, keeping the gate order explicit: lint and typecheck in parallel, then test, then coverage.
+The `coverage` job depends on `test`, keeping the gate order explicit: lint first, then test, then coverage.
 
 ## 7. Adoption — Merging Into Existing CI
 
@@ -417,7 +394,7 @@ Run steps only when needed using `if`:
 ```yaml
 - name: Deploy
   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  run: npm run deploy
+  run: bun run deploy
 ```
 
 Common conditions:
@@ -450,10 +427,10 @@ Use specific cache keys to maximize hit rates:
 ```yaml
 - uses: actions/cache@v4
   with:
-    path: ~/.npm
-    key: npm-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+    path: ~/.bun/install/cache
+    key: bun-${{ runner.os }}-${{ hashFiles('bun.lockb') }}
     restore-keys: |
-      npm-${{ runner.os }}-
+      bun-${{ runner.os }}-
 ```
 
-The exact key (`hashFiles`) gives a cache hit on identical lockfiles. The prefix fallback (`restore-keys`) restores the most recent cache for the OS even when the lockfile changed, then `npm ci` fills in the diff.
+The exact key (`hashFiles`) gives a cache hit on identical lockfiles. The prefix fallback (`restore-keys`) restores the most recent cache for the OS even when the lockfile changed, then `bun install` fills in the diff.

@@ -12,6 +12,8 @@ import {
   parseXml,
   findDocGroup,
   findClass,
+} from "../../server/src/features/xmlParser";
+import {
   renderAutodoc,
 } from "../../server/src/features/autodocRenderer";
 

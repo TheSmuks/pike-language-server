@@ -114,13 +114,9 @@ Pike ships several built-in tools accessible via `pike -x <tool>`:
 - **Current state:** Active development (Rust project).
 - **What we can learn:** Nothing for Pike language tooling. Notable only because the name causes search confusion.
 
-## 8. No Tree-sitter Grammar for Pike
+## 8. Tree-sitter Grammar for Pike
 
-There is no tree-sitter grammar for the Pike programming language. The GitHub organization `Pike/tree-sitter` is a fork of the tree-sitter framework itself (C++ library for incremental parsing), not a Pike language grammar. The nvim-treesitter parser list does not include Pike. This is a significant gap that affects:
-- Neovim semantic highlighting
-- Helix editor support
-- Any tooling that relies on incremental parsing
-
+A tree-sitter grammar for Pike now exists: [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike). It provides incremental parsing for `.pike` and `.pmod` files and is used by this LSP project as its syntactic parser. The grammar is actively maintained and covers core language constructs including classes, inheritance, imports, type annotations, and preprocessor directives.
 ## Summary: What the Pike LSP Project Can Learn
 
 ### The landscape is almost empty

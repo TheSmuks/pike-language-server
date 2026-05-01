@@ -27,11 +27,11 @@ function readCorpus(name: string): string {
 }
 
 /** Helper to index a file into the workspace */
-function indexFile(index: WorkspaceIndex, name: string): void {
+async function indexFile(index: WorkspaceIndex, name: string): Promise<void> {
   const uri = corpusUri(name);
   const content = readCorpus(name);
   const tree = parse(content);
-  index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
+  await await index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
 }
 
 // ---------------------------------------------------------------------------
@@ -45,11 +45,11 @@ describe("Cross-file definition — simple inherit", () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     // B inherits from A via string literal
-    indexFile(index, "cross-inherit-simple-a.pike");
-    indexFile(index, "cross-inherit-simple-b.pike");
+    await indexFile(index, "cross-inherit-simple-a.pike");
+    await indexFile(index, "cross-inherit-simple-b.pike");
   });
 
-  test("inherit declaration in B resolves to file A", () => {
+  test("inherit declaration in B resolves to file A", async () => {
     const uriB = corpusUri("cross-inherit-simple-b.pike");
     // The inherit declaration has the path text on its nameRange
     // Find the inherit declaration in B's symbol table
@@ -59,11 +59,9 @@ describe("Cross-file definition — simple inherit", () => {
     const inheritDecl = tableB!.declarations.find(d => d.kind === "inherit");
     expect(inheritDecl).toBeDefined();
 
-    const result = index.resolveCrossFileDefinition(
-      uriB,
-      inheritDecl!.nameRange.start.line,
-      inheritDecl!.nameRange.start.character,
-    );
+    const result = await index.resolveCrossFileDefinition(uriB,
+    inheritDecl!.nameRange.start.line,
+    inheritDecl!.nameRange.start.character,);
 
     expect(result).not.toBeNull();
     expect(result!.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
@@ -76,11 +74,11 @@ describe("Cross-file definition — inherit with rename", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-rename-a.pike");
-    indexFile(index, "cross-inherit-rename-b.pike");
+    await indexFile(index, "cross-inherit-rename-a.pike");
+    await indexFile(index, "cross-inherit-rename-b.pike");
   });
 
-  test("inherit with alias resolves to target file", () => {
+  test("inherit with alias resolves to target file", async () => {
     const uriB = corpusUri("cross-inherit-rename-b.pike");
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();
@@ -88,11 +86,9 @@ describe("Cross-file definition — inherit with rename", () => {
     const inheritDecl = tableB!.declarations.find(d => d.kind === "inherit");
     expect(inheritDecl).toBeDefined();
 
-    const result = index.resolveCrossFileDefinition(
-      uriB,
-      inheritDecl!.nameRange.start.line,
-      inheritDecl!.nameRange.start.character,
-    );
+    const result = await index.resolveCrossFileDefinition(uriB,
+    inheritDecl!.nameRange.start.line,
+    inheritDecl!.nameRange.start.character,);
 
     expect(result).not.toBeNull();
     expect(result!.uri).toBe(corpusUri("cross-inherit-rename-a.pike"));
@@ -105,12 +101,12 @@ describe("Cross-file definition — inherit chain", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-chain-a.pike");
-    indexFile(index, "cross-inherit-chain-b.pike");
-    indexFile(index, "cross-inherit-chain-c.pike");
+    await indexFile(index, "cross-inherit-chain-a.pike");
+    await indexFile(index, "cross-inherit-chain-b.pike");
+    await indexFile(index, "cross-inherit-chain-c.pike");
   });
 
-  test("C inherits B, B inherits A — chain resolves", () => {
+  test("C inherits B, B inherits A — chain resolves", async () => {
     const uriC = corpusUri("cross-inherit-chain-c.pike");
     const tableC = index.getSymbolTable(uriC);
     expect(tableC).not.toBeNull();
@@ -118,17 +114,15 @@ describe("Cross-file definition — inherit chain", () => {
     const inheritDecl = tableC!.declarations.find(d => d.kind === "inherit");
     expect(inheritDecl).toBeDefined();
 
-    const result = index.resolveCrossFileDefinition(
-      uriC,
-      inheritDecl!.nameRange.start.line,
-      inheritDecl!.nameRange.start.character,
-    );
+    const result = await index.resolveCrossFileDefinition(uriC,
+    inheritDecl!.nameRange.start.line,
+    inheritDecl!.nameRange.start.character,);
 
     expect(result).not.toBeNull();
     expect(result!.uri).toBe(corpusUri("cross-inherit-chain-b.pike"));
   });
 
-  test("B inherits A — resolves correctly", () => {
+  test("B inherits A — resolves correctly", async () => {
     const uriB = corpusUri("cross-inherit-chain-b.pike");
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();
@@ -136,11 +130,9 @@ describe("Cross-file definition — inherit chain", () => {
     const inheritDecl = tableB!.declarations.find(d => d.kind === "inherit");
     expect(inheritDecl).toBeDefined();
 
-    const result = index.resolveCrossFileDefinition(
-      uriB,
-      inheritDecl!.nameRange.start.line,
-      inheritDecl!.nameRange.start.character,
-    );
+    const result = await index.resolveCrossFileDefinition(uriB,
+    inheritDecl!.nameRange.start.line,
+    inheritDecl!.nameRange.start.character,);
 
     expect(result).not.toBeNull();
     expect(result!.uri).toBe(corpusUri("cross-inherit-chain-a.pike"));
@@ -153,11 +145,11 @@ describe("Cross-file definition — module import", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross_import_a.pmod");
-    indexFile(index, "cross-import-b.pike");
+    await indexFile(index, "cross_import_a.pmod");
+    await indexFile(index, "cross-import-b.pike");
   });
 
-  test("import declaration in B resolves to module A", () => {
+  test("import declaration in B resolves to module A", async () => {
     const uriB = corpusUri("cross-import-b.pike");
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();
@@ -174,11 +166,11 @@ describe("Cross-file references — simple inherit", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-simple-a.pike");
-    indexFile(index, "cross-inherit-simple-b.pike");
+    await indexFile(index, "cross-inherit-simple-a.pike");
+    await indexFile(index, "cross-inherit-simple-b.pike");
   });
 
-  test("declaration in A has dependents", () => {
+  test("declaration in A has dependents", async () => {
     const uriA = corpusUri("cross-inherit-simple-a.pike");
     const dependents = index.getDependents(uriA);
     expect(dependents.size).toBeGreaterThan(0);
@@ -193,10 +185,10 @@ describe("Cross-file definition — pmod directory module", () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     // The .pmod directory is NOT listed as a corpus file — we index the user
-    indexFile(index, "cross-pmod-user.pike");
+    await indexFile(index, "cross-pmod-user.pike");
   });
 
-  test("cross-pmod-user indexes successfully", () => {
+  test("cross-pmod-user indexes successfully", async () => {
     const uri = corpusUri("cross-pmod-user.pike");
     const table = index.getSymbolTable(uri);
     expect(table).not.toBeNull();
@@ -209,17 +201,17 @@ describe("Cross-file definition — self-contained files", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-stdlib.pike");
+    await indexFile(index, "cross-stdlib.pike");
   });
 
-  test("cross-stdlib.pike indexes without error", () => {
+  test("cross-stdlib.pike indexes without error", async () => {
     const uri = corpusUri("cross-stdlib.pike");
     const table = index.getSymbolTable(uri);
     expect(table).not.toBeNull();
   });
 
-  test("compat-pike78.pike detects #pike version", () => {
-    indexFile(index, "compat-pike78.pike");
+  test("compat-pike78.pike detects #pike version", async () => {
+    await indexFile(index, "compat-pike78.pike");
     const uri = corpusUri("compat-pike78.pike");
     const entry = index.getFile(uri);
     expect(entry).toBeDefined();
@@ -235,26 +227,26 @@ describe("Cross-file incremental update — invalidation", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-simple-a.pike");
-    indexFile(index, "cross-inherit-simple-b.pike");
-    indexFile(index, "cross-inherit-chain-c.pike");
+    await indexFile(index, "cross-inherit-simple-a.pike");
+    await indexFile(index, "cross-inherit-simple-b.pike");
+    await indexFile(index, "cross-inherit-chain-c.pike");
   });
 
-  test("re-indexing a file preserves dependencies", () => {
+  test("re-indexing a file preserves dependencies", async () => {
     const uriA = corpusUri("cross-inherit-simple-a.pike");
     const uriB = corpusUri("cross-inherit-simple-b.pike");
 
     // Re-index A with same content
     const content = readCorpus("cross-inherit-simple-a.pike");
     const tree = parse(content);
-    index.upsertFile(uriA, 2, tree, content, ModificationSource.DidChange);
+    await index.upsertFile(uriA, 2, tree, content, ModificationSource.DidChange);
 
     // B should still be a dependent of A
     const deps = index.getDependents(uriA);
     expect(deps.has(uriB)).toBe(true);
   });
 
-  test("invalidating A invalidates B", () => {
+  test("invalidating A invalidates B", async () => {
     const uriA = corpusUri("cross-inherit-simple-a.pike");
     const uriB = corpusUri("cross-inherit-simple-b.pike");
 
@@ -271,13 +263,13 @@ describe("Cross-file incremental update — invalidation", () => {
     expect(index.getSymbolTable(uriB)).toBeNull();
   });
 
-  test("removing a file cleans up dependencies", () => {
+  test("removing a file cleans up dependencies", async () => {
     const uriB = corpusUri("cross-inherit-simple-b.pike");
     const uriA = corpusUri("cross-inherit-simple-a.pike");
 
     // Re-index to ensure clean state
-    indexFile(index, "cross-inherit-simple-a.pike");
-    indexFile(index, "cross-inherit-simple-b.pike");
+    await indexFile(index, "cross-inherit-simple-a.pike");
+    await indexFile(index, "cross-inherit-simple-b.pike");
 
     // Verify dependency exists
     expect(index.getDependents(uriA).has(uriB)).toBe(true);
@@ -299,20 +291,20 @@ describe("Cross-file incremental update — transitive invalidation", () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
     // Chain: C inherits B, B inherits A
-    indexFile(index, "cross-inherit-chain-a.pike");
-    indexFile(index, "cross-inherit-chain-b.pike");
-    indexFile(index, "cross-inherit-chain-c.pike");
+    await indexFile(index, "cross-inherit-chain-a.pike");
+    await indexFile(index, "cross-inherit-chain-b.pike");
+    await indexFile(index, "cross-inherit-chain-c.pike");
     uriA = corpusUri("cross-inherit-chain-a.pike");
     uriB = corpusUri("cross-inherit-chain-b.pike");
     uriC = corpusUri("cross-inherit-chain-c.pike");
   });
 
-  test("dependency graph: A has B as dependent, B has C as dependent", () => {
+  test("dependency graph: A has B as dependent, B has C as dependent", async () => {
     expect(index.getDependents(uriA).has(uriB)).toBe(true);
     expect(index.getDependents(uriB).has(uriC)).toBe(true);
   });
 
-  test("invalidating A transitively invalidates B AND C", () => {
+  test("invalidating A transitively invalidates B AND C", async () => {
     // All three have valid tables
     expect(index.getSymbolTable(uriA)).not.toBeNull();
     expect(index.getSymbolTable(uriB)).not.toBeNull();
@@ -334,11 +326,11 @@ describe("Cross-file incremental update — transitive invalidation", () => {
     expect(index.getSymbolTable(uriC)).toBeNull();
   });
 
-  test("re-indexing B does not re-validate C (C remains stale)", () => {
+  test("re-indexing B does not re-validate C (C remains stale)", async () => {
     // Re-index B with fresh content
     const contentB = readCorpus("cross-inherit-chain-b.pike");
     const treeB = parse(contentB);
-    index.upsertFile(uriB, 2, treeB, contentB, ModificationSource.DidChange);
+    await index.upsertFile(uriB, 2, treeB, contentB, ModificationSource.DidChange);
 
     // B is now valid (upsertFile clears stale)
     expect(index.getSymbolTable(uriB)).not.toBeNull();
@@ -348,20 +340,20 @@ describe("Cross-file incremental update — transitive invalidation", () => {
     expect(index.isStale(uriC)).toBe(true);
   });
 
-  test("re-indexing C makes it valid again", () => {
+  test("re-indexing C makes it valid again", async () => {
     const contentC = readCorpus("cross-inherit-chain-c.pike");
     const treeC = parse(contentC);
-    index.upsertFile(uriC, 2, treeC, contentC, ModificationSource.DidChange);
+    await index.upsertFile(uriC, 2, treeC, contentC, ModificationSource.DidChange);
 
     expect(index.getSymbolTable(uriC)).not.toBeNull();
     expect(index.isStale(uriC)).toBe(false);
   });
 
-  test("invalidating B transitively invalidates C but NOT A", () => {
+  test("invalidating B transitively invalidates C but NOT A", async () => {
     // Re-index all to clean state
-    indexFile(index, "cross-inherit-chain-a.pike");
-    indexFile(index, "cross-inherit-chain-b.pike");
-    indexFile(index, "cross-inherit-chain-c.pike");
+    await indexFile(index, "cross-inherit-chain-a.pike");
+    await indexFile(index, "cross-inherit-chain-b.pike");
+    await indexFile(index, "cross-inherit-chain-c.pike");
 
     const invalidated = index.invalidateWithDependents(uriB);
 
@@ -386,11 +378,11 @@ describe("Cross-file inheritance wiring — US-001", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-simple-a.pike");
-    indexFile(index, "cross-inherit-simple-b.pike");
+    await indexFile(index, "cross-inherit-simple-a.pike");
+    await indexFile(index, "cross-inherit-simple-b.pike");
   });
 
-  test("Dog class scope has cross-file inherited scope from Animal", () => {
+  test("Dog class scope has cross-file inherited scope from Animal", async () => {
     const uriB = corpusUri("cross-inherit-simple-b.pike");
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();
@@ -426,9 +418,9 @@ describe("Cross-file inheritance wiring — US-001", () => {
     expect(inheritedNames).toContain("create");
   });
 
-  test("same-file inheritance still works — class-single-inherit", () => {
+  test("same-file inheritance still works — class-single-inherit", async () => {
     const singleIndex = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(singleIndex, "class-single-inherit.pike");
+    await indexFile(singleIndex, "class-single-inherit.pike");
 
     const uri = corpusUri("class-single-inherit.pike");
     const table = singleIndex.getSymbolTable(uri);
@@ -470,11 +462,11 @@ describe("Cross-file inheritance chain wiring", () => {
   beforeAll(async () => {
     await initParser();
     index = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
-    indexFile(index, "cross-inherit-chain-a.pike");
-    indexFile(index, "cross-inherit-chain-b.pike");
+    await indexFile(index, "cross-inherit-chain-a.pike");
+    await indexFile(index, "cross-inherit-chain-b.pike");
   });
 
-  test("Middle class inherits Base members from cross-file", () => {
+  test("Middle class inherits Base members from cross-file", async () => {
     const uriB = corpusUri("cross-inherit-chain-b.pike");
     const tableB = index.getSymbolTable(uriB);
     expect(tableB).not.toBeNull();

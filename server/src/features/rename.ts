@@ -175,7 +175,7 @@ export function getRenameLocations(
   // Same-file references
   const refs = getReferencesTo(table, line, character);
   for (const ref of refs) {
-    // Skip the declaration site (first element is always the declaration)
+    // Skip any ref that coincides with the declaration (should not happen post-unshift removal, but defensive)
     if (ref.loc.line === decl.nameRange.start.line &&
         ref.loc.character === decl.nameRange.start.character) {
       continue;
