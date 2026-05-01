@@ -27,6 +27,12 @@ export interface TypeResolutionContext {
   uri: string;
   index: WorkspaceIndex;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
+  /**
+   * Optional async type inferrer (typically PikeWorker.typeof_()).
+   * Called when static type resolution fails — e.g., a variable declared
+   * `mixed` with no assignedType. Returns the inferred type name or null.
+   */
+  typeInferrer?: (varName: string) => Promise<string | null>;
 }
 
 
@@ -99,7 +105,22 @@ export async function resolveMemberAccess(
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
   // Use assignedType when declaredType is absent or a primitive like 'mixed'
-  const typeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
+  let typeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
+
+  // If static type resolution yields nothing and a runtime inferrer is
+  // available, ask Pike for the inferred type. This covers variables
+  // declared `mixed` with no initializer pattern that extractInitializerType
+  // can handle — e.g., function parameters or assignment-target variables.
+  if (!typeName && lhsDecl && lhsDecl.name && context.typeInferrer) {
+    if (lhsDecl.kind === 'variable' || lhsDecl.kind === 'parameter') {
+      try {
+        typeName = await context.typeInferrer(lhsDecl.name);
+      } catch {
+        // Worker unavailable or timed out — proceed without inferred type
+      }
+    }
+  }
+
   if (typeName) {
     const result = await resolveType(typeName, context, depth + 1);
     if (result?.decl.kind === "class") {
@@ -224,7 +245,7 @@ async function resolveCrossFileType(
  * full range, which correctly disambiguates nested classes (multiple class
  * scopes may share the same parentId with overlapping ranges).
  */
-function findClassScope(table: SymbolTable, classDecl: Declaration): Scope | null {
+export function findClassScope(table: SymbolTable, classDecl: Declaration): Scope | null {
   for (const scope of table.scopes) {
     if (scope.kind !== 'class') continue;
     if (scope.parentId !== classDecl.scopeId) continue;
@@ -280,3 +301,28 @@ function findMemberInInheritedScopes(
   return null;
 }
 
+/**
+ * Collect all member declarations from a class and its inherited scopes.
+ * Returns declarations from the class body scope plus all inherited scopes.
+ */
+export function collectClassMembers(table: SymbolTable, classDecl: Declaration): Declaration[] {
+  const members: Declaration[] = [];
+  const classScope = findClassScope(table, classDecl);
+  if (!classScope) return members;
+
+  for (const declId of classScope.declarations) {
+    const decl = table.declById.get(declId);
+    if (decl) members.push(decl);
+  }
+
+  for (const inheritedId of classScope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedId);
+    if (!inheritedScope) continue;
+    for (const declId of inheritedScope.declarations) {
+      const decl = table.declById.get(declId);
+      if (decl) members.push(decl);
+    }
+  }
+
+  return members;
+}
