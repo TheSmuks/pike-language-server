@@ -168,6 +168,9 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
       } catch {
         // ignore
       }
+      // Drain pending events before destroying streams to avoid
+      // "Connection is closed" errors from in-flight notifications.
+      await new Promise((r) => setTimeout(r, 50));
       c2s.destroy();
       s2c.destroy();
     },

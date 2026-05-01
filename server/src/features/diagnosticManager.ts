@@ -161,7 +161,11 @@ export class DiagnosticManager {
       }
     } catch (err) {
       // Parse failure — log but don't crash the manager
-      this.connection.console.error(`parse failed for ${uri}: ${(err as Error).message}`);
+      try {
+        this.connection.console.error(`parse failed for ${uri}: ${(err as Error).message}`);
+      } catch {
+        // Connection closed during teardown
+      }
     }
 
     if (this.mode !== "realtime") return;
