@@ -2,6 +2,15 @@
 
 ### Added
 
+- **Template upgrade**: ai-project-template from v0.2.0 to v0.6.0
+  - Added OMP skills: merge-to-main, cut-release, setup, template-guide
+  - Added OMP rules: no-placeholders, changelog-required, conventional-commits
+  - Added OMP hooks: protect-main, template-compliance-hint
+  - Added OMP tool: template-audit
+  - Added GitHub workflow: branch-cleanup.yml
+  - Added docs: omp-extensions-guide.md, agent-files-guide.md
+  - Updated AGENTS.md and docs/ci.md with new structure
+
 - Type-aware arrow/dot rename: rename now checks receiver type before including
   arrow/dot references, preventing cross-class rename of same-name methods
 - Runtime type inference for completion and definition: `typeof_()` is called

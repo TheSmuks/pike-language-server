@@ -2,9 +2,9 @@
 
 ## Current Phase
 
-**Phase 9: Stabilize and Multi-editor** — All workstreams complete. 1,311 tests passing.
+**Phase 15: Correctness Foundations** — All workstreams complete. 1,612 tests passing, 0 failures, 13,072 assertions.
 
-Workstream 1 (User-facing roughness) ✓. Workstream 2 (Production quality) ✓. Workstream 3 (Performance) ✓. Ready for beta tag.
+Completion refinements (P1) ✓. Rename bug fix (P2) ✓. Diagnostics fix (P3) ✓. CI canary fix (P4) ✓. Decision docs 0017-0018 (P5) ✓.
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
 |-------|--------|-----------------|-----------------|
@@ -18,6 +18,12 @@ Workstream 1 (User-facing roughness) ✓. Workstream 2 (Production quality) ✓.
 | Phase 7: Type Resolution + Import Tracking | **Complete** | Phase 6 complete | P1: Type resolver. P2: Import tracking. 37 new tests. |
 | Phase 8: Rename | **Complete + post-audit fixes** | Phase 7 complete | textDocument/rename, textDocument/prepareRename, 30 rename tests, 3 audit bugs fixed |
 | Phase 9: Stabilize and Multi-editor | **Complete** | Phase 8 complete | Standalone build, Neovim verified, real-codebase tested, performance measured |
+| Phase 10: Type Inference | **Complete** | Phase 9 complete | assignedType, extractInitializerType, PRIMITIVE_TYPES, typeof integration |
+bp|| Phase 11: Inference Docs | **Complete** | Phase 10 complete | Decision 0019, corpus files, harness snapshots, known-limitations |
+jf|| Phase 12: Semantic Tokens | **Complete** | Phase 11 complete | Token type/modifier mapping, production, delta encoding. Decision 0020. |
+vk|| Phase 13: LSP Features | **Complete** | Phase 12 complete | documentHighlight, foldingRange, signatureHelp, semanticTokens handler. Decisions 0020, 0021. |
+kc|| Phase 14: Workspace Features | **Complete** | Phase 13 complete | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
+ya|| Phase 15: Correctness Foundations | **Complete** | Phase 14 complete | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
 
 ## Phase 1 Exit Checkpoint — Verified
 

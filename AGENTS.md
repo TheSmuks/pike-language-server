@@ -161,8 +161,11 @@ CI uses separate workflow files, one concern per file. See [docs/ci.md](./docs/c
 | `commit-lint.yml` | Conventional commit enforcement |
 | `changelog-check.yml` | Changelog update enforcement (PRs only) |
 | `blob-size-policy.yml` | Rejects oversized files (PRs only) |
+| `branch-cleanup.yml` | Deletes merged feature branches |
 
 ## Agent Behavior
+
+Agents can invoke the `template-guide` skill (`.omp/skills/template-guide/SKILL.md`) to look up conventions, audit compliance, or get upgrade guidance. Agents can also invoke the `merge-to-main` skill (`.omp/skills/merge-to-main/SKILL.md`) to automate the PR lifecycle after completing feature work, and the `cut-release` skill (`.omp/skills/cut-release/SKILL.md`) to cut a new release with proper version bumping and GitHub release creation.
 
 When an AI agent is working in this repository:
 
@@ -213,4 +216,4 @@ Follow [Keep a Changelog](https://keepachangelog.com/). Update `CHANGELOG.md` un
 
 ## Template Version
 
-This project was generated from `ai-project-template` version **0.2.0**. See [`.template-version`](./.template-version) for the current release.
+This project was generated from `ai-project-template` version **0.6.0**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect.

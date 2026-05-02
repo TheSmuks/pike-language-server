@@ -2,7 +2,7 @@
 
 [![Changelog](https://img.shields.io/badge/changelog-Keep%20a%20Changelog-blue.svg)](./CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
-[![Template](https://img.shields.io/badge/template-v0.2.0-blueviolet.svg)](./.template-version)
+[![Template](https://img.shields.io/badge/template-v0.6.0-blueviolet.svg)](./.template-version)
 
 A tier-3 Language Server Protocol implementation for Pike. Works with VS Code, Neovim, Helix, and any LSP-capable editor.
 

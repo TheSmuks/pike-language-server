@@ -1,6 +1,6 @@
-# State of the Project — Phase 14 Complete
+# State of the Project — Phase 15 Complete
 
-> Audit date: 2026-04-30. Updated after Phase 14 completion (type inference, semantic tokens, code actions, workspace features).
+> Audit date: 2026-05-01. Updated after Phase 15 completion (correctness foundations).
 
 ## Project Identity
 
@@ -29,6 +29,7 @@
 | 12: Semantic Tokens | Complete | 1,425 | Token type/modifier mapping, production, delta encoding. Decision 0020. |
 | 13: LSP Features | Complete | 1,530 | documentHighlight, foldingRange, signatureHelp, semanticTokens handler. Decisions 0020, 0021. |
 | 14: Workspace Features | Complete | 1,565 | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
+| 15: Correctness Foundations | Complete | 1,612 | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
 
 ## LSP Feature Completeness
 
