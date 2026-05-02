@@ -14,89 +14,12 @@
 //   ping      — Health check
 //   autodoc   — Extract AutoDoc XML from Pike source
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// Import Common module for shared utilities
+import Common;
 
-string get_pike_version() {
-  string v = version();
-  string major, release;
-  sscanf(v, "Pike v%s release %s", major, release);
-  return major + "." + release;
-}
-
-// ---------------------------------------------------------------------------
-// CompilationHandler for capturing diagnostics
-// ---------------------------------------------------------------------------
-
-class CaptureHandler {
-  array errors = ({});
-  array warnings = ({});
-
-  void compile_error(string file, int line, string msg) {
-    errors += ({ ([ "file": file, "line": line, "message": msg ]) });
-  }
-
-  void compile_warning(string file, int line, string msg) {
-    warnings += ({ ([ "file": file, "line": line, "message": msg ]) });
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Diagnostic normalization (reuses harness pattern)
-// ---------------------------------------------------------------------------
-
-array(mapping) normalize_diagnostics(array raw_errors, array raw_warnings) {
-  array(mapping) all = ({});
-
-  foreach(raw_errors, mapping e) {
-    all += ({ ([
-      "line": e["line"],
-      "severity": "error",
-      "message": e["message"],
-    ]) });
-  }
-
-  foreach(raw_warnings, mapping w) {
-    all += ({ ([
-      "line": w["line"],
-      "severity": "warning",
-      "message": w["message"],
-    ]) });
-  }
-
-  sort(all->line, all);
-
-  // Post-process: extract expected/actual types
-  array(mapping) result = ({});
-  int j = 0;
-  while (j < sizeof(all)) {
-    mapping d = all[j];
-    string msg = d["message"];
-
-    if (has_prefix(msg, "Expected: ") && sizeof(result) > 0) {
-      string expected = msg[10..];
-      if (sizeof(expected) > 0 && expected[-1] == '.')
-        expected = expected[..sizeof(expected)-2];
-      result[-1]["expected_type"] = expected;
-      j++;
-      continue;
-    }
-
-    if (has_prefix(msg, "Got     : ") && sizeof(result) > 0) {
-      string actual = msg[10..];
-      if (sizeof(actual) > 0 && actual[-1] == '.')
-        actual = actual[..sizeof(actual)-2];
-      result[-1]["actual_type"] = actual;
-      j++;
-      continue;
-    }
-
-    result += ({ d });
-    j++;
-  }
-
-  return result;
+// Create handler on demand for backwards compatibility
+object make_handler() {
+  return Common()->DiagnosticHandler();
 }
 
 // ---------------------------------------------------------------------------
@@ -130,13 +53,13 @@ mapping handle_diagnose(mapping params) {
     source = "#pragma strict_types\n" + source;
   }
 
-  object handler = CaptureHandler();
+  object handler = make_handler();
   program compiled_prog;
   mixed compile_err = catch {
     compiled_prog = compile_string(source, filepath, handler);
   };
 
-  array diagnostics = normalize_diagnostics(handler->errors, handler->warnings);
+  array diagnostics = Common()->normalize_diagnostics(handler->errors, handler->warnings);
 
   return ([ "diagnostics": diagnostics, "exit_code": compile_err ? 1 : 0 ]);
 }
@@ -146,13 +69,12 @@ mapping handle_diagnose(mapping params) {
 // ---------------------------------------------------------------------------
 
 mapping handle_ping(mapping params) {
-  return ([ "status": "ok", "pike_version": get_pike_version() ]);
+  return ([ "status": "ok", "pike_version": Common()->get_pike_version() ]);
 }
 
 // ---------------------------------------------------------------------------
 // Method: typeof
 //
-// ---------------------------------------------------------------------------
 // Decision 0018: evaluates typeof(expr) safely by compiling the user's
 // source into a program, then using Pike's reflection API to inspect the
 // expression type.  The expression is interpolated into compiled code, so
@@ -239,7 +161,7 @@ mapping handle_typeof(mapping params) {
     + source + "\n"
     + "mixed _typeof_get() { return typeof(" + expr + "); }\n";
 
-  object handler = CaptureHandler();
+  object handler = make_handler();
   program prog;
   mixed err = catch {
     prog = compile_string(typeof_wrapper, "<typeof-query>", handler);
@@ -288,6 +210,7 @@ mapping handle_autodoc(mapping params) {
   return ([ "xml": "", "error": sprintf("autodoc failed: %O", err) ]);
 }
 
+// ---------------------------------------------------------------------------
 // Main loop: read requests from stdin, dispatch, write responses
 // ---------------------------------------------------------------------------
 
