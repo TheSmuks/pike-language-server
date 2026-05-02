@@ -82,8 +82,8 @@ jobs:
         env:
           PIKE_BINARY: /home/runner/.pike/pike/8.0.1116/bin/pike
 
-      - name: Add Pike to PATH
-        run: echo "$HOME/.pike/pike/8.0.1116/bin" >> $GITHUB_PATH
+      - name: Add Pike and pmp to PATH
+        run: echo "$HOME/.pike/pike/8.0.1116/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
 
       - name: Install pmp
         run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
