@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "PUnit": "github.com/TheSmuks/punit-tests#v1.3.0"
+  }
+}
