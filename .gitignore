@@ -85,3 +85,5 @@ logs/
 PLAN.md
 standalone/
 .pike-lsp/
+modules/
+.pike-env/
