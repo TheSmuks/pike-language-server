@@ -110,3 +110,48 @@ If we integrate pike-introspect:
 - [ ] Benchmark: measure pike-introspect module discovery latency vs. static index lookup
 - [ ] Test in CI: verify pmp install works in CI environment, or document fallback strategy
 - [ ] Evaluate: can pike-introspect help with cross-file inherited member completion?
+---
+
+## Follow-up Results (2026-05-02)
+
+### Open Question #2: PMR availability
+
+**RESOLVED**: CI explicitly installs pmp before running `pmp install` (see `.github/workflows/ci.yml` lines 85-92):
+
+```yaml
+- name: Add Pike and pmp to PATH
+  run: echo "$HOME/.pike/pike/8.0.1116/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
+
+- name: Install pmp
+  run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
+
+- name: Install Pike dependencies
+  run: ~/.pmp/bin/pmp install
+```
+
+`pmp install TheSmuks/pike-introspect` works in CI. **No fallback strategy needed.**
+
+### Follow-up Action: Cross-file inherited member completion
+
+**RESOLVED**: pike-introspect does **not** help with cross-file inheritance resolution.
+
+**Analysis**: `describe_program(object)` returns inherited class names via `indices()`, but does not provide source file locations. For go-to-definition and member completion, we need: "which source file defines `ParentClass` → what symbols does it export?"
+
+**Conclusion**: Runtime introspection tells you *what* was inherited, but not *where* in source code. This gap must be addressed with tree-sitter/workspace index approaches. See `docs/known-limitations.md` for the actual gap (incomplete cross-file resolution in `wireInheritance()`).
+
+**Action**: Address cross-file inheritance resolution as a separate work item, not via pike-introspect.
+
+### Follow-up Action: Benchmark
+
+**DEFERRED**: pike-introspect not installed in current environment. Cannot measure actual latency.
+
+**Expected result**: Static index (`stdlib-autodoc.json`) provides O(1) hash map lookup — significantly faster than pike-introspect runtime queries (`Discover.list_modules()` + `Search.search_symbols()`).
+
+**Recommendation**: Keep static index as primary completion source. Use pike-introspect for fallback/dynamic discovery only (when a module isn't in the static index).
+
+### Updated Action Checklist
+
+- [x] Open a GitHub issue: "Explore pike-introspect integration" — done, see issue #19
+- [ ] Benchmark: measure pike-introspect module discovery latency vs. static index lookup — deferred (expected: static index faster)
+- [x] Test in CI: verify pmp install works in CI environment, or document fallback strategy — resolved, CI has pmp
+- [x] Evaluate: can pike-introspect help with cross-file inherited member completion? — no, requires tree-sitter approach
