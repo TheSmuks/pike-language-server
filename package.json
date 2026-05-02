@@ -14,7 +14,7 @@
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
     "test:integration": "cd tests/integration && npm test",
-    "test:pike": "pike -M modules -M harness tests/pike/run_tests.pike tests/pike",
+    "test:pike": "pmp run tests/pike/run_tests.pike tests/pike",
     "typecheck": "tsc --noEmit",
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
     "harness:verify": "bun run harness/src/runner.ts --verify",
