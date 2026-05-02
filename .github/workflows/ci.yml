@@ -85,12 +85,12 @@ jobs:
       - name: Add Pike to PATH
         run: echo "$HOME/.pike/pike/8.0.1116/bin" >> $GITHUB_PATH
 
-
-      - name: Install pmp
-        run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.3.0/install.sh | PMP_VERSION=v0.3.0 sh
-
-      - name: Install Pike dependencies
-        run: ~/.pmp/bin/pmp install
+      - name: Install PUnit
+        run: |
+          mkdir -p modules/PUnit.pmod
+          curl -sL "https://github.com/TheSmuks/punit-tests/archive/refs/tags/v1.3.0.tar.gz" -o /tmp/punit.tar.gz
+          tar -xzf /tmp/punit.tar.gz -C /tmp
+          cp -r /tmp/punit-tests-*/PUnit.pmod/* modules/PUnit.pmod/
 
       - name: Run Pike tests
         run: bun run test:pike
