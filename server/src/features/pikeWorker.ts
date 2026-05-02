@@ -108,7 +108,7 @@ const _thisDir = typeof __dirname !== 'undefined'
   : dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(_thisDir, "..", "..", "..");
 const WORKER_SCRIPT = join(PROJECT_ROOT, "harness", "worker.pike");
-
+const HARNESS_DIR = join(PROJECT_ROOT, "harness");
 export class PikeWorker {
   private proc: ChildProcess | null = null;
   private requestId = 0;
@@ -156,10 +156,10 @@ export class PikeWorker {
 
     if (this.config.niceValue > 0 && process.platform === "linux") {
       finalCmd = "nice";
-      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, WORKER_SCRIPT];
+      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, "-M", HARNESS_DIR, WORKER_SCRIPT];
     } else {
       finalCmd = this.config.pikeBinaryPath;
-      finalArgs = [WORKER_SCRIPT];
+      finalArgs = ["-M", HARNESS_DIR, WORKER_SCRIPT];
     }
 
     this.proc = spawn(finalCmd, finalArgs, {

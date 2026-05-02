@@ -10,6 +10,7 @@ This project uses separate GitHub Actions workflow files, one concern per file. 
 | `commit-lint.yml` | Enforce conventional commit messages |
 | `changelog-check.yml` | Require changelog entries on pull requests |
 | `blob-size-policy.yml` | Reject large files in pull requests |
+| `branch-cleanup.yml` | Delete merged feature branches |
 
 
 ### Pike build from source
@@ -62,6 +63,13 @@ on:
 ```
 
 ```yaml
+# branch-cleanup.yml — PR closed
+on:
+  pull_request:
+    types: [closed]
+```
+
+```yaml
 # blob-size-policy.yml — PRs only
 on:
   pull_request:
@@ -79,7 +87,7 @@ concurrency:
   cancel-in-progress: true
 ```
 
-- **`permissions: contents: read`** — least-privilege default. No workflow can write to the repository unless explicitly granted.
+- **`permissions`** — least-privilege default. Most workflows use `contents: read`; `branch-cleanup.yml` needs `contents: write` to delete branches via the GitHub API, and declares only that permission.
 - **`concurrency`** — cancels superseded runs for the same branch or PR, reducing queue time and resource consumption.
 
 ## 3. Caching Strategies
@@ -340,6 +348,7 @@ Copy the individual `.yml` files into `.github/workflows/`:
 .github/workflows/commit-lint.yml
 .github/workflows/changelog-check.yml
 .github/workflows/blob-size-policy.yml
+.github/workflows/branch-cleanup.yml
 ```
 
 These workflows run independently alongside any existing workflows. No conflicts, no integration effort. Remove them by deleting the files.
