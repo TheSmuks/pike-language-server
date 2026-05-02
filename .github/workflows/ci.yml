@@ -83,7 +83,7 @@ jobs:
           PIKE_BINARY: /home/runner/.pike/pike/8.0.1116/bin/pike
 
       - name: Install pmp
-        run: curl -LsSf https://github.com/TheSmuks/pmp/install.sh | sh -s -- --version v0.4.0
+        run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.4.0/install.sh | PMP_VERSION=v0.4.0 sh
 
       - name: Install Pike dependencies
         run: ~/.pmp/bin/pmp install
