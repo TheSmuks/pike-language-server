@@ -87,7 +87,7 @@ jobs:
 
 
       - name: Install pmp
-        run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.4.0/install.sh | PMP_VERSION=v0.4.0 sh
+        run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.3.0/install.sh | PMP_VERSION=v0.3.0 sh
 
       - name: Install Pike dependencies
         run: ~/.pmp/bin/pmp install
