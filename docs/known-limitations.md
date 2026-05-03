@@ -14,7 +14,7 @@
 
 ### catch expression lost in assignment context
 
-**Upstream issue**: [TheSmuks/tree-sitter-pike#3](https://github.com/TheSmuks/tree-sitter-pike/issues/3)
+**Upstream issue**: [TheSmuks/tree-sitter-pike#9](https://github.com/TheSmuks/tree-sitter-pike/issues/9)
 
 When `catch { ... }` is used as the RHS of a local declaration assignment (`mixed err = catch { ... };`), the `catch_expr` node disappears from the parse tree. The expression hierarchy descends through `comma_expr > assign_expr > ... > rel_expr` and stops, never reaching the `catch` keyword.
 
@@ -32,7 +32,7 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 ### Missing field names on for_statement children
 
-**Upstream issue**: [TheSmuks/tree-sitter-pike#2](https://github.com/TheSmuks/tree-sitter-pike/issues/2)
+**Upstream issue**: [TheSmuks/tree-sitter-pike#8](https://github.com/TheSmuks/tree-sitter-pike/issues/8)
 
 `for_statement` and `for_init_decl` children have no field names assigned. `childForFieldName('initializer')` returns null.
 
@@ -40,15 +40,15 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **Workaround**: Walk `for_statement.children` directly, checking `child.type === 'for_init_decl'`. For `for_init_decl`, scan children for `identifier` nodes.
 
-### No scope-introducing nodes for while/switch/plain blocks
+### ~~No scope-introducing nodes for while/switch/plain blocks~~ — WORKED AROUND
 
-**Upstream issue**: [TheSmuks/tree-sitter-pike#4](https://github.com/TheSmuks/tree-sitter-pike/issues/4)
+**Upstream issue**: [TheSmuks/tree-sitter-pike#10](https://github.com/TheSmuks/tree-sitter-pike/issues/10)
 
-`while_statement`, `do_while_statement`, `switch_statement` have no field names or scope markers. Variables declared inside these constructs cannot be automatically scoped.
+`while_statement`, `do_while_statement`, `switch_statement` have no field names or scope markers.
 
-**LSP impact**: Block scoping works for `if`/`for`/`foreach` (explicit handlers) but not for `while`/`switch`/`do-while`. Variables declared inside these blocks currently leak to the enclosing scope.
+**LSP impact**: None — workaround implemented. `collectWhileStatement`, `collectDoWhileStatement`, and `collectSwitchStatement` in `declarationCollector.ts` push explicit block scopes with `ScopeKind` values `'while'`, `'do_while'`, and `'switch'`. Variables declared inside these blocks are correctly scoped.
 
-**Workaround**: Add per-construct handlers similar to `collectIfStatement` for each remaining block-scoped statement type.
+**Workaround**: Per-construct handlers push explicit block scopes for each remaining block-scoped statement type. Covered by definition API tests (US-005): `while`/`switch`/`do-while` variables no longer leak to enclosing scope.
 
 
 ### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED

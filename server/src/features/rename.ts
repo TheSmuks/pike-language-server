@@ -23,7 +23,7 @@ import {
   getReferencesTo,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-import { resolveTypeName } from "./scopeBuilder";
+import { resolveTypeName } from "./scope-helpers";
 import { resolveType } from "./typeResolver";
 // ---------------------------------------------------------------------------
 // Pike reserved words — cannot be used as identifiers (rename targets/new names)

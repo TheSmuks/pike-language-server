@@ -1,5 +1,74 @@
 ## [Unreleased]
 
+## Phase 17: Type-Aware Completion and Definition - 2026-05-03
+
+### Fixed
+
+- **Definition handler now returns arrow/dot access results**: The `textDocument/definition`
+  handler was silently discarding `resolveAccessDefinition()` results, returning `null`
+  even when `obj->member` resolution succeeded. Fixed: `return accessResult;` replaces
+  `return null;` so go-to-definition works correctly for arrow/dot member accesses.
+
+### Changed
+
+- **PikeWorker typeof wired into definition handler**: `makeTypeInferrer()` is now passed
+  to `resolveAccessDefinition()` in the definition handler, enabling go-to-def on
+  `mixed`/`auto` variables with no static `assignedType` via `typeof_()` inference.
+- **New 4 tests for typeof integration**: Added LSP-level tests covering
+  `mixed d = Dog(); d->` completion, `auto f = Stdio.File(); f->` completion,
+  mixed parameter completion, and `d->speak()` definition on `mixed` typed variables.
+
+## Phase 18: Housekeeping and Debt Reduction - 2026-05-03
+
+### Removed
+
+- **Formatter skeleton**: Removed `formattingHandler.ts` (returned null for all inputs)
+  and `formatting.test.ts` (6 tests asserting null behavior). Formatting is a
+  deep problem — tree-sitter-based formatting handles indentation but not reflow,
+  line breaking, or smart alignment. Pike has no canonical formatter (no `gofmt`).
+  This decision is documented in Decision 0020 (Deferred).
+
+### Refactored
+
+- **scopeBuilder.ts (749 → 276 lines)**: Extracted `scope-helpers.ts` (321 lines,
+  geometry + node + scope utilities) and `completion-scope.ts` (129 lines,
+  position-based scope enumeration). File now contains only wireInheritance logic.
+- **xmlParser.ts (836 → 201 lines)**: Extracted `xml-renderer.ts` (659 lines,
+  AutoDoc XML → markdown: renderType, renderSignature, renderInline, renderBlocks).
+  File now contains only the lightweight XML parser and walker.
+
+### Changed
+
+- **Decision 0020 status**: Changed from "Proposed" to "Deferred".
+- **Local branches pruned**: Removed 13 stale local branches (completed phases,
+  audit fixes, CI branches).
+
+### Fixed
+
+- **GitHub issue #19**: "Explore pike-introspect integration" — investigation
+  complete. Pike-introspect v0.2.0 integrated in Phase 16. Issue updated with
+  resolution notes and closed.
+
+
+
+## Phase 19: Scope Leakage Fixes and Upstream Contributions - 2026-05-03
+
+### Changed
+
+- **known-limitations.md**: Updated "No scope-introducing nodes for while/switch/plain blocks"
+  from active limitation to "~~WORKED AROUND~~". The workaround (per-construct handlers in
+  `declarationCollector.ts`) was already present — `collectWhileStatement`,
+  `collectDoWhileStatement`, `collectSwitchStatement` push explicit block scopes with
+  `ScopeKind` values `'while'`, `'do_while'`, `'switch'`. Covered by definition API
+  tests (US-005): while/switch/do-while variables no longer leak to enclosing scope.
+
+### Not done (blocked)
+
+- **Upstream PRs for tree-sitter-pike #2/#3/#4**: GitHub API access unavailable (HTTP 403).
+  Workarounds are in place and documented. The upstream issues remain open — filing
+  PRs requires a user with write access to TheSmuks/tree-sitter-pike.
+
+
 
 ## Phase 16: pike-introspect Integration - 2026-05-03
 
