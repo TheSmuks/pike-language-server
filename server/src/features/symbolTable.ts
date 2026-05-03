@@ -115,13 +115,23 @@ export interface BuildState {
 // Re-exports from extracted modules
 // ---------------------------------------------------------------------------
 
-export { PRIMITIVE_TYPES, resolveTypeName, wireInheritance, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from './scopeBuilder';
+export {
+  getSymbolsInScope,
+  getDeclarationsInScope,
+  findClassScopeAt,
+} from './completion-scope';
+export {
+  PRIMITIVE_TYPES,
+  resolveTypeName,
+} from './scope-helpers';
+export { wireInheritance } from './scopeBuilder';
 
 // ---------------------------------------------------------------------------
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { pushScope, popScope, toRange, wireInheritance, resolveTypeName } from './scopeBuilder';
+import { pushScope, popScope, toRange, resolveTypeName } from './scope-helpers';
+import { wireInheritance } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 

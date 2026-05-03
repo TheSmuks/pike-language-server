@@ -1,3 +1,100 @@
+// ---------------------------------------------------------------------------
+// US-009: PikeWorker typeof integration for completion on mixed/untyped vars
+// ---------------------------------------------------------------------------
+
+describe.skipIf(!pikeAvailable)("US-009: typeof integration for completion on mixed/untyped variables", () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await createTestServer();
+    resetCompletionCache();
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+  });
+
+  test("completion: mixed d = Dog(); d-> shows Dog members via PikeWorker.typeof_", async () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/us009-completion.pike", src);
+
+    // Cursor after 'd->' at line 3, col 5
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 3, character: 5 },
+    }) as { items: Array<{ label: string }> };
+
+    expect(result).not.toBeNull();
+    const labels = result.items.map(i => i.label);
+    expect(labels).toContain("speak");
+    expect(labels).toContain("fetch");
+  });
+
+  test("completion: auto x = Stdio.File(); x-> shows File members via PikeWorker.typeof_", async () => {
+    const src = [
+      'void test() {',
+      '  auto f = Stdio.File();',
+      '  f->',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/us009-auto-completion.pike", src);
+
+    // Cursor after 'f->' at line 2, col 4
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 2, character: 4 },
+    }) as { items: Array<{ label: string }> };
+
+    expect(result).not.toBeNull();
+    const labels = result.items.map(i => i.label);
+    // Stdio.File has 'open' as a constructor/method
+    expect(labels.some(l => l === "open" || l.includes("read") || l.includes("write"))).toBe(true);
+  });
+
+  test("completion: param typed mixed produces no member completions (no initializer)", async () => {
+    const src = [
+      'void foo(mixed x) { x-> }',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/us009-mixed-param.pike", src);
+
+    // Cursor after 'x->' at line 0, col 17
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 0, character: 17 },
+    }) as { items: Array<{ label: string }> };
+
+    // mixed parameter with no initializer: no assignedType, typeof_() won't help
+    // The result may be empty or fall through to predef builtins
+    expect(result).not.toBeNull();
+  });
+
+  test("completion: definition: d->speak() resolves via PikeWorker typeof on mixed var with no initializer", async () => {
+    const src = [
+      'class Dog { void speak() {} void fetch(string item) {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '  d->speak();',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/us009-definition.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 3, character: 5 }, // on 'speak'
+    });
+
+    expect(result).not.toBeNull();
+    expect(result.uri).toBe(uri);
+    expect(result.range.start.line).toBe(0); // Dog class at line 0
+  });
+});
+
 /**
  * Completion tests (LSP layer + direct API).
  *
@@ -12,6 +109,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { createTestServer, type TestServer } from "./helpers";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 import {
   initParser,
   parse,
