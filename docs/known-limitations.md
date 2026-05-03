@@ -50,6 +50,15 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **Workaround**: Add per-construct handlers similar to `collectIfStatement` for each remaining block-scoped statement type.
 
+
+### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED
+
+**Problem**: wireCrossFileInheritance() only searched file-level inherit/import declarations to find the target file for a class-body inherit Animal statement. Bare identifier inherits resolved to resolve_error NOT FOUND in oracle tests.
+
+**Fix**: Added a second resolution path in wireCrossFileInheritance() (scopeBuilder.ts) that resolves the inherit name directly via ModuleResolver when no file-level match is found. Extended warmResolverCache() (workspaceIndex.ts) to pre-warm class-body identifier inherits during async cache warmup, ensuring the sync cache adapter can find them during symbol table building. Also updated resolveInheritTarget() (workspaceIndex.ts) to correctly handle identifier inherits to .pike files by looking for a matching class declaration.
+
+**Verification**: bun test tests/lsp/crossFileOracle.test.ts — all 5 tests pass. Identifier inherits to cross-file classes now resolve correctly.
+
 ## Cross-File Resolution Limitations (Phase 4)
 
 ### No .so binary module resolution
