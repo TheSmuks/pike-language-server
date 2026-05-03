@@ -503,6 +503,94 @@ function wireCrossFileInheritance(
     return { scopeId: syntheticScopeId, nextId };
   }
 
+
+  // Second resolution path: the inherit name itself might be a module/class
+  // path resolvable via the module resolver, without going through file-level
+  // inherit/import. This handles bare identifier inherits like "inherit Animal"
+  // where Animal is a class in another file.
+  if (!inheritName.startsWith('"')) {
+    const resolvedUri = index.resolveImport(inheritName, fromUri)
+      ?? index.resolveInherit(inheritName, false, fromUri);
+    if (resolvedUri) {
+      const targetTable = index.getSymbolTable(resolvedUri);
+      if (targetTable) {
+        const targetClass = targetTable.declarations.find(
+          d => d.kind === 'class' && d.name === inheritName,
+        );
+        if (targetClass) {
+          const targetClassScope = targetTable.scopes.find(s =>
+            s.kind === 'class' && s.parentId === targetClass.scopeId &&
+            containsRange(s.range, targetClass.range),
+          );
+          if (targetClassScope) {
+            const syntheticScopeId = startId;
+            const syntheticDeclIds: number[] = [];
+            let nextId = startId + 1;
+
+            for (const remoteDeclId of targetClassScope.declarations) {
+              const remoteDecl = targetTable.declById.get(remoteDeclId);
+              if (!remoteDecl) continue;
+
+              const syntheticDecl: Declaration = {
+                id: nextId,
+                name: remoteDecl.name,
+                kind: remoteDecl.kind,
+                nameRange: remoteDecl.nameRange,
+                range: remoteDecl.range,
+                scopeId: syntheticScopeId,
+                declaredType: remoteDecl.declaredType,
+                alias: remoteDecl.alias,
+                sourceUri: resolvedUri,
+              };
+              table.declarations.push(syntheticDecl);
+              table.declById.set(nextId, syntheticDecl);
+              syntheticDeclIds.push(nextId);
+              nextId++;
+            }
+
+            for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+              const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+              if (!remoteInheritedScope) continue;
+
+              for (const remoteDeclId of remoteInheritedScope.declarations) {
+                const remoteDecl = targetTable.declById.get(remoteDeclId);
+                if (!remoteDecl) continue;
+
+                const syntheticDecl: Declaration = {
+                  id: nextId,
+                  name: remoteDecl.name,
+                  kind: remoteDecl.kind,
+                  nameRange: remoteDecl.nameRange,
+                  range: remoteDecl.range,
+                  scopeId: syntheticScopeId,
+                  declaredType: remoteDecl.declaredType,
+                  alias: remoteDecl.alias,
+                  sourceUri: resolvedUri,
+                };
+                table.declarations.push(syntheticDecl);
+                table.declById.set(nextId, syntheticDecl);
+                syntheticDeclIds.push(nextId);
+                nextId++;
+              }
+            }
+
+            const syntheticScope: Scope = {
+              id: syntheticScopeId,
+              kind: 'class',
+              range: targetClassScope.range,
+              parentId: scope.id,
+              declarations: syntheticDeclIds,
+              inheritedScopes: [],
+            };
+            table.scopes.push(syntheticScope);
+            table.scopeById.set(syntheticScopeId, syntheticScope);
+
+            return { scopeId: syntheticScopeId, nextId };
+          }
+        }
+      }
+    }
+  }
   return null;
 }
 
