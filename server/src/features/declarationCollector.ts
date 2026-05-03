@@ -50,6 +50,7 @@ const BLOCK_SCOPES = new Set([
   'while_statement',
   'do_while_statement',
   'switch_statement',
+  'catch_expr',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -105,6 +106,10 @@ export function collectDeclarations(node: Node, state: BuildState): void {
     return;
   }
 
+  if (node.type === 'catch_expr') {
+    collectCatchExpr(node, state);
+    return;
+  }
   if (node.type === 'switch_statement') {
     collectSwitchStatement(node, state);
     return;
@@ -234,8 +239,8 @@ function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
   pushScope(state, 'for', toRange(node));
 
-  // Find for_init_decl child — field name 'initializer' may not be available
-  // in older WASM builds, so walk children by type.
+  // Find for_init_decl child — for_statement has 'body' and 'condition' fields,
+  // but NO 'initializer' field. Walk children by type to find for_init_decl.
   for (const child of node.children) {
     if (child.type === 'for_init_decl') {
       // for_init_decl grammar: field('type', $.type), commaSep1(seq(field('name', $.identifier), ...))
@@ -443,8 +448,8 @@ function collectSwitchStatement(node: Node, state: BuildState): void {
       }
     }
   }
-
-  // Body block has no field name — find it by type
+  // Body block has no field name in current grammar (verified WASM 2026-05-03).
+  // Find it by type — the switch block is always the first 'block' child.
   let body: Node | null = null;
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
@@ -464,6 +469,19 @@ function collectSwitchStatement(node: Node, state: BuildState): void {
   }
 }
 
+
+/**
+ * Collect a catch expression: push a 'catch' scope for the block.
+ * catch_expr has field 'value' pointing to the block (verified in WASM 2026-05-03).
+ */
+function collectCatchExpr(node: Node, state: BuildState): void {
+  const block = node.childForFieldName('value');
+  if (block) {
+    pushScope(state, 'catch', toRange(block));
+    collectDeclarations(block, state);
+    popScope(state);
+  }
+}
 function collectSimpleDecl(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
   const kind = DECL_KIND_MAP[node.type];

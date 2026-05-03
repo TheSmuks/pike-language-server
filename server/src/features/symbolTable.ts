@@ -84,7 +84,8 @@ export type ScopeKind =
   | 'if_cond'
   | 'while'
   | 'do_while'
-  | 'switch';
+  | 'switch'
+  | 'catch';
 export interface SymbolTable {
   uri: string;
   version: number;
