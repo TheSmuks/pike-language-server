@@ -194,6 +194,19 @@ US-009 connected `typeof_()` to the hover pipeline, but the completion and go-to
 
 ### Chained inference requires multiple resolveType hops with no caching
 
-For chained member access like `a()->b()->c()`, `resolveType()` is called recursively up to `MAX_RESOLUTION_DEPTH` (5). Each call re-traverses the symbol table and workspace index. There is no memoization of intermediate results.
+
 
 **Impact**: Performance degrades on deeply chained access. The depth limit (5) caps the worst case but also limits correctness for legitimate deep chains.
+
+
+### pike-introspect Availability Dependency
+
+The `PikeWorker.resolve()` method depends on pike-introspect v0.2.0 being installed via `pmp install`.
+The worker spawns with `-M modules/Introspect/src/` to find the module. If pike-introspect is not
+installed, `resolve` calls will fail with an error message.
+
+**Mitigation**: The worker starts successfully without pike-introspect — only `resolve` calls fail.
+CI installs pike-introspect via `pmp install` after the pmp step in `.github/workflows/ci.yml`.
+
+**pmp module path limitation**: pmp symlinks `modules/Introspect -> store-root` but Pike needs
+`-M modules/Introspect/src/`. Filed as TheSmuks/pmp#42. Workaround: explicit `-M` path in spawn args.

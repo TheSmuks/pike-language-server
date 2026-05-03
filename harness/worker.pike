@@ -3,7 +3,6 @@
 // Reads JSON requests from stdin (one per line), dispatches to handlers,
 // writes JSON responses to stdout (one per line).
 //
-// Protocol:
 //   Request:  {"id": 1, "method": "diagnose", "params": {...}}
 //   Response: {"id": 1, "result": {...}}
 //   Error:    {"id": 1, "error": {"code": -1, "message": "..."}}
@@ -13,6 +12,7 @@
 //   signature — Get function/method signature
 //   ping      — Health check
 //   autodoc   — Extract AutoDoc XML from Pike source
+//   resolve   — Resolve a symbol to its kind, source location, and inheritance chain
 
 // Import Common module for shared utilities
 import Common;
@@ -189,6 +189,49 @@ mapping handle_typeof(mapping params) {
 
   return ([ "type": type_str || "mixed" ]);
 }
+// ---------------------------------------------------------------------------
+// Method: resolve
+// ---------------------------------------------------------------------------
+
+mapping handle_resolve(mapping params) {
+  string symbol = params["symbol"] || "";
+  if (!sizeof(symbol))
+    return ([ "resolved": Val.false, "error": "Missing symbol name" ]);
+
+  mixed err = catch {
+    import Introspect;
+    mapping info = Introspect.Discover.resolve_symbol(symbol);
+    if (!info)
+      return ([ "resolved": Val.false, "symbol": symbol ]);
+
+    // Strip program object — not JSON-serializable
+    m_delete(info, "program");
+
+    // If it's a class, also get inheritance info
+    if (info["kind"] == "class") {
+      program p = Introspect.Discover.resolve_program(symbol);
+      if (p) {
+        mapping desc = Introspect.Describe.describe_program(p);
+        if (desc["methods"])
+          info["methods"] = desc["methods"];
+        if (desc["constants"])
+          info["constants"] = desc["constants"];
+        if (sizeof(desc["inherits"] || ({})))
+          info["inherits"] = desc["inherits"];
+        if (sizeof(desc["inherited_methods"] || ({})))
+          info["inherited_methods"] = desc["inherited_methods"];
+        if (sizeof(desc["inherited_constants"] || ({})))
+          info["inherited_constants"] = desc["inherited_constants"];
+      }
+    }
+
+    return ([ "resolved": Val.true ]) + info;
+  };
+
+  if (err)
+    return ([ "resolved": Val.false, "error": sprintf("resolve failed: %O", err) ]);
+}
+
 
 // ---------------------------------------------------------------------------
 // Method: autodoc
@@ -243,6 +286,9 @@ int main() {
         response = ([ "id": id, "result": result ]);
       } else if (method == "autodoc") {
         mapping result = handle_autodoc(params);
+        response = ([ "id": id, "result": result ]);
+      } else if (method == "resolve") {
+        mapping result = handle_resolve(params);
         response = ([ "id": id, "result": result ]);
       } else {
         response = ([
