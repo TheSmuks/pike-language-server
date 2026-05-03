@@ -983,6 +983,35 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("get_name");
     // Dog's own member should also be present
     expect(labels).toContain("fetch");
+
+
+  test("cross-file inherit completion 3-level chain: End e-> shows Base.identify() (CB-2)", async () => {
+    // Chain: End inherits Middle (cross-file), Middle inherits Base (cross-file).
+    // Completion on End e-> should show Base's identify() method.
+    const idx = await indexCorpus([
+      "cross-inherit-chain-a.pike",
+      "cross-inherit-chain-b.pike",
+      "cross-inherit-chain-c.pike",
+    ]);
+    const uriC = "file://" + join(CORPUS_DIR, "cross-inherit-chain-c.pike");
+    const tableC = idx.getSymbolTable(uriC)!;
+    const srcC = readFileSync(join(CORPUS_DIR, "cross-inherit-chain-c.pike"), "utf-8");
+    const treeC = parse(srcC);
+    const ctx: CompletionContext = {
+      index: idx,
+      stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      uri: uriC,
+    };
+
+    // Line 21 (0-indexed 20): "    write("identify: %s\n", e->identify());"
+    // Cursor after e-> at column 28
+    const result = await getCompletions(tableC, treeC, 20, 28, ctx);
+    const labels = completionLabels(result);
+
+    // identify() is defined in Base (cross-inherit-chain-a.pike), inherited through Middle.
+    // This tests the 3-level chain: End→Middle→Base.
+    expect(labels).toContain("identify");
   });
 
   test("cross-file inherit completion: no duplicate entries when child overrides parent member (US-002)", async () => {

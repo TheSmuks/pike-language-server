@@ -1,5 +1,24 @@
 ## [Unreleased]
 
+## Phase 20b: Cross-File Inheritance Chain + Diagnostic Columns - 2026-05-03
+
+### Fixed
+
+- **CB-2: cross-file inherited member completion for 3+ level chains**: `createSyntheticScope` was flattening inherited declarations into the local scope but leaving `inheritedScopes: []`. Recursive synthetic scope creation now preserves the full inheritance chain depth — `End e->` shows `identify()` from `Base` across a 3-file chain (End→Middle→Base).
+
+- **CB-4: column-level diagnostics for Pike compilation errors**: Pike's `compile_error` handler reports no column data, causing all Pike diagnostics to show at `character: 0`. Added `lineToColumn()` helper that uses tree-sitter to find the first meaningful token on the diagnostic line, and updated both `mergeDiagnostics` call sites to pass the parsed tree. Backwards-compatible: omitting the tree falls back to `character: 0`.
+
+### Changed
+
+- `mergeDiagnostics(parseDiags, pikeDiags, tree?)` now accepts an optional `tree?: Tree` parameter
+- `parser.ts` re-exports `type { Tree }` from `web-tree-sitter` for consumers
+
+### Added
+
+- `lineToColumn(tree: Tree, line: number): number` in `diagnosticManager.ts`
+- Tests for `lineToColumn` and tree-aware `mergeDiagnostics` in `diagnostics.test.ts`
+- 3-level chain completion test in `completion.test.ts`
+
 ## Phase 20: tree-sitter-pike Workarounds Removed - 2026-05-03
 
 ### Fixed
