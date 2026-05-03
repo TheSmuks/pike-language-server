@@ -1,5 +1,33 @@
 ## [Unreleased]
 
+## Phase 20: tree-sitter-pike Workarounds Removed - 2026-05-03
+
+### Fixed
+
+ug|**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitations
+  confirmed fixed in current binary (verified 2026-05-03 audit). Workarounds removed or
+  simplified in `declarationCollector.ts`.
+
+- `while_statement` and `do_while_statement` now have `body` field — no more positional scans
+- `for_statement` has `body` and `condition` fields; `initializer` still needs positional scan
+- `switch_statement.value` field works; `body` still needs positional scan (no field name)
+
+### Added
+
+zw|**catch_expr scoping** (new capability — was blocked on upstream): `catch_expr` now appears
+  in the parse tree for both standalone and assignment contexts (`mixed err = catch { ... };`).
+  Added `collectCatchExpr()` in `declarationCollector.ts` that pushes a `'catch'` scope for
+  the block. Catch-block variable declarations are now properly scoped and accessible via
+  go-to-definition and reference resolution.
+
+- `'catch_expr'` added to `BLOCK_SCOPES`
+- `'catch'` added to `ScopeKind` union type
+
+### Changed
+
+nr|**known-limitations.md updated**: Catch-in-assignment (#3) marked RESOLVED;
+  for_statement (#2) marked PARTIALLY RESOLVED (body/condition work, initializer needs scan);
+  while/switch (#4) marked MOSTLY RESOLVED (while/do_while field names work, switch body still needs scan).
 ## Phase 17: Type-Aware Completion and Definition - 2026-05-03
 
 ### Fixed

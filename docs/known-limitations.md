@@ -12,15 +12,20 @@
 
 ## Current Upstream Limitations
 
-### catch expression lost in assignment context
+### ~~catch expression in assignment context~~ — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#3](https://github.com/TheSmuks/tree-sitter-pike/issues/3)
 
-When `catch { ... }` is used as the RHS of a local declaration assignment (`mixed err = catch { ... };`), the `catch_expr` node disappears from the parse tree. The expression hierarchy descends through `comma_expr > assign_expr > ... > rel_expr` and stops, never reaching the `catch` keyword.
+**Fixed in**: WASM binary updated 2026-05-03 — `catch_expr` now appears in the parse tree
+in both standalone and assignment contexts (`mixed err = catch { ... };`).
+The node has field `value` pointing to the block.
 
-**LSP impact**: Cannot create scopes for catch-block variables, resolve references, or provide diagnostics for the standard `mixed err = catch { ... }` pattern. Standalone `catch { ... }` works correctly.
+**LSP impact**: Catch-block variable scoping now works. Variables declared in catch
+blocks are correctly scoped (not leaking to enclosing scope). Reference resolution and
+go-to-definition work for catch-block variables.
 
-**Workaround**: None. Consumers must treat catch blocks as opaque.
+**Implementation**: `collectCatchExpr()` in `declarationCollector.ts` pushes a `'catch'`
+scope for the block. `'catch_expr'` added to `BLOCK_SCOPES` for nested reference resolution.
 
 ### pike-ai-kb: pike-signature cannot resolve C-level predef builtins
 
@@ -30,25 +35,34 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
 
-### Missing field names on for_statement children
+### ~~Missing field names on for_statement children~~ — PARTIALLY RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#2](https://github.com/TheSmuks/tree-sitter-pike/issues/2)
 
-`for_statement` and `for_init_decl` children have no field names assigned. `childForFieldName('initializer')` returns null.
+**Fixed in**: WASM binary updated 2026-05-03 — `for_statement` now has `body` and
+`condition` fields. `childForFieldName('body')` and `childForFieldName('condition')` work.
 
-**LSP impact**: The symbol table builder uses positional child scanning instead of field-based access. This is fragile but functional.
+**Still present**: `for_statement` has no `initializer` field. The positional child scan for
+`for_init_decl` in `collectForStatement()` is still required.
 
-**Workaround**: Walk `for_statement.children` directly, checking `child.type === 'for_init_decl'`. For `for_init_decl`, scan children for `identifier` nodes.
+**Workaround**: `collectForStatement()` walks `node.children` directly, checking
+`child.type === 'for_init_decl'`. For `for_init_decl`, `childrenForFieldName('name')` correctly
+extracts variable name identifiers.
 
-### ~~No scope-introducing nodes for while/switch/plain blocks~~ — RESOLVED
+### ~~No scope-introducing nodes for while/switch/plain blocks~~ — MOSTLY RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#4](https://github.com/TheSmuks/tree-sitter-pike/issues/4)
 
-`while_statement`, `do_while_statement`, `switch_statement` have no field names or scope markers.
+**Fixed in**: WASM binary updated 2026-05-03 — `while_statement` and `do_while_statement`
+now have `body` fields. `collectWhileStatement()` and `collectDoWhileStatement()` use
+`childForFieldName('body')` directly. No more positional scans needed for these two.
 
-**LSP impact**: None — workaround implemented. `collectWhileStatement`, `collectDoWhileStatement`, and `collectSwitchStatement` in `declarationCollector.ts` push explicit block scopes with `ScopeKind` values `'while'`, `'do_while'`, and `'switch'`. Variables declared inside these blocks are correctly scoped via explicit block scopes pushed by `collectWhileStatement`, `collectDoWhileStatement`, and `collectSwitchStatement`.
+**Still present**: `switch_statement` has no `body` field. The positional scan for the
+block in `collectSwitchStatement()` is still required. The `value` field (switch expression)
+works correctly.
 
-**Workaround**: Per-construct handlers push explicit block scopes for each remaining block-scoped statement type. Covered by definition API tests (US-005): `while`/`switch`/`do-while` variables no longer leak to enclosing scope.
+**Workaround**: `collectWhileStatement()` and `collectDoWhileStatement()` use field names
+directly. `collectSwitchStatement()` uses a positional scan for the block.
 
 
 ### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED
