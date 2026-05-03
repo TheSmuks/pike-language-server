@@ -140,6 +140,10 @@
   `resolvesTo !== null`. Inherited references have `resolvesTo=null`. Changed filter to `resolvesTo === null`.
 - Arrow/dot access call sites (`d->bark()`) excluded from rename because `getReferencesTo()` only matched
   references where `resolvesTo === targetDeclId`. Added fallback for arrow/dot access name matching.
+- Cross-file class-body identifier inherits (`inherit Animal` where Animal is a class in another file)
+  resolved to `resolve_error: "NOT FOUND"`. `wireCrossFileInheritance()` now resolves bare identifiers
+  directly via ModuleResolver. Also extended `warmResolverCache()` to pre-warm class-body inherits and
+  fixed `resolveInheritTarget()` to correctly handle identifier inherits to `.pike` files.
 
 ### Added
 
