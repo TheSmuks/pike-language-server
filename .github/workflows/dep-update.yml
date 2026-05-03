@@ -1,0 +1,13 @@
+name: Update Pike Dependencies
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'  # Monday 06:00 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['pike.json']
+
+jobs:
+  update-deps:
+    uses: TheSmuks/pmp/.github/workflows/dep-update.yml@main
