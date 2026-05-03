@@ -523,6 +523,7 @@ export class WorkspaceIndex {
   // Internal: cross-file resolution helpers
   // ---------------------------------------------------------------------------
 
+
   private async resolveInheritTarget(decl: Declaration, fromUri: string): Promise<{
     uri: string; decl: Declaration;
   } | null> {
@@ -533,11 +534,9 @@ export class WorkspaceIndex {
     const targetEntry = this.files.get(targetUri);
     if (!targetEntry?.symbolTable) return null;
 
-    // For string literal inherits OR module (.pmod) identifier inherits,
-    // the target is the file/module itself. Return the first class or file scope.
-    if (isStringLit || targetUri.endsWith(".pmod")) {
-      // inherit "file.pike" / inherit module_name brings all top-level symbols into scope
-      // Return the first class declaration if there is one
+    // For directory modules (.pmod/), the target brings all top-level symbols into scope.
+    // Return the first class declaration as a representative target.
+    if (targetUri.endsWith(".pmod")) {
       for (const targetDecl of targetEntry.symbolTable.declarations) {
         if (targetDecl.kind === "class") {
           return { uri: targetUri, decl: targetDecl };
@@ -550,7 +549,22 @@ export class WorkspaceIndex {
       return null;
     }
 
-    // For identifier inherits, look for a matching class
+    // For string literal inherits (file paths like "cross-inherit-simple-a.pike"):
+    // return the first class found (the entire file's symbols are inherited).
+    if (isStringLit) {
+      for (const targetDecl of targetEntry.symbolTable.declarations) {
+        if (targetDecl.kind === "class") {
+          return { uri: targetUri, decl: targetDecl };
+        }
+      }
+      if (targetEntry.symbolTable.declarations.length > 0) {
+        return { uri: targetUri, decl: targetEntry.symbolTable.declarations[0] };
+      }
+      return null;
+    }
+
+    // For identifier inherits to .pike files (e.g., "inherit Animal" where Animal
+    // is a class in cross-inherit-simple-a.pike): look for a matching class.
     const inheritName = decl.alias ?? decl.name;
     for (const targetDecl of targetEntry.symbolTable.declarations) {
       if (targetDecl.name === inheritName) {
@@ -605,6 +619,7 @@ export class WorkspaceIndex {
    * declarations in the tree. This ensures the sync cache-only adapter
    * used by buildSymbolTable can find entries for cross-file wiring.
    */
+
   private async warmResolverCache(tree: Tree, uri: string): Promise<void> {
     const fromPath = this.uriToPath(uri);
     const promises: Promise<import('./moduleResolver').ResolveResult | null>[] = [];
@@ -612,6 +627,7 @@ export class WorkspaceIndex {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const walk = (node: any): void => {
       if (node.type === 'inherit_decl' || node.type === 'import_decl') {
+        // File-level inherit/import declarations
         const pathNode = node.childForFieldName('path');
         if (pathNode) {
           const name = pathNode.text;
@@ -619,6 +635,18 @@ export class WorkspaceIndex {
           if (isStringLit) {
             promises.push(this.resolver.resolveInherit(name, true, fromPath));
           } else {
+            promises.push(this.resolver.resolveImport(name, fromPath));
+            promises.push(this.resolver.resolveInherit(name, false, fromPath));
+          }
+        }
+      } else if (node.type === 'inherit') {
+        // Class-body inherit: "inherit Animal" or "inherit Middle"
+        // These are also resolved via module paths (for cross-file wiring)
+        const pathNode = node.childForFieldName('path');
+        if (pathNode) {
+          const name = pathNode.text;
+          // Only resolve bare identifiers, not string literals
+          if (!name.startsWith('"')) {
             promises.push(this.resolver.resolveImport(name, fromPath));
             promises.push(this.resolver.resolveInherit(name, false, fromPath));
           }
