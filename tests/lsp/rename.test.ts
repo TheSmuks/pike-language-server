@@ -174,7 +174,7 @@ describe("getRenameLocations — same-file", () => {
     await initParser();
   });
 
-  test("renames a local variable with all references", () => {
+  test("renames a local variable with all references", async () => {
     const src = `int counter = 0;
 counter = counter + 1;
 write((string)counter);`;
@@ -185,7 +185,7 @@ write((string)counter);`;
     const decl = findDecl(table, "counter", "variable");
     expect(decl).toBeDefined();
 
-    const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("counter");
 
@@ -195,7 +195,7 @@ write((string)counter);`;
     expect(result!.locations.every(l => l.uri === "file:///test.pike")).toBe(true);
   });
 
-  test("renames a class with member references", () => {
+  test("renames a class with member references", async () => {
     const src = `class Greeter {
   string name;
   void greet() { write("Hello " + name); }
@@ -208,14 +208,14 @@ g->name;`;
     const decl = findDecl(table, "Greeter", "class");
     expect(decl).toBeDefined();
 
-    const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("Greeter");
     // Declaration + 2 constructor calls (Greeter g = Greeter(...))
     expect(result!.locations).toHaveLength(3);
   });
 
-  test("renames a function parameter", () => {
+  test("renames a function parameter", async () => {
     const src = `int add(int a, int b) {
   return a + b;
 }`;
@@ -225,23 +225,23 @@ g->name;`;
     const decl = findDecl(table, "a", "parameter");
     expect(decl).toBeDefined();
 
-    const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("a");
     // Declaration + reference in "a + b"
     expect(result!.locations).toHaveLength(2);
   });
 
-  test("returns null for position with no symbol", () => {
+  test("returns null for position with no symbol", async () => {
     const src = `void test() { }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test.pike", 1);
 
-    const result = getRenameLocations(table, "file:///test.pike", 0, 0, null);
+    const result = await getRenameLocations(table, "file:///test.pike", 0, 0, null);
     expect(result).toBeNull();
   });
 
-  test("renames a class method", () => {
+  test("renames a class method", async () => {
     const src = `class Calculator {
   int value;
   void reset() { value = 0; }
@@ -253,14 +253,14 @@ g->name;`;
     const decl = findDecl(table, "reset", "function");
     expect(decl).toBeDefined();
 
-    const result = getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("reset");
     // Declaration only — reset() is not called within this fixture
     expect(result!.locations).toHaveLength(1);
   });
 
-  test("rename does not affect same-name identifier in different scope", () => {
+  test("rename does not affect same-name identifier in different scope", async () => {
     const src = [
       'int x = 1;',               // line 0: outer x (decl 1)
       'void foo() {',
@@ -273,7 +273,7 @@ g->name;`;
     const table = buildSymbolTable(tree, "file:///test.pike", 1);
 
     // Rename the inner x (line 2, character 10 → position of 'x' in 'string x')
-    const result = getRenameLocations(table, "file:///test.pike", 2, 10, null);
+    const result = await getRenameLocations(table, "file:///test.pike", 2, 10, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("x");
 
@@ -289,7 +289,7 @@ g->name;`;
     expect(lines).not.toContain(5);
   });
 
-  test("rename includes arrow-access call sites", () => {
+  test("rename includes arrow-access call sites", async () => {
     const src = [
       'class Dog {',
       '  void bark() {}',
@@ -308,7 +308,7 @@ g->name;`;
     const barkDecl = table.declarations.find(d => d.name === "bark" && d.kind === "function");
     expect(barkDecl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       table, "file:///test.pike",
       barkDecl!.nameRange.start.line,
       barkDecl!.nameRange.start.character,
@@ -370,7 +370,7 @@ describe("getRenameLocations — cross-file", () => {
     const speciesDecl = tableA.declarations.find(d => d.name === "SPECIES");
     expect(speciesDecl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       tableA, uriA,
       speciesDecl!.nameRange.start.line,
       speciesDecl!.nameRange.start.character,
@@ -658,18 +658,18 @@ describe("getRenameLocations — stdlib/predef rejection", () => {
 
   const protectedNames = new Set(["write", "search", "sizeof"]);
 
-  test("returns null for predef builtin declaration", () => {
+  test("returns null for predef builtin declaration", async () => {
     const src = `void write(string msg) { write("hi"); }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test.pike", 1);
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       table, "file:///test.pike", 0, 5, null, protectedNames,
     );
     expect(result).toBeNull();
   });
 
-  test("returns null for reference to protected name", () => {
+  test("returns null for reference to protected name", async () => {
     const src = `void search(string s) {}`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test.pike", 1);
@@ -677,7 +677,7 @@ describe("getRenameLocations — stdlib/predef rejection", () => {
     const decl = findDecl(table, "search", "function");
     expect(decl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       table, "file:///test.pike",
       decl!.nameRange.start.line, decl!.nameRange.start.character,
       null, protectedNames,
@@ -721,7 +721,7 @@ describe("rename across 3-file inheritance chain", () => {
     );
     expect(describeDecl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       tableBase, uriBase,
       describeDecl!.nameRange.start.line,
       describeDecl!.nameRange.start.character,
@@ -763,7 +763,7 @@ describe("rename across 3-file inheritance chain", () => {
     );
     expect(constDecl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       tableBase, uriBase,
       constDecl!.nameRange.start.line,
       constDecl!.nameRange.start.character,
@@ -793,7 +793,7 @@ describe("rename across 3-file inheritance chain", () => {
     );
     expect(areaDecl).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       tableBase, uriBase,
       areaDecl!.nameRange.start.line,
       areaDecl!.nameRange.start.character,
@@ -823,7 +823,7 @@ describe("US-004: rename scope precision for same-name methods", () => {
     await initParser();
   });
 
-  test("renaming Dog.bark does NOT rename Cat.bark (same file, typed LHS)", () => {
+  test("renaming Dog.bark does NOT rename Cat.bark (same file, typed LHS)", async () => {
     const src = [
       'class Dog {',
       '  void bark() {}',
@@ -848,7 +848,7 @@ describe("US-004: rename scope precision for same-name methods", () => {
     );
     expect(dogBark).toBeDefined();
 
-    const result = getRenameLocations(
+    const result = await getRenameLocations(
       table, "file:///test.pike",
       dogBark!.nameRange.start.line,
       dogBark!.nameRange.start.character,
