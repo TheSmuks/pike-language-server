@@ -1,6 +1,6 @@
-# State of the Project — Phase 15 Complete
+# State of the Project — Phase 16 Complete
 
-> Audit date: 2026-05-01. Updated after Phase 15 completion (correctness foundations).
+> Audit date: 2026-05-03. Updated after Phase 16 completion (pike-introspect v0.2.0 integration).
 
 ## Project Identity
 
@@ -8,7 +8,7 @@
 - **Version:** 0.1.0-alpha
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
-- **Test suite:** 1,612 tests, 0 fail, 1 todo, 13,072 assertions, 43 files
+- **Test suite:** 1,619 tests, 0 fail, 1 todo, 13,205 assertions, 44 files
 
 ## Phase History
 
@@ -30,9 +30,9 @@
 | 13: LSP Features | Complete | 1,530 | documentHighlight, foldingRange, signatureHelp, semanticTokens handler. Decisions 0020, 0021. |
 | 14: Workspace Features | Complete | 1,565 | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
 | 15: Correctness Foundations | Complete | 1,612 | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
+| 16: pike-introspect Integration | Complete | 1,619 | pike-introspect v0.2.0 integration: resolve method, ResolveResult type, inheritance chain support. Decision 0019 updated. |
 
 ## LSP Feature Completeness
-
 | capability | status | Details |
 |------------|--------|---------|
 | documentSymbol | **Implemented** | 15 node-type to SymbolKind mappings, partial results on parse errors |

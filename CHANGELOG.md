@@ -1,6 +1,23 @@
 ## [Unreleased]
 
+
+## Phase 16: pike-introspect Integration - 2026-05-03
+
 ### Added
+
+- **pike-introspect v0.2.0 integration**: New `resolve` method in worker.pike using
+  `Introspect.Discover.resolve_symbol()` and `Introspect.Describe.describe_program()` for
+  runtime-backed symbol resolution with source locations and inheritance chains
+- **`PikeWorker.resolve()` in TypeScript**: New `ResolveResult` interface and async `resolve()`
+  method exposing cross-file symbol resolution to callers
+- **Worker spawn args updated**: Added `-M modules/Introspect/src/` so the Pike worker can find
+  the Introspect module
+- **7 new resolve tests**: Tests for Stdio.File, Stdio.read_file, Stdio module, unknown symbol,
+  empty symbol, inheritance info, and worker lifecycle after resolve
+- **Decision 0019 updated**: Documented v0.2.0 features (resolve_symbol, describe_program with
+  source locations and inheritance), updated conclusions, added Phase 16 implementation notes
+
+### Changed
 
 - **Template upgrade**: ai-project-template from v0.2.0 to v0.6.0
   - Added OMP skills: merge-to-main, cut-release, setup, template-guide

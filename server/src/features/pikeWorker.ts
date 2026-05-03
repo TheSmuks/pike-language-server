@@ -75,6 +75,20 @@ export interface TypeofResult {
   error?: string;
 }
 
+export interface ResolveResult {
+  resolved: boolean;
+  name?: string;
+  kind?: string;         // "class" | "function" | "module" | "variable"
+  source_file?: string;
+  source_line?: number;
+  methods?: Array<{ name: string; source_file?: string; source_line?: number }>;
+  constants?: Array<{ name: string; source_file?: string; source_line?: number }>;
+  inherits?: Array<{ name: string; source_file?: string; source_line?: number }>;
+  inherited_methods?: string[];
+  inherited_constants?: string[];
+  error?: string;
+}
+
 interface PikeRequest {
   id: number;
   method: string;
@@ -98,10 +112,10 @@ interface QueueItem {
   timeout: ReturnType<typeof setTimeout>;
   token?: CancellationToken;
 }
-
 // ---------------------------------------------------------------------------
 // PikeWorker class
 // ---------------------------------------------------------------------------
+
 
 const _thisDir = typeof __dirname !== 'undefined'
   ? __dirname
@@ -109,7 +123,10 @@ const _thisDir = typeof __dirname !== 'undefined'
 const PROJECT_ROOT = resolve(_thisDir, "..", "..", "..");
 const WORKER_SCRIPT = join(PROJECT_ROOT, "harness", "worker.pike");
 const HARNESS_DIR = join(PROJECT_ROOT, "harness");
+const INTROSPECT_PATH = join(PROJECT_ROOT, "modules", "Introspect", "src");
+
 export class PikeWorker {
+
   private proc: ChildProcess | null = null;
   private requestId = 0;
   private pending = new Map<number, {
@@ -156,10 +173,10 @@ export class PikeWorker {
 
     if (this.config.niceValue > 0 && process.platform === "linux") {
       finalCmd = "nice";
-      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, "-M", HARNESS_DIR, WORKER_SCRIPT];
+      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, "-M", HARNESS_DIR, "-M", INTROSPECT_PATH, WORKER_SCRIPT];
     } else {
       finalCmd = this.config.pikeBinaryPath;
-      finalArgs = ["-M", HARNESS_DIR, WORKER_SCRIPT];
+      finalArgs = ["-M", HARNESS_DIR, "-M", INTROSPECT_PATH, WORKER_SCRIPT];
     }
 
     this.proc = spawn(finalCmd, finalArgs, {
@@ -451,6 +468,23 @@ export class PikeWorker {
     }
 
     return response.result as unknown as TypeofResult;
+  }
+
+
+  /** Resolve a symbol to its kind, source location, and inheritance chain. */
+  async resolve(symbol: string, token?: CancellationToken): Promise<ResolveResult> {
+    try {
+      const response = await this.enqueue("resolve", { symbol }, token);
+      if (response.error) {
+        return { resolved: false, error: response.error.message };
+      }
+      return response.result as unknown as ResolveResult;
+    } catch (err) {
+      if ((err as Error).message?.startsWith("TIMEOUT:")) {
+        return { resolved: false, error: "Timeout" };
+      }
+      throw err;
+    }
   }
 
   /** Health check. */

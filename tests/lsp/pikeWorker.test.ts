@@ -151,3 +151,58 @@ describe.skipIf(!pikeAvailable)("PikeWorker concurrent requests", () => {
     }
   });
 });
+
+describe.skipIf(!pikeAvailable)("PikeWorker resolve", () => {
+  test("resolve Stdio.File returns class info with methods and source_file", async () => {
+    const result = await worker.resolve("Stdio.File");
+    expect(result.resolved).toBe(true);
+    expect(result.kind).toBe("class");
+    expect(result.name).toBeDefined();
+    expect(result.source_file).toBeDefined();
+    expect(result.methods).toBeDefined();
+    expect(result.methods!.length).toBeGreaterThan(0);
+    // Verify methods have expected structure
+    for (const m of result.methods!) {
+      expect(typeof m.name).toBe("string");
+    }
+  });
+
+  test("resolve Stdio.read_file returns function info with source_file", async () => {
+    const result = await worker.resolve("Stdio.read_file");
+    expect(result.resolved).toBe(true);
+    expect(result.kind).toBeDefined();
+    expect(result.source_file).toBeDefined();
+  });
+
+  test("resolve Stdio (module) returns module kind", async () => {
+    const result = await worker.resolve("Stdio");
+    expect(result.resolved).toBe(true);
+    expect(result.kind).toBe("module");
+    expect(result.source_file).toBeDefined();
+  });
+
+  test("resolve unknown symbol returns resolved: false", async () => {
+    const result = await worker.resolve("NonExistentSymbol12345XYZ");
+    expect(result.resolved).toBe(false);
+  });
+
+  test("resolve empty symbol returns error", async () => {
+    const result = await worker.resolve("");
+    expect(result.resolved).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  test("Stdio.File has inheritance info", async () => {
+    const result = await worker.resolve("Stdio.File");
+    expect(result.resolved).toBe(true);
+    expect(result.inherits).toBeDefined();
+    expect(result.inherited_methods).toBeDefined();
+  });
+
+  test("worker stays alive after resolve", async () => {
+    await worker.resolve("Stdio");
+    const ping = await worker.ping();
+    expect(ping.status).toBe("ok");
+    expect(worker.isAlive).toBe(true);
+  });
+});

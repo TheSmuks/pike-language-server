@@ -1,13 +1,13 @@
 # Pike Language Server — Project Tracking
 
+
 ## Current Phase
 
-**Phase 15: Correctness Foundations** — All workstreams complete. 1,612 tests passing, 0 failures, 13,072 assertions.
+**Phase 16: pike-introspect Integration** — Complete. pike-introspect v0.2.0 integrated with resolve method, ResolveResult type, and inheritance chain support. 1,619 tests passing.
 
-Completion refinements (P1) ✓. Rename bug fix (P2) ✓. Diagnostics fix (P3) ✓. CI canary fix (P4) ✓. Decision docs 0017-0018 (P5) ✓.
+|-------|--------|-----------------|-----------------|
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
-|-------|--------|-----------------|-----------------|
 | Phase 0: Investigation | Complete (verified) | Repo created, template read, pike-ai-kb reachable | docs, corpus, 4 decision documents |
 | Phase 1: Test Harness | **Complete (verified)** | Phase 0 complete | Harness code, ground-truth snapshots, canary tests |
 | Phase 2: VSCode Extension + Tree-sitter | **Complete** | Phase 1 complete | Extension installs, documentSymbol works |
@@ -24,6 +24,7 @@ jf|| Phase 12: Semantic Tokens | **Complete** | Phase 11 complete | Token type/m
 vk|| Phase 13: LSP Features | **Complete** | Phase 12 complete | documentHighlight, foldingRange, signatureHelp, semanticTokens handler. Decisions 0020, 0021. |
 kc|| Phase 14: Workspace Features | **Complete** | Phase 13 complete | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
 ya|| Phase 15: Correctness Foundations | **Complete** | Phase 14 complete | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
+| 16: pike-introspect Integration | **Complete** | Phase 15 complete | pike-introspect v0.2.0 integration: resolve method, ResolveResult type, inheritance chain support. Decision 0019 updated.
 
 ## Phase 1 Exit Checkpoint — Verified
 
