@@ -4,6 +4,10 @@
 
 ### Fixed
 
+ka|**8 rename tests fixed (async regression)**: `getRenameLocations()` was made async in Phase 16 for type-aware arrow/dot rename filtering but 13 call sites in `rename.test.ts` were not awaiting the result. Added `await` to all call sites and `async` to the 10 affected test functions.
+
+lq|**Arrow/dot definition resolution restored**: `onDefinition` handler computed `accessResult` from `resolveAccessDefinition()` but never returned it — the handler fell through without a return value, causing `null` for all arrow/dot access go-to-definition requests. Added missing `return accessResult` in `navigationHandler.ts`.
+
 ug|**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitations
   confirmed fixed in current binary (verified 2026-05-03 audit). Workarounds removed or
   simplified in `declarationCollector.ts`.
