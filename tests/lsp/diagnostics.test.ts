@@ -213,6 +213,58 @@ describe("DiagnosticManager unit", () => {
     expect(result[1].source).toBe("pike");
   });
 
+  describe("lineToColumn and tree-aware mergeDiagnostics", () => {
+
+    test("mergeDiagnostics uses tree to compute column for Pike diagnostics", async () => {
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics, lineToColumn } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "#pragma strict_types",
+        "int main() {",
+        "  int x = 1;",
+        '  string y = x;',  // line 4: type error
+        "  return 0;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+
+      // Verify lineToColumn finds the first token column on line 4 (1-indexed: line 4 = index 3)
+      // Line 4 in the source is "  string y = x;" — first meaningful token is "string" at column 2
+      const col = lineToColumn(tree, 4);
+      expect(col).toBeGreaterThan(0);
+
+      // Now verify mergeDiagnostics applies this column
+      const pikeDiags = [{
+        line: 4,
+        severity: "error" as const,
+        message: "Bad type in assignment.",
+        expected_type: "string",
+        actual_type: "int",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree);
+      expect(result).toHaveLength(1);
+      expect(result[0].range.start.character).toBeGreaterThan(0);
+    });
+
+    test("mergeDiagnostics falls back to character 0 when no tree is provided", async () => {
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+
+      const pikeDiags = [{
+        line: 3,
+        severity: "error" as const,
+        message: "Test error.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags);
+      expect(result).toHaveLength(1);
+      expect(result[0].range.start.character).toBe(0);
+    });
+  });
+
+
+
   test("computeContentHash is deterministic", async () => {
     const { computeContentHash } = await import("../../server/src/features/diagnosticManager");
     const a = computeContentHash("hello");

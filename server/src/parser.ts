@@ -130,3 +130,4 @@ export function getLanguage(): Language {
   if (!language) throw new Error('Language not loaded — call initParser() first');
   return language;
 }
+export type { Tree } from 'web-tree-sitter';

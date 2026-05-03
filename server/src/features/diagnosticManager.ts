@@ -21,7 +21,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { PikeWorker, type PikeDiagnostic } from "./pikeWorker";
 import { getParseDiagnostics } from "./diagnostics";
-import { parse } from "../parser";
+import { parse, type Tree } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 // ---------------------------------------------------------------------------
@@ -269,7 +269,8 @@ export class DiagnosticManager {
     const cached = this.pikeCache.get(uri);
     if (cached && cached.contentHash === contentHash) {
       const parseDiags = this.safeParseDiagnostics(source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics);
+      const tree = parse(source);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, tree);
       this.publishDiagnostics(uri, lspDiagnostics);
       return;
     }
@@ -326,7 +327,8 @@ export class DiagnosticManager {
 
       // Merge and publish
       const parseDiags = this.safeParseDiagnostics(source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics);
+      const tree = parse(source);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, tree);
       this.publishDiagnostics(uri, lspDiagnostics);
 
       // Cross-file propagation: schedule re-diagnosis of dependents
@@ -457,14 +459,23 @@ export class DiagnosticManager {
 // ---------------------------------------------------------------------------
 
 /** Merge parse diagnostics with Pike compilation diagnostics. */
+/**
+ * Merge parse diagnostics with Pike compilation diagnostics.
+ *
+ * Pike diagnostics report only line numbers (no column data). When a parsed
+ * tree is available, lineToColumn uses it to find the first meaningful
+ * token on the diagnostic line, providing column-level precision.
+ */
 export function mergeDiagnostics(
   parseDiags: Diagnostic[],
   pikeDiags: PikeDiagnostic[],
+  tree?: Tree,
 ): Diagnostic[] {
   const result = [...parseDiags];
 
   for (const pd of pikeDiags) {
     const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based; clamp negative/zero
+    const character = tree ? lineToColumn(tree, pd.line) : 0;
 
     let message = pd.message;
     if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
@@ -472,8 +483,8 @@ export function mergeDiagnostics(
 
     result.push({
       range: {
-        start: { line, character: 0 },
-        end: { line, character: 0 },
+        start: { line, character },
+        end: { line, character },
       },
       severity:
         pd.severity === "error"
@@ -495,4 +506,39 @@ export function computeContentHash(source: string): string {
     hash = (hash * 1099511628211n) & 0xffffffffffffffffn;
   }
   return hash.toString(36);
+}
+
+/**
+ * Find the column of the first non-whitespace meaningful token on a given line
+ * using tree-sitter. Returns 0 if the line is empty or cannot be determined.
+ *
+ * Used to provide column-level precision for Pike diagnostics, which only
+ * report line numbers (Pike compile_error provides no column data).
+ */
+export function lineToColumn(tree: Tree, line: number): number {
+  // line is 0-based in tree-sitter; Pike diagnostics are 1-based
+  const lspLine = Math.max(0, line);
+  const node = tree.rootNode.descendantForPosition({ row: lspLine, column: 0 });
+  if (!node) return 0;
+
+  // Walk through root children to find the first named node starting on this line.
+  // We want the first meaningful token, skipping whitespace, comments, and ERROR nodes.
+  for (const child of tree.rootNode.children) {
+    const startRow = child.startPosition.row;
+    if (startRow !== lspLine) continue;
+    if (child.type === "comment" || child.type === "preprocessor") continue;
+    if (!child.isError && !child.isMissing) {
+      return child.startPosition.column;
+    }
+  }
+
+  // Fallback: scan the text for first non-whitespace character
+  const lines = tree.rootNode.text.split("\n");
+  const lineText = lines[lspLine];
+  if (lineText !== undefined) {
+    const match = lineText.match(/\S/);
+    if (match) return match.index ?? 0;
+  }
+
+  return 0;
 }
