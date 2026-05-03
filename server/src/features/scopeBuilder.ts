@@ -261,13 +261,41 @@ function createSyntheticScope(
     }
   }
 
+  // Recursively create nested synthetic scopes for inherited scopes, preserving
+  // the full inheritance chain depth (critical for 3+ level chains like End→Middle→Base).
+  const nestedScopeIds: number[] = [];
+  for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+    const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+    if (!remoteInheritedScope) continue;
+    // Find the class declaration for this inherited scope so we can recursively
+    // create its synthetic scope.
+    const remoteInheritedClass = targetTable.declarations.find(
+      d => d.kind === 'class' &&
+        d.scopeId === remoteInheritedScope.parentId &&
+        remoteInheritedScope.range.start.line >= d.range.start.line &&
+        remoteInheritedScope.range.start.line <= d.range.end.line,
+    );
+    if (!remoteInheritedClass) continue;
+    const nestedResult = createSyntheticScope(
+      table,
+      { id: syntheticScopeId },
+      remoteInheritedClass,
+      remoteInheritedScope,
+      targetTable,
+      targetUri,
+      nextId,
+    );
+    nestedScopeIds.push(nestedResult.scopeId);
+    nextId = nestedResult.nextId;
+  }
+
   const syntheticScope = {
     id: syntheticScopeId,
     kind: 'class' as const,
     range: targetClassScope.range,
     parentId: scope.id,
     declarations: syntheticDeclIds,
-    inheritedScopes: [],
+    inheritedScopes: nestedScopeIds,
   };
   table.scopes.push(syntheticScope);
   table.scopeById.set(syntheticScopeId, syntheticScope);
