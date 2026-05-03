@@ -1,8 +1,8 @@
 # Decision 0020: Source Code Formatting (Phase 16)
 
 **Date:** 2026-05-02
-**Status:** Proposed
 
+**Status:** Deferred
 ## Context
 
 The project has implemented all core Tier-3 LSP features through Phase 15 (documentSymbol, definition, references, hover, diagnostics, completion, rename, semantic tokens, document highlight, folding range, signature help, code actions, workspace symbol). Formatting (`textDocument/formatting`) is the next feature to implement.

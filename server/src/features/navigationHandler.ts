@@ -405,7 +405,6 @@ export function registerNavigationHandlers(
       accessTree,
     );
 
-    return null;
   });
 
   // -----------------------------------------------------------------------
