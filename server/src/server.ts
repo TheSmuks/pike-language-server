@@ -40,8 +40,8 @@ import {
   type PikeCacheEntry,
 } from "./features/diagnosticManager";
 import { registerHoverHandler } from "./features/hoverHandler";
+
 import { registerNavigationHandlers } from "./features/navigationHandler";
-import { registerFormattingHandler } from "./features/formattingHandler";
 import { LRUCache } from "./util/lruCache";
 import type { SymbolTable } from "./features/symbolTable";
 import { SEMANTIC_TOKENS_LEGEND } from "./features/semanticTokens";
@@ -244,7 +244,6 @@ export function createPikeServer(connection: Connection): PikeServer {
           triggerCharacters: ['(', ','],
         },
         codeActionProvider: true,
-        documentFormattingProvider: true,
         workspaceSymbolProvider: true,
         workspace: {
           fileOperations: {
@@ -389,7 +388,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   // -----------------------------------------------------------------------
 
   registerHoverHandler(connection, handlerContext);
-  registerFormattingHandler(connection, handlerContext);
+
   registerNavigationHandlers(connection, handlerContext);
 
   // -----------------------------------------------------------------------

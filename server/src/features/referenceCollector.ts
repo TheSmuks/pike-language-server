@@ -6,13 +6,13 @@
  */
 import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
+import { toLoc } from './scope-helpers';
 import {
-  toLoc,
   findScopeForNode,
   findEnclosingClassScopeId,
   findEnclosingClassDecl,
   findDeclInScope,
-} from './scopeBuilder';
+} from './scope-helpers';
 
 // ---------------------------------------------------------------------------
 // Reference collection and resolution
