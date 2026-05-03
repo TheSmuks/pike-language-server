@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "pike_introspect": "github.com/TheSmuks/pike-introspect",
     "PUnit": "github.com/TheSmuks/punit-tests#v1.3.0"
   }
 }
