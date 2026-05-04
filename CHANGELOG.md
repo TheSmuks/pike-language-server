@@ -1,5 +1,56 @@
 ## [Unreleased]
 
+## Phase 21: Known Limitations Fixed - 2026-05-03
+
+### Fixed
+
+**P1-1: AutoDoc on didOpen**: AutoDoc XML is now extracted on `textDocument/didOpen`
+with content-hash dedup, not just on `textDocument/didSave`. Hover shows
+AutoDoc content immediately when a file is opened, without requiring a save.
+Added `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`.
+
+**P2-1: Cross-file rename type filtering**: `getRenameLocations()` now applies
+`isReceiverTypeMatch()` filtering to cross-file references, matching same-file
+behavior. Renaming `Dog.bark()` excludes `cat->bark()` from other files
+where `cat` is typed `Cat`. Also removed an early-return bug that was
+skipping same-file refs when cross-file refs existed.
+
+**P3-1: Ternary operator assignedType**: `extractInitializerType()` in
+`scope-helpers.ts` now handles `cond_expr` (ternary operator). Both branches
+are examined; the first non-primitive identifier is returned.
+`mixed x = true ? Dog() : Cat();` now gets `assignedType = Dog`.
+
+**P4-1: Function return type propagation**: `resolveMemberAccess()` in
+`typeResolver.ts` now propagates function return types. When the LHS
+resolves to a function with a `declaredType`, that return type is used
+for member access. `Dog f() { return Dog(); }` then `f()->speak()` resolves
+to `Dog.speak`.
+
+**P5-1: Resolution caching**: `resolveType()` now uses an optional
+`ResolutionCache` to memoize results within a single resolution chain.
+Caches are per-request (completion/definition) and not persisted.
+
+### Changed
+
+**Upstream limitations marked resolved**: Five known-limitations entries
+were already fixed but docs were stale: `typeof_()` wired to completion
+and definition, PRIMITIVE_TYPES centralized in `scope-helpers.ts`,
+arrow/dot rename cross-file filtering, and `tree-sitter-pike` issues
+#2/#4 (for_statement initializer, switch_statement body field) fixed upstream.
+
+### Added
+
+Tests for all five fixes: didOpen AutoDoc, rename cross-file type
+filtering (2 integration tests), ternary assignedType (7 tests),
+function return type propagation (3 tests), resolution caching.
+
+### Docs
+
+`docs/known-limitations.md`: Updated all resolved items, removed stale
+workaround documentation for upstream fixes.
+`docs/state-of-project.md`: Marked AutoDoc didOpen and arrow/dot
+rename as resolved.
+
 ## Phase 20b: Cross-File Inheritance Chain + Diagnostic Columns - 2026-05-03
 
 ### Fixed
@@ -23,11 +74,11 @@
 
 ### Fixed
 
-ka|**8 rename tests fixed (async regression)**: `getRenameLocations()` was made async in Phase 16 for type-aware arrow/dot rename filtering but 13 call sites in `rename.test.ts` were not awaiting the result. Added `await` to all call sites and `async` to the 10 affected test functions.
+**8 rename tests fixed (async regression)**: `getRenameLocations()` was made async in Phase 16 for type-aware arrow/dot rename filtering but 13 call sites in `rename.test.ts` were not awaiting the result. Added `await` to all call sites and `async` to the 10 affected test functions.
 
-lq|**Arrow/dot definition resolution restored**: `onDefinition` handler computed `accessResult` from `resolveAccessDefinition()` but never returned it — the handler fell through without a return value, causing `null` for all arrow/dot access go-to-definition requests. Added missing `return accessResult` in `navigationHandler.ts`.
+**Arrow/dot definition resolution restored**: `onDefinition` handler computed `accessResult` from `resolveAccessDefinition()` but never returned it — the handler fell through without a return value, causing `null` for all arrow/dot access go-to-definition requests. Added missing `return accessResult` in `navigationHandler.ts`.
 
-ug|**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitations
+**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitations
   confirmed fixed in current binary (verified 2026-05-03 audit). Workarounds removed or
   simplified in `declarationCollector.ts`.
 
@@ -37,7 +88,7 @@ ug|**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitatio
 
 ### Added
 
-zw|**catch_expr scoping** (new capability — was blocked on upstream): `catch_expr` now appears
+**catch_expr scoping** (new capability — was blocked on upstream): `catch_expr` now appears
   in the parse tree for both standalone and assignment contexts (`mixed err = catch { ... };`).
   Added `collectCatchExpr()` in `declarationCollector.ts` that pushes a `'catch'` scope for
   the block. Catch-block variable declarations are now properly scoped and accessible via
@@ -48,7 +99,7 @@ zw|**catch_expr scoping** (new capability — was blocked on upstream): `catch_e
 
 ### Changed
 
-nr|**known-limitations.md updated**: Catch-in-assignment (#3) marked RESOLVED;
+**known-limitations.md updated**: Catch-in-assignment (#3) marked RESOLVED;
   for_statement (#2) marked PARTIALLY RESOLVED (body/condition work, initializer needs scan);
   while/switch (#4) marked MOSTLY RESOLVED (while/do_while field names work, switch body still needs scan).
 ## Phase 17: Type-Aware Completion and Definition - 2026-05-03
