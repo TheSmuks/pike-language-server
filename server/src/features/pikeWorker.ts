@@ -56,6 +56,8 @@ export interface PikeDiagnostic {
   message: string;
   expected_type?: string;
   actual_type?: string;
+  /** Optional error code from the Pike compiler. */
+  code?: string;
 }
 
 export interface DiagnoseResult {

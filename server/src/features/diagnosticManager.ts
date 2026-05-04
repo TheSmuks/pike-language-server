@@ -457,24 +457,40 @@ export class DiagnosticManager {
 // ---------------------------------------------------------------------------
 // Standalone helpers (pure functions, easy to test)
 // ---------------------------------------------------------------------------
-
-/** Merge parse diagnostics with Pike compilation diagnostics. */
 /**
  * Merge parse diagnostics with Pike compilation diagnostics.
  *
  * Pike diagnostics report only line numbers (no column data). When a parsed
  * tree is available, lineToColumn uses it to find the first meaningful
  * token on the diagnostic line, providing column-level precision.
+ *
+ * Deduplication: Parse diagnostics on lines that have Pike diagnostics are
+ * suppressed. Pike diagnostics are more semantically accurate.
+ *
+ * Both diagnostic types receive codes: parse errors get P1xxx, Pike errors
+ * get P2xxxx (or the Pike compiler's own code if available).
  */
 export function mergeDiagnostics(
   parseDiags: Diagnostic[],
   pikeDiags: PikeDiagnostic[],
   tree?: Tree,
 ): Diagnostic[] {
-  const result = [...parseDiags];
+  // Build set of line numbers that have Pike diagnostics.
+  // Parse diagnostics on these lines will be suppressed (Pike is more precise).
+  const pikeLines = new Set<number>();
+  for (const pd of pikeDiags) {
+    pikeLines.add(pd.line - 1); // Pike 1-based → LSP 0-based
+  }
+
+  // Filter parse diagnostics: suppress if the same line has a Pike diagnostic.
+  const suppressedParseDiags = parseDiags.filter((diag) => {
+    return !pikeLines.has(diag.range.start.line);
+  });
+
+  const result: Diagnostic[] = [...suppressedParseDiags];
 
   for (const pd of pikeDiags) {
-    const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based; clamp negative/zero
+    const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
     const character = tree ? lineToColumn(tree, pd.line) : 0;
 
     let message = pd.message;
@@ -486,12 +502,12 @@ export function mergeDiagnostics(
         start: { line, character },
         end: { line, character },
       },
-      severity:
-        pd.severity === "error"
-          ? DiagnosticSeverity.Error
-          : DiagnosticSeverity.Warning,
+      severity: pd.severity === "error"
+        ? DiagnosticSeverity.Error
+        : DiagnosticSeverity.Warning,
       source: "pike",
       message,
+      code: pd.code ?? `P2${String(pd.line).padStart(4, '0')}`,
     });
   }
 
