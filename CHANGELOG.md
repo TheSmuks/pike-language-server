@@ -1,5 +1,66 @@
 ## [Unreleased]
 
+## [0.2.0-beta] - 2026-05-04
+
+### Fixed
+
+**Dead formatter.ts removed**: Orphaned 244-line `server/src/features/formatter.ts`
+was removed. The file was marked as removed in Phase 18 but persisted on disk.
+All formatting functionality is deferred per Decision 0020.
+
+### Changed
+
+All unreleased changes from Phases 17-21 are now part of this release:
+
+**Diagnostic quality**: Parse diagnostics have tighter ERROR node ranges,
+context-aware error messages, and numeric codes (P1xxx/P2xxxx). Duplicate
+diagnostics on Pike-error lines are suppressed.
+
+**Test infrastructure**: Fixed `createTestServer()` to send `processId: null`
+(16 previously-hanging test files now pass). Fixed syntax error in
+`completion.test.ts` (missing closing braces).
+
+**Rename improvements**: Cross-file type filtering on arrow/dot access,
+early-return bug fixed (same-file refs were skipped when cross-file refs existed).
+
+**Hover improvements**: AutoDoc XML now extracted on `didOpen` (no save required),
+ternary operator `assignedType`, function return type propagation, resolution
+caching.
+
+**Type inference**: PikeWorker `typeof_()` wired to completion and definition,
+`mixed`/`auto` variables can now complete and go-to-def. Assignment-based
+type narrowing, `typeof_()` fallback for hover.
+
+**Completion improvements**: Declared-type member completion (`Animal a; a->`),
+3-level cross-file inheritance chain completion, protected symbol rejection
+(283 predef builtins, 5,471 stdlib names).
+
+**Diagnostics**: Column-aware Pike compilation errors via tree-sitter
+`lineToColumn()` helper. Three modes: realtime (default), saveOnly, off.
+
+**Additional features**: Semantic tokens, document highlights, folding ranges,
+signature help, code actions, workspace symbol search, background indexing
+with progress, persistent cross-restart cache, VSCode configuration change
+handler, cancellation token propagation.
+
+**Performance**: Incremental tree-sitter parsing with LRU cache (50 entries /
+50 MB ceiling), PikeWorker FIFO queue with backpressure, auto-restart on
+malformed responses, event-loop yielding for large files.
+
+**Code quality**: Audit round 2 (20 fixes), audit round 3 (10 fixes),
+dead code removal from hoverHandler.ts, scopeBuilder.ts (749→276 lines),
+xmlParser.ts (836→201 lines).
+
+**Docs**: Known-limitations.md updated, state-of-project.md updated to Phase 21,
+Decision documents 0014, 0018, 0019, 0020, 0021, 0022.
+
+### Chore
+
+- Remove unused variables and imports across 6 files
+- PikeDiagnostic interface: added optional `code` field
+- Documentation cleanup: TRACKING.md updated through Phase 21
+
+
 
 ### Added
 
