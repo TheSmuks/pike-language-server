@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+### Chore
+
+Remove unused variables and imports: `inferredSig` in `hoverHandler.ts`,
+`FileEntry` in `persistentCache.ts`, `SCOPE_INTRODUCERS`/`BLOCK_SCOPES`
+in `declarationCollector.ts`, `rangeSize` in `completion-scope.ts`,
+`ctx` parameter in `codeAction.ts`.
+
 ## Phase 21: Known Limitations Fixed - 2026-05-03
 
 ### Fixed

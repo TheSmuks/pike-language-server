@@ -4,7 +4,7 @@
  * Extracted from scopeBuilder.ts to reduce file size.
  */
 import type { Declaration, SymbolTable } from './symbolTable';
-import { findScopeAtPosition, rangeSize } from './scope-helpers';
+import { findScopeAtPosition } from './scope-helpers';
 
 /**
  * Collect all declarations from a scope and its inherited scopes.

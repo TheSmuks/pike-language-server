@@ -19,7 +19,7 @@ import type {
   Scope,
   SymbolTable,
 } from "./symbolTable";
-import type { FileEntry, WorkspaceIndex } from "./workspaceIndex";
+import type { WorkspaceIndex } from "./workspaceIndex";
 import { createHash } from "node:crypto";
 
 // ---------------------------------------------------------------------------
