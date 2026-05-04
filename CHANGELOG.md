@@ -2,6 +2,10 @@
 
 ### Added
 
+**Corpus expansion: 5 new P1 corpus files** covering constant declarations,
+`.pmod` directory module imports, typed function parameters, `#define`/`#ifdef`
+preprocessor directives, and `#include` directive resolution.
+
 **Rename through function return types**: Renaming a class now also updates
 function return type annotations. Renaming `Dog` → `Cat` also renames `Dog f()`
 → `Cat f()`. Added `collectFunctionReturnTypeRefs()` to collect return type

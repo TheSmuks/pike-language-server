@@ -1,62 +1,62 @@
 {
-  "error": null,
   "resolutions": [
     {
-      "reference": "cross-inherit-chain-b.pike",
+      "target_file": "corpus/files/cross-inherit-chain-b.pike",
       "alias": null,
+      "line": 9,
       "symbols": [
         {
           "defined_file": "corpus/files/cross-inherit-chain-a.pike",
+          "name": "Base",
           "members": [
             {
-              "kind": "function",
-              "name": "create"
+              "name": "create",
+              "kind": "function"
             },
             {
-              "kind": "function",
-              "name": "identify"
+              "name": "identify",
+              "kind": "function"
             }
           ],
-          "kind": "class",
           "line": 8,
-          "name": "Base"
+          "kind": "class"
         },
         {
           "defined_file": "corpus/files/cross-inherit-chain-b.pike",
+          "name": "Middle",
           "members": [
             {
-              "kind": "function",
-              "name": "create"
+              "name": "create",
+              "kind": "function"
             },
             {
-              "kind": "function",
-              "name": "identify"
+              "name": "identify",
+              "kind": "function"
             }
           ],
-          "kind": "class",
           "line": 11,
-          "name": "Middle"
+          "kind": "class"
         },
         {
           "defined_file": "corpus/files/cross-inherit-chain-b.pike",
-          "kind": "function",
+          "name": "main",
           "line": 19,
-          "name": "main"
+          "kind": "function"
         }
       ],
       "kind": "inherit",
-      "target_file": "corpus/files/cross-inherit-chain-b.pike",
-      "line": 9
+      "reference": "cross-inherit-chain-b.pike"
     },
     {
-      "resolve_error": "NOT FOUND",
-      "reference": "Middle",
-      "alias": null,
-      "kind": "inherit",
       "target_file": null,
-      "line": 12
+      "alias": null,
+      "line": 12,
+      "kind": "inherit",
+      "resolve_error": "NOT FOUND",
+      "reference": "Middle"
     }
   ],
+  "error": null,
   "pike_version": "8.0.1116",
   "file": "corpus/files/cross-inherit-chain-c.pike"
 }
