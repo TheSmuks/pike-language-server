@@ -7,6 +7,12 @@
  * - scopeBuilder.ts (this file): wireInheritance only
  *
  * Extracted from symbolTable.ts.
+
+// This file serves as a single import point for scope operations.
+// Callers may import from this module rather than the underlying
+// scope-helpers.ts or completion-scope.ts directly. The re-exports
+// are intentional — they provide a stable API surface for the
+// symbol table and completion systems.
  */
 import type { Declaration, SymbolTable } from './symbolTable';
 

@@ -26,11 +26,7 @@ import {
 import { getCompletions, type CompletionContext } from "./completion";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { findImplementations } from "./implementation";
-import {
-  produceSemanticTokens,
-  deltaEncodeTokens,
-  SEMANTIC_TOKENS_LEGEND,
-} from "./semanticTokens";
+import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceCodeActions } from "./codeAction";
