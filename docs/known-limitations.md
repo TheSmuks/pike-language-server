@@ -1,5 +1,26 @@
 # Known Limitations
 
+## Formatting Limitations
+
+### Phase 1 Scope: Indentation-only
+
+The `textDocument/formatting` feature uses a three-layer architecture:
+
+1. **`client/language-configuration.json`** — Client-side indentation rules (Enter, Tab, auto-indent). No LSP traffic.
+2. **`pike-fmt`** — Standalone formatter tool (separate repository). Uses tree-sitter-pike.
+3. **`server/src/features/formattingHandler.ts`** — LSP thin wrapper that shells out to `pike-fmt`.
+
+**Current phase 1 limitations:**
+
+| # | Limitation | Impact | Mitigation |
+|---|------------|--------|------------|
+| 1 | **No semantic formatting** | Formatter operates on tree-sitter parse, not Pike semantics | Phase 1 is indentation-only |
+| 2 | **Preprocessor directive formatting** | `#if`/`#endif` blocks may not format correctly if parse tree splits across boundaries | tree-sitter-pike limitation — document in user docs |
+| 3 | **No operator spacing** | Phase 1 is indentation normalization only | Future phases may add spacing |
+| 4 | **Multiline string/comment bodies preserved** | Formatter only touches leading whitespace | Intentional for Phase 1 |
+| 5 | **Range formatting not implemented** | Formatter operates on whole files | Full-document formatting only |
+| 6 | **Requires pike-fmt installed** | LSP handler shells out to `pike-fmt` | Error response if binary not found |
+
 ## Resolved Upstream Issues
 
 ### ~~Unicode identifiers not parsed correctly~~ — RESOLVED
@@ -64,7 +85,6 @@ works correctly.
 **Workaround**: `collectWhileStatement()` and `collectDoWhileStatement()` use field names
 directly. `collectSwitchStatement()` uses a positional scan for the block.
 
-
 ### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED
 
 **Problem**: wireCrossFileInheritance() only searched file-level inherit/import declarations to find the target file for a class-body inherit Animal statement. Bare identifier inherits resolved to resolve_error NOT FOUND in oracle tests.
@@ -72,6 +92,33 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 **Fix**: Added a second resolution path in wireCrossFileInheritance() (scopeBuilder.ts) that resolves the inherit name directly via ModuleResolver when no file-level match is found. Extended warmResolverCache() (workspaceIndex.ts) to pre-warm class-body identifier inherits during async cache warmup, ensuring the sync cache adapter can find them during symbol table building. Also updated resolveInheritTarget() (workspaceIndex.ts) to correctly handle identifier inherits to .pike files by looking for a matching class declaration.
 
 **Verification**: bun test tests/lsp/crossFileOracle.test.ts — all 5 tests pass. Identifier inherits to cross-file classes now resolve correctly.
+
+## Severity Classification
+
+### Critical (Blocks core functionality)
+
+*None currently.*
+
+### High (Major features impaired)
+
+*None currently.*
+
+### Medium (Known workarounds, tracked for resolution)
+
+| Limitation | Severity | Workaround |
+|------------|----------|------------|
+| Complex initializer type inference | Medium | `extractInitializerType` handles constructors and ternary. Complex expressions need explicit annotations. |
+| Cross-file type resolution freshness | Medium | Background indexing mitigates. |
+| pike-fmt not integrated in LSP | Medium | Formatter created, LSP handler implemented. Requires pike-fmt on PATH. |
+
+### Low (Minor impact, rare occurrence)
+
+| Limitation | Severity | Workaround |
+|------------|----------|------------|
+| for_statement missing initializer field | Low | Positional scan workaround in `collectForStatement()` |
+| switch_statement missing body field | Low | Positional scan workaround in `collectSwitchStatement()` |
+| pike-introspect availability | Low | CI installs it. Worker starts without it; only `resolve` calls fail. |
+| pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
 
 ## Cross-File Resolution Limitations (Phase 4)
 
@@ -83,13 +130,11 @@ The ModuleResolver skips `.so` (compiled C module) files. System modules that ar
 
 **Rationale**: Resolving C modules requires parsing C header files or using libdwarf debugging info — neither is practical for an LSP that needs to stay fast. The mitigation covers 95% of use cases.
 
-
 ### No joinnode multi-path merge — PERMANENT
 
 Pike's `joinnode` class merges symbols from multiple search paths when the same module name exists in multiple locations. The LSP uses first-match-wins instead. If a workspace contains a module with the same name as a system module, the workspace version takes precedence.
 
 **Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
-
 
 ### Import resolution is scoped to file-system paths — PERMANENT
 
@@ -152,6 +197,7 @@ The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins
 **Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
 
 **Current state**: `predef-builtin-index.json` (283 symbols) is a temporary workaround. When [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) ships its `all_constants()` fallback, evaluate removing the predef index in favor of kb queries.
+
 ### ~~AutoDoc hover requires save for cache population~~ — RESOLVED
 
 AutoDoc XML is now extracted on `textDocument/didOpen` with content-hash dedup,
@@ -160,6 +206,7 @@ a file is opened, without requiring a save.
 
 **Implementation**: `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`
 extracts AutoDoc on open using the same fire-and-forget pattern as didSave.
+
 ### AutoDoc hover coverage depends on codebase conventions — BY DESIGN
 
 AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
@@ -167,6 +214,7 @@ AutoDoc hover only works for symbols documented with `//!` comments. PikeExtract
 **Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.
 
 **Rationale**: AutoDoc is opt-in documentation. The fallback to tree-sitter declared types ensures hover always works, even for undocumented symbols.
+
 ## Phase 7: Type Resolution Limitations
 
 ### ~~Type resolution requires explicit type annotations~~ — PARTIALLY RESOLVED (US-008)
@@ -180,6 +228,7 @@ simple constructor or ternary call still require explicit type annotations.
 **Impact**: Arrow/dot member completion and go-to-definition now work for
 variables initialized with simple constructors or ternary expressions, even when
 declared as `mixed`. Other complex initializers still require explicit annotations.
+
 ### Type resolution is same-file only for direct class lookup
 
 `resolveType()` finds classes in the same file first, then falls through to cross-file resolution and stdlib. But cross-file resolution depends on the WorkspaceIndex having the target file indexed. If the target file hasn't been opened or changed since indexing, the resolution may return null.
@@ -219,6 +268,7 @@ now get `assignedType = Dog`.
 `typeof_()` is wired into the hover provider (`server.ts`), completion provider
 (`navigationHandler.ts:565`), and definition provider (`navigationHandler.ts:397`).
 Member access on `mixed`-typed variables now resolves through runtime inference.
+
 ### ~~PRIMITIVE_TYPES centralization is incomplete~~ — RESOLVED
 
 `PRIMITIVE_TYPES` is defined once in `scope-helpers.ts` and re-exported through
@@ -232,8 +282,7 @@ results within a single resolution chain. Each resolution hop checks the cache
 before doing work and stores results after. Caches are created per-request
 (completion/definition) and are not persisted.
 
-
-### pike-introspect Availability Dependency
+## pike-introspect Availability Dependency
 
 The `PikeWorker.resolve()` method depends on pike-introspect v0.2.0 being installed via `pmp install`.
 The worker spawns with `-M modules/Introspect/src/` to find the module. If pike-introspect is not
