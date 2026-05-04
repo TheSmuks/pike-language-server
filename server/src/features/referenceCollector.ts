@@ -47,15 +47,77 @@ export function collectReferences(node: Node, state: BuildState): void {
     case 'type':
       collectTypeRef(node, state);
       break;
+    case 'function_decl':
+      // Collect return type references for rename-through-return-types.
+      // When renaming class Dog → Cat, `Dog f()` should also be renamed.
+      collectFunctionReturnTypeRefs(node, state);
+      break;
     default:
       break;
   }
 
-  // Recurse into children
+  // Recurse into children, but skip return_type on function_decl — it's
+  // already handled by collectFunctionReturnTypeRefs above. This prevents
+  // the generic type walker from collecting duplicate type_refs for the
+  // return type identifier.
   for (const child of node.children) {
+    if (node.type === 'function_decl' && child.type === 'return_type') {
+      continue;
+    }
     collectReferences(child, state);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Function return type references
+// ---------------------------------------------------------------------------
+
+/**
+ * Collect function return type references.
+ * For `Dog f()`, collects `Dog` as a type_ref to the Dog class declaration.
+ * This enables rename-through-return-types: renaming Dog → Cat also updates `Dog f()`.
+ */
+function collectFunctionReturnTypeRefs(node: Node, state: BuildState): void {
+  const returnType = node.childForFieldName('return_type');
+  if (!returnType) return;
+
+  // Walk the return_type subtree to find id_type > identifier
+  collectReturnTypeIdRecursive(returnType, state);
+}
+
+function collectReturnTypeIdRecursive(node: Node, state: BuildState): void {
+  for (const child of node.children) {
+    if (child.type === 'id_type') {
+      const identChild = child.children.find(c => c.type === 'identifier');
+      if (identChild) {
+        const name = identChild.text;
+        const declId = resolveName(name, identChild, state);
+        state.references.push({
+          name,
+          loc: toLoc(identChild.startPosition),
+          kind: 'type_ref',
+          resolvesTo: declId,
+          confidence: declId !== null ? 'high' : 'low',
+        });
+      }
+    } else if (
+      child.type === 'type' ||
+      child.type === 'union_type' ||
+      child.type === 'intersection_type' ||
+      child.type === 'generic_type' ||
+      child.type === 'function_type' ||
+      child.type === 'array_type' ||
+      child.type === 'mapping_type' ||
+      child.type === 'multiset_type'
+    ) {
+      collectReturnTypeIdRecursive(child, state);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Identifier, scope, this, and postfix references
+// ---------------------------------------------------------------------------
 
 function collectIdentifierRef(node: Node, state: BuildState): void {
   const nameNode = node.childForFieldName('name');
