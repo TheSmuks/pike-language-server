@@ -1,3 +1,10 @@
+# Changelog
+
+All notable changes to the Pike Language Server project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
 ## [Unreleased]
 
 ### Added
@@ -21,37 +28,13 @@ references, with location deduplication in `getReferencesTo()`.
 
 **CI**: Upgraded `actions/cache` from v4 to v5.
 
-## [0.2.0-beta] - 2026-05-04
-
-## [0.2.0-beta] - 2026-05-04
+## [0.2.0-beta]
 
 ### Added
 
-**Diagnostic quality improvements**: Parse diagnostics now have tighter ERROR node ranges
-(single token instead of full recovery span), context-aware error messages, and numeric
-diagnostic codes (P1xxx for parse, P2xxxx for Pike compiler). Parse diagnostics on
-lines with Pike diagnostics are suppressed to avoid duplication.
+**Diagnostic quality improvements**: Parse diagnostics now have tighter ERROR node ranges (single token instead of full recovery span), context-aware error messages, and numeric diagnostic codes (P1xxx for parse, P2xxxx for Pike compiler). Parse diagnostics on lines with Pike diagnostics are suppressed to avoid duplication.
 
-### Fixed
 
-**Dead formatter.ts removed**: Orphaned 244-line `server/src/features/formatter.ts`
-was removed. The file was marked as removed in Phase 18 but persisted on disk.
-All formatting functionality is deferred per Decision 0020.
-
-**Dead import in navigationHandler.ts**: Removed unused `SEMANTIC_TOKENS_LEGEND` import.
-
-**Stale TODO in referenceCollector.ts**: Updated to reference known-limitations doc.
-
-**Test infrastructure critical bug**: `createTestServer()` in `tests/lsp/helpers.ts`
-now sends `processId: null` in the `initialize` request. The vscode-languageserver
-watchdog requires this field; omitting it caused `kill(undefined)` to be called,
-making 16 of 34 LSP test files hang indefinitely.
-
-**Syntax error in completion.test.ts**: Fixed missing closing braces that caused
-test suite to fail. Also fixed `dead-code` and `unused-import` violations surfaced
-by the corrected test suite.
-
-**Unused imports across codebase**: Removed 8 unused imports in 6 files.
 
 ### Changed
 
@@ -99,214 +82,562 @@ xmlParser.ts (836→201 lines).
 **Docs**: Known-limitations.md updated, state-of-project.md updated to Phase 21,
 Decision documents 0014, 0018, 0019, 0020, 0021, 0022.
 
-### Chore
 
 - Remove unused variables and imports across 6 files
 - PikeDiagnostic interface: added optional `code` field
 - Documentation cleanup: TRACKING.md updated through Phase 21
 
-## Phase 21: Known Limitations Fixed - 2026-05-03
+
+
+
+**Documentation cleanup**: Updated TRACKING.md with Phases 17-21, updated state-of-project.md title to Phase 21, documented scopeBuilder.ts re-export facade, added "PERMANENT" markers to known-limitations for unfixable items (.so modules, joinnode, import resolution).
+
+**PikeDiagnostic interface**: Added optional `code` field for compiler error codes.
+
+
+**Test infrastructure critical bug**: `createTestServer()` in `tests/lsp/helpers.ts`
+now sends `processId: null` in the `initialize` request. The vscode-languageserver
+watchdog requires this field; omitting it caused `kill(undefined)` to be called,
+making 16 of 34 LSP test files hang indefinitely.
+
+**Syntax error in completion.test.ts**: Fixed missing closing braces that caused
+the entire file to fail parsing. The file now runs all completion integration tests.
+
+**Dead code removal from hoverHandler.ts**: Removed 12 lines of no-op code in the
+`needsPikeTypeof` branch that fetched `typeof_()` results from PikeWorker but did
+nothing with them. The hover always fell through to the tree-sitter fallback.
+
+
+Remove unused variables and imports: `inferredSig` in `hoverHandler.ts`,
+`FileEntry` in `persistentCache.ts`, `SCOPE_INTRODUCERS`/`BLOCK_SCOPES`
+in `declarationCollector.ts`, `rangeSize` in `completion-scope.ts`,
+`ctx` parameter in `codeAction.ts`.
+
 
 ### Fixed
 
-**~~Unicode identifiers not parsed correctly~~**: tree-sitter-pike commit `28a8ae8`
-added Unicode property escapes (`\p{L}`, `\p{N}`) to the identifier grammar rule.
-WASM binary updated; LSP now handles full Unicode identifiers.
+**Dead formatter.ts removed**: Orphaned 244-line `server/src/features/formatter.ts`
+was removed. The file was marked as removed in Phase 18 but persisted on disk.
+All formatting functionality is deferred per Decision 0020.
 
-**~~catch expression in assignment context~~**: WASM binary updated — `catch_expr`
-now appears in the parse tree in both standalone and assignment contexts.
-`collectCatchExpr()` in `declarationCollector.ts` now handles assignment context.
 
-**for_statement missing initializer field**: `for_statement` now has `body` and
-`condition` fields. `initializer` field still missing; positional scan workaround
-remains in `collectForStatement()`.
+**Dead import in navigationHandler.ts**: Removed unused `SEMANTIC_TOKENS_LEGEND` import.
 
-**while/do-while missing body field**: `while_statement` and `do_while_statement`
-now have `body` fields. `collectWhileStatement()` and `collectDoWhileStatement()`
-use `childForFieldName('body')` directly.
+**Stale TODO in referenceCollector.ts**: Updated to reference known-limitations doc.
 
-**switch_statement missing body field**: `switch_statement` still lacks `body` field.
-Positional scan workaround remains in `collectSwitchStatement()`.
 
-### Changed
 
-**WASM binary updated**: Built from latest tree-sitter-pike grammar with field name fixes
-for `for_statement`, `while_statement`, `do_while_statement`, and `switch_statement`.
-Updated `server/dist/tree-sitter-pike.wasm`.
+## Phase 21: Known Limitations Fixed - 2026-05-03
 
 ### Added
 
-**cross-inherit-chain test suite**: Added 5 corpus files and harness snapshots for
-3-level inheritance chain (A inherits B inherits C). Tests verify that member access
-through the chain works at all levels.
+Tests for all five fixes: didOpen AutoDoc, rename cross-file type
+filtering (2 integration tests), ternary assignedType (7 tests),
+function return type propagation (3 tests), resolution caching.
 
-**Precomputed cross-inherit-chain-resolve snapshots**: Added oracle-verified ground
-truth for `cross-inherit-chain-a.pike`, `cross-inherit-chain-b.pike`,
-`cross-inherit-chain-c.pike`.
 
-### Docs
+### Changed
 
-**Known-limitations.md**: Consolidated permanent limitations (.so modules, joinnode,
-import resolution) with "PERMANENT" markers. Added upstream issue links for
-tree-sitter-pike #1, #2, #3, #4.
+**Upstream limitations marked resolved**: Five known-limitations entries
+were already fixed but docs were stale: `typeof_()` wired to completion
+and definition, PRIMITIVE_TYPES centralized in `scope-helpers.ts`,
+arrow/dot rename cross-file filtering, and `tree-sitter-pike` issues
+#2/#4 (for_statement initializer, switch_statement body field) fixed upstream.
+
+
+`docs/known-limitations.md`: Updated all resolved items, removed stale
+workaround documentation for upstream fixes.
+`docs/state-of-project.md`: Marked AutoDoc didOpen and arrow/dot
+rename as resolved.
+
+
+### Fixed
+
+**P1-1: AutoDoc on didOpen**: AutoDoc XML is now extracted on `textDocument/didOpen`
+with content-hash dedup, not just on `textDocument/didSave`. Hover shows
+AutoDoc content immediately when a file is opened, without requiring a save.
+Added `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`.
+
+**P2-1: Cross-file rename type filtering**: `getRenameLocations()` now applies
+`isReceiverTypeMatch()` filtering to cross-file references, matching same-file
+behavior. Renaming `Dog.bark()` excludes `cat->bark()` from other files
+where `cat` is typed `Cat`. Also removed an early-return bug that was
+skipping same-file refs when cross-file refs existed.
+
+**P3-1: Ternary operator assignedType**: `extractInitializerType()` in
+`scope-helpers.ts` now handles `cond_expr` (ternary operator). Both branches
+are examined; the first non-primitive identifier is returned.
+`mixed x = true ? Dog() : Cat();` now gets `assignedType = Dog`.
+
+**P4-1: Function return type propagation**: `resolveMemberAccess()` in
+`typeResolver.ts` now propagates function return types. When the LHS
+resolves to a function with a `declaredType`, that return type is used
+for member access. `Dog f() { return Dog(); }` then `f()->speak()` resolves
+to `Dog.speak`.
+
+**P5-1: Resolution caching**: `resolveType()` now uses an optional
+`ResolutionCache` to memoize results within a single resolution chain.
+Caches are per-request (completion/definition) and not persisted.
+
 
 ## Phase 20b: Cross-File Inheritance Chain + Diagnostic Columns - 2026-05-03
 
-### Fixed
+### Added
 
-**Cross-file class-body identifier inherit not resolved**: Added second resolution path
-in `wireCrossFileInheritance()` that resolves inherit name via `ModuleResolver` when
-no file-level match is found. Extended `warmResolverCache()` to pre-warm class-body
-identifier inherits during async cache warmup.
+- `lineToColumn(tree: Tree, line: number): number` in `diagnosticManager.ts`
+- Tests for `lineToColumn` and tree-aware `mergeDiagnostics` in `diagnostics.test.ts`
+- 3-level chain completion test in `completion.test.ts`
 
-**Diagnostic column positions are approximate**: Added `lineToColumn()` helper that
-locates the first meaningful token on the diagnostic's line using tree-sitter.
-Both `mergeDiagnostics` call sites now pass the parsed tree for column resolution.
 
 ### Changed
 
-**Diagnostics**: Pike compiler diagnostics now display with approximate column positions
-(pointing to first meaningful token). Parse diagnostics (tree-sitter errors) retain
-precise column positions.
+- `mergeDiagnostics(parseDiags, pikeDiags, tree?)` now accepts an optional `tree?: Tree` parameter
+- `parser.ts` re-exports `type { Tree }` from `web-tree-sitter` for consumers
 
-**Reference collector**: Refactored to use a single `_collectAllReferences()` helper
-that unifies same-file and cross-file collection. Simplified `getReferencesTo()` to
-delegate to `_collectAllReferences()`.
 
-### Added
+### Fixed
 
-**cross-inherit-chain corpus files**: `cross-inherit-chain-a.pike`,
-`cross-inherit-chain-b.pike`, `cross-inherit-chain-c.pike` for 3-level
-inheritance testing.
+- **CB-2: cross-file inherited member completion for 3+ level chains**: `createSyntheticScope` was flattening inherited declarations into the local scope but leaving `inheritedScopes: []`. Recursive synthetic scope creation now preserves the full inheritance chain depth — `End e->` shows `identify()` from `Base` across a 3-file chain (End→Middle→Base).
 
-**Diagnostic column test**: Added test in `diagnostics.test.ts` verifying column
-resolution for Pike compiler errors.
+- **CB-4: column-level diagnostics for Pike compilation errors**: Pike's `compile_error` handler reports no column data, causing all Pike diagnostics to show at `character: 0`. Added `lineToColumn()` helper that uses tree-sitter to find the first meaningful token on the diagnostic line, and updated both `mergeDiagnostics` call sites to pass the parsed tree. Backwards-compatible: omitting the tree falls back to `character: 0`.
+
 
 ## Phase 20: tree-sitter-pike Workarounds Removed - 2026-05-03
 
-### Fixed
-
-**~~Unicode identifiers not parsed correctly~~ — RESOLVED**: tree-sitter-pike grammar
-now accepts Unicode identifiers via `\p{L}` and `\p{N}` property escapes.
-
-**~~for_statement missing initializer field~~ — PARTIALLY RESOLVED**: `body` and
-`condition` fields added. `initializer` field still missing; positional scan remains.
-
-**~~No scope-introducing nodes for while/switch/plain blocks~~ — MOSTLY RESOLVED**:
-`while_statement` and `do_while_statement` now have `body` fields. `switch_statement`
-`body` field still missing; positional scan remains.
-
 ### Added
 
-**Stdlib corpus files**: `stdlib-fileio.pike` covering `Stdio.File`,
-`Stdio.read_file`, `Stdio.write_file`.
+**catch_expr scoping** (new capability — was blocked on upstream): `catch_expr` now appears
+  in the parse tree for both standalone and assignment contexts (`mixed err = catch { ... };`).
+  Added `collectCatchExpr()` in `declarationCollector.ts` that pushes a `'catch'` scope for
+  the block. Catch-block variable declarations are now properly scoped and accessible via
+  go-to-definition and reference resolution.
 
-**Diagnostic code field**: Added numeric diagnostic codes to Pike compiler diagnostics
-(P2xxxx range) for IDE integration.
+- `'catch_expr'` added to `BLOCK_SCOPES`
+- `'catch'` added to `ScopeKind` union type
+
+
+### Changed
+
+**known-limitations.md updated**: Catch-in-assignment (#3) marked RESOLVED;
+  for_statement (#2) marked PARTIALLY RESOLVED (body/condition work, initializer needs scan);
+  while/switch (#4) marked MOSTLY RESOLVED (while/do_while field names work, switch body still needs scan).
+
+### Fixed
+
+**8 rename tests fixed (async regression)**: `getRenameLocations()` was made async in Phase 16 for type-aware arrow/dot rename filtering but 13 call sites in `rename.test.ts` were not awaiting the result. Added `await` to all call sites and `async` to the 10 affected test functions.
+
+**Arrow/dot definition resolution restored**: `onDefinition` handler computed `accessResult` from `resolveAccessDefinition()` but never returned it — the handler fell through without a return value, causing `null` for all arrow/dot access go-to-definition requests. Added missing `return accessResult` in `navigationHandler.ts`.
+
+**tree-sitter-pike upstream fixes resolved**: Three WASM field-name limitations
+  confirmed fixed in current binary (verified 2026-05-03 audit). Workarounds removed or
+  simplified in `declarationCollector.ts`.
+
+- `while_statement` and `do_while_statement` now have `body` field — no more positional scans
+- `for_statement` has `body` and `condition` fields; `initializer` still needs positional scan
+- `switch_statement.value` field works; `body` still needs positional scan (no field name)
+
 
 ## Phase 17: Type-Aware Completion and Definition - 2026-05-03
 
+### Changed
+
+- **PikeWorker typeof wired into definition handler**: `makeTypeInferrer()` is now passed
+  to `resolveAccessDefinition()` in the definition handler, enabling go-to-def on
+  `mixed`/`auto` variables with no static `assignedType` via `typeof_()` inference.
+- **New 4 tests for typeof integration**: Added LSP-level tests covering
+  `mixed d = Dog(); d->` completion, `auto f = Stdio.File(); f->` completion,
+  mixed parameter completion, and `d->speak()` definition on `mixed` typed variables.
+
+
 ### Fixed
 
-**Type resolution through function return types**: `resolveMemberAccess()` now uses
-`declaredType` from call expressions to resolve member access on return values.
-`f()->speak()` resolves correctly when `f()` is declared to return `Dog`.
+- **Definition handler now returns arrow/dot access results**: The `textDocument/definition`
+  handler was silently discarding `resolveAccessDefinition()` results, returning `null`
+  even when `obj->member` resolution succeeded. Fixed: `return accessResult;` replaces
+  `return null;` so go-to-definition works correctly for arrow/dot member accesses.
 
-**Type annotation renaming**: Renaming `Dog` now updates function return type
-annotations. `collectFunctionReturnTypeRefs()` collects all `Dog` references in
-type annotation positions within function declarations.
-
-**PRIMITIVE_TYPES centralization**: `PRIMITIVE_TYPES` moved to `scope-helpers.ts`
-and re-exported through `symbolTable.ts`. All consumers now import from single
-canonical source.
-
-### Changed
-
-**Type inference chain caching**: `resolveType()` now uses an optional `ResolutionCache`
-to memoize results within a single resolution chain. Each hop checks cache before
-doing work. Caches are per-request (completion/definition) and not persisted.
-
-**Hover handler**: Tier 1 (AutoDoc), Tier 2 (stdlib index), Tier 3 (tree-sitter)
-routing with predef builtin fallback. `renderPredefSignature()` strips scope/attribute
-wrappers for cleaner display.
-
-**Completion provider**: Three-tier resolution (symbol table → cross-file → stdlib).
-Reuses same `ResolutionCache` mechanism as hover for consistent type inference.
-
-**Reference collector**: Single `_collectAllReferences()` helper for same-file and
-cross-file. Type-filtered for cross-file when `lhsName` is present.
-
-### Removed
-
-**Dead formatter.ts**: Orphaned 244-line `server/src/features/formatter.ts` removed.
-The file was marked as removed in Phase 18 but persisted on disk.
-
-**Dead code in scope-helpers.ts**: `hasProhibitedModifier()` was dead code (never called)
-— removed along with `PROHIBITED_MODIFIERS`.
-
-**Dead `scope-helpers.ts` import in declarationCollector.ts**: Unused import removed.
-
-### Refactored
-
-**scopeBuilder.ts**: Reduced from 749 to 276 lines by extracting type inference to
-`typeResolver.ts` and scope helpers to `scope-helpers.ts`. Re-exports from `scope-helpers.ts`.
-
-**xmlParser.ts**: Reduced from 836 to 201 lines by extracting XML extraction logic
-into Pike-specific helpers. Removed generic parsing framework.
-
-**referenceCollector.ts**: Unified same-file and cross-file collection into single
-`_collectAllReferences()` helper. Simplified `getReferencesTo()`.
-
-### Changed
-
-**Symbol table**: Added `assignedType` field for variables initialized with simple
-constructors or ternary expressions. Enables type resolution for `mixed`-typed
-variables without explicit annotations.
-
-**Type resolver**: Added `resolveType()` for walking initializer expressions.
-Added `extractInitializerType()` for constructors and ternary operators.
-
-**Declaration collector**: Added `collectForStatement()` for `for` loop variable
-scoping. Added `collectCatchExpr()` for catch block scoping.
-
-**Hover handler**: Type inferrer wired to `PikeWorker.typeof_()` for runtime
-type inference on `mixed` variables.
-
-**Completion provider**: `CompletionContext` now tracks resolver state for
-multi-hop type chains.
-
-**Scope helpers**: `isScopeBoundary()` now returns `false` for all statement types
-(no scope boundaries inside blocks). `BLOCK_SCOPES` removed.
-
-**`typeof_()` wiring**: Called for hover, completion, and definition. Falls back
-to tree-sitter declared types when PikeWorker is unavailable.
 
 ## Phase 18: Housekeeping and Debt Reduction - 2026-05-03
 
+### Changed
+
+- **scopeBuilder.ts (749 → 276 lines)**: Extracted `scope-helpers.ts` (321 lines,
+  geometry + node + scope utilities) and `completion-scope.ts` (129 lines,
+  position-based scope enumeration). File now contains only wireInheritance logic.
+- **xmlParser.ts (836 → 201 lines)**: Extracted `xml-renderer.ts` (659 lines,
+  AutoDoc XML → markdown: renderType, renderSignature, renderInline, renderBlocks).
+  File now contains only the lightweight XML parser and walker.
+
+
+- **Decision 0020 status**: Changed from "Proposed" to "Deferred".
+- **Local branches pruned**: Removed 13 stale local branches (completed phases,
+  audit fixes, CI branches).
+
+
 ### Removed
 
-**formatter.ts**: Dead 244-line file. Formatting deferred to pike-fmt per Decision 0020.
+- **Formatter skeleton**: Removed `formattingHandler.ts` (returned null for all inputs)
+  and `formatting.test.ts` (6 tests asserting null behavior). Formatting is a
+  deep problem — tree-sitter-based formatting handles indentation but not reflow,
+  line breaking, or smart alignment. Pike has no canonical formatter (no `gofmt`).
+  This decision is documented in Decision 0020 (Deferred).
 
-**Dead exports from symbolTable.ts**: `getDefinitionAt()` and `isLocalDeclaration()`
-removed — unused after refactoring.
 
-### Refactored
+### Fixed
 
-**scopeBuilder.ts**: Extracted type inference to separate modules. Re-exports
-helpers from `scope-helpers.ts`.
+- **GitHub issue #19**: "Explore pike-introspect integration" — investigation
+  complete. Pike-introspect v0.2.0 integrated in Phase 16. Issue updated with
+  resolution notes and closed.
 
-**xmlParser.ts**: Removed generic XML parsing framework. Pike-specific extraction
-now in focused helpers.
+
+
+
+## Phase 19: Scope Leakage Fixes and Upstream Contributions - 2026-05-03
 
 ### Changed
 
-**Type inference**: Added `ResolutionCache` for memoization within resolution chains.
-Handles constructor calls and ternary operators in initializers.
+- **known-limitations.md**: Updated "No scope-introducing nodes for while/switch/plain blocks"
+  from active limitation to "~~WORKED AROUND~~". The workaround (per-construct handlers in
+  `declarationCollector.ts`) was already present — `collectWhileStatement`,
+  `collectDoWhileStatement`, `collectSwitchStatement` push explicit block scopes with
+  `ScopeKind` values `'while'`, `'do_while'`, `'switch'`. Covered by definition API
+  tests (US-005): while/switch/do-while variables no longer leak to enclosing scope.
 
-**Hover**: Predef builtin signatures from `predef-builtin-index.json` (283 symbols).
-Rendered via `renderPredefSignature()`.
 
-**Reference collection**: Type-filtered cross-file references when `lhsName` is present.
+## Phase 16: pike-introspect Integration - 2026-05-03
 
-**Scope boundaries**: `isScopeBoundary()` simplified — no scope boundaries inside blocks.
-`BLOCK_SCOPES` set removed.
+### Added
+
+- **pike-introspect v0.2.0 integration**: New `resolve` method in worker.pike using
+  `Introspect.Discover.resolve_symbol()` and `Introspect.Describe.describe_program()` for
+  runtime-backed symbol resolution with source locations and inheritance chains
+- **`PikeWorker.resolve()` in TypeScript**: New `ResolveResult` interface and async `resolve()`
+  method exposing cross-file symbol resolution to callers
+- **Worker spawn args updated**: Added `-M modules/Introspect/src/` so the Pike worker can find
+  the Introspect module
+- **7 new resolve tests**: Tests for Stdio.File, Stdio.read_file, Stdio module, unknown symbol,
+  empty symbol, inheritance info, and worker lifecycle after resolve
+- **Decision 0019 updated**: Documented v0.2.0 features (resolve_symbol, describe_program with
+  source locations and inheritance), updated conclusions, added Phase 16 implementation notes
+
+
+- Type inference: assignment-based type narrowing (`assignedType` field on Declaration, `extractInitializerType`, `PRIMITIVE_TYPES` set)
+- PikeWorker typeof integration for hover on mixed/auto-typed variables
+- Type inference corpus files (4 new .pike files) and harness snapshots
+- Semantic tokens: 9 token types + 5 modifiers, function→method promotion in class scope
+- Semantic token LSP handler (textDocument/semanticTokens/full) with delta encoding
+- Document highlight handler (textDocument/documentHighlight) with Write/Read kinds
+- Folding range handler (textDocument/foldingRange) for blocks, classes, comment groups
+- Signature help handler (textDocument/signatureHelp) with parameter tracking
+- Code actions: remove unused variable, add missing stdlib import (extensible quick-fix registry)
+- Workspace symbol search (workspace/symbol) with case-insensitive prefix matching
+- Background workspace indexing on startup with progress reporting
+- Persistent cache across LSP restarts (symbol table serialization + WASM hash invalidation)
+- VSCode configuration change handler (didChangeConfiguration) for diagnostic settings
+- Cancellation token propagation to all LSP request handlers
+- Decision documents: 0019 (type inference), 0020 (semantic tokens), 0021 (signature help), 0022 (background indexing)
+
+
+- `server/src/features/rename.ts` — stdlib/predef protected symbol rejection: `prepareRename()` and `getRenameLocations()` now reject rename targets matching 283 predef builtins or 5,471 stdlib short names, preventing accidental breakage of shadowed stdlib symbols
+- `corpus/files/rename-base.pike`, `rename-child.pike`, `rename-main.pike` — multi-file inheritance chain corpus files for rename testing
+- 9 new rename tests: protected symbol rejection (6), 3-file inheritance chain rename (3)
+- `tests/integration/p2-verification.test.ts` — Phase 6 P2 verification suite: worker thrashing, hover latency, cross-file propagation, mode switching (10 tests, real PikeWorker, no mocks)
+- `server/src/server.ts` — `PikeServer.index` changed from stale value to live getter, fixing dependency graph access after initialization
+- `server/src/features/symbolTable.ts` — `buildSymbolTableAsync()` for event-loop yielding on large files (>= 1000 nodes)
+- `server/src/server.ts` — `workspace/didChangeWatchedFiles` capability with dynamic watcher registration for `.pike` and `.pmod` files
+- `decisions/0014-audit-remediation-and-incremental-parsing.md` — architecture decision record for audit fixes
+
+
+- `server/src/parser.ts` — `deleteTree(uri)`, `getCachedTree(uri)`, `clearTreeCache()` for tree cache lifecycle
+- `decisions/0018-incremental-parsing-and-ipc-security.md` — architecture decision record
+- Standalone server build (`bun run build:standalone`) producing a self-contained bundle in `standalone/`
+- `bin/pike-language-server` wrapper script for use with any LSP-capable editor
+- `docs/other-editors.md` — verified setup instructions for Neovim, Helix, and generic LSP clients
+- `package.json` `bin` field and `build:standalone` script
+
+
+- `textDocument/rename` — workspace-wide symbol renaming with cross-file support (decision 0016)
+  - Scope-aware: only renames the same symbol, not homonyms in different scopes
+  - Cross-file: uses WorkspaceIndex to enumerate references across dependent files
+  - `textDocument/prepareRename` returns range and placeholder for rename UI
+  - Pike keyword validation prevents renaming to reserved words
+  - Renames variables, parameters, functions, classes, and class members
+
+- Type resolution system (decision 0014)
+  - `server/src/features/typeResolver.ts` — pure-function `resolveType()` and `resolveMemberAccess()`
+  - Resolution chain: same-file class → qualified type → cross-file via inherit/import → stdlib
+  - Depth limit 5 with graceful degradation to null
+- Arrow/dot access definition and hover resolution
+  - `textDocument/definition` now resolves `obj->member` and `obj.member` through type inference
+  - `textDocument/hover` provides member info for resolved arrow/dot accesses
+- Import dependency tracking (decision 0015)
+  - `DeclKind 'import'` distinguishes import from inherit declarations
+  - `extractDependencies()` includes import edges in dependency graph
+  - Cross-file diagnostic propagation covers import dependents
+- `resolveTypeMembers()` in completion.ts replaced with `resolveMemberAccess()` calls
+  - Cross-file member completion via workspace index
+  - Inherited member completion through type resolution
+- Stdlib qualified type resolution: `resolveQualifiedType` falls through to stdlib index for types like `Stdio.File`
+
+
+- `textDocument/completion` — tree-sitter-first completion provider (decision 0012)
+  - Trigger characters: `.`, `>`, `:` (dot, arrow, scope access)
+  - Unqualified completion: local scope walk + predef builtins (283) + stdlib modules (5,471)
+  - Dot/arrow access: resolve left-hand side → enumerate members from symbol table + stdlib
+  - Scope access (`::`): resolve inherited class members
+  - Deduplication: inner scope shadows outer
+  - No Pike worker dependency in the common case (~93% of completions)
+- `symbolTable.ts`: `getSymbolsInScope()` — enumerate all declarations visible at a position
+- `symbolTable.ts`: `getDeclarationsInScope()` — enumerate declarations in a specific scope
+- `symbolTable.ts`: `findClassScopeAt()` — find enclosing class scope at a position
+- `completion.ts`: stdlib secondary index — prefix-grouped member enumeration
+- Real-time diagnostics with debouncing (decision 0013)
+  - `DiagnosticManager` — per-file debounce timers (500ms default, configurable)
+  - Supersession: version-gated dispatch prevents stale diagnoses
+  - Worker priority queue: diagnose defers to hover/completion
+  - Cross-file diagnostic propagation via dependency graph
+  - Three modes: `realtime` (default), `saveOnly`, `off`
+  - Staleness indication for long-running diagnose (2s)
+  - Configurable via `initializationOptions.diagnosticMode`
+- 15 new diagnostic tests (debounce, mode, lifecycle, caching, supersession, priority)
+
+
+- Declared-type member completion: `Animal a; a->` now resolves to class members
+  - Symbol table tracks `declaredType` on variables and parameters from type annotations
+  - `resolveTypeMembers()` resolves declared types to class scopes, including inherited members
+  - Works for both local variables and function parameters
+  - Primitive types (`int`, `string`, `mixed`) correctly produce no member completions
+  - 6 new tests covering typed variables, parameters, inheritance, primitives, mixed types
+- Cancellation state test: verifies `$/cancelRequest` causes early return via raw JSON-RPC
+- `c2s`/`s2c` streams exposed on `TestServer` for raw message testing
+
+
+### Changed
+
+- **Template upgrade**: ai-project-template from v0.2.0 to v0.6.0
+  - Added OMP skills: merge-to-main, cut-release, setup, template-guide
+  - Added OMP rules: no-placeholders, changelog-required, conventional-commits
+  - Added OMP hooks: protect-main, template-compliance-hint
+  - Added OMP tool: template-audit
+  - Added GitHub workflow: branch-cleanup.yml
+  - Added docs: omp-extensions-guide.md, agent-files-guide.md
+  - Updated AGENTS.md and docs/ci.md with new structure
+
+- Type-aware arrow/dot rename: rename now checks receiver type before including
+  arrow/dot references, preventing cross-class rename of same-name methods
+- Runtime type inference for completion and definition: `typeof_()` is called
+  when static type resolution fails for `mixed`/`auto` variables
+- `resolveTypeName()` utility: centralized type priority chain (declaredType >
+  assignedType > null), replacing duplicated ternary in 3 files
+- `collectClassMembers()` and exported `findClassScope()` from typeResolver
+  for correct class scope lookup using `containsRange`
+- `typeInferrer` callback on TypeResolutionContext and CompletionContext
+  for async runtime type inference through PikeWorker
+
+
+- `findMemberInClass()` and `findMemberInInheritedScopes()` now use
+  `containsRange(classDecl.range, scope.range)` instead of
+  `posInRange(scope.range, nameRange.start)`, fixing nested class disambiguation
+- `getRenameLocations()` is now async for type-aware filtering
+- All 28 empty `catch {}` blocks in server/src/ now have explanatory comments
+- Removed dead `rangeContains()` from completionTrigger.ts
+- Removed unused imports (`Range`, `getDeclarationsInScope`) from completionTrigger.ts
+
+
+
+- Audit remediation round 2: correctness and robustness fixes across 10 files:
+  - `symbolTable.ts`: for-init and foreach-lvalue collection now use grammar field names (`childrenForFieldName('name')`, `childrenForFieldName('key'/'value')`) instead of walking bare `identifier` children, preventing type identifiers from being registered as variable names (C5, C6)
+  - `symbolTable.ts`: removed all non-null assertions (`!`) on `scopeMap.get()` results that were followed by null checks — the assertion lied to the type system and could crash before the guard executed (H12)
+  - `symbolTable.ts`: `collectFunctionDecl` now extracts `return_type` field as `declaredType` (M13)
+  - `server.ts`: `diagnosticDebounceMs` and `maxNumberOfProblems` from `initializationOptions` are now wired to `DiagnosticManager` instead of being extracted and ignored (H9, H10)
+  - `diagnosticManager.ts`: added `setDebounceMs()`, `setMaxNumberOfProblems()` methods; `publishDiagnostics()` now truncates to max problems limit
+  - `moduleResolver.ts`: removed dead code — step 4 iterated `modulePaths` identically to step 2 (H11)
+  - `pikeWorker.ts`: auto-restart after malformed responses now logs failure reason instead of silently swallowing errors (H14)
+  - `client/extension.ts`: added restart-in-progress guard to prevent duplicate `LanguageClient` instances when settings change rapidly (H15)
+  - `server.ts`: extracted `renderPredefSignature()` helper from inline regex chain for testability (M9)
+  - `server.ts`: replaced Bun-specific `import.meta?.main` with cross-runtime guard (M14)
+  - `accessResolver.ts`: added cache-hit comment on `parse()` call (M10)
+  - `documentSymbol.test.ts`: uses `createSilentStream()` instead of bare `new PassThrough()` (H13)
+  - `completion.test.ts`: removed dead first `getCompletions()` call whose result was never asserted (M11)
+  - `sharedServer.test.ts`: LRU eviction test now uses production `LRUCache` class instead of hand-rolled Map (M12/L5)
+
+- Systematic refactoring across 12 files addressing correctness, structural, error handling, and dead code issues:
+  - Rewrote `detectPikePaths()` to use `pike --show-paths` for actual paths instead of hardcoded defaults
+  - Extracted access resolution into new `server/src/features/accessResolver.ts` with `ResolutionContext` interface
+  - Added generic `LRUCache<T>` (`server/src/util/lruCache.ts`) with max entries, max bytes, and `onEvict` callback; integrated into parser and server
+  - Added `declById`/`scopeById` indexed maps to `SymbolTable` for O(1) lookups (replaced 21 O(n) array scans)
+  - Fixed shared `completionCtx.uri` mutation with per-request context spread
+  - Added malformed response counter in `PikeWorker` with auto-restart threshold
+  - Log parse failures in `DiagnosticManager.onDidChange`
+  - Clear pending request timeouts in `PikeWorker.restart()`
+
+
+- `server/src/server.ts` — `onPrepareRename` and `onRenameRequest` now pass protected stdlib/predef name set to rename functions
+- `server/src/features/rename.ts` — `prepareRename()` and `getRenameLocations()` accept optional `ProtectedNames` parameter for stdlib/predef rejection
+- `decisions/0016-rename.md` — amended with protected symbol rejection section
+- `TRACKING.md` — Phase 6 P3 entry corrected from 'Deferred' to 'Shipped in Phase 8'
+- `tests/lsp/rename.test.ts` — LSP protocol test fixtures renamed to avoid stdlib name collisions (counter→tally, add→computeSum)
+
+- `harness/worker.pike` — `handle_typeof` hardened with character whitelist, balanced-parentheses check, dangerous-identifier rejection, and 200-char length limit
+- `server/src/server.ts` — `autodocCache` now has independent 5 MB size cap with LRU eviction
+- `server/src/server.ts` — `getSymbolTable` and `upsertFile` callers properly await async operations
+- `server/src/parser.ts` — incremental tree-sitter parsing with LRU tree cache (50 entries / 50 MB ceiling), `parse(source, uri)` passes old tree for diff-based re-parsing
+- `server/src/features/pikeWorker.ts` — strict FIFO queue serializing all worker calls, stdin backpressure via `drain` event, process-exit race fix
+- `harness/worker.pike` — `typeof` handler rejects `;\n\r` in expressions, uses function wrapper instead of raw variable interpolation
+- `server/src/features/diagnosticManager.ts` — removed internal priority queue; all worker calls delegate to `PikeWorker.enqueue()`
+- `server/src/features/diagnostics.ts` — eliminated duplicate types (`Position`, `Range`, `DiagnosticSeverity`, `Diagnostic`), now imported from `vscode-languageserver/node`
+- `server/src/features/documentSymbol.ts` — eliminated duplicate types (`Position`, `Range`, `SymbolKind`, `DocumentSymbol`), now imported from `vscode-languageserver/node`
+- `server/src/server.ts` — all `parse()` calls pass URI for incremental cache; `didClose` evicts tree, `onShutdown` clears cache
+
+
+- `collectInheritDecl()` now derives `kind` from node type (`import_decl` → `'import'`, `inherit_decl` → `'inherit'`)
+- All consumers of `kind === 'inherit'` audited and updated to handle both kinds where appropriate
+- `findMemberInClass` and `findMemberInInheritedScopes` use `parentId` + position comparison instead of `containsDecl`
+
+
+
+### Removed
+
+- Dead `return "bool"` after `case "zero"` in `autodocRenderer.ts`
+- Unsafe `as unknown as` cast on synthetic `SymbolTable` in `typeResolver.ts`
+- `table as any` casts in `rename.ts` (replaced with proper `SymbolTable` type)
+- Dead `buildStdlibLookupKeys` and `formatSignature` helpers from `server.ts`
+- Unused `fileScopeId` variable in `symbolTable.ts`
+- Unused `buildSymbolTableAsync`, `yieldToEventLoop`, and `YIELD_THRESHOLD` from `symbolTable.ts`
+
+
+- `PLAN.md` — stale Phase 7-8 handoff document (Phase 8 complete)
+
+
+### Fixed
+
+- `tests/lsp/hover.test.ts` — stdlib hover test now asserts unconditionally (no more `if (result)` maybe-assertion)
+- `tests/lsp/diagnostics.test.ts` — cross-file propagation test uses real corpus files and real workspace root instead of virtual URIs
+- `resolveTypeMembers()` in completion.ts used broken `containsDecl()` for class scope lookup —
+  class-name dot completion (`Animal.`) returned nothing. Fixed to use `parentId + rangeContains`.
+- Cross-file rename excluded inherited symbol references because `getCrossFileReferences()` filtered by
+  `resolvesTo !== null`. Inherited references have `resolvesTo=null`. Changed filter to `resolvesTo === null`.
+- Arrow/dot access call sites (`d->bark()`) excluded from rename because `getReferencesTo()` only matched
+  references where `resolvesTo === targetDeclId`. Added fallback for arrow/dot access name matching.
+- Cross-file class-body identifier inherits (`inherit Animal` where Animal is a class in another file)
+  resolved to `resolve_error: "NOT FOUND"`. `wireCrossFileInheritance()` now resolves bare identifiers
+  directly via ModuleResolver. Also extended `warmResolverCache()` to pre-warm class-body inherits and
+  fixed `resolveInheritTarget()` to correctly handle identifier inherits to `.pike` files.
+
+
+- Operator symbols (backtick identifiers) no longer appear in completion suggestions
+  - Filtered out Pike operators (`>`, `==`, `->`, etc.) from predef builtin completions
+- Trailing dot/arrow completion now works (`Stdio.`\n, `a->`\n no longer falls through to unqualified)
+  - `findLhsBeforePosition()` handles ERROR nodes and anonymous operator tokens
+  - Fixed `indexOf` bug: tree-sitter node wrappers are not reference-identical; use `equals()` for sibling lookup
+- Foreach loop variables (`idx`, `val`) now captured in symbol table
+  - Fixed `collectForeachStatement()`: `foreach_lvalues` is an unnamed child, not a field
+  - Fixed `collectForeachLvalues()`: identifiers are siblings of type nodes, not children
+- Completion handler checks `CancellationToken` at three boundaries for fast-typing cancellation
+- Tree-sitter `indexOf` bug: node wrappers are not reference-identical; use `equals()` for sibling lookup
+
+
+## Phase 5: Types and Diagnostics - 2026-04-28
+
+### Added
+
+- Pike worker subprocess: long-lived Pike process for diagnostics and type queries
+  - JSON-over-stdio protocol: diagnose, typeof, ping methods
+  - CompilationHandler-based structured diagnostics (errors + warnings)
+  - Same normalization as harness introspect.pike (expected/actual type extraction)
+- PikeWorker TypeScript class: subprocess lifecycle management
+  - Lazy start, automatic crash recovery, restart with readiness check
+  - Idle eviction: kill after 5 min idle (configurable), restart on next request
+  - Memory ceiling: forced restart after 100 requests or 30 min active use
+  - Timeout: 5s per request, surfaced as diagnostic on timeout
+  - CPU politeness: spawned with nice +5 on Linux
+  - FIFO queueing: one request at a time, documented
+  - All values configurable via PikeWorkerConfig
+- Save-triggered diagnostic pipeline (decision 0011)
+  - didSave → Pike worker → structured diagnostics → merged with parse diagnostics
+  - Position mapping: Pike 1-based lines → LSP 0-based lines
+  - Diagnostic severity mapping: Pike error/warning → LSP Error/Warning
+  - Timeout surfaced as warning diagnostic ("Compilation timed out, will retry on next save.")
+- LRU diagnostic cache: 50 entries / 25MB cap, oldest-first eviction
+  - Content-hash keyed per-file, undo operations are free
+- AutoDoc hover routing: parse-tree driven, no subprocess (decision 0011 §7)
+  - Tier 1: Workspace AutoDoc — //! comments extracted from source text
+  - Tier 2: Stdlib — reserved for pike-ai-kb pike-signature (Phase 6)
+  - Tier 3: Fall-through — tree-sitter declared type
+  - Supports: @param, @returns, @throws, @note, @deprecated, @seealso, etc.
+  - Hover coverage on corpus: 7/545 (1%) — corpus not designed for autodoc
+- Hover handler: three-tier routing per decision 0002
+  - Same-file: autodoc → tree-sitter
+  - Cross-file: WorkspaceIndex resolution → autodoc or tree-sitter
+  - Hover never involves the Pike worker — sub-millisecond latency
+- Decision 0011: Types, diagnostics, hover, shared-server policies
+- harness/resolve.pike: cross-file resolution ground truth from Pike's perspective
+- Extension packaging: esbuild bundles for server and client
+- @vscode/test-electron integration tests (3 tests in VSCode extension host)
+- docs/deployment-context.md: SSH/shared-server deployment context
+
+
+### Fixed
+
+- resolveInheritTarget: .pmod file inherits treated like string literal inherits
+- Directory module normalization: LSP and Pike resolve differently, test normalizes
+- Spawn command: fixed double-command bug in nice/ Pike worker spawn
+
+
+## Phase 4: Cross-File Resolution - 2026-04-27
+
+### Added
+
+- ModuleResolver: Pike's module resolution algorithm in TypeScript
+  - Module path resolution: Stdio.File, cross_import_a, cross_pmod_dir.helpers
+  - Inherit path resolution: string literal, identifier, dot-path, relative (.Foo)
+  - Import path resolution: import Stdio, import cross_pmod_dir
+  - #pike version-aware search paths (e.g., #pike 7.8)
+  - Priority: .pmod directory > .pmod file > .pike file
+  - Hyphen-to-underscore normalization (Pike naming convention)
+  - Caching with per-query invalidation
+- WorkspaceIndex: in-memory per-file symbol table index
+  - Forward dependency graph (inherit/import targets)
+  - Reverse dependency graph (dependents) for invalidation
+  - Invalidation propagation: file change → dependents invalidated
+  - ModificationSource tracking (gopls pattern)
+  - Content hashing for cache validity
+  - #pike version detection from parse tree
+- Cross-file definition: resolve definitions across files through inherit/import chains
+- Cross-file references: find references to symbols across workspace files
+- Server integration: WorkspaceIndex replaces per-document cache
+- Manifest-driven metadata: corpus/corpus.json replaces hardcoded CROSS_FILE_FLAGS
+- import_decl now collected as declaration alongside inherit_decl
+- Decision 0010: Cross-file resolution architecture (workspace model, index, module resolution, invalidation)
+- 14 new cross-file corpus files covering inherit chains, import, pmod directories, stdlib, compat
+
+
+## Phase 3: Per-file Symbol Table - 2026-04-27
+
+### Added
+
+- Symbol table builder: two-pass construction (declarations + references, then inheritance wiring)
+- Scope-aware resolver: 10-level scope hierarchy with chain walk
+- textDocument/definition handler: go-to-definition for same-file symbols
+- textDocument/references handler: find-references for same-file symbols
+- Symbol table cache: lazy rebuild on next request after didChange
+- Inherit-with-rename support: `inherit Animal : creature` with alias resolution
+- 4 new corpus files: scope-for-catch, scope-shadow-params, class-forward-refs, class-inherit-rename
+- 18 edge-case tests covering scoping, shadowing, forward refs, lambda captures
+- Decision 0009 expanded: explicit cache invalidation policy, Pike-verified scoping behaviors table, class extraction documentation
+- Upstream issues filed: tree-sitter-pike#2, #3, #4
+
+
+### Fixed
+
+- For-loop init declarations now register in for-scope (was empty due to tree-sitter missing field names)
+- If-block consequence/alternative push their own block scope (variables no longer leak)
+- Lambda scopes in variable initializers now discovered
+- Scope tie-breaking prefers deeper scopes when ranges are equal
+- Inherit-with-rename: scope_access resolves through alias, go-to-def on both path and alias
+
+
+## [0.1.0-alpha]
+
+[unreleased]: https://github.com/TheSmuks/pike-language-server/compare/v0.2.0-beta...HEAD
+[0.2.0-beta]: https://github.com/TheSmuks/pike-language-server/releases/tag/v0.2.0-beta
