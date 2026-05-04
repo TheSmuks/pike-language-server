@@ -399,11 +399,19 @@ export function getReferencesTo(
 
   if (targetDeclId === null) return [];
 
-  // Collect all references that resolve to this declaration
+  // Collect all references that resolve to this declaration.
+  // Deduplicate by (line, character) to avoid including the same location
+  // twice (e.g., when the return type identifier is collected both by the
+  // explicit function_decl handler and by the generic type walker).
   const results: Reference[] = [];
+  const seenLocs = new Set<string>();
   for (const ref of table.references) {
     if (ref.resolvesTo === targetDeclId) {
-      results.push(ref);
+      const locKey = `${ref.loc.line}:${ref.loc.character}`;
+      if (!seenLocs.has(locKey)) {
+        seenLocs.add(locKey);
+        results.push(ref);
+      }
     }
   }
 

@@ -215,6 +215,27 @@ g->name;`;
     expect(result!.locations).toHaveLength(3);
   });
 
+  test("renames a class and updates function return type annotations", async () => {
+    // Renaming class Dog → Cat should also update `Dog f()` return type annotations.
+    // The return type field on function_decl is collected as a type_ref reference.
+    const src = `class Dog {
+}
+Dog getDog();`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const decl = findDecl(table, "Dog", "class");
+    expect(decl).toBeDefined();
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("Dog");
+    // Declaration (line 0) + return type annotation on getDog() (line 1)
+    // This confirms return type references are collected for rename
+    // Declaration (line 0) + return type annotation (line 2) = 2 locations
+    expect(result!.locations).toHaveLength(2);
+    expect(result!.locations[0].line).toBe(0);
+    expect(result!.locations[1].line).toBe(2);
+  });
+
   test("renames a function parameter", async () => {
     const src = `int add(int a, int b) {
   return a + b;
