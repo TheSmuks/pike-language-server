@@ -40,6 +40,7 @@ import {
   type PikeCacheEntry,
 } from "./features/diagnosticManager";
 import { registerHoverHandler } from "./features/hoverHandler";
+import { registerFormattingHandler } from "./features/formattingHandler";
 
 import { registerNavigationHandlers } from "./features/navigationHandler";
 import { LRUCache } from "./util/lruCache";
@@ -61,8 +62,13 @@ export interface PikeServer {
   autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   /** Diagnostic manager — exposed for testing. */
   diagnosticManager: DiagnosticManager;
+  /** Path to pike-fmt binary — exposed for testing. */
+  pikeFmtPath: string;
 }
 
+// Path to pike-fmt formatter binary. Set via initializationOptions or config.
+// Defaults to "pike-fmt" (expects it on PATH).
+let pikeFmtPath = "pike-fmt";
 
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
@@ -119,6 +125,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
   /** In-flight upsertFile promises to avoid concurrent indexing of the same URI. */
   const upsertInFlight = new Map<string, Promise<any>>();
+ 
 
   /**
    * Get or build the symbol table for a document.
@@ -177,6 +184,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     predefBuiltins,
     diagnosticManager,
     connection,
+    pikeFmtPath,
   };
 
   // -----------------------------------------------------------------------
@@ -200,6 +208,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     const initOpts = params.initializationOptions as {
       diagnosticMode?: string;
       pikeBinaryPath?: string;
+      pikeFmtPath?: string;
       diagnosticDebounceMs?: number;
       maxNumberOfProblems?: number;
     } | undefined;
@@ -211,6 +220,10 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
     if (initOpts?.pikeBinaryPath) {
       worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
+    }
+    if (initOpts?.pikeFmtPath) {
+      pikeFmtPath = initOpts.pikeFmtPath;
+      handlerContext.pikeFmtPath = pikeFmtPath;
     }
     if (initOpts?.diagnosticDebounceMs && initOpts.diagnosticDebounceMs > 0) {
       diagnosticManager.setDebounceMs(initOpts.diagnosticDebounceMs);
@@ -245,6 +258,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         },
         codeActionProvider: true,
         workspaceSymbolProvider: true,
+        documentFormattingProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -367,6 +381,11 @@ export function createPikeServer(connection: Connection): PikeServer {
     const config = settings.settings?.pike?.languageServer;
     if (!config) return;
 
+    if (config.pikeFmtPath) {
+      pikeFmtPath = config.pikeFmtPath;
+      handlerContext.pikeFmtPath = pikeFmtPath;
+    }
+
     if (config.diagnosticMode) {
       const mode = config.diagnosticMode;
       if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
@@ -390,6 +409,11 @@ export function createPikeServer(connection: Connection): PikeServer {
   registerHoverHandler(connection, handlerContext);
 
   registerNavigationHandlers(connection, handlerContext);
+
+  registerFormattingHandler(connection, {
+    documents,
+    pikeFmtPath,
+  });
 
   // -----------------------------------------------------------------------
   // Shutdown
@@ -463,7 +487,15 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.listen(connection);
 
-  return { connection, documents, get index() { return index; }, worker, autodocCache, diagnosticManager };
+  return {
+    connection,
+    documents,
+    get index() { return index; },
+    worker,
+    autodocCache,
+    diagnosticManager,
+    get pikeFmtPath() { return pikeFmtPath; },
+  };
 }
 
 // ---------------------------------------------------------------------------
