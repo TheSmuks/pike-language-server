@@ -17,6 +17,10 @@
     "cross-pmod-user.pike": {
       "strict": true,
       "modulePath": "."
+    },
+    "import-pmod.pike": {
+      "strict": true,
+      "modulePath": "corpus/files"
     }
   }
 }

@@ -1,0 +1,18 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/import-pmod.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 13,
+      "name": "main"
+    }
+  ]
+}
