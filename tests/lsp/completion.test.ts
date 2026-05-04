@@ -1,3 +1,4 @@
+import { pikeAvailable } from "../helpers/pikeAvailable";
 // ---------------------------------------------------------------------------
 // US-009: PikeWorker typeof integration for completion on mixed/untyped vars
 // ---------------------------------------------------------------------------
@@ -93,6 +94,8 @@ describe.skipIf(!pikeAvailable)("US-009: typeof integration for completion on mi
     expect(result.uri).toBe(uri);
     expect(result.range.start.line).toBe(0); // Dog class at line 0
   });
+
+
 });
 
 /**
@@ -109,7 +112,6 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { createTestServer, type TestServer } from "./helpers";
-import { pikeAvailable } from "../helpers/pikeAvailable";
 import {
   initParser,
   parse,
@@ -138,11 +140,11 @@ let server: TestServer;
 beforeAll(async () => {
   server = await createTestServer();
   resetCompletionCache();
-});
+  });
 
 afterAll(async () => {
   await server.teardown();
-});
+  });
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1279,5 +1281,6 @@ describe("Private member filtering", () => {
     expect(labels).toContain("reveal");
     expect(labels).toContain("__secret");
     expect(labels).toContain("__hidden");
-  });
+});
+});
 });
