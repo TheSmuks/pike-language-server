@@ -29,6 +29,19 @@ function getSettings(): Record<string, unknown> {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  // Language configuration for Pike — client-side, no LSP traffic.
+  // Handles Enter, Tab, auto-indent, and surrounding pairs.
+  // See client/language-configuration.json for rules.
+  const langConfig = JSON.parse(
+    require("fs").readFileSync(
+      context.asAbsolutePath("language-configuration.json"),
+      "utf8"
+    )
+  );
+  context.subscriptions.push(
+    vscode.languages.setLanguageConfiguration("pike", langConfig)
+  );
+
   const serverModule = context.asAbsolutePath(
     path.join("server", "dist", "server.js"),
   );
@@ -58,7 +71,6 @@ export function activate(context: vscode.ExtensionContext): void {
     serverOptions,
     clientOptions,
   );
-
 
   // Restart the server when settings change
   // Guard against rapid-fire config changes creating duplicate clients
