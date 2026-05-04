@@ -298,33 +298,6 @@ export function registerHoverHandler(
       return null;
     }
 
-    // Tier 4: PikeWorker typeof for untyped/mixed variables
-    // Only for variables/parameters where declaredType is absent or 'mixed'.
-    // Explicitly typed variables (int, string, Dog, etc.) skip entirely.
-    const isVariableLike = decl.kind === "variable" || decl.kind === "parameter";
-    const declType = (decl as Declaration).declaredType;
-    const needsPikeTypeof =
-      isVariableLike &&
-      (!declType || declType === "mixed" || declType === "auto");
-    if (needsPikeTypeof) {
-      const source = doc.getText();
-      try {
-        const typeofResult = await ctx.worker.typeof_(source, decl.name, token);
-        if (
-          typeofResult.type &&
-          typeofResult.type !== "mixed" &&
-          !typeofResult.error
-        ) {
-          const baseHover = declForHover(decl, params.textDocument.uri, ctx);
-          if (baseHover) {
-
-          }
-        }
-      } catch {
-        // Worker unavailable or timed out — fall through to tree-sitter hover
-      }
-    }
-
     return formatHover(declForHover(decl, params.textDocument.uri, ctx));
   });
 }
