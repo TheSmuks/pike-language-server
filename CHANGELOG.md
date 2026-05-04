@@ -1,5 +1,19 @@
 ## [Unreleased]
 
+### Fixed
+
+**Test infrastructure critical bug**: `createTestServer()` in `tests/lsp/helpers.ts`
+now sends `processId: null` in the `initialize` request. The vscode-languageserver
+watchdog requires this field; omitting it caused `kill(undefined)` to be called,
+making 16 of 34 LSP test files hang indefinitely.
+
+**Syntax error in completion.test.ts**: Fixed missing closing braces that caused
+the entire file to fail parsing. The file now runs all completion integration tests.
+
+**Dead code removal from hoverHandler.ts**: Removed 12 lines of no-op code in the
+`needsPikeTypeof` branch that fetched `typeof_()` results from PikeWorker but did
+nothing with them. The hover always fell through to the tree-sitter fallback.
+
 ### Chore
 
 Remove unused variables and imports: `inferredSig` in `hoverHandler.ts`,
