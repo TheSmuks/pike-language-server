@@ -573,6 +573,36 @@ export function registerNavigationHandlers(
   });
 
   // -----------------------------------------------------------------------
+  // textDocument/didOpen — extract AutoDoc on document open (decision 0014)
+  // -----------------------------------------------------------------------
+
+  ctx.documents.onDidOpen((event) => {
+    const doc = event.document;
+
+    // Extract AutoDoc XML on open (non-critical, fire-and-forget)
+    const source = doc.getText();
+    const autodocHash = computeContentHash(source);
+    const cachedAutodoc = ctx.autodocCache.get(doc.uri);
+    if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
+      const filepath = doc.uri.startsWith("file://")
+        ? doc.uri.slice(7)
+        : doc.uri;
+      ctx.worker
+        .autodoc(source, filepath)
+        .then((result) => {
+          if (result.xml) {
+            ctx.autodocCache.set(doc.uri, {
+              xml: result.xml,
+              hash: autodocHash,
+              timestamp: Date.now(),
+            });
+          }
+        })
+        .catch(() => {}); // Non-critical
+    }
+  });
+
+  // -----------------------------------------------------------------------
   // textDocument/didSave — delegate to DiagnosticManager (decision 0013)
   // -----------------------------------------------------------------------
 

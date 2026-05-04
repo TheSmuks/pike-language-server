@@ -17,7 +17,6 @@
 
 import {
   type Declaration,
-  type Reference,
   type SymbolTable,
   getDefinitionAt,
   getReferencesTo,
@@ -117,29 +116,59 @@ export type ProtectedNames = ReadonlySet<string>;
 // ---------------------------------------------------------------------------
 
 /**
+ * Find the class that owns a member declaration using the origin table.
+ * Class declarations have a scopeId that is the file scope, while class body
+ * scopes have parentId = class decl's scopeId. So we find the class body scope
+ * (whose parentId contains targetDecl) and then find the class whose scopeId
+ * matches the body scope's parentId.
+ */
+function findOwningClass(
+  targetDecl: Declaration,
+  originTable: SymbolTable,
+): { className: string } | null {
+  // Find the class body scope that contains targetDecl
+  const classBodyScope = originTable.scopes.find(
+    s => s.kind === 'class' && s.declarations.includes(targetDecl.id),
+  );
+  if (!classBodyScope) return null;
+
+  // The class declaration's scopeId is the class body scope's parent
+  const classDecl = originTable.declarations.find(
+    d => d.kind === 'class' && d.scopeId === classBodyScope.parentId,
+  );
+  if (!classDecl) return null;
+
+  return { className: classDecl.name };
+}
+
+/**
  * Check if an arrow/dot access receiver matches the declaration's class.
  *
  * When renaming Dog.bark(), we want to include d->bark where d is a Dog,
  * but exclude c->bark where c is a Cat (even if Cat also has bark()).
  *
  * Resolution strategy:
- * 1. Find the LHS variable's declaration
- * 2. Resolve its type (declared or assigned)
- * 3. Check if that type resolves to the same class as the target decl
+ * 1. Find the class that the LHS variable's type resolves to (from the ref's file)
+ * 2. Find the class that the target declaration belongs to (from the origin file)
+ * 3. Compare by class name — IDs are file-local and not comparable across files
  *
  * If resolution fails (unknown type, unresolvable), we include the
  * reference — false negatives (missing renames) are worse than false
  * positives (extra renames that the user can reject in preview).
+ *
+ * @param refTable - Symbol table of the file containing the reference
+ * @param originTable - Symbol table of the file containing the declaration
  */
 async function isReceiverTypeMatch(
-  table: SymbolTable,
-  uri: string,
+  refTable: SymbolTable,
+  refUri: string,
   lhsName: string,
   targetDecl: Declaration,
+  originTable: SymbolTable,
   index: WorkspaceIndex,
 ): Promise<boolean> {
   // Find the LHS variable declaration
-  const lhsDecl = table.declarations.find(
+  const lhsDecl = refTable.declarations.find(
     d => d.name === lhsName && (d.kind === 'variable' || d.kind === 'parameter'),
   );
   if (!lhsDecl) return true; // Unknown LHS — include conservatively
@@ -149,33 +178,25 @@ async function isReceiverTypeMatch(
 
   // Resolve the LHS type to a class declaration
   const lhsTypeResult = await resolveType(lhsTypeName, {
-    table,
-    uri,
+    table: refTable,
+    uri: refUri,
     index,
     stdlibIndex: {}, // Stdlib types don't have user-defined members
   });
 
   if (!lhsTypeResult) return true; // Can't resolve — include conservatively
 
-  // The LHS type must resolve to the same class scope as the target declaration.
-  // For methods, the targetDecl's scopeId is the class body scope.
-  // For the class itself, the targetDecl IS the class.
+  // Handle class renames: check if lhs type IS the class being renamed
   if (targetDecl.kind === 'class') {
-    // Renaming the class itself — lhs type should be this class
-    return lhsTypeResult.decl.id === targetDecl.id;
+    return lhsTypeResult.decl.name === targetDecl.name;
   }
 
-  // For members (methods, variables), check if lhs type is the same class
-  // or a class that inherits from the target's class.
-  // Simple check: does the LHS type resolve to the class that contains targetDecl?
-  const targetClassScope = table.scopes.find(s =>
-    s.kind === 'class' && s.declarations.includes(targetDecl.id),
-  );
-  if (!targetClassScope) return true; // Can't determine owning class
+  // For member renames: find the class that owns targetDecl
+  const targetClass = findOwningClass(targetDecl, originTable);
+  if (!targetClass) return true; // Can't determine owning class
 
-  // Check if LHS type's class scope is the same
-  return lhsTypeResult.decl.scopeId === targetClassScope.parentId ||
-    lhsTypeResult.decl.id === targetDecl.id;
+  // Compare by class name — IDs are file-local and not comparable across files
+  return lhsTypeResult.decl.name === targetClass.className;
 }
 
 
@@ -188,7 +209,7 @@ async function isReceiverTypeMatch(
  * 1. Resolve the declaration at cursor via `getDefinitionAt()`
  * 2. If cross-file, use `WorkspaceIndex.getCrossFileReferences()`
  * 3. Otherwise, use `getReferencesTo()` for same-file
- * 4. Build the list of all locations (declaration + references)
+ * 4. Build the list of all locations (declaration + all references)
  */
 export async function getRenameLocations(
   table: SymbolTable,
@@ -219,24 +240,35 @@ export async function getRenameLocations(
     length: oldName.length,
   });
 
-  // Try cross-file references first
+  // Cross-file references
   if (index) {
     const crossFileRefs = index.getCrossFileReferences(uri, line, character);
-    if (crossFileRefs.length > 0) {
-      for (const { uri: refUri, ref } of crossFileRefs) {
-        // Skip the declaration site (already added)
-        if (refUri === uri && ref.loc.line === decl.nameRange.start.line &&
-            ref.loc.character === decl.nameRange.start.character) {
-          continue;
-        }
-        locations.push({
-          uri: refUri,
-          line: ref.loc.line,
-          character: ref.loc.character,
-          length: ref.name.length,
-        });
+    for (const { uri: refUri, ref } of crossFileRefs) {
+      // Skip the declaration site (already added)
+      if (refUri === uri && ref.loc.line === decl.nameRange.start.line &&
+          ref.loc.character === decl.nameRange.start.character) {
+        continue;
       }
-      return { locations, oldName };
+
+      // Type-aware filtering for arrow/dot access:
+      // If we're renaming a member on class Dog, exclude cat->bark
+      // where cat's type resolves to Cat, not Dog.
+      if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName) {
+        const refTable = index.getSymbolTable(refUri);
+        if (refTable) {
+          if (!await isReceiverTypeMatch(refTable, refUri, ref.lhsName, decl, table, index)) {
+            continue;
+          }
+        }
+        // If refTable is null (file not indexed), include conservatively
+      }
+
+      locations.push({
+        uri: refUri,
+        line: ref.loc.line,
+        character: ref.loc.character,
+        length: ref.name.length,
+      });
     }
   }
 
@@ -250,10 +282,8 @@ export async function getRenameLocations(
     }
 
     // Type-aware filtering for arrow/dot access:
-    // If we're renaming a member on class Dog, exclude cat->bark
-    // where cat's type resolves to Cat, not Dog.
     if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName && index) {
-      if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, index)) {
+      if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, table, index)) {
         continue;
       }
     }
@@ -312,22 +342,10 @@ export function prepareRename(
   character: number,
   protectedNames?: ProtectedNames,
 ): PrepareRenameResult | null {
-  // Try to find a declaration at or referenced from this position
   const decl = getDefinitionAt(table, line, character);
-  if (!decl) {
-    return null;
-  }
-
-  // Reject stdlib/predef symbols
-  if (protectedNames?.has(decl.name)) {
-    return null;
-  }
-
-  // Reject Pike keywords (double-check — declaration names should never be
-  // keywords, but guard against malformed parse results)
-  if (PIKE_KEYWORDS.has(decl.name)) {
-    return null;
-  }
+  if (!decl) return null;
+  if (protectedNames?.has(decl.name)) return null;
+  if (PIKE_KEYWORDS.has(decl.name)) return null;
 
   return {
     line: decl.nameRange.start.line,

@@ -463,8 +463,8 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    // Declaration (line 0) + assignment (line 1) + addition (line 1) = 3
-    expect(edit.changes[uri]).toHaveLength(3);
+    // Declaration (line 0) + assignment (line 1) + 3 refs on line 1 = 5
+    expect(edit.changes[uri]).toHaveLength(5);
 
     // All edits should use the new name
     for (const te of edit.changes[uri]) {
@@ -487,8 +487,8 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    // Declaration (line 0) + call site (line 1) = 2
-    expect(edit.changes[uri]).toHaveLength(2);
+    // Declaration (line 0) + call site (line 1) + both computeSum refs (line 1) = 3
+    expect(edit.changes[uri]).toHaveLength(3);
   });
 
   test("returns null for empty position", async () => {
@@ -868,5 +868,92 @@ describe("US-004: rename scope precision for same-name methods", () => {
     const callLine = src.split('\n')[9];
     expect(callLine).toContain('d->bark');
     expect(lines).toContain(9);
+  });
+});
+// ---------------------------------------------------------------------------
+// US-004: Cross-file type-aware rename filtering
+// ---------------------------------------------------------------------------
+
+describe("US-004: rename cross-file refs with type filtering", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const RENAME_CROSSFILE_FILES = [
+    "rename-crossfile-dog.pike",
+    "rename-crossfile-cat.pike",
+    "rename-crossfile-main.pike",
+  ];
+
+  async function makeCrossFileIndex(): Promise<{ index: WorkspaceIndex; uris: Map<string, string> }> {
+    const idx = new WorkspaceIndex({ workspaceRoot: CORPUS_DIR });
+    const uris = new Map<string, string>();
+    for (const name of RENAME_CROSSFILE_FILES) {
+      const uri = "file://" + join(CORPUS_DIR, name);
+      uris.set(name, uri);
+      const src = readCorpus(name);
+      const tree = parse(src);
+      await idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    }
+    return { index: idx, uris };
+  }
+
+  test("renaming Dog.bark excludes Cat.bark from cross-file refs", async () => {
+    const { index, uris } = await makeCrossFileIndex();
+    const uriDog = uris.get("rename-crossfile-dog.pike")!;
+    const tableDog = index.getSymbolTable(uriDog)!;
+
+    // Find Dog.bark declaration
+    const dogBark = tableDog.declarations.find(
+      d => d.name === "bark" && d.kind === "function",
+    );
+    expect(dogBark).toBeDefined();
+
+    const result = await getRenameLocations(
+      tableDog, uriDog,
+      dogBark!.nameRange.start.line,
+      dogBark!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("bark");
+
+    // Should have 2 locations: Dog.bark declaration + d->bark in main
+    // Should NOT include c->bark in main (Cat.bark)
+    expect(result!.locations).toHaveLength(2);
+
+    const uriMain = uris.get("rename-crossfile-main.pike")!;
+    const mainLocs = result!.locations.filter(l => l.uri === uriMain);
+    expect(mainLocs).toHaveLength(1);
+
+    // The one main location should be d->bark, not c->bark
+    // d->bark is on line 11 (0-indexed), c->bark is on line 16
+    const mainLocLines = mainLocs.map(l => l.line);
+    expect(mainLocLines).toContain(11); // d->bark
+    expect(mainLocLines).not.toContain(16); // c->bark
+  });
+
+  test("renaming Dog.bark includes d->bark where d is a Dog variable", async () => {
+    const { index, uris } = await makeCrossFileIndex();
+    const uriDog = uris.get("rename-crossfile-dog.pike")!;
+    const tableDog = index.getSymbolTable(uriDog)!;
+
+    const dogBark = tableDog.declarations.find(
+      d => d.name === "bark" && d.kind === "function",
+    );
+    expect(dogBark).toBeDefined();
+
+    const result = await getRenameLocations(
+      tableDog, uriDog,
+      dogBark!.nameRange.start.line,
+      dogBark!.nameRange.start.character,
+      index,
+    );
+    expect(result).not.toBeNull();
+
+    // Verify d->bark is included (line 11 in main file)
+    const uriMain = uris.get("rename-crossfile-main.pike")!;
+    const mainLoc = result!.locations.find(l => l.uri === uriMain && l.line === 11);
+    expect(mainLoc).toBeDefined();
   });
 });
