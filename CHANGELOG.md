@@ -17,6 +17,10 @@ function return type annotations. Renaming `Dog` → `Cat` also renames `Dog f()
 → `Cat f()`. Added `collectFunctionReturnTypeRefs()` to collect return type
 references, with location deduplication in `getReferencesTo()`.
 
+### Changed
+
+**CI**: Upgraded `actions/cache` from v4 to v5.
+
 ## [0.2.0-beta] - 2026-05-04
 
 ### Fixed
