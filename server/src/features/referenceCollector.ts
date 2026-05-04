@@ -137,7 +137,7 @@ function collectPostfixRef(node: Node, state: BuildState): void {
           name: memberNode.text,
           loc: toLoc(memberNode.startPosition),
           kind: 'arrow_access',
-          resolvesTo: null, // TODO: resolve through object type (Phase 3 basic)
+          resolvesTo: null, // TODO: arrow/dot access resolution deferred (see docs/known-limitations.md)
           confidence: 'low',
           lhsName,
         });

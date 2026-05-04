@@ -75,23 +75,29 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 
 ## Cross-File Resolution Limitations (Phase 4)
 
-### No .so binary module resolution
+### No .so binary module resolution — PERMANENT
 
 The ModuleResolver skips `.so` (compiled C module) files. System modules that are pure C (e.g., `_Stdio`, `__builtin`) cannot be resolved by path lookup. This affects completion and go-to-definition for low-level system types.
 
 **Mitigation**: Most commonly used stdlib modules (Stdio, Array, Mapping, etc.) are implemented in Pike (.pmod files) and resolve correctly. Pure C modules could be handled in a future phase via pike-ai-kb or a pre-built system module map.
 
-### No joinnode multi-path merge
+**Rationale**: Resolving C modules requires parsing C header files or using libdwarf debugging info — neither is practical for an LSP that needs to stay fast. The mitigation covers 95% of use cases.
+
+
+### No joinnode multi-path merge — PERMANENT
 
 Pike's `joinnode` class merges symbols from multiple search paths when the same module name exists in multiple locations. The LSP uses first-match-wins instead. If a workspace contains a module with the same name as a system module, the workspace version takes precedence.
 
 **Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
 
-### Import resolution is scoped to file-system paths
+
+### Import resolution is scoped to file-system paths — PERMANENT
 
 Import resolution searches workspace and system module paths. It does not query Pike at runtime. Dynamic module behavior (modules that register symbols at compile time) is not captured.
 
 **Impact**: Low for standard Pike code. Dynamic modules are rare in user workspaces.
+
+**Rationale**: Dynamic compilation-time module registration requires running Pike at LSP startup time for every file, which is too slow. File-system path resolution is the practical trade-off.
 
 ### .pmod directory contents not individually introspected by harness
 
@@ -154,12 +160,13 @@ a file is opened, without requiring a save.
 
 **Implementation**: `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`
 extracts AutoDoc on open using the same fire-and-forget pattern as didSave.
-### AutoDoc hover coverage depends on codebase conventions
+### AutoDoc hover coverage depends on codebase conventions — BY DESIGN
 
 AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
 
 **Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.
 
+**Rationale**: AutoDoc is opt-in documentation. The fallback to tree-sitter declared types ensures hover always works, even for undocumented symbols.
 ## Phase 7: Type Resolution Limitations
 
 ### ~~Type resolution requires explicit type annotations~~ — PARTIALLY RESOLVED (US-008)

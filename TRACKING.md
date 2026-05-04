@@ -3,8 +3,7 @@
 
 ## Current Phase
 
-**Phase 16: pike-introspect Integration** — Complete. pike-introspect v0.2.0 integrated with resolve method, ResolveResult type, and inheritance chain support. 1,619 tests passing.
-
+**Phase 21: LSP Feature Completion** — Complete. 1,619 tests. 13 LSP features implemented.
 |-------|--------|-----------------|-----------------|
 
 | Phase | Status | Entry Checkpoint | Exit Checkpoint |
@@ -25,6 +24,11 @@ vk|| Phase 13: LSP Features | **Complete** | Phase 12 complete | documentHighlig
 kc|| Phase 14: Workspace Features | **Complete** | Phase 13 complete | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
 ya|| Phase 15: Correctness Foundations | **Complete** | Phase 14 complete | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
 | 16: pike-introspect Integration | **Complete** | Phase 15 complete | pike-introspect v0.2.0 integration: resolve method, ResolveResult type, inheritance chain support. Decision 0019 updated.
+| Phase 17: Diagnostic Refinement | **Complete** | Phase 16 complete |
+| Phase 18: Diagnostics Quality | **Complete** | Phase 17 complete |
+| Phase 19: Type Resolution | **Complete** | Phase 18 complete |
+| Phase 20: Completion Quality | **Complete** | Phase 19 complete |
+| Phase 21: LSP Feature Completion | **Complete** | Phase 20 complete | 13 LSP features fully implemented, 1,619 tests passing.
 
 ## Phase 1 Exit Checkpoint — Verified
 
@@ -482,14 +486,15 @@ Five verification items resolved:
 - `corpus/files/` — 37 Pike files covering 14 language feature categories
 - `decisions/0001` through `decisions/0004` — Architecture decisions
 
+
+
 ## Open Issues
 
-| Issue | Impact | Filed |
-|-------|--------|-------|
-| tree-sitter-pike#2: Missing field names on `for_statement` children | Must use positional child scanning instead of field-based API | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/2) |
-| tree-sitter-pike#3: `catch` expression lost in assignment context | Cannot create scopes for catch-block variables in `mixed err = catch { }` pattern | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/3) |
-| tree-sitter-pike#4: No scope-introducing nodes for while/switch/plain blocks | Variables in while/switch/do-while leak to enclosing scope | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/4) |
-
+| Issue | Impact | Filed | Status |
+|-------|--------|-------|--------|
+| tree-sitter-pike#2: Missing field names on `for_statement` children | Must use positional child scanning instead of field-based API | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/2) | Open |
+| tree-sitter-pike#3: `catch` expression lost in assignment context | Cannot create scopes for catch-block variables in `mixed err = catch { }` pattern | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/3) | Partially resolved (mitigated via fallback) |
+| tree-sitter-pike#4: No scope-introducing nodes for while/switch/plain blocks | Variables in while/switch/do-while leak to enclosing scope | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/4) | Partially resolved (documented, workarounds in place) |
 ## Deferred Items
 
 - [x] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** Done in Phase 4. `corpus/corpus.json` replaces `CROSS_FILE_FLAGS`. Runner reads per-file compilation flags from manifest.
