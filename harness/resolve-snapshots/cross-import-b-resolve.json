@@ -1,58 +1,58 @@
 {
-  "pike_version": "8.0.1116",
+  "file": "corpus/files/cross-import-b.pike",
   "error": null,
   "resolutions": [
     {
-      "line": 10,
       "reference": "cross_import_a",
-      "target_file": "corpus/files/cross_import_a.pmod",
+      "line": 10,
       "symbols": [
         {
           "line": 20,
-          "name": "Greeter",
           "defined_file": "corpus/files/cross_import_a.pmod",
+          "kind": "class",
+          "name": "Greeter",
           "members": [
             {
-              "name": "create",
-              "kind": "function"
+              "kind": "function",
+              "name": "create"
             },
             {
-              "name": "greet",
-              "kind": "function"
+              "kind": "function",
+              "name": "greet"
             },
             {
-              "name": "greeting",
-              "kind": "variable"
+              "kind": "variable",
+              "name": "greeting"
             }
-          ],
-          "kind": "class"
+          ]
         },
         {
-          "name": "LIBRARY_VERSION",
           "defined_file": "corpus/files/cross_import_a.pmod",
-          "kind": "variable"
+          "kind": "variable",
+          "name": "LIBRARY_VERSION"
         },
         {
           "line": 16,
-          "name": "count_words",
           "defined_file": "corpus/files/cross_import_a.pmod",
-          "kind": "function"
+          "kind": "function",
+          "name": "count_words"
         },
         {
           "line": 12,
-          "name": "format_name",
           "defined_file": "corpus/files/cross_import_a.pmod",
-          "kind": "function"
+          "kind": "function",
+          "name": "format_name"
         },
         {
           "line": 26,
-          "name": "main",
           "defined_file": "corpus/files/cross_import_a.pmod",
-          "kind": "function"
+          "kind": "function",
+          "name": "main"
         }
       ],
-      "kind": "import"
+      "kind": "import",
+      "target_file": "corpus/files/cross_import_a.pmod"
     }
   ],
-  "file": "corpus/files/cross-import-b.pike"
+  "pike_version": "8.0.1116"
 }

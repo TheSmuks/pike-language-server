@@ -3,12 +3,9 @@
   "resolutions": [
     {
       "target_file": "corpus/files/cross-inherit-simple-a.pike",
-      "alias": null,
       "line": 10,
       "symbols": [
         {
-          "line": 10,
-          "name": "Animal",
           "members": [
             {
               "name": "create",
@@ -23,39 +20,42 @@
               "kind": "function"
             }
           ],
-          "kind": "class",
-          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+          "line": 10,
+          "name": "Animal",
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike",
+          "kind": "class"
         },
         {
           "name": "SPECIES",
-          "kind": "variable",
-          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike",
+          "kind": "variable"
         },
         {
           "line": 28,
           "name": "describe",
-          "kind": "function",
-          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike",
+          "kind": "function"
         },
         {
           "line": 32,
           "name": "main",
-          "kind": "function",
-          "defined_file": "corpus/files/cross-inherit-simple-a.pike"
+          "defined_file": "corpus/files/cross-inherit-simple-a.pike",
+          "kind": "function"
         }
       ],
-      "reference": "cross-inherit-simple-a.pike",
-      "kind": "inherit"
+      "alias": null,
+      "kind": "inherit",
+      "reference": "cross-inherit-simple-a.pike"
     },
     {
-      "resolve_error": "NOT FOUND",
       "target_file": null,
-      "alias": null,
       "line": 13,
-      "reference": "Animal",
-      "kind": "inherit"
+      "resolve_error": "NOT FOUND",
+      "alias": null,
+      "kind": "inherit",
+      "reference": "Animal"
     }
   ],
-  "file": "corpus/files/cross-inherit-simple-b.pike",
-  "error": null
+  "error": null,
+  "file": "corpus/files/cross-inherit-simple-b.pike"
 }

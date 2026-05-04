@@ -1,49 +1,49 @@
 {
   "error": null,
-  "file": "corpus/files/cross-inherit-rename-b.pike",
-  "pike_version": "8.0.1116",
   "resolutions": [
     {
-      "target_file": "corpus/files/cross-inherit-rename-a.pike",
-      "alias": "motor",
+      "reference": "cross-inherit-rename-a.pike",
       "line": 9,
       "kind": "inherit",
+      "target_file": "corpus/files/cross-inherit-rename-a.pike",
       "symbols": [
         {
           "line": 10,
-          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "name": "Engine",
           "kind": "class",
           "members": [
             {
-              "kind": "function",
-              "name": "create"
+              "name": "create",
+              "kind": "function"
             },
             {
-              "kind": "function",
-              "name": "describe"
+              "name": "describe",
+              "kind": "function"
             }
           ],
-          "name": "Engine"
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike"
         },
         {
-          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "name": "TYPE",
           "kind": "variable",
-          "name": "TYPE"
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike"
         },
         {
           "line": 22,
-          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "name": "efficiency",
           "kind": "function",
-          "name": "efficiency"
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike"
         },
         {
           "line": 26,
-          "defined_file": "corpus/files/cross-inherit-rename-a.pike",
+          "name": "main",
           "kind": "function",
-          "name": "main"
+          "defined_file": "corpus/files/cross-inherit-rename-a.pike"
         }
       ],
-      "reference": "cross-inherit-rename-a.pike"
+      "alias": "motor"
     }
-  ]
+  ],
+  "pike_version": "8.0.1116",
+  "file": "corpus/files/cross-inherit-rename-b.pike"
 }
