@@ -1,6 +1,24 @@
 ## [Unreleased]
 
+
+### Added
+
+**Diagnostic quality improvements**: Parse diagnostics now have tighter ERROR node ranges (single token instead of full recovery span), context-aware error messages, and numeric diagnostic codes (P1xxx for parse, P2xxxx for Pike compiler). Parse diagnostics on lines with Pike diagnostics are suppressed to avoid duplication.
+
+
 ### Fixed
+
+**Dead import in navigationHandler.ts**: Removed unused `SEMANTIC_TOKENS_LEGEND` import.
+
+**Stale TODO in referenceCollector.ts**: Updated to reference known-limitations doc.
+
+
+### Chore
+
+**Documentation cleanup**: Updated TRACKING.md with Phases 17-21, updated state-of-project.md title to Phase 21, documented scopeBuilder.ts re-export facade, added "PERMANENT" markers to known-limitations for unfixable items (.so modules, joinnode, import resolution).
+
+**PikeDiagnostic interface**: Added optional `code` field for compiler error codes.
+
 
 **Test infrastructure critical bug**: `createTestServer()` in `tests/lsp/helpers.ts`
 now sends `processId: null` in the `initialize` request. The vscode-languageserver

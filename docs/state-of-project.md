@@ -1,8 +1,6 @@
 
-# State of the Project — Phase 20b Complete
-
-> Audit date: 2026-05-03. Updated after Phase 20b completion (cross-file inheritance chain, diagnostic columns).
-## Project Identity
+# State of the Project — Phase 21 Complete
+> Audit date: 2026-05-04. Updated after Phase 21 completion (13 LSP features, 1,619 tests).
 
 - **Name:** pike-language-server
 - **Version:** 0.1.0-alpha
@@ -31,6 +29,11 @@
 | 14: Workspace Features | Complete | 1,565 | Code actions, workspace symbol, background indexing, persistent cache, configuration, cancellation. |
 | 15: Correctness Foundations | Complete | 1,612 | Completion refinements, rename bug fix, diagnostics fix, CI canary fix. Decisions 0017, 0018. |
 | 16: pike-introspect Integration | Complete | 1,619 | pike-introspect v0.2.0 integration: resolve method, ResolveResult type, inheritance chain support. Decision 0019 updated. |
+| 17: Diagnostic Refinement | Complete | 1,612 | Diagnostic refinements and additional test coverage |
+| 18: Diagnostics Quality | Complete | 1,619 | Tighter ERROR ranges, better messages, deduplication, diagnostic codes |
+| 19: Type Resolution | Complete | 1,619 | Arrow/dot access resolvesTo population, complex initializer inference |
+| 20: Completion Quality | Complete | 1,619 | Completion refinements, case sensitivity fix, snippet support |
+| 21: LSP Feature Completion | Complete | 1,619 | 13 LSP features fully implemented |
 
 ## LSP Feature Completeness
 | capability | status | Details |
