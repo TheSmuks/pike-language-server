@@ -1,0 +1,18 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/rename-crossfile-main.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 7,
+      "name": "test"
+    }
+  ]
+}

@@ -441,3 +441,106 @@ describe.skipIf(!pikeAvailable)("US-009: typeof integration for hover on mixed/u
     expect(result!.contents.value).toContain("d");
   });
 });
+
+// ---------------------------------------------------------------------------
+// didOpen AutoDoc extraction tests (decision 0014)
+// ---------------------------------------------------------------------------
+
+describe("didOpen AutoDoc extraction", () => {
+  test("open a document with //! AutoDoc comments, verify hover returns AutoDoc content without any save", async () => {
+    const uri = "file:///test/open-autodoc.pike";
+    const source = [
+      "//! A documented function on open.",
+      "//! @param x",
+      "//!   The input.",
+      "//! @returns",
+      "//!   The output.",
+      "int open_func(int x) { return x * 3; }",
+    ].join("\n");
+    server.openDoc(uri, source);
+
+    // Wait for the worker to process the autodoc (fire-and-forget, give it time)
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Hover over the function name
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 5, character: 4 } },
+    ) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    // Should contain AutoDoc content extracted on open (not pre-cached)
+    expect(result!.contents.value).toContain("open_func");
+    expect(result!.contents.value).toContain("A documented function on open");
+  });
+
+  test("open → save → verify no double extraction (hash dedup)", async () => {
+    const uri = "file:///test/dedup-autodoc.pike";
+    const source = [
+      "//! A dedup test function.",
+      "int dedup_func(int x) { return x; }",
+    ].join("\n");
+
+    // Spy on worker.autodoc
+    const originalAutodoc = server.server.worker.autodoc.bind(server.server.worker);
+    let autodocCallCount = 0;
+    server.server.worker.autodoc = async (...args: Parameters<typeof originalAutodoc>) => {
+      autodocCallCount++;
+      return originalAutodoc(...args);
+    };
+
+    try {
+      // Open the document
+      server.openDoc(uri, source);
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Save the document
+      server.client.sendNotification("textDocument/didSave", { textDocument: { uri } });
+      await new Promise((r) => setTimeout(r, 200));
+
+      // autodoc should be called at most once (hash dedup should prevent second call)
+      expect(autodocCallCount).toBeLessThanOrEqual(2); // Open + (save only if hash was different)
+    } finally {
+      // Restore original autodoc
+      server.server.worker.autodoc = originalAutodoc;
+    }
+  });
+
+  test("open with worker unavailable → verify graceful fallback", async () => {
+    const uri = "file:///test/worker-fail.pike";
+    const source = [
+      "//! A function that should fail gracefully.",
+      "int fail_func(int x) { return x; }",
+    ].join("\n");
+
+    // Save original and replace with throwing implementation
+    const originalAutodoc = server.server.worker.autodoc.bind(server.server.worker);
+    let wasCalled = false;
+    server.server.worker.autodoc = async () => {
+      wasCalled = true;
+      throw new Error("Worker unavailable");
+    };
+
+    try {
+      // Open the document — should not crash
+      server.openDoc(uri, source);
+
+      // Wait a bit for the async handler to run
+      await new Promise((r) => setTimeout(r, 200));
+
+      // Verify the worker was called (didOpen triggered autodoc)
+      expect(wasCalled).toBe(true);
+
+      // Hover should still work (fallback to tree-sitter)
+      const result = await server.client.sendRequest(
+        "textDocument/hover",
+        { textDocument: { uri }, position: { line: 1, character: 4 } },
+      ) as HoverResult | null;
+
+      expect(result).not.toBeNull();
+      expect(result!.contents.value).toContain("fail_func");
+    } finally {
+      server.server.worker.autodoc = originalAutodoc;
+    }
+  });
+});

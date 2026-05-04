@@ -33,12 +33,17 @@ export interface TypeResolutionContext {
    * `mixed` with no assignedType. Returns the inferred type name or null.
    */
   typeInferrer?: (varName: string) => Promise<string | null>;
+  /**
+   * Optional per-request cache for type resolution results.
+   * Prevents re-resolving the same type across chained member accesses.
+   */
+  cache?: ResolutionCache;
 }
-
 
 const MAX_RESOLUTION_DEPTH = 5;
 
 
+export type ResolutionCache = Map<string, TypeResolutionResult>;
 export interface TypeResolutionResult {
   decl: Declaration;
   /** URI of the file containing the resolved declaration. */
@@ -61,6 +66,12 @@ export async function resolveType(
   context: TypeResolutionContext,
   depth = 0,
 ): Promise<TypeResolutionResult | null> {
+  // Check cache first to avoid redundant resolution work
+  if (context.cache) {
+    const cached = context.cache.get(typeName);
+    if (cached !== undefined) return cached;
+  }
+
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
   if (PRIMITIVE_TYPES.has(typeName)) return null;
   if (!typeName) return null;
@@ -70,21 +81,28 @@ export async function resolveType(
     d => d.kind === "class" && d.name === typeName,
   );
   if (localClass) {
-    return { decl: localClass, uri: context.uri, table: context.table };
+    const result = { decl: localClass, uri: context.uri, table: context.table };
+    context.cache?.set(typeName, result);
+    return result;
   }
 
   // 2. Qualified type (e.g., "Stdio.File") — resolve first segment as module
   if (typeName.includes(".")) {
-    return await resolveQualifiedType(typeName, context, depth);
+    const result = await resolveQualifiedType(typeName, context, depth);
+    if (result) context.cache?.set(typeName, result);
+    return result;
   }
 
   // 3. Cross-file class via inherit/import declarations
   const crossFileClass = await resolveCrossFileType(typeName, context);
-  if (crossFileClass) return crossFileClass;
+  if (crossFileClass) {
+    context.cache?.set(typeName, crossFileClass);
+    return crossFileClass;
+  }
 
   // 4. Stdlib type — check if "predef.<typeName>" has children in stdlib index
   // For stdlib types, we return null for the declaration — callers can
-  // still enumerate members via the stdlib prefix index
+  // still enumerate members via the stdlib prefix index.
 
   return null;
 }
@@ -118,6 +136,17 @@ export async function resolveMemberAccess(
       } catch {
         // Worker unavailable or timed out — proceed without inferred type
       }
+    }
+  }
+
+  // If typeName is still null, the LHS might be a function call expression.
+  // Look up the function's declared return type for member resolution.
+  if (!typeName && lhsName) {
+    const fnDecl = context.table.declarations.find(
+      d => d.name === lhsName && d.kind === 'function',
+    );
+    if (fnDecl?.declaredType && !PRIMITIVE_TYPES.has(fnDecl.declaredType)) {
+      typeName = fnDecl.declaredType;
     }
   }
 
@@ -211,12 +240,19 @@ async function resolveCrossFileType(
   for (const decl of context.table.declarations) {
     if (decl.kind !== "inherit" && decl.kind !== "import") continue;
 
-    // For string-literal inherits, skip (they resolve to files, not class names)
-    if (decl.name.startsWith('"') && decl.name.endsWith('"')) continue;
+    // Check if this is a string-literal inherit like inherit "foo.pike"
+    const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
 
     // Resolve this inherit/import to a target file
-    const targetUri = (await context.index.resolveImport(decl.name, context.uri))
-      ?? await context.index.resolveInherit(decl.name, false, context.uri);
+    let targetUri: string | null = null;
+    if (isStringLit) {
+      // String-literal inherits use resolveInherit with isStringLiteral=true
+      targetUri = await context.index.resolveInherit(decl.name, true, context.uri);
+    } else {
+      // Non-string inherits/imports use resolveImport or resolveInherit with isStringLiteral=false
+      targetUri = (await context.index.resolveImport(decl.name, context.uri))
+        ?? await context.index.resolveInherit(decl.name, false, context.uri);
+    }
     if (!targetUri) continue;
 
     const targetTable = context.index.getSymbolTable(targetUri);

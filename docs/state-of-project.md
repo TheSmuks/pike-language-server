@@ -1,7 +1,7 @@
-# State of the Project — Phase 19 Complete
 
-> Audit date: 2026-05-03. Updated after Phase 19 completion (scope leakage fixes).
+# State of the Project — Phase 20b Complete
 
+> Audit date: 2026-05-03. Updated after Phase 20b completion (cross-file inheritance chain, diagnostic columns).
 ## Project Identity
 
 - **Name:** pike-language-server
@@ -83,24 +83,23 @@
 | `predef-builtin-index.json` | 283 C-level predef function type signatures | 28 KB |
 | `tree-sitter-pike.wasm` | Compiled Pike grammar | ~302 KB |
 
+
 ## Known Limitations
 
 **Upstream (tree-sitter-pike):**
-- #2: Missing field names on for_statement children -> workaround: positional scanning
-- #3: catch expression lost in assignment context -> no scope for catch-block variables
-- #4: No scope-introducing nodes for while/switch/plain blocks -> variable leakage
+- #2: for_statement has `body` and `condition` fields; `initializer` still needs positional scan
+- #4: switch_statement has `value` field; `body` still needs positional scan (no field name)
 
 **Server:**
-- Diagnostics are real-time with 500ms debounce (configurable, decision 0013)
-- No column-level diagnostic positions (character: 0 always)
-- Hover shows declared types, not inferred types
-- AutoDoc hover requires save for cache population
-- No .so binary module resolution
-- No joinnode multi-path merge
-- Import resolution scoped to file-system paths
-- Arrow/dot access rename uses name-based matching for unresolved references, which may include call sites on different classes sharing the same method name
-- Cross-file inherited member completion returns only same-file members (wireInheritance does not resolve cross-file inheritance)
-
+fd|- Diagnostics are real-time with 500ms debounce (configurable, decision 0013)
+ub|- Pike compiler diagnostics use approximate column positions (first meaningful token on line, not error-token-precise); parse diagnostics are precise
+ec|- Hover shows declared types, not inferred types — RESOLVED in Phase 21 (typeof_ wired to completion + definition)
+bx|- AutoDoc hover requires save for cache population — RESOLVED in Phase 21 (didOpen handler added)
+vh|- No .so binary module resolution
+xo|- No joinnode multi-path merge
+sd|- Import resolution scoped to file-system paths
+yh|- Arrow/dot access rename uses name-based matching for unresolved references — RESOLVED in Phase 21 (isReceiverTypeMatch applied to cross-file refs)
+wk
 **pike-ai-kb:**
 - [#11](https://github.com/TheSmuks/pike-ai-kb/issues/11): pike-signature cannot resolve C-level predef builtins (mitigated by predef-builtin-index.json)
 

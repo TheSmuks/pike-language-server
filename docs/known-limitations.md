@@ -118,19 +118,24 @@ Diagnostics from the Pike compiler are triggered on `textDocument/didChange` (de
 **Configuration**: `initializationOptions.diagnosticMode` in the `initialize` request. Default: `realtime`.
 
 **Verified**: 50 rapid didChange events produce ≤ 3 diagnose invocations. Hover latency unaffected during in-flight diagnose. See `decisions/0013-verification.md`.
-### No column-level diagnostic positions
 
-Pike's CompilationHandler reports line numbers but not column positions. LSP diagnostics from Pike always have `character: 0`.
+### Diagnostic column positions are approximate
 
-**Impact**: Underlines span the entire line rather than the specific token. Parse diagnostics (from tree-sitter) do have column-level positions.
+Pike's `compile_error` handler reports line numbers but not column positions. When Pike emits a diagnostic, the `character` field was always 0, making underlines span the entire line.
 
-### ~~Hover does not use Pike runtime for type inference~~ — PARTIALLY RESOLVED (US-009)
+**Resolution (Phase 20b)**: Added `lineToColumn()` helper that locates the first meaningful token on the diagnostic's line using tree-sitter and returns its column offset. Both `mergeDiagnostics` call sites now pass the parsed tree.
 
-**US-009 update**: The `typeof_()` method is now connected to hover responses (`server.ts`). When a variable is declared as `mixed` or has no type annotation, hover calls `typeof_()` to get the runtime-inferred type. Variables with explicit type annotations still use declared types.
+**Remaining gap**: The column is approximate — it points to the first meaningful token on the line, not to the specific error token. For Pike compiler diagnostics, this is the best available signal. Parse diagnostics (tree-sitter errors) already have precise column positions.
 
-**Remaining gap**: `typeof_()` is only invoked for hover, not for completion or go-to-definition. Member access completion on `mixed`-typed variables still cannot resolve through the runtime.
+### ~~Hover does not use Pike runtime for type inference~~ — RESOLVED
 
-**Impact**: Hover on `mixed`/untyped variables now shows the inferred type in many cases. Member completion and definition lookup on the same variables remain unresolved.
+**US-009 update**: The `typeof_()` method is wired into the hover provider
+(`server.ts`), completion provider (`navigationHandler.ts:565`), and definition
+provider (`navigationHandler.ts:397`). Member access on `mixed`-typed variables
+now resolves through runtime inference.
+
+**Impact**: Hover, completion, and definition are type-aware for `mixed`
+variables when a runtime inferrer is available.
 
 ### Stdlib hover: C-level builtins not indexed
 
@@ -141,13 +146,14 @@ The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins
 **Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
 
 **Current state**: `predef-builtin-index.json` (283 symbols) is a temporary workaround. When [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) ships its `all_constants()` fallback, evaluate removing the predef index in favor of kb queries.
+### ~~AutoDoc hover requires save for cache population~~ — RESOLVED
 
-### AutoDoc hover requires save for cache population
+AutoDoc XML is now extracted on `textDocument/didOpen` with content-hash dedup,
+not just on `textDocument/didSave`. Hover shows AutoDoc content immediately when
+a file is opened, without requiring a save.
 
-AutoDoc XML is extracted on `didSave` and cached. Before the first save of a file, hover falls through to tree-sitter (Tier 3). This means new files opened but never saved will not have AutoDoc hover.
-
-**Rationale**: The Pike worker extracts AutoDoc from source text (no file I/O needed), but the extraction is triggered by the save pipeline. Adding extraction on `didOpen` would require worker startup on file open.
-
+**Implementation**: `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`
+extracts AutoDoc on open using the same fire-and-forget pattern as didSave.
 ### AutoDoc hover coverage depends on codebase conventions
 
 AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
@@ -160,57 +166,64 @@ AutoDoc hover only works for symbols documented with `//!` comments. PikeExtract
 
 **US-008 update**: The symbol table now captures `assignedType` from simple initializer expressions. When a variable is declared as `mixed x = Dog()`, `assignedType` is set to `Dog`, enabling type resolution through the existing `resolveType()` pipeline.
 
-**Remaining gap**: `assignedType` only captures simple constructor calls (`Dog()`, `makeDog()`). Complex expressions (ternary, arithmetic, function calls returning untyped results) are not handled. Variables initialized by assignment (not declaration) are also not covered.
+**Remaining gap**: Variables initialized by assignment (not declaration) are
+not covered by `assignedType`. Complex expressions that don't reduce to a
+simple constructor or ternary call still require explicit type annotations.
 
-**Impact**: Arrow/dot member completion and go-to-definition now work for variables initialized with simple constructors, even when declared as `mixed`. Complex initializers still require explicit type annotations.
-
+**Impact**: Arrow/dot member completion and go-to-definition now work for
+variables initialized with simple constructors or ternary expressions, even when
+declared as `mixed`. Other complex initializers still require explicit annotations.
 ### Type resolution is same-file only for direct class lookup
 
 `resolveType()` finds classes in the same file first, then falls through to cross-file resolution and stdlib. But cross-file resolution depends on the WorkspaceIndex having the target file indexed. If the target file hasn't been opened or changed since indexing, the resolution may return null.
 
-### No inference through function return types
+### ~~No inference through function return types~~ — RESOLVED
 
-If a function returns `Animal`, calling `f()->speak()` cannot resolve `speak` because the return type is not tracked. Only direct declared types on variables and parameters are used.
-
-**US-008 note**: `assignedType` captures initializer types for variables, but function return type propagation is not implemented. Chained inference (`a()->b()->c()`) requires multiple `resolveType` hops with no caching, and the `MAX_RESOLUTION_DEPTH` (5) limits deeply chained calls.
+When `resolveMemberAccess()` encounters a call expression where the callee
+resolves to a function with a `declaredType` (return type annotation), it uses
+that as the type for member access. `f()->speak()` now resolves correctly when
+`f()` is declared to return `Dog`.
 
 ## Phase 8: Rename Limitations
 
-### Arrow/dot access rename uses name-based matching for unresolved references
+### ~~Arrow/dot access rename uses name-based matching for unresolved references~~ — RESOLVED
 
-When renaming `bark()` on class `Dog`, all `->bark` call sites are included regardless of the object's type. If another class also has a `bark()` method, `otherObj->bark()` would be renamed too.
+When renaming `Dog.bark()`, cross-file `->bark` call sites are now type-filtered
+via `isReceiverTypeMatch()`. References where the LHS resolves to a different
+class are excluded.
 
-**Impact**: Low in practice — different classes rarely share method names in the same scope, and the rename preview allows users to verify before applying.
+**Implementation**: `getRenameLocations()` (rename.ts:255-258) applies the same
+`isReceiverTypeMatch()` check for same-file refs and cross-file refs (when
+`lhsName` is present in the reference).
 
 ### Rename does not rename through function return types
 
 If `makeDog()` returns `Dog`, renaming `Dog` class won't update the return type annotation of `makeDog()`. Type annotation renaming is not implemented.
 
-## Phase 10/11: Type Inference Gaps (US-008/009/010)
+## Resolved: Type Inference (US-008/009/010)
 
-### assignedType only captures simple constructor calls
+`extractInitializerType()` in `scope-helpers.ts` now handles `cond_expr` (ternary
+operator). When a ternary is encountered, both branches are examined and the
+first non-primitive identifier is returned. Variables like `mixed x = condition ? Dog() : Cat();`
+now get `assignedType = Dog`.
 
-`extractInitializerType()` in `symbolTable.ts` extracts types from initializers, but only handles simple constructor patterns (`Dog()`, `makeDog()`). Complex expressions — ternary operators, arithmetic, function calls returning untyped results, chained calls — are not parsed for type information.
+### ~~typeof_() is only called for hover, not completion or definition~~ — RESOLVED
 
-**Impact**: Variables like `mixed x = condition ? Dog() : Cat();` get no `assignedType`. Only the straightforward `mixed x = Dog();` pattern is covered.
+`typeof_()` is wired into the hover provider (`server.ts`), completion provider
+(`navigationHandler.ts:565`), and definition provider (`navigationHandler.ts:397`).
+Member access on `mixed`-typed variables now resolves through runtime inference.
+### ~~PRIMITIVE_TYPES centralization is incomplete~~ — RESOLVED
 
-### typeof_() is only called for hover, not completion or definition
+`PRIMITIVE_TYPES` is defined once in `scope-helpers.ts` and re-exported through
+`symbolTable.ts`. All consumers import from the single canonical source. The
+pattern duplication issue is resolved.
 
-US-009 connected `typeof_()` to the hover pipeline, but the completion and go-to-definition features do not invoke it. A `mixed`-typed variable with a runtime-inferred type will show the correct type on hover but still produce no completions after `->`.
+### ~~Chained inference requires multiple resolveType hops with no caching~~ — RESOLVED
 
-**Impact**: Hover is type-aware for `mixed` variables; completion and definition remain annotation-only.
-
-### PRIMITIVE_TYPES centralization is incomplete
-
-`PRIMITIVE_TYPES` is defined once in `symbolTable.ts` and imported by `completion.ts`, `typeResolver.ts`, and `server.ts` (3 import sites). This works but means any modification to the primitive set requires verifying all consumers. No single canonical source of truth beyond the one definition.
-
-**Impact**: Low — the set is stable. But the pattern of `declaredType && !PRIMITIVE_TYPES.has(declaredType) ? declaredType : assignedType` is duplicated in three files, creating a maintenance risk if the fallback logic changes.
-
-### Chained inference requires multiple resolveType hops with no caching
-
-
-
-**Impact**: Performance degrades on deeply chained access. The depth limit (5) caps the worst case but also limits correctness for legitimate deep chains.
+`resolveType()` now uses an optional `ResolutionCache` to memoize type resolution
+results within a single resolution chain. Each resolution hop checks the cache
+before doing work and stores results after. Caches are created per-request
+(completion/definition) and are not persisted.
 
 
 ### pike-introspect Availability Dependency

@@ -280,6 +280,53 @@ describe("Recursion guards", () => {
 });
 
 // ---------------------------------------------------------------------------
+// resolveMemberAccess — function return type propagation
+// ---------------------------------------------------------------------------
+
+describe("resolveMemberAccess — function return type", () => {
+  test("resolves member through function declared return type", async () => {
+    const src = 'class Dog { void speak() {} } Dog f() { return Dog(); }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/fn-return.pike", 1);
+    wireInheritance(table);
+    const ctx = makeTypeCtx(table);
+
+    const fnF = table.declarations.find(d => d.name === "f" && d.kind === "function");
+    expect(fnF).not.toBeUndefined();
+
+    // lhsName="f", lhsDecl=null (call expression), expect return type Dog to resolve
+    const member = await resolveMemberAccess("f", "speak", null, ctx);
+    expect(member).not.toBeNull();
+    expect(member!.name).toBe("speak");
+  });
+
+  test("returns null for function with no return type", async () => {
+    const src = 'void f() { }';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/fn-void.pike", 1);
+    const ctx = makeTypeCtx(table);
+
+    const fnF = table.declarations.find(d => d.name === "f" && d.kind === "function");
+    expect(fnF).not.toBeUndefined();
+
+    // fn has declaredType "void" which is primitive → no propagation
+    const member = await resolveMemberAccess("f", "speak", null, ctx);
+    expect(member).toBeNull();
+  });
+
+  test("returns null when lhsName is a variable, not a function", async () => {
+    const src = 'int x;';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/var-not-fn.pike", 1);
+    const ctx = makeTypeCtx(table);
+
+    // "x" is a variable, not a function → no return type lookup
+    const member = await resolveMemberAccess("x", "foo", null, ctx);
+    expect(member).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Definition provider — arrow/dot access via LSP
 // ---------------------------------------------------------------------------
 
@@ -538,4 +585,117 @@ describe("resolveType depth limit", () => {
     expect(result).not.toBeNull();
     expect(result!.name).toBe("fetch");
   });
+// ---------------------------------------------------------------------------
+// cond_expr (ternary) — extractInitializerType
+// ---------------------------------------------------------------------------
+
+describe("extractInitializerType — cond_expr (ternary)", () => {
+  test("consequence constructor used when both branches have constructors", async () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'class Cat { void meow() {} }',
+      'void test() {',
+      '  mixed d = true ? Dog() : Cat();',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ternary-a.pike", 1);
+    wireInheritance(table);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    // Consequence branch should be preferred
+    expect(dDecl!.assignedType).toBe("Dog");
+  });
+
+  test("alternate constructor used when consequence is a literal", async () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = true ? 42 : Dog();',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ternary-b.pike", 1);
+    wireInheritance(table);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    // Alternate branch should be used when consequence is not a type identifier
+    expect(dDecl!.assignedType).toBe("Dog");
+  });
+
+  test("consequence constructor used when alternate is a literal", async () => {
+    const src = [
+      'class Cat { void meow() {} }',
+      'void test() {',
+      '  mixed d = false ? Cat() : 42;',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ternary-c.pike", 1);
+    wireInheritance(table);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    // Consequence should still be preferred
+    expect(dDecl!.assignedType).toBe("Cat");
+  });
+
+  test("no assignedType when both branches are literals", async () => {
+    const src = [
+      'void test() {',
+      '  mixed d = true ? 42 : "hello";',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ternary-d.pike", 1);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    // Neither branch yields a type identifier
+    expect(dDecl!.assignedType).toBeUndefined();
+  });
+
+  test("nested ternary drills into nested structure", async () => {
+    const src = [
+      'class C { void foo() {} }',
+      'class D { void bar() {} }',
+      'class E { void baz() {} }',
+      'void test() {',
+      '  mixed d = true ? (false ? C() : D()) : E();',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/ternary-e.pike", 1);
+    wireInheritance(table);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    // consequence is the nested ternary; D is the alternate of that nested ternary
+    expect(dDecl!.assignedType).toBe("D");
+  });
+
+  test("existing constructor inference still works", async () => {
+    const src = [
+      'class Dog { void speak() {} }',
+      'void test() {',
+      '  mixed d = Dog();',
+      '}',
+    ].join("\n");
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/non-ternary.pike", 1);
+    wireInheritance(table);
+
+    const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
+    expect(dDecl).toBeDefined();
+    expect(dDecl!.declaredType).toBe("mixed");
+    expect(dDecl!.assignedType).toBe("Dog");
+  });
+});
 });

@@ -97,6 +97,38 @@ export function resolveTypeName(decl: { declaredType?: string; assignedType?: st
   return null;
 }
 
+
+/**
+ * Drill through expression wrappers (postfix_expr, identifier_expr, primary_expr,
+ * single-child wrappers) to find the innermost identifier Node.
+ * Returns null if the drill path ends without reaching an identifier.
+ * Does NOT descend into cond_expr — callers must handle that separately.
+ */
+export function drillForIdentifier(node: Node): Node | null {
+  // Returns identifier or cond_expr nodes (for nested ternary handling)
+  let inner: Node | null = node;
+  while (inner !== null) {
+    if (inner.type === 'postfix_expr') {
+      if (inner.childCount > 1) {
+        inner = inner.child(0);
+        continue;
+      }
+      inner = inner.child(0);
+      continue;
+    }
+    if (inner.type === 'identifier_expr' || inner.type === 'primary_expr') {
+      inner = inner.namedChild(0);
+      continue;
+    }
+    if (inner.namedChildCount === 1) {
+      inner = inner.namedChild(0);
+      continue;
+    }
+    break;
+  }
+  const t = inner?.type;
+  return (t === 'identifier' || t === 'cond_expr') ? inner : null;
+}
 /**
  * Extract the type name from a variable initializer, if the RHS is a simple
  * identifier that could be a class name (e.g., Dog d = makeDog() → makeDog).
@@ -107,53 +139,98 @@ export function resolveTypeName(decl: { declaredType?: string; assignedType?: st
  * a simple identifier.
  */
 export function extractInitializerType(node: Node): string | undefined {
+  // Bare cond_expr (no variable_decl/local_declaration wrapper): handle it directly
+  if (node.type === 'cond_expr') {
+    if (node.childCount === 1) return undefined;
+    const consequence = node.child(2);
+    if (consequence) {
+      // Drill through wrappers to find the actual expression
+      let expr: Node | undefined = consequence;
+      while (expr && expr.type !== 'cond_expr' && expr.type !== 'identifier') {
+        if (expr.type === 'postfix_expr') {
+          const id = drillForIdentifier(expr);
+          if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
+          break;
+        }
+        if (expr.namedChildCount === 1) {
+          expr = expr.namedChild(0) ?? undefined;
+        } else {
+          break;
+        }
+      }
+      if (expr?.type === 'cond_expr') {
+        // Nested ternary in consequence
+        const nestedType = extractInitializerType(expr);
+        if (nestedType) return nestedType;
+      } else if (expr?.type === 'identifier') {
+        if (!PRIMITIVE_TYPES.has(expr.text)) return expr.text;
+      }
+    }
+    const alternate = node.child(4);
+    if (alternate) {
+      const id = drillForIdentifier(alternate);
+      if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
+    }
+    return undefined;
+  }
+
   // Only variable_decl or local_declaration has a 'value' field with an initializer
   if (node.type !== 'variable_decl' && node.type !== 'local_declaration') return undefined;
 
   const valueNode = node.childForFieldName('value');
   if (!valueNode) return undefined;
 
-  // Drill through expression wrappers to find the innermost meaningful node.
-  // The tree wraps expressions: comma_expr > assign_expr > cond_expr > ... >
-  // postfix_expr > primary_expr > identifier_expr > identifier
-  // For call expressions like Dog(), we extract the callee name as a heuristic.
-  // This is correct for constructors (Dog d = Dog()) but may be wrong for
-  // factory functions (Dog d = makeDog()). Downstream code validates against
-  // the symbol table when resolving.
-  // For simple identifier references like someVar, we want the identifier.
   let inner: Node | null = valueNode;
   while (inner !== null) {
     if (inner.type === 'postfix_expr') {
       if (inner.childCount > 1) {
-        // Call expression: extract the callee (first child) as heuristic type
         inner = inner.child(0);
-        // Continue drilling — callee may be wrapped in another postfix_expr
         continue;
       }
-      // Single child: keep drilling
       inner = inner.child(0);
       continue;
     }
-
     if (inner.type === 'identifier_expr' || inner.type === 'primary_expr') {
       inner = inner.namedChild(0);
       continue;
     }
-
-    // Expression wrappers: drill into first named child
+    if (inner.type === 'cond_expr') {
+      if (inner.childCount === 1) {
+        // Fall through to single-child wrapper
+      } else {
+        const consequence = inner.child(2);
+        if (consequence) {
+          const id = drillForIdentifier(consequence);
+          if (id?.type === 'cond_expr') {
+            const nestedType = extractInitializerType(id);
+            if (nestedType) return nestedType;
+          } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
+            return id.text;
+          }
+        }
+        const alternate = inner.child(4);
+        if (alternate) {
+          const id = drillForIdentifier(alternate);
+          if (id?.type === 'cond_expr') {
+            const nestedType = extractInitializerType(id);
+            if (nestedType) return nestedType;
+          } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
+            return id.text;
+          }
+        }
+        return undefined;
+      }
+    }
     if (inner.namedChildCount === 1) {
       inner = inner.namedChild(0);
       continue;
     }
-
-    // identifier, literal, etc. — stop drilling
     break;
   }
 
   if (!inner || inner.type !== 'identifier') return undefined;
 
   const name = inner.text;
-  // Skip primitive types and keywords
   if (PRIMITIVE_TYPES.has(name)) return undefined;
 
   return name;
