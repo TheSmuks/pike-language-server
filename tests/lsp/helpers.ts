@@ -131,6 +131,7 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
 
   // Perform LSP initialization handshake
   await client.sendRequest("initialize", {
+    processId: null,
     rootUri: options?.rootUri ?? null,
     capabilities: {},
   });
