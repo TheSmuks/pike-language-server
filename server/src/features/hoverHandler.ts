@@ -317,12 +317,7 @@ export function registerHoverHandler(
         ) {
           const baseHover = declForHover(decl, params.textDocument.uri, ctx);
           if (baseHover) {
-            const inferredSig = `${typeofResult.type} ${decl.name}`;
-            return formatHover({
-              ...baseHover,
-              signature: `${baseHover.signature}  // inferred: ${typeofResult.type}`,
-              documentation: `Type inferred by Pike: \`${typeofResult.type}\``,
-            });
+
           }
         }
       } catch {

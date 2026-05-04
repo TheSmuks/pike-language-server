@@ -35,23 +35,7 @@ const DECL_KIND_MAP: Record<string, DeclKind> = {
   typedef_decl: 'typedef',
 };
 
-const SCOPE_INTRODUCERS = new Set([
-  'class_decl',
-  'function_decl',
-  'local_function_decl',
-  'lambda_expr',
-]);
 
-const BLOCK_SCOPES = new Set([
-  'block',
-  'for_statement',
-  'foreach_statement',
-  'if_statement',
-  'while_statement',
-  'do_while_statement',
-  'switch_statement',
-  'catch_expr',
-]);
 
 // ---------------------------------------------------------------------------
 // Collect declarations by walking the tree and creating scopes as needed.
