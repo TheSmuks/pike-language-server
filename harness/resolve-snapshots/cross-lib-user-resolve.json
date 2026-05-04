@@ -1,14 +1,13 @@
 {
-  "pike_version": "8.0.1116",
   "resolutions": [
     {
+      "target_file": "corpus/files/cross_lib_module.pmod",
       "kind": "inherit",
       "symbols": [
         {
           "kind": "class",
-          "defined_file": "corpus/files/cross_lib_module.pmod",
-          "line": 15,
           "name": "Calculator",
+          "defined_file": "corpus/files/cross_lib_module.pmod",
           "members": [
             {
               "kind": "function",
@@ -22,32 +21,33 @@
               "kind": "function",
               "name": "multiply"
             }
-          ]
+          ],
+          "line": 15
         },
         {
           "kind": "variable",
-          "defined_file": "corpus/files/cross_lib_module.pmod",
-          "name": "MODULE_VERSION"
+          "name": "MODULE_VERSION",
+          "defined_file": "corpus/files/cross_lib_module.pmod"
         },
         {
           "kind": "function",
+          "name": "factorial",
           "defined_file": "corpus/files/cross_lib_module.pmod",
-          "line": 10,
-          "name": "factorial"
+          "line": 10
         },
         {
           "kind": "function",
+          "name": "greet",
           "defined_file": "corpus/files/cross_lib_module.pmod",
-          "line": 6,
-          "name": "greet"
+          "line": 6
         }
       ],
-      "alias": null,
-      "target_file": "corpus/files/cross_lib_module.pmod",
       "line": 6,
+      "alias": null,
       "reference": "cross_lib_module"
     }
   ],
+  "file": "corpus/files/cross-lib-user.pike",
   "error": null,
-  "file": "corpus/files/cross-lib-user.pike"
+  "pike_version": "8.0.1116"
 }

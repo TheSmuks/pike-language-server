@@ -1,0 +1,87 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "int",
+      "line": 12,
+      "message": "Type mismatch in argument 1 to doubleInt.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "string",
+      "line": 13,
+      "message": "Type mismatch in argument 1 to doubleString.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "array",
+      "line": 14,
+      "message": "Type mismatch in argument 1 to doubleArray.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "int | object",
+      "line": 19,
+      "message": "Type mismatch in argument 2 to write.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "object | string(..)",
+      "line": 20,
+      "message": "Type mismatch in argument 2 to write.",
+      "severity": "warning"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "unknown",
+      "expected_type": "array | mapping | multiset | object | string",
+      "line": 21,
+      "message": "Type mismatch in argument 1 to sizeof.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/fn-overload.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 7,
+      "name": "doubleInt"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "doubleString"
+    },
+    {
+      "kind": "function",
+      "line": 9,
+      "name": "doubleArray"
+    },
+    {
+      "kind": "function",
+      "line": 11,
+      "name": "dispatch"
+    },
+    {
+      "kind": "function",
+      "line": 18,
+      "name": "main"
+    }
+  ]
+}
