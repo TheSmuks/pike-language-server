@@ -1,6 +1,8 @@
 {
   "name": "pike-language-server",
   "version": "0.3.2-beta",
+  "activationEvents": ["onLanguage:pike"],
+  "main": "./client/dist/extension.js",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
   "extensionKind": [
