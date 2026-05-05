@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [0.2.1-beta]
 
 ### Added
 
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **4 new ADRs**: 0023 (document highlight), 0024 (folding range), 0025 (code action), 0026 (workspace symbol). Also updated feature table to show Decision references for all implemented features.
 
-**State of project**: Updated to Phase 22, version 0.2.0-beta. Corpus counts updated (73 files, 16 categories, 21 ADRs).
+**State of project**: Updated to Phase 22, version 0.2.1-beta. Corpus counts updated (73 files, 16 categories, 21 ADRs).
 
 **Corpus manifest**: Complete rewrite listing all 73 committed files with accurate counts per category.
 
@@ -644,5 +644,6 @@ Caches are per-request (completion/definition) and not persisted.
 
 ## [0.1.0-alpha]
 
-[unreleased]: https://github.com/TheSmuks/pike-language-server/compare/v0.2.0-beta...HEAD
-[0.2.0-beta]: https://github.com/TheSmuks/pike-language-server/releases/tag/v0.2.0-beta
+[v0.2.1-beta]: https://github.com/TheSmuks/pike-language-server/releases/tag/v0.2.1-beta
+[v0.2.0-beta]: https://github.com/TheSmuks/pike-language-server/releases/tag/v0.2.0-beta
+[0.2.0-beta]: https://github.com/TheSmuks/pike-language-server/compare/v0.1.0-alpha...v0.2.0-beta
