@@ -5,6 +5,29 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [Unreleased]
+
+### Added
+
+**DocumentLink provider**: `textDocument/documentLink` makes import paths, inherit paths, and `#include` directives clickable. Reuses `ModuleResolver` for path resolution. Decision 0027.
+
+**9 new P1 corpus files**: `basic-type-conversions.pike`, `basic-string-types.pike`, `basic-int-ranges.pike`, `import-relative.pike`, `err-type-member.pike`, `stdlib-string.pike`, `stdlib-array.pike`, `stdlib-mapping.pike`, `err-syntax-partial.pike` — with Pike-ground-truth harness snapshots.
+
+### Changed
+
+**Arrow/dot access resolution**: `collectPostfixRef()` in `referenceCollector.ts` now resolves the LHS type and populates `resolvesTo` with `confidence: 'high'` for same-file member access. Previously had TODO with `resolvesTo: null, confidence: 'low'`.
+
+### Documentation
+
+**4 new ADRs**: 0023 (document highlight), 0024 (folding range), 0025 (code action), 0026 (workspace symbol). Also updated feature table to show Decision references for all implemented features.
+
+**State of project**: Updated to Phase 22, version 0.2.0-beta. Corpus counts updated (73 files, 16 categories, 21 ADRs).
+
+**Corpus manifest**: Complete rewrite listing all 73 committed files with accurate counts per category.
+
+**CI hygiene**: Deleted 16 stale merged remote branches.
+
 ## [0.2.0-beta]
 
 ### Added
