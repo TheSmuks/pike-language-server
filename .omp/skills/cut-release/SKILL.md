@@ -59,7 +59,7 @@ bash scripts/release.sh <OLD_VERSION> <NEW_VERSION>
 
 **Example:**
 ```bash
-bash scripts/release.sh 0.3.2-beta 0.3.3-beta
+bash scripts/release.sh 0.3.3-beta 0.3.3-beta
 ```
 
 ### What the script does
