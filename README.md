@@ -3,7 +3,7 @@
 **Visual Studio Code extension for Pike programming language support.**
 
 [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)
-[![template](https://img.shields.io/badge/template-v0.3.2-beta-green)](https://github.com/TheSmuks/ai-project-template)
+[![template](https://img.shields.io/badge/template-v0.3.3-beta-green)](https://github.com/TheSmuks/ai-project-template)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
 
 Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more. Works with Pike 8.0 and newer.
