@@ -60,10 +60,11 @@ if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
   fatal "OLD_VERSION and NEW_VERSION must differ"
 fi
 
-# Validate semver format
-SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+$'
+
+# Validate semver format (supports X.Y.Z and X.Y.Z-suffix like 0.3.2-beta)
+SEMVER_REGEX='^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$'
 if ! echo "$NEW_VERSION" | grep -qE "$SEMVER_REGEX"; then
-  fatal "NEW_VERSION must be valid semver (X.Y.Z): got '$NEW_VERSION'"
+  fatal "NEW_VERSION must be valid semver (X.Y.Z or X.Y.Z-suffix): got '$NEW_VERSION'"
 fi
 
 # ── Version Manifest ─────────────────────────────────────────────────────────
