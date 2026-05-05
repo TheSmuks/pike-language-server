@@ -48,6 +48,8 @@ fi
 
 # Copy LICENSE
 cp "$ROOT/LICENSE" "$STAGE/"
+# Copy CHANGELOG for marketplace display
+cp "$ROOT/CHANGELOG.md" "$STAGE/"
 
 # Copy language configuration (required at extension root by extension.ts)
 cp "$ROOT/client/language-configuration.json" "$STAGE/"
@@ -67,9 +69,10 @@ cat > "$STAGE/.vscodeignore" << 'EOF'
 **/bin/**
 **/*.md
 !README.md
+!CHANGELOG.md
 !LICENSE
-EOF
 
+EOF
 echo "Stage directory:"
 du -sh "$STAGE"
 du -sh "$STAGE"/* | sort -rh | head -10
