@@ -148,6 +148,13 @@ Shows what would change without making any modifications.
    gh release create vX.Y.Z --title "vX.Y.Z" --notes "<changelog-body>"
    ```
    
+
+
+   > **Note:** The VSIX artifact is built and uploaded automatically by the
+   > `.github/workflows/release.yml` workflow after the release is published.
+   > Wait for that workflow to complete before downloading the `.vsix` asset.
+
+
    The release body should be the changelog section for this version (everything between `## [X.Y.Z]` and the next `## [` or end of file).
 
 ---
