@@ -6,7 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   
+
+  
+  ## [Unreleased]
+  
+  ### Fixed
+  
+  **Extension activation crash**: `scripts/build-vsix.sh` now copies
+  `client/language-configuration.json` into the VSIX so it is present at the
+  extension root. Previously the file was missing from the packaged VSIX,
+  causing the extension to crash silently when reading it on activation.
+  
+  ### Added
+  
+  **Output channel and status bar**: `client/extension.ts` now creates a log
+  output channel ("Pike Language Server") and a status bar item that reflects
+  server state: spinning icon while starting, zap icon while running, warning
+  icon on error. State transitions are logged with timestamps. A custom
+  `errorHandler` routes server errors to the output channel instead of showing
+  popup dialogs. Clicking the status bar item opens the output channel.
+  
+
+  
   ## [0.3.0-beta]
+
   
   ### Added
   

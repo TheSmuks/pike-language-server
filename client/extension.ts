@@ -7,6 +7,13 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import {
+  type StateChangeEvent,
+  type ErrorHandler,
+  type ErrorHandlerResult,
+  type CloseHandlerResult,
+  ErrorAction,
+  CloseAction,
+  State,
   LanguageClient,
   LanguageClientOptions,
   ServerOptions,
@@ -14,6 +21,80 @@ import {
 } from "vscode-languageclient/node";
 
 let client: LanguageClient | undefined;
+
+// ─── Observability ──────────────────────────────────────────────────────────
+
+/** Output channel capturing extension lifecycle and server events. */
+const outputChannel = vscode.window.createOutputChannel("Pike Language Server", { log: true });
+
+/** Status bar item reflecting server state. */
+const statusBarItem = vscode.window.createStatusBarItem(
+  vscode.StatusBarAlignment.Left,
+  /* priority */ 99,
+);
+
+/**
+ * Log a timestamped message to the output channel.
+ * `log: true` channel hides the VSCode timestamp; we add our own.
+ */
+function log(label: string, message: string): void {
+  const ts = new Date().toISOString().substring(11, 23); // HH:MM:SS.mmm
+  outputChannel.appendLine(`[${ts}] [${label}] ${message}`);
+}
+
+/** Update the status bar to reflect server state. */
+function updateStatusBar(state: State): void {
+  switch (state) {
+    case State.Starting: {
+      statusBarItem.text = `$(sync~spin) Pike LSP`;
+      statusBarItem.backgroundColor = undefined;
+      statusBarItem.color = undefined;
+      break;
+    }
+    case State.Running: {
+      statusBarItem.text = `$(zap) Pike LSP`;
+      statusBarItem.backgroundColor = undefined;
+      statusBarItem.color = undefined;
+      break;
+    }
+    case State.Stopped: {
+      statusBarItem.text = `$(warning) Pike LSP`;
+      statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+      statusBarItem.color = new vscode.ThemeColor("statusBarItem.errorForeground");
+      break;
+    }
+    default: {
+      statusBarItem.text = `$(question) Pike LSP`;
+      break;
+    }
+  }
+}
+
+/**
+ * Custom error handler that logs to the output channel instead of
+ * showing transient popup errors for every server hiccup.
+ */
+function makeErrorHandler(label: string): ErrorHandler {
+  return {
+    error(_error: Error, message: unknown): ErrorHandlerResult {
+      // message is the LSP Message (or derived type) in-flight when the error occurred.
+      // Narrow safely — only Request/Notification types carry a `method` field.
+      const method =
+        typeof message === "object" && message !== null && "method" in message
+          ? (message as { method: string }).method
+          : "unknown";
+      log(label, `Server error during ${method}`);
+      return { action: ErrorAction.Continue };
+    },
+
+    closed(): CloseHandlerResult {
+      log(label, "Server process exited");
+      return { action: CloseAction.DoNotRestart };
+    },
+  };
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
 
 /**
  * Read language server settings from VSCode configuration.
@@ -29,23 +110,30 @@ function getSettings(): Record<string, unknown> {
   };
 }
 
+// ─── Extension lifecycle ────────────────────────────────────────────────────
+
 export function activate(context: vscode.ExtensionContext): void {
+  log("EXT", "Activating Pike Language Server...");
+
   // Language configuration for Pike — client-side, no LSP traffic.
   // Handles Enter, Tab, auto-indent, and surrounding pairs.
   // See client/language-configuration.json for rules.
   const langConfig = JSON.parse(
-    require("fs").readFileSync(
+    require("node:fs").readFileSync(
       context.asAbsolutePath("language-configuration.json"),
-      "utf8"
-    )
+      "utf8",
+    ),
   );
   context.subscriptions.push(
-    vscode.languages.setLanguageConfiguration("pike", langConfig)
+    vscode.languages.setLanguageConfiguration("pike", langConfig),
   );
 
-  const serverModule = context.asAbsolutePath(
-    path.join("server", "dist", "server.js"),
-  );
+  // Status bar: show starting state and open output channel on click.
+  updateStatusBar(State.Starting);
+  statusBarItem.command = "workbench.action.output.toggleOutput";
+  context.subscriptions.push(statusBarItem);
+
+  const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.js"));
 
   const serverOptions: ServerOptions = {
     run: { module: serverModule, transport: TransportKind.stdio },
@@ -64,6 +152,8 @@ export function activate(context: vscode.ExtensionContext): void {
       fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{pike,pmod,mmod}"),
     },
     initializationOptions: getSettings(),
+    // Route server errors through our custom handler (no popup spam).
+    errorHandler: makeErrorHandler("SERVER"),
   };
 
   client = new LanguageClient(
@@ -73,21 +163,52 @@ export function activate(context: vscode.ExtensionContext): void {
     clientOptions,
   );
 
-  // Restart the server when settings change
-  // Guard against rapid-fire config changes creating duplicate clients
+  // Listen for state transitions to update status bar.
+  client.onDidChangeState((event: StateChangeEvent) => {
+    updateStatusBar(event.newState);
+    switch (event.newState) {
+      case State.Starting:
+        log("CLIENT", "State: Starting");
+        break;
+      case State.Running:
+        log("CLIENT", "State: Running");
+        break;
+      case State.Stopped:
+        log("CLIENT", "State: Stopped");
+        break;
+      default:
+        log("CLIENT", `State: unknown(${event.newState})`);
+        break;
+    }
+  });
+
+  log("EXT", "Starting server...");
+  client.start();
+
+  // Restart the server when settings change.
+  // Guard against rapid-fire config changes creating duplicate clients.
   let restarting = false;
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration("pike.languageServer")) {
         if (restarting) return;
         restarting = true;
+        log("EXT", "Settings changed — restarting server...");
         client?.stop().then(() => {
           client = new LanguageClient(
             "pikeLanguageServer",
             "Pike Language Server",
             serverOptions,
-            { ...clientOptions, initializationOptions: getSettings() },
+            {
+              ...clientOptions,
+              initializationOptions: getSettings(),
+              // Re-apply custom error handler after restart.
+              errorHandler: makeErrorHandler("SERVER"),
+            },
           );
+          client.onDidChangeState((ev: StateChangeEvent) => {
+            updateStatusBar(ev.newState);
+          });
           client.start();
         }).finally(() => {
           restarting = false;
@@ -95,10 +216,9 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
   );
-
-  client.start();
 }
 
 export function deactivate(): Thenable<void> | undefined {
+  log("EXT", "Shutting down...");
   return client?.stop();
 }
