@@ -49,6 +49,9 @@ fi
 # Copy LICENSE
 cp "$ROOT/LICENSE" "$STAGE/"
 
+# Copy language configuration (required at extension root by extension.ts)
+cp "$ROOT/client/language-configuration.json" "$STAGE/"
+
 # Create .vscodeignore to keep the vsix small
 cat > "$STAGE/.vscodeignore" << 'EOF'
 **/*.map
