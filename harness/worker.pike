@@ -199,8 +199,15 @@ mapping handle_resolve(mapping params) {
     return ([ "resolved": Val.false, "error": "Missing symbol name" ]);
 
   mixed err = catch {
-    import Introspect;
-    mapping info = Introspect.Discover.resolve_symbol(symbol);
+    // Resolve Introspect at RUNTIME, not compile time.
+    // Pike's `import` is a compile-time directive — it fails the entire
+    // script if the module is absent. master()->resolv() defers to runtime.
+    object|program introspect = master()->resolv("Introspect");
+    if (!introspect) {
+      return ([ "resolved": Val.false, "error": "Introspect module not available" ]);
+    }
+
+    mapping info = introspect->Discover->resolve_symbol(symbol);
     if (!info)
       return ([ "resolved": Val.false, "symbol": symbol ]);
 
@@ -209,9 +216,9 @@ mapping handle_resolve(mapping params) {
 
     // If it's a class, also get inheritance info
     if (info["kind"] == "class") {
-      program p = Introspect.Discover.resolve_program(symbol);
+      program p = introspect->Discover->resolve_program(symbol);
       if (p) {
-        mapping desc = Introspect.Describe.describe_program(p);
+        mapping desc = introspect->Describe->describe_program(p);
         if (desc["methods"])
           info["methods"] = desc["methods"];
         if (desc["constants"])
