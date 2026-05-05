@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   
 
-  
+
+  ## [Unreleased]
+
+  ### Added
+
+  - **Pre-flight check script**: `scripts/preflight.sh` runs the full test suite before a release (typecheck, build, bun test, pike tests via pmp, harness tests, e2e tests). Fails fast on the first error.
+  - **pmp-guide skill**: New skill documenting `pmp` usage conventions — use `pmp run` instead of raw `pike -M`.
+  - **cut-release skill Phase 1.5**: Added pre-flight checks documentation, corrected `--skip-e2e` rationale, updated manifest count.
+  - **release.sh pre-flight note**: Added NOTE block directing users to run preflight.sh before executing the release script.
+
+  ### Changed
+
+  - **preflight.sh step 4**: Now uses `bun run test:pike` (wraps `pmp run`) instead of raw `pike -M modules -M harness`. Adds `~/.pmp/bin` to PATH so pmp is found in local dev environments.
+  - **preflight.sh `--skip-e2e`**: Corrected rationale — "requires `@vscode/test-electron` setup" instead of "requires a display server".
   ## [0.3.2-beta] — 2026-05-05
 
 ### Added
