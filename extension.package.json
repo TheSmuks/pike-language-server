@@ -2,7 +2,7 @@
   "name": "pike-language-server",
   "displayName": "Pike Language Server",
   "description": "Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more",
-  "version": "0.3.3-beta",
+  "version": "0.3.4-beta",
   "publisher": "thesmuks",
   "engines": {
     "vscode": "^1.85.0"
