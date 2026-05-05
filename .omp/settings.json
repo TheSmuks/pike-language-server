@@ -1,9 +1,0 @@
-{
-  "$schema": "https://json.schemastore.org/omp-settings.json",
-  "skills": {
-    "enabled": true
-  },
-  "rules": {
-    "enabled": true
-  }
-}
