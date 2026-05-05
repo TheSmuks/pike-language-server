@@ -1,0 +1,19 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='stdlib-mapping'><doc><text><p>Test Mapping and m_delete functions in Pike.\n Valid file — all Mapping operations are valid.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/stdlib-mapping.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "syntax_error",
+      "line": 61,
+      "message": "syntax error, unexpected '+'",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/stdlib-mapping.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

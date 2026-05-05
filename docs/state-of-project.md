@@ -1,9 +1,9 @@
 
-# State of the Project — Phase 21 Complete
-> Audit date: 2026-05-04. Updated after Phase 21 completion (13 LSP features, 1,619 tests).
+# State of the Project — Phase 22 Complete
+> Audit date: 2026-05-05. Updated after Phase 22 completion (clean house, 4 ADRs, corpus manifest sync).
 
 - **Name:** pike-language-server
-- **Version:** 0.1.0-alpha
+- **Version:** 0.2.0-beta
 - **Stack:** TypeScript 5.7+ on Bun, vscode-languageserver-node 9.x, tree-sitter-pike WASM
 - **Oracle:** Pike 8.0.1116 binary (long-lived subprocess)
 - **Test suite:** 1,619 tests, 0 fail, 1 todo, 13,205 assertions, 44 files
@@ -34,7 +34,7 @@
 | 19: Type Resolution | Complete | 1,619 | Arrow/dot access resolvesTo population, complex initializer inference |
 | 20: Completion Quality | Complete | 1,619 | Completion refinements, case sensitivity fix, snippet support |
 | 21: LSP Feature Completion | Complete | 1,619 | 13 LSP features fully implemented |
-
+| 22: Clean House + Quality | Complete | 1,619 | ADRs 0023-0026, corpus sync, stale branch cleanup |
 ## LSP Feature Completeness
 | capability | status | Details |
 |------------|--------|---------|
@@ -45,12 +45,12 @@
 | diagnostics | **Implemented** | Tree-sitter parse errors (real-time) + Pike compilation (real-time debounced, 500ms). Content-hash cached. Three modes: realtime/saveOnly/off. Decision 0013. |
 | completion | **Implemented** | Unqualified (local scope + predef 283 + stdlib 5,471). Dot/arrow/scope access via tree-sitter. Decision 0012. |
 | rename | **Implemented** | textDocument/rename + prepareRename. Scope-aware, cross-file via WorkspaceIndex. Keyword validation. Decision 0016. |
-| code actions | **Implemented** | Remove unused variable, add missing import. Extensible quick-fix registry. Decision 0021. |
+| code actions | **Implemented** | Remove unused variable, add missing import. Decision 0025. |
 | semanticTokens | **Implemented** | 9 token types + 5 modifiers. Function→method promotion in class scope. Decision 0020. |
-| documentHighlight | **Implemented** | Read/Write highlighting for declarations and references. |
-| foldingRange | **Implemented** | class_body, block, comment group folding. |
+| documentHighlight | **Implemented** | Read/Write highlighting. Decision 0023. |
+| foldingRange | **Implemented** | class_body, block, comment group folding. Decision 0024. |
 | signatureHelp | **Implemented** | Parameter hints with active parameter tracking. Stdlib + local function support. Decision 0021. |
-| workspaceSymbol | **Implemented** | Cross-file prefix search, case-insensitive. Decision 0022. |
+| workspaceSymbol | **Implemented** | Cross-file prefix search. Decision 0026. |
 | formatting | Not planned | — |
 
 ## Architecture Summary
@@ -119,7 +119,7 @@ wk
 - 4 integration tests
 - Harness: 37 ground-truth snapshots, 11 canary tests
 
-## Decisions (17 ADRs)
+| ## Decisions (21 ADRs)
 
 | # | Title | Key Decision |
 |---|-------|-------------|
@@ -138,8 +138,18 @@ wk
 | 0013 | Real-time Diagnostics | Per-file debouncing (500ms), supersession, priority queue, cross-file propagation, three modes |
 | 0013-verification | P2 Verification Report | Bugs found (onDidSave, disposed guards), measurements, rename deferral rationale |
 | 0014 | Type Resolution | Pure-function resolveType/resolveMemberAccess, depth-limited chain, no worker |
-| 0015 | Import Tracking | DeclKind 'import', extractDependencies for imports, cross-file propagation |
-| 0016 | Rename | textDocument/rename via existing reference resolution, scope-aware, keyword validation |
+0015 | Import Tracking | DeclKind 'import', extractDependencies, cross-file propagation |
+| 0016 | Rename | textDocument/rename, scope-aware, cross-file via WorkspaceIndex |
+| 0017 | Beta Readiness | Pre-release checklist, Phase 21 criteria |
+| 0018 | Incremental Parsing + IPC Security | Security hardening, incremental tree-sitter |
+| 0019 | Pike-introspect Integration | pike-introspect v0.2.0 with resolve_symbol, describe_program |
+| 0020 | Formatting | Deferred (pike-fmt in separate repo) |
+| 0021 | Signature Help | Parameter hints with active parameter tracking |
+| 0022 | Workspace Symbol Search | Cross-file prefix search, case-insensitive |
+| 0023 | Document Highlight | Read/Write highlighting for declarations and references |
+| 0024 | Folding Range | class_body, block, comment group folding |
+| 0025 | Code Action | Quick-fix registry (remove unused, add missing import) |
+| 0026 | Workspace Symbol | Cross-file prefix search |
 
 ## Performance Baseline
 
@@ -160,5 +170,5 @@ wk
 See tests/perf/benchmarks.test.ts for regression tests (3x slack for CI variability).
 ## Corpus
 
-64 committed files across 14 categories, 21 planned:
-- Basic types (4), Classes (5), Functions (4), Imports (2), Type errors (4), Undefined identifiers (4), Arity errors (3), Syntax/recovery (1), Modifiers (2), Cross-file (4+directory), Stdlib (1), Preprocessor (1), Enums (1), AutoDoc (1)
+| 73 committed files across 16 categories, 13 planned:
+- Basic types (4), Classes (5), Functions (4), Imports (2), Type errors (4), Undefined identifiers (4), Arity errors (3), Syntax/recovery (1), Modifiers (2), Cross-file (4+directory), Stdlib (1), Preprocessor (1), Enums (1), AutoDoc (1), Type inference (4), Compat (1), Test infrastructure (27+)

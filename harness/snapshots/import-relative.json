@@ -1,0 +1,25 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='import-relative'><doc><text><p>Test relative import paths in Pike.\n Valid file — relative imports use \".\" notation.</p>\n</text></doc><docgroup homogen-name='Stdio' homogen-type='import'><doc>\n</doc>\n<import name='Stdio'><source-position file='corpus/files/import-relative.pike' first-line='11'/><classname>Stdio</classname></import>\n</docgroup>\n<docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/import-relative.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 25,
+      "message": "Unused local variable f.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/import-relative.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 24,
+      "name": "test_stdio_usage"
+    }
+  ]
+}

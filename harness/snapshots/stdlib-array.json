@@ -1,0 +1,70 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='stdlib-array'><doc><text><p>Test Array module functions in Pike.\n Valid file — all Array operations are valid.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/stdlib-array.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 10,
+      "message": "Unused local variable doubled.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 11,
+      "message": "Unused local variable strings.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 18,
+      "message": "Unused local variable odds.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 24,
+      "message": "Unused local variable sorted.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 26,
+      "message": "Unused local variable sorted_words.",
+      "severity": "warning"
+    },
+    {
+      "category": "unknown",
+      "line": 33,
+      "message": "Index 'common_elements' not present in module Array.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 33,
+      "message": "Indexed module was: Array.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "array(int)",
+      "category": "wrong_arity",
+      "line": 33,
+      "message": "Too many arguments to `() (function call) (expected 0 arguments).",
+      "severity": "error"
+    },
+    {
+      "actual_type": "int(10..10)",
+      "category": "bad_argument",
+      "expected_type": "array | mapping | multiset | object | program | string(..)",
+      "line": 45,
+      "message": "Bad argument 1 to indices.",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/stdlib-array.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

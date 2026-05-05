@@ -1,0 +1,91 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "syntax_error",
+      "line": 15,
+      "message": "syntax error, unexpected TOK_INT_ID, expecting TOK_LEX_EOF or ';'",
+      "severity": "error"
+    },
+    {
+      "category": "syntax_error",
+      "line": 19,
+      "message": "syntax error, unexpected TOK_VOID_ID, expecting TOK_LEX_EOF or ';'",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 21,
+      "message": "Missing ';'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Missing ')'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Unexpected end of file.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Missing ';'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Unexpected end of file.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Missing '}'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Opening '{' was here.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Unexpected end of file.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Missing '}'.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Opening '{' was here.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 24,
+      "message": "Unexpected end of file.",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/err-syntax-partial.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

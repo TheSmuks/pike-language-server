@@ -1,0 +1,125 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='stdlib-string'><doc><text><p>Test String module functions in Pike.\n Valid file — all String operations are valid.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/stdlib-string.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 14,
+      "message": "Unused local variable result.",
+      "severity": "warning"
+    },
+    {
+      "category": "unknown",
+      "line": 20,
+      "message": "Index 'trim' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 20,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string",
+      "category": "wrong_arity",
+      "line": 20,
+      "message": "Too many arguments to `() (function call) (expected 0 arguments).",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 21,
+      "message": "Index 'trim_left' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 21,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string",
+      "category": "wrong_arity",
+      "line": 21,
+      "message": "Too many arguments to `() (function call) (expected 0 arguments).",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 22,
+      "message": "Index 'trim_right' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 22,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "string",
+      "category": "wrong_arity",
+      "line": 22,
+      "message": "Too many arguments to `() (function call) (expected 0 arguments).",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 29,
+      "message": "Index 'split' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 29,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "actual_type": "mixed",
+      "category": "wrong_arity",
+      "line": 29,
+      "message": "Too many arguments to `() (function call) (expected 0 arguments).",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 35,
+      "message": "Index 'String0' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 35,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 36,
+      "message": "Index 'String0' not present in module String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 36,
+      "message": "Indexed module was: String.",
+      "severity": "error"
+    },
+    {
+      "category": "unknown",
+      "line": 37,
+      "message": "Index 'String0' not present in module String.",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/stdlib-string.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

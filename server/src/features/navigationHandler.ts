@@ -31,6 +31,7 @@ import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceCodeActions } from "./codeAction";
 import { searchWorkspaceSymbols } from "./workspaceSymbol";
+import { registerDocumentLinkHandler } from "./documentLink";
 import {
   resolveAccessDefinition,
   type ResolutionContext,
@@ -630,4 +631,9 @@ export function registerNavigationHandlers(
         .catch(() => {}); // Non-critical
     }
   });
+
+  // -----------------------------------------------------------------------
+  // textDocument/documentLink (US-030)
+  // -----------------------------------------------------------------------
+  registerDocumentLinkHandler(connection, ctx.documents, ctx.index, ctx.index.resolver);
 }
