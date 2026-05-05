@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
   
+
+  
+  ## [Unreleased]
+
+  ### Added
+
+  **VSCode marketplace presentation**: Extension `package.json` enriched with
+  icon (256x256 Pike fish picturemark), keywords, categories, galleryBanner,
+  repository, homepage, license, and `extensionKind`. Five settings now declared
+  in `contributes.configuration` so they appear in VS Code settings UI:
+  `path`, `pikeFmtPath`, `diagnosticMode`, `diagnosticDebounceMs`,
+  `maxNumberOfProblems`. `README.md` rewritten for marketplace presentation with
+  Quick Start, feature list, configuration table, troubleshooting, and links.
+  `build-vsix.sh` updated to include `CHANGELOG.md` in VSIX.
+
   ## [0.3.1-beta] - 2026-05-05
   
   ### Fixed
