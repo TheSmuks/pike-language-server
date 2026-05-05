@@ -85,17 +85,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
   **known-limitations.md updated**: "pike-fmt not integrated" severity lowered from "Medium" to resolved. pike-fmt is now bundled and working.
 
-## [Unreleased]
-
-
 ## [0.3.3-beta] — 2026-05-05
 
 ### Added
 
   Placeholder for next release.
-
-## [Unreleased]
-
 
 ## [0.2.0-beta]
 
