@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
 
 
+  
+
+  ## [Unreleased]
+
+  ### Fixed
+
+  - **Worker startup crash when Introspect unavailable**: `harness/worker.pike`
+    `handle_resolve()` now uses `master()->resolv("Introspect")` for runtime
+    module resolution instead of a compile-time `import Introspect`. Pike's
+    `import` is a compile-time directive — when Introspect is absent (as in the
+    VSIX), the entire script failed to compile with "Module is neither mapping
+    nor object". The worker now gracefully degrades and returns
+    `"Introspect module not available"` instead of crashing on startup.
   ## [0.3.4-beta] — 2026-05-05
 
 ### Added
