@@ -8,7 +8,7 @@ version: 1.0.0
 
 # Cut Release
 
-Automated release workflow for the Pike Language Server: determine version → run `scripts/release.sh` (updates 9 manifest files + builds VSIX) → commit → create PR → merge → tag → publish GitHub release.
+Automated release workflow for the Pike Language Server: determine version → run pre-flight checks → run `scripts/release.sh` (updates 9 manifest files + builds VSIX) → commit → create PR → merge → tag → publish GitHub release.
 
 ## When to Use
 
@@ -49,6 +49,39 @@ Invoke this skill whenever you are ready to cut a new release. Common triggers:
 
 ---
 
+## Phase 1.5: Pre-flight Checks (scripts/preflight.sh does this)
+
+Run the pre-flight check script **before** proceeding with the release:
+
+```bash
+bash .omp/skills/cut-release/scripts/preflight.sh
+```
+
+**What it verifies:**
+
+| Step | Command | What it verifies |
+|------|---------|-----------------|
+| 1 | `bun run typecheck` | TypeScript compiles cleanly |
+| 2 | `bun run build:extension` | Extension bundles build |
+| 3 | `bun test` | In-process Bun tests |
+| 4 | `bun run test:pike` | Pike runtime tests |
+| 5 | `bun run test:harness` | Harness tests |
+| 6 | `bun run test:e2e` | E2E tests (VSCode extension host) |
+
+Steps run in order, **failing fast** on the first error. The release **MUST NOT** proceed if any step fails.
+
+
+To skip the E2E suite (slow), use `--skip-e2e`:
+
+```bash
+bash .omp/skills/cut-release/scripts/preflight.sh --skip-e2e
+```
+
+Use this when `@vscode/test-electron` is not installed. CI does not run e2e tests.
+
+
+---
+
 ## Phase 2: Execute Release (`scripts/release.sh` does this)
 
 Run the automation script with the version bump:
@@ -64,7 +97,7 @@ bash scripts/release.sh 0.3.3-beta 0.3.3-beta
 
 ### What the script does
 
-1. **Pre-flight**: Verifies OLD_VERSION exists in all 8 version manifest files. Aborts if any are missing (prevents wrong version being passed).
+1. **Pre-flight**: Verifies OLD_VERSION exists in all 9 version manifest files. Aborts if any are missing (prevents wrong version being passed).
 
 2. **Update files**: Replaces version in all manifest files:
    | File | Pattern |
@@ -114,17 +147,17 @@ Shows what would change without making any modifications.
 4. **Create PR** (or use `merge-to-main` skill):
    ```bash
    gh pr create --base main --title "chore: cut vX.Y.Z" --body "## Summary
-   
+
    Cut release vX.Y.Z.
-   
+
    ## Changes
-   
+
    - Updated version references across all manifest files
    - CHANGELOG.md updated with release section
    - VSIX rebuilt and included in artifacts
-   
+
    ## Verification
-   
+
    - All 9 manifest files updated with new version
    - VSIX build succeeded
    - No stale version references remain"
@@ -194,6 +227,7 @@ Shows what would change without making any modifications.
 | Multiple version-like strings | Use anchored patterns (handled by script) |
 | Tag already exists | Detect via `git tag -l vX.Y.Z` and abort |
 | Wrong version passed | Pre-flight check catches missing OLD_VERSION |
+| Pre-flight checks fail | Abort — fix failures before releasing |
 | VSIX build fails | Script aborts; fix build errors before committing |
 
 ---
