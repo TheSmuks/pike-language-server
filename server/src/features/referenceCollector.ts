@@ -5,8 +5,9 @@
  * Extracted from symbolTable.ts (US-032/US-033).
  */
 import type { Node } from 'web-tree-sitter';
-import type { BuildState } from './symbolTable';
-import { toLoc } from './scope-helpers';
+import type { BuildState, Declaration } from './symbolTable';
+import { PRIMITIVE_TYPES } from './symbolTable';
+import { toLoc, resolveTypeName } from './scope-helpers';
 import {
   findScopeForNode,
   findEnclosingClassScopeId,
@@ -187,39 +188,72 @@ function extractLhsIdentifier(lhsNode: Node | undefined): string | undefined {
 function collectPostfixRef(node: Node, state: BuildState): void {
   // postfix_expr is polymorphic — dispatch based on children
   const children = node.children;
+  const refLine = node.startPosition.row;
+
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
-    // Arrow access: `obj->member`
-    if (child.type === '->' || child.type === '->?' || child.type === '?->') {
-      const memberNode = children[i + 1];
-      if (memberNode && (memberNode.type === 'identifier' || memberNode.type === 'magic_identifier')) {
-        // Capture LHS identifier for type-aware filtering (US-004).
-        const lhsName = extractLhsIdentifier(children[i - 1]);
-        state.references.push({
-          name: memberNode.text,
-          loc: toLoc(memberNode.startPosition),
-          kind: 'arrow_access',
-          resolvesTo: null, // TODO: arrow/dot access resolution deferred (see docs/known-limitations.md)
-          confidence: 'low',
-          lhsName,
-        });
+
+    // Check if this child is an arrow/dot operator
+    const isArrowOp = child.type === '->' || child.type === '->?' || child.type === '?->';
+    const isDotOp = child.type === '.';
+    if (!isArrowOp && !isDotOp) continue;
+
+    const memberNode = children[i + 1];
+    if (!memberNode || (memberNode.type !== 'identifier' && memberNode.type !== 'magic_identifier')) continue;
+
+    const memberName = memberNode.text;
+    const lhsName = extractLhsIdentifier(children[i - 1]);
+    const kind = isArrowOp ? 'arrow_access' : 'dot_access';
+
+    // Try to resolve the LHS variable to its type, then find the member in that type.
+    // This provides 'high' confidence references when same-file type resolution succeeds.
+    let resolvesTo: number | null = null;
+    let confidence: 'high' | 'low' = 'low';
+
+    if (lhsName) {
+      const lhsDeclId = findDeclInScope(lhsName, findScopeForNode(node, state) ?? -1, state);
+      if (lhsDeclId !== null) {
+        const lhsDecl = state.declMap.get(lhsDeclId);
+        if (lhsDecl) {
+          const typeName = resolveTypeName(lhsDecl);
+          if (typeName && !PRIMITIVE_TYPES.has(typeName)) {
+            // Look for a class declaration with this name in the current table
+            const typeClassDecl = state.declarations.find(
+              d => d.kind === 'class' && d.name === typeName,
+            );
+            if (typeClassDecl) {
+              // Look for the member in that class's scope
+              const classScopeId = state.scopeStack.find(sid => {
+                const s = state.scopeMap.get(sid);
+                return s?.kind === 'class';
+              });
+              if (classScopeId !== undefined) {
+                const classScope = state.scopeMap.get(classScopeId);
+                if (classScope) {
+                  for (const memberDeclId of classScope.declarations) {
+                    const memberDecl = state.declMap.get(memberDeclId);
+                    if (memberDecl && memberDecl.name === memberName) {
+                      resolvesTo = memberDeclId;
+                      confidence = 'high';
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
-    // Dot access: `Module.member`
-    if (child.type === '.') {
-      const memberNode = children[i + 1];
-      if (memberNode && memberNode.type === 'identifier') {
-        const lhsName = extractLhsIdentifier(children[i - 1]);
-        state.references.push({
-          name: memberNode.text,
-          loc: toLoc(memberNode.startPosition),
-          kind: 'dot_access',
-          resolvesTo: null, // Cross-file for now
-          confidence: 'low',
-          lhsName,
-        });
-      }
-    }
+
+    state.references.push({
+      name: memberName,
+      loc: toLoc(memberNode.startPosition),
+      kind,
+      resolvesTo,
+      confidence,
+      lhsName,
+    });
   }
 }
 

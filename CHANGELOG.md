@@ -5,7 +5,7 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0-beta]
 
 ### Added
 
@@ -24,25 +24,7 @@ function return type annotations. Renaming `Dog` → `Cat` also renames `Dog f()
 → `Cat f()`. Added `collectFunctionReturnTypeRefs()` to collect return type
 references, with location deduplication in `getReferencesTo()`.
 
-### Changed
-
 **CI**: Upgraded `actions/cache` from v4 to v5.
-
-## [0.2.0-beta]
-
-### Added
-
-**Diagnostic quality improvements**: Parse diagnostics now have tighter ERROR node ranges (single token instead of full recovery span), context-aware error messages, and numeric diagnostic codes (P1xxx for parse, P2xxxx for Pike compiler). Parse diagnostics on lines with Pike diagnostics are suppressed to avoid duplication.
-
-
-
-### Changed
-
-All unreleased changes from Phases 17-21 are now part of this release:
-
-**Diagnostic quality**: Parse diagnostics have tighter ERROR node ranges,
-context-aware error messages, and numeric codes (P1xxx/P2xxxx). Duplicate
-diagnostics on Pike-error lines are suppressed.
 
 **Test infrastructure**: Fixed `createTestServer()` to send `processId: null`
 (16 previously-hanging test files now pass). Fixed syntax error in

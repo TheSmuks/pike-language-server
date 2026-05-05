@@ -1,0 +1,187 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='basic-int-ranges'><doc><text><p>Test integer ranges and zero types in Pike.\n Valid file — all int operations are valid.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/basic-int-ranges.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unused_variable",
+      "line": 9,
+      "message": "Unused local variable positive.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 10,
+      "message": "Unused local variable negative.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 11,
+      "message": "Unused local variable zero.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 12,
+      "message": "Unused local variable hex.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 13,
+      "message": "Unused local variable octal.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 14,
+      "message": "Unused local variable binary.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 19,
+      "message": "Unused local variable max_int.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 20,
+      "message": "Unused local variable min_int.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 21,
+      "message": "Unused local variable typical.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 26,
+      "message": "Unused local variable i.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 27,
+      "message": "Unused local variable neg_zero.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 28,
+      "message": "Unused local variable m.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 35,
+      "message": "Unused local variable sum.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 36,
+      "message": "Unused local variable diff.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 37,
+      "message": "Unused local variable prod.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 38,
+      "message": "Unused local variable div.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 39,
+      "message": "Unused local variable mod.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 40,
+      "message": "Unused local variable neg.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 46,
+      "message": "Unused local variable shifted.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 47,
+      "message": "Unused local variable masked.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 48,
+      "message": "Unused local variable ored.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 49,
+      "message": "Unused local variable xored.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 65,
+      "message": "Unused local variable big.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/basic-int-ranges.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "test_int_literals"
+    },
+    {
+      "kind": "function",
+      "line": 18,
+      "name": "test_int_ranges"
+    },
+    {
+      "kind": "function",
+      "line": 25,
+      "name": "test_zero_related"
+    },
+    {
+      "kind": "function",
+      "line": 32,
+      "name": "test_int_operations"
+    },
+    {
+      "kind": "function",
+      "line": 44,
+      "name": "test_bit_operations"
+    },
+    {
+      "kind": "function",
+      "line": 53,
+      "name": "test_comparisons"
+    },
+    {
+      "kind": "function",
+      "line": 64,
+      "name": "test_int_overflow"
+    }
+  ]
+}
