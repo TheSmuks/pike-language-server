@@ -4,7 +4,8 @@ description: Navigate template conventions, audit compliance, and guide upgrades
 category: project-management
 tags: [template, conventions, compliance, upgrade]
 version: 1.0.0
-template-version: 0.6.0
+
+template-version: 0.3.2-beta
 ---
 
 # Template Guide

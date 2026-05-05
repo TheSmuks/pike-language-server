@@ -5,7 +5,8 @@
 
 # TEMPLATE_VERSION: This file is part of the ai-project-template version manifest.
 # cut-release.sh updates this line on each release.
-TEMPLATE_VERSION=0.6.0
+
+TEMPLATE_VERSION=0.3.2-beta
 
 set -euo pipefail
 
@@ -60,12 +61,14 @@ for wf in ci.yml commit-lint.yml changelog-check.yml blob-size-policy.yml; do
     fi
 done
 
+
 # ── 4. .template-version ────────────────────────────────────────────────────
 echo "Checking .template-version..."
 if [ -f ".template-version" ]; then
     VERSION=$(cat .template-version | tr -d '[:space:]')
-    # Validate semver format: X.Y.Z (the real invariant)
-    if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+
+    # Validate semver format: X.Y.Z or X.Y.Z-suffix (e.g., 0.3.2-beta)
+    if echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$'; then
         pass ".template-version is valid semver ($VERSION)"
     else
         fail ".template-version is not valid semver: $VERSION"
