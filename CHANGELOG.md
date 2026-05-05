@@ -8,9 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   
 
 
-  ## [Unreleased]
+  ## [0.3.4-beta] — 2026-05-05
 
-  ### Added
+### Added
 
   - **Pre-flight check script**: `scripts/preflight.sh` runs the full test suite before a release (typecheck, build, bun test, pike tests via pmp, harness tests, e2e tests). Fails fast on the first error.
   - **pmp-guide skill**: New skill documenting `pmp` usage conventions — use `pmp run` instead of raw `pike -M`.
@@ -71,6 +71,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Decision 0020 updated**: Status changed from "In Progress" to "Phase B/C complete". Phase D (tests, corpus verification) is in progress.
   
   **known-limitations.md updated**: "pike-fmt not integrated" severity lowered from "Medium" to resolved. pike-fmt is now bundled and working.
+
+## [Unreleased]
+
 
 ## [0.3.3-beta] — 2026-05-05
 
