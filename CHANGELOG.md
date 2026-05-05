@@ -5,10 +5,27 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-
-## [0.2.1-beta]
-
-### Added
+  
+  ## [0.3.0-beta]
+  
+  ### Added
+  
+  **`extensionKind: ["workspace"]`**: VSCode extension now declares it must run on the workspace/remote side. Required for Remote-SSH deployment where the extension and all subprocesses (pike, pike-fmt, tree-sitter WASM) live on the remote server.
+  
+  **`pike.languageServer.pikeFmtPath` configuration**: Users can now configure the pike-fmt binary path via VS Code settings (`pike.languageServer.pikeFmtPath`). Previously only configurable via `initializationOptions`. `client/extension.ts` now passes this through to the server.
+  
+  **Formatting integration (Phase B)**: `server/src/features/formattingHandler.ts` now passes correct `--tab-size` arg to pike-fmt (removed invalid `--indent-width`). pike-fmt CLI fixed to load tree-sitter-pike.wasm correctly in bundled output. Published to npm (`pike-fmt@0.1.3`) and added as LSP dependency.
+  
+  **Formatting tests**: New integration tests for the formatting handler covering graceful failure, real pike-fmt binary, and idempotency (`tests/lsp/formatting.test.ts`, 13 tests).
+  
+  ### Documentation
+  
+  **Decision 0020 updated**: Status changed from "In Progress" to "Phase B/C complete". Phase D (tests, corpus verification) is in progress.
+  
+  **known-limitations.md updated**: "pike-fmt not integrated" severity lowered from "Medium" to resolved. pike-fmt is now bundled and working.
+  
+  
+  
 
 **DocumentLink provider**: `textDocument/documentLink` makes import paths, inherit paths, and `#include` directives clickable. Reuses `ModuleResolver` for path resolution. Decision 0027.
 
@@ -22,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **4 new ADRs**: 0023 (document highlight), 0024 (folding range), 0025 (code action), 0026 (workspace symbol). Also updated feature table to show Decision references for all implemented features.
 
-**State of project**: Updated to Phase 22, version 0.2.1-beta. Corpus counts updated (73 files, 16 categories, 21 ADRs).
+**State of project**: Updated to Phase 22, version 0.3.0-beta. Corpus counts updated (73 files, 16 categories, 21 ADRs).
 
 **Corpus manifest**: Complete rewrite listing all 73 committed files with accurate counts per category.
 

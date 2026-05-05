@@ -1,8 +1,11 @@
 {
   "name": "pike-language-server",
-  "version": "0.2.1-beta",
+  "version": "0.3.0-beta",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
+  "extensionKind": [
+    "workspace"
+  ],
   "bin": {
     "pike-language-server": "./bin/pike-language-server"
   },
@@ -28,6 +31,7 @@
     "typescript": "^5.7.0"
   },
   "dependencies": {
+    "pike-fmt": "^0.1.3",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.0",
@@ -58,6 +62,12 @@
           "type": "string",
           "default": "pike",
           "description": "Path to the Pike binary. Used for language server subprocess and path discovery.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.pikeFmtPath": {
+          "type": "string",
+          "default": "pike-fmt",
+          "description": "Path to the pike-fmt formatter binary. Used by textDocument/formatting.",
           "scope": "machine-overridable"
         },
         "pike.languageServer.diagnosticMode": {

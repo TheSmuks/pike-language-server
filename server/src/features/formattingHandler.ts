@@ -101,8 +101,6 @@ export function registerFormattingHandler(
         const args = [
           "--tab-size",
           String(options.tabSize ?? 2),
-          "--indent-width",
-          String(options.tabSize ?? 2),
           ...(options.insertSpaces === false
             ? ["--use-tabs"]
             : []),
