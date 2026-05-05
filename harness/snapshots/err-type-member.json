@@ -1,0 +1,19 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='err-type-member'><doc><text><p>Test type mismatch on member access (should produce Pike error).\n Error file — accessing wrong type members.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/err-type-member.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "syntax_error",
+      "line": 44,
+      "message": "syntax error, unexpected TOK_IDENTIFIER, expecting TOK_LEX_EOF or ';'",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/err-type-member.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

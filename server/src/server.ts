@@ -258,6 +258,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         },
         codeActionProvider: true,
         workspaceSymbolProvider: true,
+        documentLinkProvider: { resolveProvider: false },
         documentFormattingProvider: true,
         workspace: {
           fileOperations: {

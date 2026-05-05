@@ -1,0 +1,25 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='basic-string-types'><doc><text><p>Test string types and operations in Pike.\n Valid file — all string operations are valid.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/basic-string-types.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 1,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "category": "unknown",
+      "line": 12,
+      "message": "Illegal ` identifier.",
+      "severity": "error"
+    },
+    {
+      "category": "syntax_error",
+      "line": 12,
+      "message": "syntax error, unexpected TOK_IDENTIFIER, expecting TOK_LEX_EOF or ';'",
+      "severity": "error"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/basic-string-types.pike",
+  "pike_version": "8.0.1116",
+  "symbols": []
+}

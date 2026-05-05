@@ -1,0 +1,61 @@
+{
+  "autodoc": "<?xml version='1.0' encoding='utf-8'?>\n\n<autodoc>\n<namespace name='predef'>\n<class name='basic-type-conversions'><doc><text><p>Test implicit and explicit type conversions in Pike.\n Valid file — all conversions are valid Pike.</p>\n</text></doc><docgroup homogen-name='' homogen-type='import'><doc/>\n<import name=''><source-position file='corpus/files/basic-type-conversions.pike' first-line='4'/><classname>7.8::</classname></import>\n</docgroup>\n</class>\n</namespace>\n</autodoc>\n\n\n",
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [
+    {
+      "actual_type": "mixed",
+      "category": "wrong_return_type",
+      "expected_type": "float",
+      "line": 26,
+      "message": "Wrong return type.",
+      "severity": "warning"
+    },
+    {
+      "category": "unused_variable",
+      "line": 35,
+      "message": "Unused local variable parsed.",
+      "severity": "warning"
+    }
+  ],
+  "error": null,
+  "file": "corpus/files/basic-type-conversions.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "INT_MAX"
+    },
+    {
+      "kind": "variable",
+      "name": "PI"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "test_explicit_casts"
+    },
+    {
+      "kind": "function",
+      "line": 22,
+      "name": "test_arithmetic"
+    },
+    {
+      "kind": "function",
+      "line": 30,
+      "name": "test_string_conversions"
+    },
+    {
+      "kind": "function",
+      "line": 40,
+      "name": "test_array_int"
+    },
+    {
+      "kind": "function",
+      "line": 45,
+      "name": "test_array_string"
+    }
+  ]
+}
