@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.3.0-beta",
+  "version": "0.3.2-beta",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
   "extensionKind": [
