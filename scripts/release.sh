@@ -15,6 +15,12 @@
 #   8. package.json               — "version": "X.Y.Z"
 #   9. .omp/skills/cut-release/SKILL.md  — version in example commands
 
+
+
+# NOTE: Before running this script, run the pre-flight checks:
+#   bash .omp/skills/cut-release/scripts/preflight.sh
+# The release MUST NOT proceed if pre-flight fails.
+
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
