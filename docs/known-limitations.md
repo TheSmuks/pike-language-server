@@ -101,7 +101,6 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 
 ### High (Major features impaired)
 
-*None currently.*
 
 ### Medium (Known workarounds, tracked for resolution)
 
@@ -109,7 +108,7 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 |------------|----------|------------|
 | Complex initializer type inference | Medium | `extractInitializerType` handles constructors and ternary. Complex expressions need explicit annotations. |
 | Cross-file type resolution freshness | Medium | Background indexing mitigates. |
-| pike-fmt not integrated in LSP | Medium | Formatter created, LSP handler implemented. Requires pike-fmt on PATH. |
+| pike-fmt formatting | Medium | Phase 1: indentation normalization only. Operator spacing future work. |
 
 ### Low (Minor impact, rare occurrence)
 
@@ -117,7 +116,7 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 |------------|----------|------------|
 | for_statement missing initializer field | Low | Positional scan workaround in `collectForStatement()` |
 | switch_statement missing body field | Low | Positional scan workaround in `collectSwitchStatement()` |
-| pike-introspect availability | Low | CI installs it. Worker starts without it; only `resolve` calls fail. |
+| pike-introspect availability | Low | CI installs it. Worker starts without it. Only `resolve` calls fail. |
 | pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
 
 ## Cross-File Resolution Limitations (Phase 4)

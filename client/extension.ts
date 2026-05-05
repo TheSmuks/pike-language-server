@@ -22,6 +22,7 @@ function getSettings(): Record<string, unknown> {
   const config = vscode.workspace.getConfiguration("pike.languageServer");
   return {
     pikeBinaryPath: config.get<string>("path", "pike"),
+    pikeFmtPath: config.get<string>("pikeFmtPath", "pike-fmt"),
     diagnosticMode: config.get<string>("diagnosticMode", "realtime"),
     diagnosticDebounceMs: config.get<number>("diagnosticDebounceMs", 500),
     maxNumberOfProblems: config.get<number>("maxNumberOfProblems", 100),
