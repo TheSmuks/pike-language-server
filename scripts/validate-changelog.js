@@ -104,9 +104,11 @@ for (let i = headerEnd; i < lines.length; i++) {
       versions.set(versionId, lineNum);
     }
     
+
     currentVersion = verMatch[0].substring(3);  // "## [version]"
     currentVersionLine = lineNum;
-    isSemVer = true;
+    // [Unreleased] is not a released version — skip section ordering.
+    isSemVer = versionId !== "Unreleased";
     currentSection = null;
     sectionHasContent = false;
     continue;
