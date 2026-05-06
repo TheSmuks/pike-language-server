@@ -118,6 +118,8 @@ export interface NavigationContext {
   diagnosticManager: DiagnosticManager;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
+  /** Connection for logging when content is unexpectedly null. */
+  connection: Connection;
 }
 
 // ---------------------------------------------------------------------------
@@ -578,6 +580,12 @@ export function registerNavigationHandlers(
 
     // Extract AutoDoc XML on open (non-critical, fire-and-forget)
     const source = doc.getText();
+    // gopls sentinel pattern: return diagnostic-quality error for null/undefined.
+    // Empty string is valid content — no guard needed.
+    if (source === undefined || source === null) {
+      ctx.connection.console.error(`unexpected null content for ${doc.uri}`);
+      return;
+    }
     const autodocHash = computeContentHash(source);
     const cachedAutodoc = ctx.autodocCache.get(doc.uri);
     if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {

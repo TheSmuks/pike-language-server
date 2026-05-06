@@ -178,6 +178,9 @@ export function activate(context: vscode.ExtensionContext): void {
     initializationOptions: getSettings(),
     // Route server errors through our custom handler (no popup spam).
     errorHandler: makeErrorHandler("SERVER"),
+    // Share the existing output channel so the LanguageClient does not create
+    // a second one with the same name (which would cause duplicate log output).
+    outputChannel,
   };
 
   client = new LanguageClient(
@@ -228,6 +231,8 @@ export function activate(context: vscode.ExtensionContext): void {
               initializationOptions: getSettings(),
               // Re-apply custom error handler after restart.
               errorHandler: makeErrorHandler("SERVER"),
+              // Share the output channel to avoid duplicate log entries.
+              outputChannel,
             },
           );
           client.onDidChangeState((ev: StateChangeEvent) => {

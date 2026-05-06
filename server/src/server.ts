@@ -25,7 +25,7 @@ import {
 } from "vscode-languageserver/node";
 import type { InitializeParams, InitializeResult } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initParser, parse, deleteTree, clearTreeCache } from "./parser";
+import { initParser, isParserReady, parse, deleteTree, clearTreeCache } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { indexWorkspaceFiles } from "./features/backgroundIndex";
 import {
@@ -68,7 +68,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
   // Start parser initialization early so it completes before the first parse call.
   // initParser() is idempotent — returns the same promise on subsequent calls.
-  const parserReady = initParser();
+  void initParser();
   const worker = new PikeWorker();
 
   // -----------------------------------------------------------------
@@ -122,7 +122,7 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
   /** In-flight upsertFile promises to avoid concurrent indexing of the same URI. */
   const upsertInFlight = new Map<string, Promise<any>>();
- 
+
 
   /**
    * Get or build the symbol table for a document.
@@ -431,12 +431,18 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.onDidChangeContent(async (event) => {
     const doc = event.document;
-    // Ensure the parser is initialized before parsing any document.
-    // Documents may arrive before onInitialized completes.
-    await parserReady;
-
+    // If the parser is not yet ready, skip processing entirely.
+    // The document will be re-processed on the next didChange (immediate on keystroke).
+    // rust-analyzer pattern: non-blocking readiness check, no data loss.
+    if (!isParserReady()) return;
 
     try {
+      const content = doc.getText();
+      if (content === undefined || content === null) {
+        connection.console.error(`unexpected null content for ${doc.uri}`);
+        return;
+      }
+
       const tree = parse(doc.getText(), doc.uri);
 
       // Update workspace index, invalidating dependents

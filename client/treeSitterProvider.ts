@@ -223,12 +223,10 @@ export class TreeSitterSyntacticProvider
   async #init(): Promise<void> {
     try {
       // Language.load() must be called before instantiating Parser.
-      await treeSitter.Language.load(
+      const lang = await treeSitter.Language.load(
         this.context.asAbsolutePath("server/tree-sitter-pike.wasm"),
       );
-      this.language = await treeSitter.Language.load(
-        this.context.asAbsolutePath("server/tree-sitter-pike.wasm"),
-      );
+      this.language = lang;
       this.parser = new treeSitter.Parser();
       this.parser.setLanguage(this.language);
       this.query = new treeSitter.Query(this.language, HIGHLIGHTS_QUERY);
@@ -241,64 +239,70 @@ export class TreeSitterSyntacticProvider
     document: vscode.TextDocument,
     _token: vscode.CancellationToken,
   ): Promise<vscode.SemanticTokens | null> {
-    if (this.initPromise) {
-      await this.initPromise;
-      this.initPromise = null;
-    }
+    try {
+      if (this.initPromise) {
+        await this.initPromise;
+        this.initPromise = null;
+      }
 
-    if (!this.parser || !this.query) {
-      return null;
-    }
+      if (!this.parser || !this.query) {
+        return null;
+      }
 
-    const text = document.getText();
-    const tree = this.parser.parse(text);
-    if (!tree) {
-      return null;
-    }
+      const text = document.getText();
+      const tree = this.parser.parse(text);
+      if (!tree) {
+        return null;
+      }
 
-    const rootNode = tree.rootNode;
-    const captures = this.query.captures(rootNode);
-    const tokens: ParsedToken[] = [];
+      const rootNode = tree.rootNode;
+      const captures = this.query.captures(rootNode);
+      const tokens: ParsedToken[] = [];
 
-    for (const capture of captures) {
-      const node = capture.node;
-      const { startPosition, endPosition } = node;
+      for (const capture of captures) {
+        const node = capture.node;
+        const { startPosition, endPosition } = node;
 
-      const { tokenType, tokenModifiers } = mapCapture(capture.name);
-      tokens.push({
-        line: startPosition.row,
-        startCol: startPosition.column,
-        endLine: endPosition.row,
-        endCol: endPosition.column,
-        tokenType,
-        tokenModifiers,
+        const { tokenType, tokenModifiers } = mapCapture(capture.name);
+        tokens.push({
+          line: startPosition.row,
+          startCol: startPosition.column,
+          endLine: endPosition.row,
+          endCol: endPosition.column,
+          tokenType,
+          tokenModifiers,
+        });
+      }
+
+      // Sort by start position so tokens are in document order
+      tokens.sort((a, b) => {
+        const lineDiff = a.line - b.line;
+        if (lineDiff !== 0) return lineDiff;
+        return a.startCol - b.startCol;
       });
+
+      const builder = new vscode.SemanticTokensBuilder(this.legend);
+
+      for (const tok of tokens) {
+        builder.push(
+          new vscode.Range(
+            tok.line,
+            tok.startCol,
+            tok.endLine,
+            tok.endCol,
+          ),
+          tok.tokenType,
+          tok.tokenModifiers,
+        );
+      }
+
+      return builder.build();
+    } catch (err) {
+      console.error("[TreeSitterProvider] Failed:", err);
+      return null;
     }
-
-    // Sort by start position so tokens are in document order
-    tokens.sort((a, b) => {
-      const lineDiff = a.line - b.line;
-      if (lineDiff !== 0) return lineDiff;
-      return a.startCol - b.startCol;
-    });
-
-    const builder = new vscode.SemanticTokensBuilder(this.legend);
-
-    for (const tok of tokens) {
-      builder.push(
-        new vscode.Range(
-          tok.line,
-          tok.startCol,
-          tok.endLine,
-          tok.endCol,
-        ),
-        tok.tokenType,
-        tok.tokenModifiers,
-      );
-    }
-
-    return builder.build();
   }
+
 
   releaseDocumentSemanticTokens(_result: vscode.SemanticTokens): void {
     // Nothing to release for tree-sitter tokens
