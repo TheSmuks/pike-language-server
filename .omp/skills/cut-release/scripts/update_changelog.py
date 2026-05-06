@@ -24,32 +24,45 @@ def main():
         print(f"FAIL: {changelog_path} not found")
         sys.exit(1)
     
-    content = changelog_path.read_text()
+    lines = changelog_path.read_text().splitlines()
     
-    # Extract unreleased section
-    unreleased_match = re.search(r'## \[Unreleased\](.*?)(?=\n## \[|\Z)', content, re.DOTALL)
-    if not unreleased_match:
+    # Find ## [Unreleased] line
+    try:
+        unreleased_idx = next(i for i, line in enumerate(lines) if line.strip() == '## [Unreleased]')
+    except StopIteration:
         print("FAIL: No [Unreleased] section found")
         sys.exit(1)
     
-    unreleased_content = unreleased_match.group(1).strip()
+    # Collect unreleased content until next ## [ or end of file
+    unreleased_lines = []
+    for line in lines[unreleased_idx + 1:]:
+        if re.match(r'\s*## \[', line):
+            break
+        unreleased_lines.append(line)
+    
+    unreleased_content = '\n'.join(unreleased_lines).strip()
     if not unreleased_content:
         print("FAIL: [Unreleased] section is empty")
         sys.exit(1)
     
     # Build new version section
-    new_section = f"## [{new_version}] — {date_now}\n\n{unreleased_content}\n\n## [Unreleased]\n\n"
+    new_section_lines = [
+        f"## [{new_version}] — {date_now}",
+        "",
+        unreleased_content,
+        "",
+        "## [Unreleased]",
+        "",
+    ]
     
-    # Replace
-    new_content = re.sub(
-        r'## \[Unreleased\].*?(?=\n## \[|\Z)',
-        new_section,
-        content,
-        count=1,
-        flags=re.DOTALL
+    # Replace the [Unreleased] section in-place
+    new_lines = (
+        lines[:unreleased_idx]
+        + new_section_lines
+        + lines[unreleased_idx + 1 + len(unreleased_lines):]
     )
     
-    changelog_path.write_text(new_content)
+    changelog_path.write_text('\n'.join(new_lines) + '\n')
     print(f"PASS: Created [{new_version}] section with unreleased content")
 
 if __name__ == '__main__':

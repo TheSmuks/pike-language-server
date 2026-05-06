@@ -2,7 +2,7 @@
   "name": "pike-language-server",
   "displayName": "Pike Language Server",
   "description": "Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more",
-  "version": "0.3.4-beta",
+  "version": "0.3.5-beta",
   "publisher": "thesmuks",
   "engines": {
     "vscode": "^1.85.0"
@@ -32,7 +32,7 @@
   "activationEvents": [
     "onLanguage:pike"
   ],
-  "main": "./client/dist/extension.js",
+  "main": "./client/dist/extension.cjs",
   "contributes": {
     "languages": [
       {
@@ -47,6 +47,33 @@
         ]
       }
     ],
+    "grammars": [
+      {
+        "language": "pike",
+        "scopeName": "source.pike",
+        "path": "./syntaxes/pike.tmLanguage.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "builtinFunction",
+        "superType": "function"
+      }
+    ],
+    "semanticTokenModifiers": [
+      {
+        "id": "mutable"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "pike",
+        "scopes": {
+          "builtinFunction": ["support.function.builtin.pike"],
+          "variable.mutable": ["variable.other.mutable.pike"]
+        }
+      }
+    ],
     "configuration": {
       "title": "Pike Language Server",
       "properties": {
@@ -54,12 +81,6 @@
           "type": "string",
           "default": "pike",
           "description": "Path to the Pike binary. Must be Pike 8.0 or newer.",
-          "scope": "machine"
-        },
-        "pike.languageServer.pikeFmtPath": {
-          "type": "string",
-          "default": "pike-fmt",
-          "description": "Path to the pike-fmt formatter binary.",
           "scope": "machine"
         },
         "pike.languageServer.diagnosticMode": {
