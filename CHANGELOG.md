@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     nor object". The worker now gracefully degrades and returns
     `"Introspect module not available"` instead of crashing on startup.
 
+
   ### Changed
 
   - **Integration test architecture**: `tests/integration/` rewritten with
@@ -30,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `dist/run-tests.js` (Bun strips `__dirname`). Lock cleanup added.
     Layer 2 narrowed to wiring-only scope; correctness assertions live in
     Layer 1 (`tests/lsp/`).
+
+
   ## [0.3.4-beta] — 2026-05-05
 
 ### Added
