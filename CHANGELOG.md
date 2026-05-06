@@ -10,9 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   
 
-  ## [Unreleased]
+## [0.3.5-beta] — 2026-05-06
 
-  ### Fixed
+### Fixed
 
   - **Worker startup crash when Introspect unavailable**: `harness/worker.pike`
     `handle_resolve()` now uses `master()->resolv("Introspect")` for runtime
@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Layer 2 narrowed to wiring-only scope; correctness assertions live in
     Layer 1 (`tests/lsp/`).
 
+## [Unreleased]
 
   ## [0.3.4-beta] — 2026-05-05
 

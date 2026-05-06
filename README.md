@@ -3,7 +3,7 @@
 **Visual Studio Code extension for Pike programming language support.**
 
 [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)
-[![template](https://img.shields.io/badge/template-v0.3.4-beta-green)](https://github.com/TheSmuks/ai-project-template)
+[![template](https://img.shields.io/badge/template-v0.3.5-beta-green)](https://github.com/TheSmuks/ai-project-template)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
 
 Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more. Works with Pike 8.0 and newer.
@@ -58,7 +58,7 @@ The status bar item (bottom-right) shows the server state: spinning while starti
 - **Rename** — workspace-wide, scope-aware, cross-file, type-aware receiver filtering
 - **Code actions** — remove unused variable, add missing import
 - **Signature help** — parameter hints with active parameter tracking
-- **Formatting** — indentation normalization via `pike-fmt`
+  - **Formatting** — indentation normalization
 
 ### Additional Features
 - **Hover** — type info, AutoDoc documentation, stdlib signatures
@@ -76,7 +76,6 @@ Settings are available under **Extensions → Pike Language Server** in VS Code 
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `pike.languageServer.path` | `pike` | Path to the Pike binary. Must be Pike 8.0 or newer. |
-| `pike.languageServer.pikeFmtPath` | `pike-fmt` | Path to the pike-fmt formatter binary. |
 | `pike.languageServer.diagnosticMode` | `realtime` | When to report diagnostics: `realtime`, `saveOnly`, or `off` |
 | `pike.languageServer.diagnosticDebounceMs` | `500` | Debounce interval (ms) for realtime diagnostics. Range: 100–5000. |
 | `pike.languageServer.maxNumberOfProblems` | `100` | Maximum diagnostic problems reported per file. Range: 1–1000. |
@@ -85,11 +84,8 @@ Settings are available under **Extensions → Pike Language Server** in VS Code 
 
 ## Requirements
 
-- **Pike** 8.0 or newer (must be on `PATH`)
-- **Bun** runtime (for bundled server)
+fz|- **Pike** 8.0 or newer (must be on `PATH`)
 - **VS Code** 1.85.0 or later
-
-Pike is the oracle for type information and diagnostics. Bun is the JavaScript runtime for the LSP server. You do **not** need Node.js unless developing the extension.
 
 ---
 
