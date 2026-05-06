@@ -5,6 +5,7 @@
  */
 
 import * as path from "node:path";
+import * as fs from "node:fs";
 import * as vscode from "vscode";
 import {
   type StateChangeEvent,
@@ -19,6 +20,8 @@ import {
   ServerOptions,
   TransportKind,
 } from "vscode-languageclient/node";
+
+import { TreeSitterSyntacticProvider } from "./treeSitterProvider";
 
 let client: LanguageClient | undefined;
 
@@ -103,7 +106,6 @@ function getSettings(): Record<string, unknown> {
   const config = vscode.workspace.getConfiguration("pike.languageServer");
   return {
     pikeBinaryPath: config.get<string>("path", "pike"),
-    pikeFmtPath: config.get<string>("pikeFmtPath", "pike-fmt"),
     diagnosticMode: config.get<string>("diagnosticMode", "realtime"),
     diagnosticDebounceMs: config.get<number>("diagnosticDebounceMs", 500),
     maxNumberOfProblems: config.get<number>("maxNumberOfProblems", 100),
@@ -114,33 +116,55 @@ function getSettings(): Record<string, unknown> {
 
 export function activate(context: vscode.ExtensionContext): void {
   log("EXT", "Activating Pike Language Server...");
-
   // Language configuration for Pike — client-side, no LSP traffic.
   // Handles Enter, Tab, auto-indent, and surrounding pairs.
   // See client/language-configuration.json for rules.
-  const langConfig = JSON.parse(
-    require("node:fs").readFileSync(
-      context.asAbsolutePath("language-configuration.json"),
-      "utf8",
+  try {
+    const langConfigPath = context.asAbsolutePath("language-configuration.json");
+    const langConfig = JSON.parse(fs.readFileSync(langConfigPath, "utf8"));
+    context.subscriptions.push(
+      vscode.languages.setLanguageConfiguration("pike", langConfig),
+    );
+  } catch (err) {
+    log("EXT", `Warning: language-configuration.json not loaded: ${(err as Error).message}`);
+    log("EXT", "Language configuration (brackets, comments) will use defaults.");
+  }
+
+  // Register tree-sitter syntactic token provider.
+  // Runs at lower priority than LSP — VSCode merges both providers.
+  // Provides instant highlighting for keywords, operators, types, literals
+  // without waiting for project analysis.
+  const syntacticProvider = new TreeSitterSyntacticProvider(context);
+  context.subscriptions.push(
+    vscode.languages.registerDocumentSemanticTokensProvider(
+      { language: "pike" },
+      syntacticProvider,
+      syntacticProvider.legend,
     ),
   );
-  context.subscriptions.push(
-    vscode.languages.setLanguageConfiguration("pike", langConfig),
-  );
+  log("EXT", "Tree-sitter syntactic provider registered.");
 
   // Status bar: show starting state and open output channel on click.
   updateStatusBar(State.Starting);
   statusBarItem.command = "workbench.action.output.toggleOutput";
   context.subscriptions.push(statusBarItem);
 
-  const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.js"));
+  const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
+
 
   const serverOptions: ServerOptions = {
-    run: { module: serverModule, transport: TransportKind.stdio },
+    run: {
+      module: serverModule,
+      transport: TransportKind.stdio,
+      options: { env: { PIKE_LSP_STDIO: "1" } },
+    },
     debug: {
       module: serverModule,
       transport: TransportKind.stdio,
-      options: { execArgv: ["--nolazy", "--inspect=6009"] },
+      options: {
+        execArgv: ["--nolazy", "--inspect=6009"],
+        env: { PIKE_LSP_STDIO: "1" },
+      },
     },
   };
 

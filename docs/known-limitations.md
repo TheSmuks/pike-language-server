@@ -292,3 +292,24 @@ CI installs pike-introspect via `pmp install` after the pmp step in `.github/wor
 
 **pmp module path limitation**: pmp symlinks `modules/Introspect -> store-root` but Pike needs
 `-M modules/Introspect/src/`. Filed as TheSmuks/pmp#42. Workaround: explicit `-M` path in spawn args.
+ 
+ ## VSCode Extension Host Environment Limitations
+ 
+ ### Tree-sitter WASM unavailability in VSCode extension host
+ 
+ The `web-tree-sitter` package uses WebAssembly APIs (`loadWebAssemblyModule`) that are
+ not available in Node.js environments. While the LSP server itself runs correctly in
+ Node.js, the tree-sitter-based syntactic token provider (`TreeSitterSyntacticProvider`)
+ cannot initialize inside VSCode's extension host.
+ 
+ **Error**: `TypeError: Cannot read properties of undefined (reading 'loadWebAssemblyModule')`
+ 
+ **Impact**: Semantic token highlighting based on tree-sitter fails in the extension host.
+ The LSP server (which runs as a separate Node.js process) works correctly for hover,
+ go-to-definition, completion, and other language features.
+ 
+ **Workaround**: Tests that require tree-sitter WASM gracefully skip with appropriate
+ messages. The extension still activates and the LSP server functions normally.
+ 
+ **Affected tests**: `documentSymbol` (via tree-sitter), semantic token provider
+ **Unaffected tests**: Extension activation, LSP protocol features (hover, definition, etc.)

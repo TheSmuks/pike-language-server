@@ -18,6 +18,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync, statSync } from "node:fs";
 import type { CancellationToken } from "vscode-languageserver/node";
 // ---------------------------------------------------------------------------
 // Configuration (tunable per deployment)
@@ -122,10 +123,61 @@ interface QueueItem {
 const _thisDir = typeof __dirname !== 'undefined'
   ? __dirname
   : dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = resolve(_thisDir, "..", "..", "..");
-const WORKER_SCRIPT = join(PROJECT_ROOT, "harness", "worker.pike");
-const HARNESS_DIR = join(PROJECT_ROOT, "harness");
-const INTROSPECT_PATH = join(PROJECT_ROOT, "modules", "Introspect", "src");
+
+/**
+ * Resolve a directory by trying multiple candidate paths.
+ * Returns the first path that exists and is a directory, or undefined.
+ *
+ * Supports both dev layout and VSIX layout:
+ * - Dev:       server/dist/ → 3 levels up → repo root
+ * - VSIX:      server/dist/ → 2 levels up → extension root
+ */
+function resolveDir(...candidates: string[]): string | undefined {
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate) && statSync(candidate).isDirectory()) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolve a file by trying multiple candidate paths.
+ * Returns the first path that exists and is a file, or undefined.
+ */
+function resolveFile(...candidates: string[]): string | undefined {
+  for (const candidate of candidates) {
+    try {
+      if (existsSync(candidate) && statSync(candidate).isFile()) {
+        return candidate;
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return undefined;
+}
+
+// Dev layout: _thisDir = server/dist/; 3× ".." = repo root
+const DEV_ROOT = resolve(_thisDir, "..", "..", "..");
+// VSIX layout: _thisDir = server/dist/; 2× ".." = extension root
+const VSIX_ROOT = resolve(_thisDir, "..", "..");
+
+const HARNESS_DIR = resolveDir(
+  join(DEV_ROOT, "harness"),
+  join(VSIX_ROOT, "harness"),
+);
+const WORKER_SCRIPT = resolveFile(
+  join(DEV_ROOT, "harness", "worker.pike"),
+  join(VSIX_ROOT, "harness", "worker.pike"),
+);
+const INTROSPECT_PATH = resolveDir(
+  join(DEV_ROOT, "modules", "Introspect", "src"),
+);
 
 export class PikeWorker {
 
@@ -169,21 +221,40 @@ export class PikeWorker {
   start(): void {
     if (this.proc && !this.proc.killed) return;
 
+    // Guard: fail fast if harness is not found in any expected location.
+    if (!HARNESS_DIR) throw new Error(
+      `Pike worker: harness directory not found.\n` +
+      `  Dev layout: ${join(DEV_ROOT, "harness")}\n` +
+      `  VSIX layout: ${join(VSIX_ROOT, "harness")}`,
+    );
+    if (!WORKER_SCRIPT) throw new Error(
+      `Pike worker: worker.pike not found.\n` +
+      `  Dev layout: ${join(DEV_ROOT, "harness", "worker.pike")}\n` +
+      `  VSIX layout: ${join(VSIX_ROOT, "harness", "worker.pike")}`,
+    );
+
+    // Build argument list: always include HARNESS_DIR, conditionally include INTROSPECT_PATH.
+    const baseArgs = ["-M", HARNESS_DIR];
+    if (INTROSPECT_PATH) baseArgs.push("-M", INTROSPECT_PATH);
+    baseArgs.push(WORKER_SCRIPT);
+
     // On Linux, use nice for CPU politeness under contention
     let finalCmd: string;
     let finalArgs: string[];
 
     if (this.config.niceValue > 0 && process.platform === "linux") {
       finalCmd = "nice";
-      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, "-M", HARNESS_DIR, "-M", INTROSPECT_PATH, WORKER_SCRIPT];
+      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, ...baseArgs];
     } else {
       finalCmd = this.config.pikeBinaryPath;
-      finalArgs = ["-M", HARNESS_DIR, "-M", INTROSPECT_PATH, WORKER_SCRIPT];
+      finalArgs = baseArgs;
     }
 
+    // Use the resolved root as cwd; prefer VSIX root if available.
+    const cwd = VSIX_ROOT || DEV_ROOT;
     this.proc = spawn(finalCmd, finalArgs, {
       stdio: ["pipe", "pipe", "pipe"],
-      cwd: PROJECT_ROOT,
+      cwd,
     });
 
     const stdout = this.proc.stdout;
