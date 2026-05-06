@@ -27,10 +27,13 @@ const workDoneProgress = new ProgressType<{
   percentage?: number;
 }>();
 
+
 export interface BackgroundIndexOptions {
   connection: Connection;
   index: WorkspaceIndex;
   workspaceRoot: string;
+  /** Pike worker for type-aware indexing. Omit if Pike is unavailable. */
+  worker?: { isAvailable: boolean };
   /** Progress token from the client, if it supports workDoneProgress. */
   progressToken?: string | number;
 }
@@ -48,10 +51,18 @@ export interface BackgroundIndexOptions {
 export async function indexWorkspaceFiles(
   options: BackgroundIndexOptions,
 ): Promise<void> {
-  const { connection, index, workspaceRoot } = options;
+
+  const { connection, index, workspaceRoot, worker } = options;
 
   if (!workspaceRoot) {
     connection.console.log("Pike LSP: no workspace root, skipping background indexing");
+    return;
+  }
+
+  // Skip type-aware indexing if Pike is unavailable.
+  // Tree-sitter parsing still runs below for symbol table building.
+  if (worker && !worker.isAvailable) {
+    connection.console.log("Pike binary not found — skipping background indexing");
     return;
   }
 

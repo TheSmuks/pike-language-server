@@ -57,7 +57,25 @@ wk|### Added
     `onDidChangeContent` (server.ts) and `onDidOpen` (navigationHandler.ts).
 
   - **Documentation**: Both patterns documented in `docs/lsp-references.md`
-    with source citations.
+
+
+### Fixed
+
+  - **Graceful degradation without Pike**: PikeWorker now detects missing Pike
+    binary (exit code 127) and sets `pikeAvailable = false`, skipping spawn on
+    subsequent requests. No more stderr spam on every request. Server stays up
+    with tree-sitter-only features (symbols, highlights, folding, formatting).
+    Added `PikeUnavailableError` and `isAvailable` getter to `PikeWorker`.
+
+  - **Duplicate log lines in output panel**: Removed `{ log: true }` from the
+    VSCode `OutputChannel` creation. The `{ log: true }` channel auto-timestamps
+    `window/logMessage` notifications AND passes them through raw, causing each
+    server message to appear twice. The extension already adds its own timestamps.
+
+  - **One-time user notification**: When Pike is not found, the server now shows
+    a single warning via `window/showWarningMessage` in `onInitialized` instead
+    of spamming the console. Tree-sitter-only features remain fully functional.
+
 
   ## [0.3.4-beta] — 2026-05-05
 
