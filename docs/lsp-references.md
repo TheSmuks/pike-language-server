@@ -193,4 +193,45 @@ const symbols = await client.sendRequest('textDocument/documentSymbol', { textDo
 // Compare symbols against harness snapshot
 ```
 
-No subprocess, no stdio, no VSCode. The test framework IS the editor.
+th|No subprocess, no stdio, no VSCode. The test framework IS the editor.
+
+## Parser readiness: non-blocking readiness check
+
+**Problem.** During LSP server startup, tree-sitter WASM initialization takes time. If a document change arrives before the parser is ready, handlers that block on initialization queue up. The server appears unresponsive; multiple documents can pile up in the queue.
+
+**Solution: rust-analyzer's default-return pattern.** Instead of blocking on parser readiness, check readiness with a fast boolean guard. If not ready, return immediately. The document will be re-processed on the next didChange (which fires immediately on keystroke). No data is lost because tree-sitter parses the full content each time, not incrementally — the first real parse after readiness produces the correct result.
+
+**Where to look.** rust-analyzer's `dispatch.rs`. The `prime_caches` function initializes the analysis engine while the server starts. Handlers check `AnalysisHost::is_ready()` or equivalent before processing.
+
+**Apply to Pike LSP.** `server/src/parser.ts` exports `isParserReady()` which returns `true` after `initParser()` completes. `server/src/server.ts` uses this instead of `await parserReady`:
+
+```typescript
+// BLOCKING (old): await parserReady; // queues up if not ready
+// NON-BLOCKING (new): if (!isParserReady()) return; // skip, re-try on next keystroke
+
+documents.onDidChangeContent(async (event) => {
+  if (!isParserReady()) return;
+  // ... process document
+});
+```
+
+## Content guards: sentinel for null/undefined
+
+**Problem.** A compound guard like `if (!content && content !== "")` silently skips processing when `content` is unexpectedly `null` or `undefined`. The error is invisible — no log, no diagnostic, no way to detect the problem.
+
+**Solution: gopls's sentinel pattern.** When content is unexpectedly null/undefined, log a diagnostic-quality error instead of silently skipping. The guard checks only for the invalid state (null/undefined), not for the valid-but-empty state (empty string).
+
+**Where to look.** gopls's `brokenFile` handling in the document processing layer. When the content hash doesn't match or the content is unexpectedly absent, gopls logs an error and returns an error response or diagnostic, not a silent success.
+
+**Apply to Pike LSP.** `server/src/server.ts` and `server/src/features/navigationHandler.ts` use:
+
+```typescript
+const content = doc.getText();
+if (content === undefined || content === null) {
+  connection.console.error(`unexpected null content for ${doc.uri}`);
+  return;
+}
+// Empty string is valid content — no guard needed
+```
+
+The pattern distinguishes between "unexpected null" (bug → log error) and "valid empty" (user wrote empty file → process normally).

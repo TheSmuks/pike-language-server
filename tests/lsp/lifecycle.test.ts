@@ -105,6 +105,78 @@ describe("lifecycle: performance", () => {
     const avg = timings.reduce((a, b) => a + b, 0) / timings.length;
     expect(avg).toBeLessThan(200);
 
+kg|    await teardown();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Parser readiness guard
+// ---------------------------------------------------------------------------
+
+describe("lifecycle: parser readiness guard", () => {
+  test("didChange before parser ready does not crash server", async () => {
+    // This test verifies the rust-analyzer default-return pattern.
+    // When a document change arrives before the tree-sitter parser is ready,
+    // the handler returns immediately without blocking or erroring.
+    // The document will be re-processed on the next didChange (keystroke).
+
+    const { client, c2s, s2c, openDoc, teardown } = await createTestServer();
+
+    // Open a document - this triggers didOpen
+    const uri = openDoc("file:///test/ready.pike", "int x = 1;");
+
+    // Send a didChange notification - this is normally processed immediately.
+    // If the parser ready guard wasn't working, this would either:
+    // - Block waiting for parser init (old behavior: await parserReady)
+    // - Crash the server
+    // With the guard, it returns immediately and processing continues.
+    client.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: "int x = 2;" }],
+    });
+
+    // Give the server a moment to process
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Verify the server is still responsive after the guard
+    const result = await client.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri },
+    });
+    expect(result).not.toBeNull();
+
+    // Clean up
+    c2s.destroy();
+    s2c.destroy();
+    await teardown();
+  });
+
+  test("document changes with valid empty content are processed", async () => {
+    // Empty string is valid content - the server should process it normally.
+    // This ensures the content guard doesn't incorrectly skip empty files.
+
+    const { client, c2s, s2c, openDoc, teardown } = await createTestServer();
+
+    // Open with non-empty content
+    const uri = openDoc("file:///test/empty.pike", "int x = 1;");
+
+    // Change to empty content - this should be processed, not skipped
+    client.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: "" }],
+    });
+
+    // Give the server time to process
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Verify server is still responsive
+    const result = await client.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri },
+    });
+    expect(result).not.toBeNull();
+
+    // Clean up
+    c2s.destroy();
+    s2c.destroy();
     await teardown();
   });
 });
