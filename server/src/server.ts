@@ -10,7 +10,7 @@
  * - Top-level `connection.listen()` — the production entry point over stdio.
  */
 
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
 
 import {
   createConnection,
@@ -62,16 +62,13 @@ export interface PikeServer {
   autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   /** Diagnostic manager — exposed for testing. */
   diagnosticManager: DiagnosticManager;
-  /** Path to pike-fmt binary — exposed for testing. */
-  pikeFmtPath: string;
 }
-
-// Path to pike-fmt formatter binary. Set via initializationOptions or config.
-// Defaults to "pike-fmt" (expects it on PATH).
-let pikeFmtPath = "pike-fmt";
 
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
+  // Start parser initialization early so it completes before the first parse call.
+  // initParser() is idempotent — returns the same promise on subsequent calls.
+  const parserReady = initParser();
   const worker = new PikeWorker();
 
   // -----------------------------------------------------------------
@@ -173,7 +170,6 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   const stdlibIndex = stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>;
   const predefBuiltins: Record<string, string> = predefBuiltinIndex as Record<string, string>;
-
   const handlerContext = {
     documents,
     index: index as WorkspaceIndex,
@@ -184,7 +180,6 @@ export function createPikeServer(connection: Connection): PikeServer {
     predefBuiltins,
     diagnosticManager,
     connection,
-    pikeFmtPath,
   };
 
   // -----------------------------------------------------------------------
@@ -199,19 +194,21 @@ export function createPikeServer(connection: Connection): PikeServer {
     const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
     clientSupportsWatchedFiles =
       params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
-    index = await WorkspaceIndex.create(rootPath);
+
+    // Read initialization options FIRST — needed for WorkspaceIndex.create
+    const initOpts = params.initializationOptions as {
+      diagnosticMode?: string;
+      pikeBinaryPath?: string;
+      diagnosticDebounceMs?: number;
+      maxNumberOfProblems?: number;
+    } | undefined;
+
+    // Pass pikeBinaryPath so module resolution uses the same binary as PikeWorker
+    index = await WorkspaceIndex.create(rootPath, initOpts?.pikeBinaryPath);
     diagnosticManager.setIndex(index);
     // Update handler context with resolved index
     (handlerContext as any).index = index;
 
-    // Read diagnostic mode from initializationOptions
-    const initOpts = params.initializationOptions as {
-      diagnosticMode?: string;
-      pikeBinaryPath?: string;
-      pikeFmtPath?: string;
-      diagnosticDebounceMs?: number;
-      maxNumberOfProblems?: number;
-    } | undefined;
     if (initOpts?.diagnosticMode) {
       const mode = initOpts.diagnosticMode;
       if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
@@ -220,10 +217,6 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
     if (initOpts?.pikeBinaryPath) {
       worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
-    }
-    if (initOpts?.pikeFmtPath) {
-      pikeFmtPath = initOpts.pikeFmtPath;
-      handlerContext.pikeFmtPath = pikeFmtPath;
     }
     if (initOpts?.diagnosticDebounceMs && initOpts.diagnosticDebounceMs > 0) {
       diagnosticManager.setDebounceMs(initOpts.diagnosticDebounceMs);
@@ -304,7 +297,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
 
     // Load persistent cache
-    const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+    const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
     const currentWasmHash = computeWasmHash(wasmPath);
 
     try {
@@ -382,11 +375,6 @@ export function createPikeServer(connection: Connection): PikeServer {
     const config = settings.settings?.pike?.languageServer;
     if (!config) return;
 
-    if (config.pikeFmtPath) {
-      pikeFmtPath = config.pikeFmtPath;
-      handlerContext.pikeFmtPath = pikeFmtPath;
-    }
-
     if (config.diagnosticMode) {
       const mode = config.diagnosticMode;
       if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
@@ -413,7 +401,6 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   registerFormattingHandler(connection, {
     documents,
-    pikeFmtPath,
   });
 
   // -----------------------------------------------------------------------
@@ -425,7 +412,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
     // Save persistent cache before clearing
     try {
-      const wasmPath = resolve(import.meta.dir, 'tree-sitter-pike.wasm');
+      const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
       const wasmHash = computeWasmHash(wasmPath);
       await saveCache(index.workspaceRoot, index, wasmHash);
     } catch (err) {
@@ -444,6 +431,10 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   documents.onDidChangeContent(async (event) => {
     const doc = event.document;
+    // Ensure the parser is initialized before parsing any document.
+    // Documents may arrive before onInitialized completes.
+    await parserReady;
+
 
     try {
       const tree = parse(doc.getText(), doc.uri);
@@ -487,7 +478,6 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   documents.listen(connection);
-
   return {
     connection,
     documents,
@@ -495,7 +485,6 @@ export function createPikeServer(connection: Connection): PikeServer {
     worker,
     autodocCache,
     diagnosticManager,
-    get pikeFmtPath() { return pikeFmtPath; },
   };
 }
 

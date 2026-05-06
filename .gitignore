@@ -20,7 +20,6 @@ runs/
 mlruns/
 wandb/
 lightning_logs/
-
 eval_results/
 benchmark_results/
 
@@ -28,7 +27,6 @@ benchmark_results/
 .env
 .env.*
 !.env.example
-*.vsix
 *.key
 *.pem
 secrets/
@@ -37,7 +35,6 @@ secrets/
 __pycache__/
 *.py[cod]
 *$py.class
-*.so
 *.egg-info/
 dist/
 build/
@@ -67,14 +64,31 @@ node_modules/
 Thumbs.db
 Desktop.ini
 
-# Build artifacts
-*.o
-*.a
-*.exe
-*.dll
-*.so
-*.dylib
+# Pike runtime
+.pike-lsp/
+.pike-env/
+modules/
 
+# Build artifacts (root)
+out/
+standalone/
+PLAN.md
+
+# VSCode extension packaging
+*.vsix
+
+# Compiled/bundled JS (not tracked — built from TypeScript sources)
+server/src/**/*.js
+server/src/**/*.js.map
+client/**/*.js
+client/**/*.js.map
+
+# VSCode test runner artifacts
+tests/integration/dist-temp/
+tests/integration/.vscode-test/
+tests/lsp/helpers.js
+
+# Coverage
 coverage/
 .coverage
 htmlcov/
@@ -82,8 +96,11 @@ htmlcov/
 # Logs
 *.log
 logs/
-PLAN.md
-standalone/
-.pike-lsp/
-modules/
-.pike-env/
+
+# Misc build remnants
+*.o
+*.a
+*.exe
+*.dll
+*.so
+*.dylib

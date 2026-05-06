@@ -16,11 +16,22 @@ import { LRUCache } from './util/lruCache';
 
 let parserInstance: Parser | null = null;
 let language: Language | null = null;
+let initPromise: Promise<void> | null = null;
 
-export async function initParser(wasmPath?: string): Promise<void> {
-  if (parserInstance) return;
+/**
+ * Initialize the tree-sitter parser.  Safe to call multiple times — subsequent
+ * calls return the same promise and do not re-initialize.
+ */
+export function initParser(wasmPath?: string): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = doInit(wasmPath);
+  return initPromise;
+}
+
+async function doInit(wasmPath?: string): Promise<void> {
   await Parser.init();
-  parserInstance = new Parser();
+  const parser = new Parser();
+
   // Try WASM in multiple locations:
   // 1. Explicit path provided by caller
   // 2. Same directory as this module (standalone bundle)
@@ -48,7 +59,10 @@ export async function initParser(wasmPath?: string): Promise<void> {
   if (!loaded) {
     throw new Error(`tree-sitter-pike.wasm not found. Searched: ${candidates.join(', ')}`);
   }
-  parserInstance.setLanguage(language);
+  parser.setLanguage(language);
+  // Only assign parserInstance after language is fully loaded so parse() callers
+  // always see a fully-initialized parser.
+  parserInstance = parser;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,3 +145,4 @@ export function getLanguage(): Language {
   return language;
 }
 export type { Tree } from 'web-tree-sitter';
+export { parserInstance };

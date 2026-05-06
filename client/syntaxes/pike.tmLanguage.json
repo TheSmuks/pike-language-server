@@ -1,0 +1,46 @@
+{
+	"$schema": "https://raw.githubusercontent.com/microsoft/vscode/HEAD/src/vs/workbench/services/textMate/common/TMScopeRegistry.ts",
+	"name": "Pike",
+	"scopeName": "source.pike",
+	"fileTypes": ["pike", "pmod", "mmod"],
+	"patterns": [
+		{
+			"name": "comment.line.double-slash",
+			"match": "//.*$"
+		},
+		{
+			"name": "comment.block",
+			"begin": "/\\*",
+			"end": "\\*/"
+		},
+		{
+			"name": "comment.block.documentation",
+			"begin": "/\\*\\*",
+			"end": "\\*/"
+		},
+		{
+			"name": "comment.line.documentation",
+			"match": "//!.*$"
+		},
+		{
+			"name": "string.quoted.double",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape",
+					"match": "\\\\[nrt\\\\\"']|\\\\x[0-9a-fA-F]{2}|\\\\[0-7]{1,3}"
+				},
+				{
+					"name": "constant.character.escape",
+					"match": "\\\\."
+				}
+			]
+		},
+		{
+			"name": "string.quoted.backtick",
+			"begin": "`",
+			"end": "`"
+		}
+	]
+}

@@ -158,14 +158,17 @@ The Pike LSP uses three layers of testing with different cost/coverage trade-off
 - Catches: logic bugs in LSP server, parser regressions, symbol extraction errors
 - Pattern: gopls `internal/lsp/regtest`
 
-### Layer 2: VSCode integration tests (`tests/integration/`)
+fn|### Layer 2: VSCode extension wiring tests (`tests/integration/`)
 
-- Real VSCode process with extension loaded via `@vscode/test-electron`
-- Ground truth: VSCode behaves correctly
+ed|Tests verify that the VSCode extension activates and the LSP client is wired correctly — nothing more. Correctness assertions (hover returns correct types, definition returns correct locations, etc.) live in Layer 1.
+
+ch|- Real VSCode process with extension loaded via `@vscode/test-electron` + Mocha
+- Ground truth: extension wiring, not LSP correctness
 - Slow: seconds per test
 - Run before each release
-- Catches: extension wiring bugs, activation failures, transport issues
-- 5–15 tests for the entire project
+- Catches: extension activation failures, language configuration errors, transport wiring bugs, crash-on-unhandled-documents
+- 5–10 wiring-only tests (not protocol correctness — that's Layer 1's job)
+- Uses Mocha describe/it for structured pass/fail counts, per-test timing, and CI-compatible output
 
 ### Layer 3: Manual smoke tests (`MANUAL_SMOKE_TESTS.md`)
 

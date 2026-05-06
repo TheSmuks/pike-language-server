@@ -1,11 +1,9 @@
 /**
- * Formatting handler — thin wrapper that shells out to pike-fmt.
+ * Formatting handler — uses pike-fmt in-process via direct import.
  *
- * Architecture follows gopls/rust-analyzer pattern: the LSP does not implement
- * formatting logic itself. Instead it spawns the standalone pike-fmt tool,
- * pipes document text to it, diffs the output, and returns TextEdit[].
- *
- * Phase 1 scope: whole-document formatting only. No range formatting.
+ * Architecture: the server already has web-tree-sitter and tree-sitter-pike.wasm
+ * initialized. Instead of spawning a subprocess, we call pike-fmt's format()
+ * function directly, avoiding subprocess overhead, timeouts, and PATH dependency.
  */
 
 import {
@@ -15,13 +13,13 @@ import {
   type FormattingOptions,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { spawn } from "node:child_process";
 import type { TextDocuments } from "vscode-languageserver/node";
+
+import { format as pikeFormat } from "pike-fmt/src/formatter";
+import { parserInstance } from "../parser";
 
 interface FormattingContext {
   documents: TextDocuments<TextDocument>;
-  /** Path to pike-fmt binary. Set via initializationOptions or config. */
-  pikeFmtPath: string;
 }
 
 /**
@@ -79,8 +77,8 @@ function computeIndentEdits(
 /**
  * Register the document formatting handler on the connection.
  *
- * The handler spawns pike-fmt as a subprocess with the document text on stdin.
- * If pike-fmt is not available, returns a plain text error response.
+ * Calls pike-fmt's format() function directly using the already-initialized
+ * tree-sitter parser. The parser is shared with the rest of the server.
  */
 export function registerFormattingHandler(
   connection: Connection,
@@ -94,78 +92,28 @@ export function registerFormattingHandler(
       const source = doc.getText();
       const options: FormattingOptions = params.options;
 
-      return new Promise((resolve) => {
-        // Spawn pike-fmt with formatting options as args
-        // --tab-size: number of spaces per tab (tabSize from options)
-        // --use-tabs: boolean (insertSpaces === false)
-        const args = [
-          "--tab-size",
-          String(options.tabSize ?? 2),
-          ...(options.insertSpaces === false
-            ? ["--use-tabs"]
-            : []),
-        ];
+      try {
+        // Use the server's already-initialized parser
+        if (!parserInstance) {
+          connection.console.error("format failed: parser not initialized");
+          return null;
+        }
+        const formatted = pikeFormat(source, {
+          tabSize: options.tabSize ?? 2,
+          useTabs: options.insertSpaces === false,
+          insertFinalNewline: true,
+          operatorSpacing: false,
+        }, parserInstance);
 
-        let stdout = "";
-        let stderr = "";
-        let killed = false;
-
-        const child = spawn(ctx.pikeFmtPath, args, {
-          stdio: ["pipe", "pipe", "pipe"],
-          // Don't inherit the parent environment — keep PATH clean
-          env: { ...process.env, PATH: process.env.PATH ?? "" },
-        });
-
-        const timeout = setTimeout(() => {
-          killed = true;
-          child.kill("SIGTERM");
-        }, 30_000);
-
-        child.stdout?.on("data", (chunk) => {
-          stdout += chunk.toString();
-        });
-
-        child.stderr?.on("data", (chunk) => {
-          stderr += chunk.toString();
-        });
-
-        child.on("close", (code) => {
-          clearTimeout(timeout);
-          if (killed) {
-            connection.console.error(
-              `pike-fmt timed out after 30s for ${params.textDocument.uri}`,
-            );
-            resolve(null);
-            return;
-          }
-
-          if (code !== 0 || stderr.length > 0) {
-            connection.console.error(
-              `pike-fmt exited with code ${code}: ${stderr}`,
-            );
-            // Return error as a diagnostic-like message
-            resolve(null);
-            return;
-          }
-
-          // Compute indent edits
-          const edits = computeIndentEdits(source, stdout);
-          resolve(edits);
-        });
-
-        child.on("error", (err) => {
-          clearTimeout(timeout);
-          connection.console.error(
-            `Failed to spawn pike-fmt at ${ctx.pikeFmtPath}: ${err.message}`,
-          );
-          resolve(null);
-        });
-
-        // Write source to pike-fmt's stdin
-        child.stdin?.write(source, () => {
-          child.stdin?.end();
-        });
-      });
+        // Compute indent edits (pike-fmt already handles full formatting)
+        const edits = computeIndentEdits(source, formatted);
+        return edits;
+      } catch (err) {
+        connection.console.error(
+          `format failed: ${(err as Error).message}`,
+        );
+        return null;
+      }
     },
   );
 }
