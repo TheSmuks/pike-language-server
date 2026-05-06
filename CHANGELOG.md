@@ -44,6 +44,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Layer 1 (`tests/lsp/`).
 
 ## [Unreleased]
+wk|### Added
+  - **Adopt rust-analyzer non-blocking parser readiness pattern**: `isParserReady()`
+    replaces `await parserReady` in `onDidChangeContent`. Handler returns
+    immediately when parser is not initialized, avoiding blocking during WASM
+    load. Document is re-processed on next keystroke.
+
+  - **Adopt gopls sentinel pattern for content guards**: Changed compound guard
+    `if (!content && content !== "")` to explicit `if (content === undefined ||
+    content === null)` with error logging. Distinguishes "unexpected null"
+    (logged, skipped) from "valid empty" (proceeds normally). Applied to
+    `onDidChangeContent` (server.ts) and `onDidOpen` (navigationHandler.ts).
+
+  - **Documentation**: Both patterns documented in `docs/lsp-references.md`
+    with source citations.
 
   ## [0.3.4-beta] — 2026-05-05
 

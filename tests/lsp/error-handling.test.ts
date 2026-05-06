@@ -238,4 +238,117 @@ describe("error handling", () => {
     const sym = symbols[0] as { name: string };
     expect(sym.name).toBe("café");
   });
+
+  test("didChange with empty content does not crash server", async () => {
+    // Regression test: open a valid Pike file, then send didChange with empty
+    // string content.  The server's onDidChangeContent handler has a content guard
+    // `if (!content && content !== "")` that returns early on undefined/null
+    // while still allowing empty string (falsy but !== "" is false → continues).
+    const uri = "file:///test/empty-change.pike";
+    const validSource = "int x = 1;\n";
+
+    server.openDoc(uri, validSource);
+
+    // Ensure the document is indexed before the change
+    const beforeSymbols = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+    expect(beforeSymbols.length).toBeGreaterThan(0);
+
+    // Send didChange with empty string — exercises the server content guard
+    server.client.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 2 },
+      contentChanges: [{ text: "" }],
+    });
+
+    // The server should not crash — documentSymbol returns whatever the server
+    // produces (empty content may still produce a token, not a crash).
+    const result = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+    expect(Array.isArray(result)).toBe(true);
+    // The key assertion is no crash — the server is resilient to empty content.
+
+    // Restore valid content so subsequent tests are not affected
+    server.client.sendNotification("textDocument/didChange", {
+      textDocument: { uri, version: 3 },
+      contentChanges: [{ text: validSource }],
+    });
+
+    const restoredSymbols = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+    expect(restoredSymbols.length).toBeGreaterThan(0);
+  });
+
+
+  test("didOpen with empty content does not crash autodoc extraction", async () => {
+    // Regression test: navigationHandler onDidOpen calls computeContentHash(source)
+    // where source = doc.getText().  The content guard `if (!source && source !== "")`
+    // prevents crashes when source is undefined.  Empty string is allowed (guard
+    // passes because `"" !== ""` is false).
+    const uri = "file:///test/empty-on-open.pike";
+
+    // Open with empty content — exercises the navigation content guard.
+    // The server should not crash from the autodoc pipeline.
+    server.openDoc(uri, "");
+
+    // The key assertion: no crash when opening empty content.
+    // Subsequent request should still work.
+    const result = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  test(".pmod file opens and indexes without crashing", async () => {
+    // Regression test: .pmod files triggered a crash in the navigation handler's
+    // onDidOpen because computeContentHash was called with source that could be
+    // falsy (undefined), and source.charAt(0) throws TypeError on undefined.
+    // The content guard prevents this.
+    const uri = "file:///test/Geom/Point.pmod";
+    const source = [
+      "// AutoDoc module header",
+      "!=\"Point — a 2D coordinate.\"",
+      "",
+      "class Point {",
+      "  //! X coordinate",
+      "  int x;",
+      "  //! Y coordinate",
+      "  int y;",
+      "",
+      "  //! Construct a Point",
+      "  void create(int _x, int _y) {",
+      "    x = _x;",
+      "    y = _y;",
+      "  }",
+      "",
+      "  //! Distance from origin",
+      "  float magnitude() {",
+      "    return sqrt((float)(x * x + y * y));",
+      "  }",
+      "}",
+      "",
+    ].join("\n");
+
+    server.openDoc(uri, source);
+
+    const symbols = (await server.client.sendRequest(
+      "textDocument/documentSymbol",
+      { textDocument: { uri } },
+    )) as unknown[];
+
+    expect(Array.isArray(symbols)).toBe(true);
+    // The key assertion: server did not crash on .pmod file.
+    // It may or may not produce symbols depending on tree-sitter's .pmod support.
+    // If symbols were produced, verify the class name appears.
+    const names = (symbols as Array<{ name: string }>).map((s) => s.name);
+    if (symbols.length > 0) {
+      expect(names).toContain("Point");
+    }
+  });
 });

@@ -17,6 +17,7 @@ import { LRUCache } from './util/lruCache';
 let parserInstance: Parser | null = null;
 let language: Language | null = null;
 let initPromise: Promise<void> | null = null;
+let parserReady = false;
 
 /**
  * Initialize the tree-sitter parser.  Safe to call multiple times — subsequent
@@ -63,6 +64,7 @@ async function doInit(wasmPath?: string): Promise<void> {
   // Only assign parserInstance after language is fully loaded so parse() callers
   // always see a fully-initialized parser.
   parserInstance = parser;
+  parserReady = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -89,6 +91,14 @@ const treeCache = new LRUCache<TreeEntry>({
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Returns true after the parser has been initialized and is ready to parse.
+ * Use this to check readiness without awaiting the init promise.
+ */
+export function isParserReady(): boolean {
+  return parserReady;
+}
 
 /**
  * Parse source text, using the cached tree for the given URI if available.
@@ -144,5 +154,6 @@ export function getLanguage(): Language {
   if (!language) throw new Error('Language not loaded — call initParser() first');
   return language;
 }
+
 export type { Tree } from 'web-tree-sitter';
 export { parserInstance };
