@@ -1,11 +1,15 @@
 {
   "name": "pike-language-server-integration-tests",
   "private": true,
-  "type": "module",
   "scripts": {
-    "test": "bun run run-tests.ts"
+    "test": "bun run compile && xvfb-run -a node dist/run-tests.js",
+    "compile": "tsc"
   },
   "devDependencies": {
-    "@vscode/test-electron": "^2.4.1"
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.118.0",
+    "@vscode/test-electron": "^2.4.1",
+    "mocha": "^10.7.3"
   }
 }
