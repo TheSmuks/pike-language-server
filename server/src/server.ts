@@ -12,6 +12,7 @@
 
 import { resolve, dirname } from "node:path";
 
+
 import {
   createConnection,
   TextDocuments,
@@ -22,6 +23,7 @@ import {
   FileChangeType,
   DocumentHighlight,
   DocumentHighlightKind,
+  MessageType,
 } from "vscode-languageserver/node";
 import type { InitializeParams, InitializeResult } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -34,7 +36,8 @@ import {
   deserializeSymbolTable,
   computeWasmHash,
 } from "./features/persistentCache";
-import { PikeWorker } from "./features/pikeWorker";
+
+import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import {
   DiagnosticManager,
   type PikeCacheEntry,
@@ -274,7 +277,28 @@ export function createPikeServer(connection: Connection): PikeServer {
       } catch {
         // Connection may be closed during teardown
       }
+
+
     }
+    // Check Pike availability asynchronously.
+    // If Pike is unavailable, show a one-time warning so the user knows
+    // which features are missing (compile diagnostics, hover types, etc.).
+    // This is fire-and-forget — the worker will surface PikeUnavailableError
+    // to individual request handlers for graceful degradation.
+    worker.ping().catch((err: unknown) => {
+      if (err instanceof PikeUnavailableError) {
+
+
+        try {
+          connection.window.showWarningMessage(
+            "Pike binary not found. Syntax highlighting and navigation still work. " +
+            "Install Pike for diagnostics, hover info, and completion.",
+          );
+        } catch {
+          // Connection may be closed during teardown
+        }
+      }
+    });
 
     // Register file watchers for .pike and .pmod files.
     // Enables notifications when files change externally
@@ -327,10 +351,12 @@ export function createPikeServer(connection: Connection): PikeServer {
     // Background workspace indexing — fire-and-forget
     // Discovers and indexes all .pike/.pmod files for workspace/symbol
     // and cross-file navigation.
+
     indexWorkspaceFiles({
       connection,
       index,
       workspaceRoot: index.workspaceRoot,
+      worker,
     }).catch((err) => {
       // Connection may be closed during shutdown — do not re-throw.
       try {

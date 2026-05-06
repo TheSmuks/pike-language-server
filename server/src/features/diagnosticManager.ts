@@ -19,7 +19,8 @@ import {
   TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { PikeWorker, type PikeDiagnostic } from "./pikeWorker";
+
+import { PikeWorker, PikeUnavailableError, type PikeDiagnostic } from "./pikeWorker";
 import { getParseDiagnostics } from "./diagnostics";
 import { parse, type Tree } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
@@ -333,15 +334,22 @@ export class DiagnosticManager {
 
       // Cross-file propagation: schedule re-diagnosis of dependents
       this.propagateToDependents(uri);
+
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
-        try {
-          this.connection.console.error(
-            `Pike diagnose failed for ${uri}: ${(err as Error).message},`,
-          );
-        } catch {
-          // Connection may be closed during teardown
+        // Only log if it's not the "binary not found" error —
+        // that was already reported by PikeWorker.
+        const isPikeUnavailable = err instanceof Error
+          && err.name === "PikeUnavailableError";
+        if (!isPikeUnavailable) {
+          try {
+            this.connection.console.error(
+              `Pike diagnose failed for ${uri}: ${(err as Error).message}`,
+            );
+          } catch {
+            // Connection may be closed during teardown
+          }
         }
       }
       // Keep only parse diagnostics

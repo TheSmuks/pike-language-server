@@ -104,6 +104,25 @@ interface PikeResponse {
   error?: { code: number; message: string };
 }
 
+
+// ---------------------------------------------------------------------------
+// PikeUnavailableError
+// ---------------------------------------------------------------------------
+
+/**
+ * Error thrown when Pike binary is not available.
+ * Used for graceful degradation — callers can catch and fall back to
+ * tree-sitter-only features without spamming error logs.
+ */
+export class PikeUnavailableError extends Error {
+  readonly name = "PikeUnavailableError";
+  constructor(message = "Pike binary not available") {
+    super(message);
+    this.constructor = PikeUnavailableError;
+    Object.setPrototypeOf(this, PikeUnavailableError.prototype);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // FIFO queue item
 // ---------------------------------------------------------------------------
@@ -207,6 +226,14 @@ export class PikeWorker {
   private requestCount = 0;
   private startTime = 0;
 
+  /**
+   * Tracks Pike binary availability:
+   * - null = unknown (not yet attempted)
+   * - true = available (spawn succeeded)
+   * - false = unavailable (exit code 127 or pike not found)
+   */
+  private pikeAvailable: boolean | null = null;
+
   constructor(config?: Partial<PikeWorkerConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -266,22 +293,33 @@ export class PikeWorker {
       this.buffer += data.toString();
       this.processBuffer();
     });
+
     stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
-      if (msg) {
+      // Suppress stderr logging once Pike is known to be unavailable.
+      // The first occurrence (the "nice: pike: No such file" spam) is
+      // unavoidable since pikeAvailable is null at spawn time.
+      if (msg && this.pikeAvailable !== false) {
         console.error("[pike-worker stderr]", msg);
       }
     });
 
     const exitingProc = this.proc;
+
     this.proc.on("exit", (code, signal) => {
       this.clearIdleTimer();
       // Only reject pending if this is the CURRENT proc (not an old one
       // that was killed during a restart cycle)
       if (!this.restarting && this.proc === exitingProc) {
-        const error = new Error(
-          `Pike worker exited (code=${code}, signal=${signal})`,
-        );
+        // Detect "binary not found" (exit code 127 on Linux)
+        if (code === 127) {
+          this.pikeAvailable = false;
+        }
+
+        // Reject pending requests with typed error
+        const error = code === 127
+          ? new PikeUnavailableError()
+          : new Error(`Pike worker exited (code=${code}, signal=${signal})`);
         for (const [, pending] of this.pending) {
           clearTimeout(pending.timeout);
           pending.reject(error);
@@ -297,6 +335,7 @@ export class PikeWorker {
         this.sending = false;
         this.proc = null;
       }
+
     });
 
     // Reset tracking
@@ -316,9 +355,21 @@ export class PikeWorker {
     this.sending = false;
   }
 
-  /** Check if the worker is alive. */
+
+  /** Check if the worker process is alive. */
+
   get isAlive(): boolean {
     return this.proc !== null && !this.proc.killed;
+  }
+
+  /**
+   * Check if Pike is available.
+   * - null = not yet attempted
+   * - true = available
+   * - false = binary not found or permanently unavailable
+   */
+  get isAvailable(): boolean {
+    return this.pikeAvailable !== false;
   }
 
   /** Get current request count since last start. */
@@ -335,7 +386,14 @@ export class PikeWorker {
    * written to stdin at any time.  Returns a promise that resolves with
    * the Pike worker's response.
    */
+
   private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken): Promise<PikeResponse> {
+    // Fast path: if Pike is known to be unavailable, reject immediately.
+    // This avoids spamming stderr with "nice: pike: No such file" on every request.
+    if (this.pikeAvailable === false) {
+      return Promise.reject(new PikeUnavailableError());
+    }
+
     // Check if forced restart is needed before queuing
     if (this.shouldForceRestart()) {
       this.restarting = true;

@@ -28,8 +28,10 @@ let client: LanguageClient | undefined;
 // ─── Observability ──────────────────────────────────────────────────────────
 
 /** Output channel capturing extension lifecycle and server events. */
-const outputChannel = vscode.window.createOutputChannel("Pike Language Server", { log: true });
 
+
+
+const outputChannel = vscode.window.createOutputChannel("Pike Language Server");
 /** Status bar item reflecting server state. */
 const statusBarItem = vscode.window.createStatusBarItem(
   vscode.StatusBarAlignment.Left,
