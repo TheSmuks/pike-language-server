@@ -83,6 +83,15 @@ wk|### Added
     a single warning via `window/showWarningMessage` in `onInitialized` instead
     of spamming the console. Tree-sitter-only features remain fully functional.
 
+## [0.3.7-beta] — 2026-05-07
+
+### Fixed
+
+  - **Server bundle banner quoting**: Moved server esbuild invocation into
+    `scripts/build-server.sh` to fix `from'module'` single-quote collision
+    that produced `frommodule` — a syntax error preventing the server from
+    starting.
+
 ## [Unreleased]
 
   ## [0.3.4-beta] — 2026-05-05

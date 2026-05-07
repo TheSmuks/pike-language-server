@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.3.6-beta",
+  "version": "0.3.7-beta",
   "activationEvents": [
     "onLanguage:pike"
   ],
@@ -14,7 +14,7 @@
     "pike-language-server": "./bin/pike-language-server"
   },
   "scripts": {
-    "build:extension": "esbuild server/src/main.ts --bundle --outfile=server/dist/server.mjs --platform=node --target=node22 --format=esm --sourcemap --loader:.wasm=file --banner:js='import{createRequire}from'module';const require=createRequire(import.meta.url)' && bash scripts/build-client.sh",
+    "build:extension": "bash scripts/build-server.sh && bash scripts/build-client.sh",
     "build:standalone": "scripts/build-standalone.sh",
     "test": "bun test",
     "test:lsp": "bun test tests/lsp/",
