@@ -306,4 +306,5 @@ echo "  7. Push tag:          git push origin v$NEW_VERSION"
 echo "  8. Create release:    gh release create v$NEW_VERSION --title \"v$NEW_VERSION\" \\"
 echo "                         --notes-file CHANGELOG.md"
 echo ""
-echo "VSIX: pike-language-server-$NEW_VERSION.vsix"
+BUILD_NUM=$(date +%s | tail -c 7)
+echo "VSIX: pike-language-server-$NEW_VERSION+${BUILD_NUM}.vsix"
