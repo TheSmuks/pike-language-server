@@ -1,7 +1,9 @@
 {
   "name": "pike-language-server",
   "version": "0.3.5-beta",
-  "activationEvents": ["onLanguage:pike"],
+  "activationEvents": [
+    "onLanguage:pike"
+  ],
   "main": "./client/dist/extension.cjs",
   "description": "Tier-3 LSP implementation for Pike",
   "type": "module",
@@ -12,7 +14,7 @@
     "pike-language-server": "./bin/pike-language-server"
   },
   "scripts": {
-    "build:extension": "esbuild server/src/main.ts --bundle --outfile=server/dist/server.mjs --platform=node --target=node22 --format=esm --sourcemap --loader:.wasm=file --banner:js=\"import{createRequire}from'module';const require=createRequire(import.meta.url)\" && esbuild client/extension.ts --bundle --outfile=client/dist/extension.cjs --out-extension:.js=.cjs --platform=node --target=node22 --format=cjs --sourcemap --external:vscode",
+    "build:extension": "esbuild server/src/main.ts --bundle --outfile=server/dist/server.mjs --platform=node --target=node22 --format=esm --sourcemap --loader:.wasm=file --banner:js='import{createRequire}from'module';const require=createRequire(import.meta.url)' && bash scripts/build-client.sh",
     "build:standalone": "scripts/build-standalone.sh",
     "test": "bun test",
     "test:lsp": "bun test tests/lsp/",

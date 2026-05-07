@@ -40,4 +40,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=$(node -e "console.log(require('./extension.package.json').version)")
-          gh release upload "${{ github.event.release.tag_name }}" "pike-language-server-${VERSION}.vsix"
+          BUILD_NUM=$(date +%s | tail -c 7)
+          gh release upload "${{ github.event.release.tag_name }}" "out/pike-language-server-${VERSION}+${BUILD_NUM}.vsix"

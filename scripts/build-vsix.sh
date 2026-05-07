@@ -10,9 +10,10 @@ STAGE="$ROOT/out/.vsix-stage"
 
 # Read version from extension manifest
 VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').version)")
-VSIX_NAME="pike-language-server-${VERSION}.vsix"
+BUILD_NUM=$(date +%s | tail -c 7)
+VSIX_NAME="pike-language-server-${VERSION}+${BUILD_NUM}.vsix"
 
-echo "Packaging pike-language-server v${VERSION}..."
+echo "Packaging pike-language-server v${VERSION}+${BUILD_NUM}..."
 
 # Create output directory
 mkdir -p "$ROOT/out"

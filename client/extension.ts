@@ -4,6 +4,10 @@
  * Starts the LSP server as a child process communicating over stdio.
  */
 
+// Injected at build time via esbuild --define. Falls back to "dev" for
+// unbundled runs (bun test, typecheck).
+declare const BUILD_NUMBER: string | undefined;
+
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
@@ -118,6 +122,9 @@ function getSettings(): Record<string, unknown> {
 
 export function activate(context: vscode.ExtensionContext): void {
   log("EXT", "Activating Pike Language Server...");
+  const version = context.extension.packageJSON.version as string;
+  const buildId = typeof BUILD_NUMBER !== "undefined" ? BUILD_NUMBER : "dev";
+  log("EXT", `Version ${version}+${buildId}`);
   // Language configuration for Pike — client-side, no LSP traffic.
   // Handles Enter, Tab, auto-indent, and surrounding pairs.
   // See client/language-configuration.json for rules.
