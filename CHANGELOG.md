@@ -43,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Layer 2 narrowed to wiring-only scope; correctness assertions live in
     Layer 1 (`tests/lsp/`).
 
-## [Unreleased]
+## [0.3.6-beta] — 2026-05-07
+
 wk|### Added
   - **Adopt rust-analyzer non-blocking parser readiness pattern**: `isParserReady()`
   - **Build number in VSIX and extension log**: VSIX filenames and extension
@@ -82,6 +83,7 @@ wk|### Added
     a single warning via `window/showWarningMessage` in `onInitialized` instead
     of spamming the console. Tree-sitter-only features remain fully functional.
 
+## [Unreleased]
 
   ## [0.3.4-beta] — 2026-05-05
 
