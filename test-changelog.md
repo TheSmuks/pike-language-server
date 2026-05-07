@@ -43,16 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Layer 2 narrowed to wiring-only scope; correctness assertions live in
     Layer 1 (`tests/lsp/`).
 
-## [0.3.6-beta] — 2026-05-07
-
-wk|### Added
+## [Unreleased]
+wk|
+### Added
   - **Adopt rust-analyzer non-blocking parser readiness pattern**: `isParserReady()`
-  - **Build number in VSIX and extension log**: VSIX filenames and extension
-    activation logs now include a unique build number (last 6 digits of Unix
-    epoch seconds) via `+<build>` suffix, e.g. `0.3.5-beta+559491`. Build number
-    is baked into the client bundle at compile time via esbuild `--define`.
-    The extension logs `Version <version>+<build>` on activation so users can
-    identify which build they are testing without looking at file timestamps.
     replaces `await parserReady` in `onDidChangeContent`. Handler returns
     immediately when parser is not initialized, avoiding blocking during WASM
     load. Document is re-processed on next keystroke.
@@ -83,7 +77,6 @@ wk|### Added
     a single warning via `window/showWarningMessage` in `onInitialized` instead
     of spamming the console. Tree-sitter-only features remain fully functional.
 
-## [Unreleased]
 
   ## [0.3.4-beta] — 2026-05-05
 
