@@ -332,9 +332,11 @@ describe("documentSymbol canary: class-create.pike", () => {
     );
     for (const cls of classes) {
       const childKinds = new Set(cls.children!.map((c) => c.kind));
+
+      // Class methods and fields (correctly emitted as Method/Field, not Function/Variable)
       const hasDecls =
-        childKinds.has(SymbolKind.Function) ||
-        childKinds.has(SymbolKind.Variable) ||
+        childKinds.has(SymbolKind.Method) ||
+        childKinds.has(SymbolKind.Field) ||
         childKinds.has(SymbolKind.Constant);
       expect(hasDecls).toBe(true);
     }

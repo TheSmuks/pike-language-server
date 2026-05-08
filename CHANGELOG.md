@@ -22,4 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     which correctly finds the class body scope via `kind === 'class'`
     and range containment.
 
+  - **textDocument/references respects includeDeclaration**: The `onReferences`
+    handler now adds the declaration location to the results when
+    `params.context.includeDeclaration` is `true`, in both cross-file and
+    same-file paths with duplicate-avoidance logic.
+
+  - **documentLink fallback for unresolvable modules**: `collectInheritLink`
+    in `documentLink.ts` now emits a `pike://modules/...` link even when the
+    module cannot be resolved, instead of silently omitting the link.
+
+  - **health-check.ts test suite**: Fixed 6 needle/position issues and 1 test
+    structure error in the LSP health-check test file (`tests/health-check.ts`):
+    `refs.method`, `refs.parameter`, `rename.prepare-valid`, `rename.execute`,
+    `highlight.variable`, `hover.variable-type`, and `codeAction.unused-var`.
+
 ## [0.3.5-beta] — 2026-05-06

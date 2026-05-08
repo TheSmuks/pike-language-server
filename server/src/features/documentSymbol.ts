@@ -43,7 +43,9 @@ function symbolsFromClassDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous class — skip
   const body = node.childForFieldName('body');
-  const children = body ? collectSymbols(body) : [];
+  // Pass parentKind="class" so that nested function/variable declarations
+  // are emitted with kind Method/Field instead of Function/Variable.
+  const children = body ? collectSymbols(body, 'class') : [];
   return [
     DocumentSymbol.create(
       nameNode.text,
@@ -56,28 +58,28 @@ function symbolsFromClassDecl(node: Node): DocumentSymbol[] {
   ];
 }
 
-function symbolsFromFunctionDecl(node: Node): DocumentSymbol[] {
+function symbolsFromFunctionDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous — skip
   return [
     DocumentSymbol.create(
       nameNode.text,
       undefined,
-      SymbolKind.Function,
+      parentKind === 'class' ? SymbolKind.Method : SymbolKind.Function,
       toRange(node),
       nameRange(nameNode, node),
     ),
   ];
 }
 
-function symbolsFromVariableDecl(node: Node): DocumentSymbol[] {
+function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
   return names.map((nameNode) =>
     DocumentSymbol.create(
       nameNode.text,
       undefined,
-      SymbolKind.Variable,
+      parentKind === 'class' ? SymbolKind.Field : SymbolKind.Variable,
       toRange(node),
       toRange(nameNode),
     ),
@@ -179,7 +181,7 @@ function symbolsFromTypedefDecl(node: Node): DocumentSymbol[] {
 // Dispatch
 // ---------------------------------------------------------------------------
 
-type DeclHandler = (node: Node) => DocumentSymbol[];
+type DeclHandler = (node: Node, parentKind?: string) => DocumentSymbol[];
 
 const DECL_HANDLERS: Record<string, DeclHandler> = {
   class_decl: symbolsFromClassDecl,
@@ -198,8 +200,13 @@ const DECL_HANDLERS: Record<string, DeclHandler> = {
  * Walk children of a container node (program, class_body, etc.) and collect
  * symbols.  Each child is expected to be a `declaration` wrapper around the
  * actual declaration node, or the declaration node itself.
+ *
+ * @param container - the node whose children to walk
+ * @param parentKind - optional context hint: when "class", function/variable
+ *                    declarations inside the container are emitted as
+ *                    Method/Field rather than Function/Variable.
  */
-function collectSymbols(container: Node): DocumentSymbol[] {
+function collectSymbols(container: Node, parentKind?: string): DocumentSymbol[] {
   const symbols: DocumentSymbol[] = [];
   for (const child of container.children) {
     // Skip ERROR / missing nodes
@@ -211,7 +218,7 @@ function collectSymbols(container: Node): DocumentSymbol[] {
 
     const handler = DECL_HANDLERS[decl.type];
     if (handler) {
-      symbols.push(...handler(decl));
+      symbols.push(...handler(decl, parentKind));
     }
     // Unknown node types are silently ignored — not an error.
   }
