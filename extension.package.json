@@ -42,11 +42,12 @@
           ".pmod",
           ".mmod"
         ],
+
         "aliases": [
           "Pike"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
-    ],
     "grammars": [
       {
         "language": "pike",
