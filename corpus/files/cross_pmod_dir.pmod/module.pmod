@@ -5,5 +5,5 @@
 constant MODULE_NAME = "cross-pmod-dir";
 
 string capitalize(string s) {
-    return String.capitalize(s);
+  return String.capitalize(s);
 }

@@ -7,14 +7,14 @@
 // Basic mapping operations
 void test_mapping_basics() {
   mapping(string:int) m = ([
-    "one": 1,
-    "two": 2,
-    "three": 3
+  "one": 1,
+  "two": 2,
+  "three": 3
   ]);
-  
-  int val = m["two"];             // 2
-  m["four"] = 4;                  // add entry
-  m_delete(m, "three");           // remove entry
+
+  int val = m["two"]; // 2
+  m["four"] = 4; // add entry
+  m_delete(m, "three"); // remove entry
 }
 
 // m_delete — removes a key from mapping
@@ -30,23 +30,23 @@ void test_mapping_iteration() {
   foreach (m; string key; int val) {
     // process key and val
   }
-  array(string) keys = indices(m);  // ({ "x", "y", "z" })
-  array(int) values = values(m);    // ({ 10, 20, 30 })
+  array(string) keys = indices(m); // ({ "x", "y", "z" })
+  array(int) values = values(m); // ({ 10, 20, 30 })
 }
 
 // Mapping lookups with default
 void test_mapping_tryget() {
   mapping(string:int) m = ([ "a": 1, "b": 2 ]);
-  int val = m["a"];                    // 1
-  int missing = m["z"] || 0;            // default pattern
+  int val = m["a"]; // 1
+  int missing = m["z"] || 0; // default pattern
 }
 
 // Mapping stats
 void test_mapping_stats() {
   mapping(string:int) m = ([ "x": 1, "y": 2 ]);
-  int size = sizeof(m);                 // 2
-  int has_x = has_index(m, "x");        // 1 (true)
-  int has_z = has_index(m, "z");        // 0 (false)
+  int size = sizeof(m); // 2
+  int has_x = has_index(m, "x"); // 1 (true)
+  int has_z = has_index(m, "z"); // 0 (false)
 }
 
 // Typed mapping

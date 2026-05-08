@@ -6,8 +6,8 @@
 
 // Missing closing brace / incomplete block
 void test_incomplete_block() {
-  if (true) {
-    // file ends here without closing brace
+if (true) {
+// file ends here without closing brace
 
 // Missing semicolon after statement
 void test_missing_semicolon() {
@@ -17,7 +17,7 @@ void test_missing_semicolon() {
 
 // Incomplete expression
 void test_incomplete_expr() {
-  int x = 5 +
+int x = 5 +
 }
 
 // Missing function body

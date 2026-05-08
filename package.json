@@ -22,10 +22,13 @@
     "test:integration": "cd tests/integration && npm test",
     "test:pike": "pmp run tests/pike/run_tests.pike tests/pike",
     "typecheck": "tsc --noEmit",
+    "fmt:check": "bash scripts/fmt.sh --check",
+    "fmt:write": "bash scripts/fmt.sh --write",
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
     "harness:verify": "bun run harness/src/runner.ts --verify",
     "harness:resolve-snapshot": "bun run harness/src/runner.ts --resolve-snapshot",
-    "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify"
+    "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify",
+    "postinstall": "node scripts/postinstall-pike-fmt.js"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -36,7 +39,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "pike-fmt": "^0.1.3",
+    "pike-fmt": "^0.1.5",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.0",
