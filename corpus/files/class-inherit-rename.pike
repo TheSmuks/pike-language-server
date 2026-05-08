@@ -5,35 +5,35 @@
 #pragma strict_types
 
 class Base {
-    string label = "base";
+  string label = "base";
 
-    string describe() {
-        return "Base: " + label;
-    }
+  string describe() {
+    return "Base: " + label;
+  }
 
-    int get_value() {
-        return 42;
-    }
+  int get_value() {
+    return 42;
+  }
 }
 
 class Derived {
-    inherit Base : parent;
+  inherit Base : parent;
 
-    string label = "derived";
+  string label = "derived";
 
-    string who() {
-        // Access through alias
-        return parent::describe();
-    }
+  string who() {
+    // Access through alias
+    return parent::describe();
+  }
 
-    int value() {
-        return parent::get_value();
-    }
+  int value() {
+    return parent::get_value();
+  }
 }
 
 int main() {
-    object d = Derived();
-    write("who: %s\n", d->who());
-    write("value: %d\n", d->value());
-    return 0;
+  object d = Derived();
+  write("who: %s\n", d->who());
+  write("value: %d\n", d->value());
+  return 0;
 }

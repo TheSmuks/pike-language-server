@@ -5,13 +5,13 @@ inherit "rename-crossfile-dog.pike";
 inherit "rename-crossfile-cat.pike";
 
 void test() {
-    Dog d = Dog();
-    Cat c = Cat();
-    
-    // This should be renamed when we rename Dog.bark()
-    d->bark();
-    
-    // This should NOT be renamed when we rename Dog.bark()
-    // because c's type is Cat, not Dog
-    c->bark();
+  Dog d = Dog();
+  Cat c = Cat();
+
+  // This should be renamed when we rename Dog.bark()
+  d->bark();
+
+  // This should NOT be renamed when we rename Dog.bark()
+  // because c's type is Cat, not Dog
+  c->bark();
 }

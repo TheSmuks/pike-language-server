@@ -3,5 +3,5 @@
 #pragma strict_types
 
 class Calculator {
-    int multiply(int a, int b) { return a * b; }
+  int multiply(int a, int b) { return a * b; }
 }

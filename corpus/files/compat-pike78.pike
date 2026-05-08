@@ -7,8 +7,8 @@
 #pike 7.8
 
 int main() {
-    // With #pike 7.8, module resolution checks lib/7.8/modules/ first
-    // Stdio should still work (it has a 7.8 compat version)
-    write("Hello from #pike 7.8 mode\n");
-    return 0;
+  // With #pike 7.8, module resolution checks lib/7.8/modules/ first
+  // Stdio should still work (it has a 7.8 compat version)
+  write("Hello from #pike 7.8 mode\n");
+  return 0;
 }

@@ -21,6 +21,9 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 | 5 | **Range formatting not implemented** | Formatter operates on whole files | Full-document formatting only |
 | 6 | **Requires pike-fmt installed** | LSP handler shells out to `pike-fmt` | Error response if binary not found |
 
+
+| ~~`.pmod` files not discovered~~ | `pike-fmt` only matches `.pike` and `.lpc` | RESOLVED in pike-fmt v0.1.5 ([#17](https://github.com/TheSmuks/pike-fmt/issues/17)) |
+
 ## Resolved Upstream Issues
 
 ### ~~Unicode identifiers not parsed correctly~~ — RESOLVED
@@ -92,6 +95,29 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 **Fix**: Added a second resolution path in wireCrossFileInheritance() (scopeBuilder.ts) that resolves the inherit name directly via ModuleResolver when no file-level match is found. Extended warmResolverCache() (workspaceIndex.ts) to pre-warm class-body identifier inherits during async cache warmup, ensuring the sync cache adapter can find them during symbol table building. Also updated resolveInheritTarget() (workspaceIndex.ts) to correctly handle identifier inherits to .pike files by looking for a matching class declaration.
 
 **Verification**: bun test tests/lsp/crossFileOracle.test.ts — all 5 tests pass. Identifier inherits to cross-file classes now resolve correctly.
+
+### ~~`.pmod` file discovery~~ — RESOLVED
+
+**Upstream issue**: [TheSmuks/pike-fmt#17](https://github.com/TheSmuks/pike-fmt/issues/17)
+
+**Fixed in**: pike-fmt v0.1.5 — `findPikeFiles()` now matches `.pmod` extension.
+
+**LSP update**: `scripts/fmt.sh` no longer needs workarounds for `.pmod` discovery.
+Row 7 in the formatting table above is now marked RESOLVED.
+
+
+### ~~Configurable WASM path~~ — RESOLVED
+
+**Upstream issue**: [TheSmuks/pike-fmt#16](https://github.com/TheSmuks/pike-fmt/issues/16)
+
+**Fixed in**: pike-fmt v0.1.5 — accepts `--wasm-path <path>` or `PIKE_FMT_WASM` env var.
+
+**LSP workaround**: `scripts/fmt.sh` sets `PIKE_FMT_WASM` to point to
+`dist/tree-sitter-pike.wasm`. The bundled `cli.js` has a hardcoded `__dirname`
+pointing to the build machine's source path, so auto-detection fails. The env var
+bypasses the broken search paths. A `postinstall` script (`scripts/postinstall-pike-fmt.js`)
+also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter runtime can find it.
+
 
 ## Severity Classification
 

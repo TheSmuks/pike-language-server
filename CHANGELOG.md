@@ -17,11 +17,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and constants are now colorized immediately on file open with zero indexing delay.
     Previously only comments and strings were highlighted.
 
-  - **Removed build artifacts**: `out/pike-language-server-*.vsix` and scratch
-    files `test2.md`, `test-changelog.md` are no longer tracked by git.
+dg|  - **Removed build artifacts**: `out/pike-language-server-*.vsix` and scratch
+th|    files `test2.md`, `test-changelog.md` are no longer tracked by git.
+
+  - **pike-fmt upgraded to v0.1.5**: Uses npm semver (`^0.1.5`). The npm package
+    bundles `tree-sitter-pike.wasm` in `dist/`. `.pmod` files are now discovered
+    by `pike-fmt` ([TheSmuks/pike-fmt#17]). `scripts/fmt.sh` sets `PIKE_FMT_WASM`
+    to bypass a bundled-`__dirname` bug in `dist/cli.js` ([TheSmuks/pike-fmt#16]).
+    A `postinstall` script (`scripts/postinstall-pike-fmt.js`) symlinks
+    `web-tree-sitter.wasm` into `dist/` for the bundled tree-sitter runtime.
 
 ### Added
 
+  - **pike-fmt integration**: `scripts/fmt.sh` wrapper and `fmt:check`/`fmt:write`
+    npm scripts for formatting Pike source files in the repo. CI checks formatting on
+    every push/PR via the `pike-fmt` job in `.github/workflows/ci.yml`.
   - **tree-sitter highlights for Neovim/Helix**: `queries/highlights.scm` provides
     syntax highlighting queries for nvim-treesitter and Helix via tree-sitter.
     Captures include `@keyword.import` for inherit/import, `@function.method`,

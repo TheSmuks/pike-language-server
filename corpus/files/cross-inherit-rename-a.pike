@@ -8,19 +8,19 @@
 constant TYPE = "combustion";
 
 class Engine {
-    protected int horsepower;
+  protected int horsepower;
 
-    void create(int hp) {
-        horsepower = hp;
-    }
+  void create(int hp) {
+    horsepower = hp;
+  }
 
-    string describe() {
-        return sprintf("Engine(%d hp)", horsepower);
-    }
+  string describe() {
+    return sprintf("Engine(%d hp)", horsepower);
+  }
 }
 
 float efficiency(float load) {
-    return load * 0.85;
+  return load * 0.85;
 }
 
 int main() { return 0; }
