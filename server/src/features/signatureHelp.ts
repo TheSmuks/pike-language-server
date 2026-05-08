@@ -439,9 +439,11 @@ function countCommasInNode(node: Node, line: number, character: number): number 
  *
  * Exported for direct unit testing.
  */
+
+
 export function findEnclosingCallExport(tree: Tree, line: number, character: number): Node | null {
   const node = tree.rootNode.descendantForPosition({ row: line, column: character });
   if (!node) return null;
   return findEnclosingCall(node, line, character);
+
 }
->>>>>>> 749628b (fix: health-check tests and includeDeclaration support)
