@@ -21,7 +21,7 @@ void test_array_filter() {
 // Array.sort (in-place, returns sorted array)
 void test_array_sort() {
   array(int) nums = ({ 5, 3, 1, 4, 2 });
-  array(int) sorted = sort(nums);              // Pike built-in sort
+  array(int) sorted = sort(nums); // Pike built-in sort
   array(string) words = ({ "banana", "apple", "cherry" });
   array(string) sorted_words = sort(words);
 }
@@ -31,7 +31,7 @@ void test_array_set_ops() {
   array(int) a = ({ 1, 2, 3, 4 });
   array(int) b = ({ 3, 4, 5, 6 });
   array(int) common = Array.common_elements(a, b); // ({ 3, 4 })
-  array(int) diff = a - b;                        // ({ 1, 2 })
+  array(int) diff = a - b; // ({ 1, 2 })
 }
 
 // Array.transpose
@@ -42,13 +42,13 @@ void test_array_transpose() {
 
 // Array.for_each and enumeration
 void test_array_enumerate() {
-  array(int) indices = indices(10);              // ({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 })
+  array(int) indices = indices(10); // ({ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 })
   array(string) values = values(([ "a": 1, "b": 2 ])); // ({ 1, 2 })
 }
 
 // Array.sum and custom aggregation
 void test_array_aggregate() {
   array(int) nums = ({ 1, 2, 3, 4, 5 });
-  int total = Array.sum(nums);                    // 15
+  int total = Array.sum(nums); // 15
   array(int) prefix = Array.reduce(nums, lambda(int a, int b) { return a + b; });
 }

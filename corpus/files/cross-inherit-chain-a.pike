@@ -6,15 +6,15 @@
 #pragma strict_types
 
 class Base {
-    protected string label;
+  protected string label;
 
-    void create(string _label) {
-        label = _label;
-    }
+  void create(string _label) {
+    label = _label;
+  }
 
-    string identify() {
-        return "Base:" + label;
-    }
+  string identify() {
+    return "Base:" + label;
+  }
 }
 
 int main() { return 0; }

@@ -25,61 +25,61 @@
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Missing ')'.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Unexpected end of file.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Missing ';'.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Unexpected end of file.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Missing '}'.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Opening '{' was here.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Unexpected end of file.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Missing '}'.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Opening '{' was here.",
       "severity": "error"
     },
     {
       "category": "unknown",
-      "line": 24,
+      "line": 25,
       "message": "Unexpected end of file.",
       "severity": "error"
     }

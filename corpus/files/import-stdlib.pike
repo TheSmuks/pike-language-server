@@ -7,15 +7,15 @@
 import Stdio;
 
 int main() {
-    // Stdio.File — basic file handle
-    object f = File();
+  // Stdio.File — basic file handle
+  object f = File();
 
-    // Stdio.write_file — returns int (bytes written)
-    int bytes = write_file("/dev/null", "test");
+  // Stdio.write_file — returns int (bytes written)
+  int bytes = write_file("/dev/null", "test");
 
-    // Using Stdio.mkdirhier via import
-    // (not executing, just ensuring symbol resolves)
-    mkdirhier("/tmp/corpus-test/");
+  // Using Stdio.mkdirhier via import
+  // (not executing, just ensuring symbol resolves)
+  mkdirhier("/tmp/corpus-test/");
 
-    return 0;
+  return 0;
 }
