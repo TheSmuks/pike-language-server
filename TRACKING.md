@@ -490,12 +490,16 @@ Five verification items resolved:
 
 ## Open Issues
 
-| Issue | Impact | Filed | Status |
-|-------|--------|-------|--------|
-| tree-sitter-pike#2: Missing field names on `for_statement` children | Must use positional child scanning instead of field-based API | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/2) | Open |
-| tree-sitter-pike#3: `catch` expression lost in assignment context | Cannot create scopes for catch-block variables in `mixed err = catch { }` pattern | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/3) | Partially resolved (mitigated via fallback) |
-| tree-sitter-pike#4: No scope-introducing nodes for while/switch/plain blocks | Variables in while/switch/do-while leak to enclosing scope | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/4) | Partially resolved (documented, workarounds in place) |
-## Deferred Items
+
+ic|| Issue | Impact | Filed | Status |
+bm||-------|--------|-------|--------|
+vx|| tree-sitter-pike#2: Missing field names on `for_statement` children | Must use positional child scanning instead of field-based API | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/2) | Open |
+or|| tree-sitter-pike#3: `catch` expression lost in assignment context | Cannot create scopes for catch-block variables in `mixed err = catch { }` pattern | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/3) | Partially resolved (mitigated via fallback) |
+if|| tree-sitter-pike#4: No scope-introducing nodes for while/switch/plain blocks | Variables in while/switch/do-while leak to enclosing scope | [link](https://github.com/TheSmuks/tree-sitter-pike/issues/4) | Partially resolved (documented, workarounds in place) |
+tc|| TextMate grammar tokenization coverage | No automated test harness for grammar tokenization; coverage unknown | — | Open (tracked via `harness/__tests__/tmLanguage.test.ts` + manual verification) |
+cf|| Cross-file inherited member completion | `Dog d; d->` returns only same-file members when `Dog` inherits from a cross-file class | — | Open (test in `tests/lsp/completion.test.ts`, documented in `docs/known-limitations.md`) |
+
+wr|## Deferred Items
 
 - [x] **Phase 4 prerequisite: Replace filename-based cross-file invocation with manifest-driven per-file metadata.** Done in Phase 4. `corpus/corpus.json` replaces `CROSS_FILE_FLAGS`. Runner reads per-file compilation flags from manifest.
 - [x] **Phase 5 prerequisite: Build `harness/resolve.pike` for cross-file resolution ground truth.** Done. `resolve.pike` introspects cross-file resolution via `master()->resolv()` and `cast_to_program()`. 7 resolution snapshots. 5 oracle tests comparing LSP against Pike.
