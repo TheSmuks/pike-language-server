@@ -447,8 +447,11 @@ describe("canary: class-create.pike produces deep symbol tree", () => {
     for (const cls of classes) {
       if (!cls.children) continue;
       for (const child of cls.children) {
-        // Children of a class should be functions (methods), variables, constants, or inherits (Module)
+
+        // Children of a class should be methods, fields, constants, or inherits (Module)
         const validKinds: number[] = [
+          SymbolKind.Method,
+          SymbolKind.Field,
           SymbolKind.Function,
           SymbolKind.Variable,
           SymbolKind.Constant,
