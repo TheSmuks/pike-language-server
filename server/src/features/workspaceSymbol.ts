@@ -42,12 +42,14 @@ const DECL_KIND_TO_SYMBOL_KIND: Record<DeclKind, SymbolKind> = {
  *
  * Performs case-insensitive prefix matching on declaration names.
  * Only searches files that have been indexed (opened or changed).
+ * An empty string query returns all indexed symbols.
  */
 export function searchWorkspaceSymbols(
   query: string,
   index: WorkspaceIndex,
 ): SymbolInformation[] {
-  if (!query) return [];
+  // Only reject null/undefined, not empty string — empty string matches all.
+  if (query === undefined || query === null) return [];
 
   const lowerQuery = query.toLowerCase();
   const results: SymbolInformation[] = [];

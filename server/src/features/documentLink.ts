@@ -172,6 +172,13 @@ function collectInheritLink(
         range,
         target: cached.uri,
       });
+    } else {
+      // Best-effort: emit a link even when the module cannot be resolved.
+      // VS Code handles unresolvable URIs gracefully and allows navigation attempts.
+      links.push({
+        range,
+        target: `pike://modules/${pathText.replace(/\./g, "/")}`,
+      });
     }
   }
 }
