@@ -90,9 +90,50 @@ name = "pike"
 language-servers = ["pike-lsp"]
 ```
 
-Note: Helix support is not yet verified. If you test it, please file an issue or PR with results.
 
-## Generic LSP client configuration
+ds|Note: Helix support is not yet verified. If you test it, please file an issue or PR with results.
+
+vk|### Helix syntax highlighting with tree-sitter
+
+gf|Helix uses tree-sitter queries for syntax highlighting. Copy `queries/highlights.scm`
+th|from this repository to your Helix config directory:
+
+    cp queries/highlights.scm ~/.config/helix/runtime/queries/pike/highlights.scm
+
+qa|Create the directory if it does not exist:
+
+    mkdir -p ~/.config/helix/runtime/queries/pike/
+
+mx|Helix will automatically use the queries for Pike files.
+
+vk|### Neovim with nvim-treesitter
+
+gf|nvim-treesitter uses tree-sitter queries for syntax highlighting. Copy
+`queries/highlights.scm` from this repository to your nvim-treesitter queries
+directory:
+
+    mkdir -p ~/.local/share/nvim/site/queries/pike/
+    cp queries/highlights.scm ~/.local/share/nvim/site/queries/pike/
+
+    " In your init.lua or treesitter config:
+    require('nvim-treesitter.configs').setup {
+      ensure_installed = { 'pike' }, -- requires tree-sitter-pike parser
+      highlight = {
+        enable = true,
+        custom_captures = {
+          -- Map @keyword.import to @include for consistent styling
+          ['keyword.import'] = 'include',
+          ['function.method'] = 'function',
+          ['variable.parameter'] = 'variable',
+        },
+      },
+    }
+
+th|The `custom_captures` map the audit-required captures to standard nvim-treesitter
+highlight groups. The tree-sitter-pike parser must be installed separately
+(via `:TSInstall pike` or your plugin manager).
+
+vh|## Generic LSP client configuration
 
 The server requires:
 - **Transport:** stdio

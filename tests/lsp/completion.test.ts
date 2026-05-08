@@ -1284,3 +1284,18 @@ describe("Private member filtering", () => {
 });
 });
 });
+
+// TODO: Cross-file inherited member completion
+// This test is skipped because wireInheritance() does not resolve cross-file inheritance.
+// When the limitation is resolved, remove .skip and wire the test.
+// See docs/known-limitations.md: "Cross-file inherited member completion"
+describe.skip("Cross-file inherited member completion (cross-file)", () => {
+  test("arrow completion on cross-file inherited class returns inherited members", async () => {
+    // Setup: Dog inherits from Animal (cross-file)
+    // Dog.pike: class Dog { inherit Animal; }
+    // User.pike: Dog d; d->
+    // Expected: completion should include Animal's members (bark, name)
+    // Actual: completion returns only Dog's own members (fetch)
+    expect(true).toBe(true); // Placeholder — actual implementation needs cross-file setup
+  });
+});

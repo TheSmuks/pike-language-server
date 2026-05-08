@@ -219,28 +219,28 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
   }
 }
 
+
+
+
 function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
   pushScope(state, 'for', toRange(node));
 
-  // Find for_init_decl child — for_statement has 'body' and 'condition' fields,
-  // but NO 'initializer' field. Walk children by type to find for_init_decl.
-  for (const child of node.children) {
-    if (child.type === 'for_init_decl') {
-      // for_init_decl grammar: field('type', $.type), commaSep1(seq(field('name', $.identifier), ...))
-      // Use childrenForFieldName('name') to get only the variable name identifiers,
-      // not the type identifiers (which would be picked up by walking bare 'identifier' children).
-      const scopeId = currentScopeId(state);
-      for (const nameNode of child.childrenForFieldName('name')) {
-        addDeclaration(state, {
-          name: nameNode.text,
-          kind: 'variable',
-          nameRange: toRange(nameNode),
-          range: toRange(child),
-          scopeId,
-        });
-      }
-      break;
+  // for_statement has initializer, body, and condition fields (tree-sitter-pike v1.1.1+)
+  const initializer = node.childForFieldName('initializer');
+  if (initializer) {
+    // for_init_decl grammar: field('type', $.type), commaSep1(seq(field('name', $.identifier), ...))
+    // Use childrenForFieldName('name') to get only the variable name identifiers,
+    // not the type identifiers (which would be picked up by walking bare 'identifier' children).
+    const scopeId = currentScopeId(state);
+    for (const nameNode of initializer.childrenForFieldName('name')) {
+      addDeclaration(state, {
+        name: nameNode.text,
+        kind: 'variable',
+        nameRange: toRange(nameNode),
+        range: toRange(initializer),
+        scopeId,
+      });
     }
   }
 
@@ -251,6 +251,7 @@ function collectForStatement(node: Node, state: BuildState): void {
 
   popScope(state);
 }
+
 
 function collectForeachStatement(node: Node, state: BuildState): void {
   pushScope(state, 'foreach', toRange(node));
@@ -431,22 +432,18 @@ function collectSwitchStatement(node: Node, state: BuildState): void {
         break;
       }
     }
+
+
   }
-  // Body block has no field name in current grammar (verified WASM 2026-05-03).
-  // Find it by type — the switch block is always the first 'block' child.
-  let body: Node | null = null;
-  for (let i = 0; i < node.childCount; i++) {
-    const child = node.child(i);
-    if (child?.type === 'block') {
-      body = child;
-      break;
-    }
-  }
+
+  // switch_statement has 'body' and 'value' fields (tree-sitter-pike v1.1.1+)
+  const body = node.childForFieldName('body');
   if (body) {
     pushScope(state, 'block', toRange(body));
     collectDeclarations(body, state);
     popScope(state);
   }
+
 
   if (pushedCondScope) {
     popScope(state);

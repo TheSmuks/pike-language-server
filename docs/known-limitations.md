@@ -99,10 +99,14 @@ directly. `collectSwitchStatement()` uses a positional scan for the block.
 
 *None currently.*
 
-### High (Major features impaired)
 
+pb|### High (Major features impaired)
 
-### Medium (Known workarounds, tracked for resolution)
+vo|| Limitation | Impact | Workaround |
+la||------------|-------|------------|
+he|| Cross-file inherited member completion | `Dog d; d->` returns only same-file members when `Dog` inherits from a cross-file class | None — wireInheritance() does not resolve cross-file inheritance |
+
+lb|### Medium (Known workarounds, tracked for resolution)
 
 | Limitation | Severity | Workaround |
 |------------|----------|------------|

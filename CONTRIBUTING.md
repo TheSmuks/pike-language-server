@@ -88,3 +88,30 @@ Update [CHANGELOG.md](./CHANGELOG.md) under the `[Unreleased]` section for every
 - Ensure CI passes
 - Reference related issues in the PR description
 - Follow the PR template when opening a PR
+
+## AI Agent Scaffolding
+
+This project uses AI agent skills stored in `.omp/skills/`. Each skill is a self-contained Markdown file documenting a specific task domain.
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `pike-introspection/` | Pike runtime introspection, parser, and stdlib APIs |
+| `pike-language-reference/` | Pike language syntax, semantics, and type system |
+| `pike-stdlib-api/` | Pike 8.0.1116 standard library API surface |
+| `pike-debugging/` | Debugging Pike code, introspecting the runtime |
+| `cut-release/` | Cutting a clean release (version bump, changelog, VSIX) |
+| `merge-to-main/` | Automating the PR lifecycle (create, monitor, merge) |
+| `setup/` | Interactive project setup workflow |
+
+### Using Skills
+
+AI agents automatically discover skills via the `.omp/skills/` directory. When an agent asks about Pike APIs, syntax, or debugging, it should consult the relevant skill first.
+
+### Contributing Skills
+
+New skills should be added to `.omp/skills/<name>/SKILL.md`. Each skill must document:
+- What problem it solves
+- Key APIs and patterns
+- Common pitfalls and edge cases
