@@ -204,6 +204,33 @@ export function registerNavigationHandlers(
   );
 
   // -----------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
+  // textDocument/diagnostic (pull diagnostics — diagnosticProvider capability)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest(
+    "textDocument/diagnostic",
+    async (params: { textDocument: { uri: string } }, token: CancellationToken) => {
+      if (token.isCancellationRequested) return { kind: "full", items: [] };
+      const doc = ctx.documents.get(params.textDocument.uri);
+      if (!doc) return { kind: "full", items: [] };
+
+      try {
+        const tree = parse(doc.getText(), params.textDocument.uri);
+        const diagnostics = getParseDiagnostics(tree);
+        return { kind: "full", items: diagnostics };
+      } catch (err) {
+        connection.console.error(
+          `textDocument/diagnostic failed: ${(err as Error).message}`,
+        );
+        return { kind: "full", items: [] };
+      }
+    },
+  );
+
+
+  // -----------------------------------------------------------------------
   // textDocument/documentHighlight (US-015)
   // -----------------------------------------------------------------------
 
@@ -416,6 +443,8 @@ export function registerNavigationHandlers(
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return [];
 
+    const includeDeclaration = params.context?.includeDeclaration === true;
+
     // Try cross-file references
     const crossFileRefs = ctx.index.getCrossFileReferences(
       params.textDocument.uri,
@@ -424,7 +453,7 @@ export function registerNavigationHandlers(
     );
 
     if (crossFileRefs.length > 0) {
-      return crossFileRefs.map(({ uri, ref }) => ({
+      let results = crossFileRefs.map(({ uri, ref }) => ({
         uri,
         range: {
           start: { line: ref.loc.line, character: ref.loc.character },
@@ -434,6 +463,38 @@ export function registerNavigationHandlers(
           },
         },
       }));
+
+      if (includeDeclaration) {
+        const decl = getDefinitionAt(
+          table,
+          params.position.line,
+          params.position.character,
+        );
+        if (decl) {
+          const declLoc = {
+            uri: table.uri,
+            range: {
+              start: {
+                line: decl.nameRange.start.line,
+                character: decl.nameRange.start.character,
+              },
+              end: {
+                line: decl.nameRange.end.line,
+                character: decl.nameRange.end.character,
+              },
+            },
+          };
+          // Avoid duplicates when cursor is already on a reference
+          const isDuplicate = results.some(
+            r =>
+              r.range.start.line === declLoc.range.start.line &&
+              r.range.start.character === declLoc.range.start.character,
+          );
+          if (!isDuplicate) results.unshift(declLoc);
+        }
+      }
+
+      return results;
     }
 
     // Fallback to same-file references
@@ -443,7 +504,7 @@ export function registerNavigationHandlers(
       params.position.character,
     );
 
-    return refs.map((ref) => ({
+    let results = refs.map(ref => ({
       uri: table.uri,
       range: {
         start: { line: ref.loc.line, character: ref.loc.character },
@@ -453,6 +514,37 @@ export function registerNavigationHandlers(
         },
       },
     }));
+
+    if (includeDeclaration) {
+      const decl = getDefinitionAt(
+        table,
+        params.position.line,
+        params.position.character,
+      );
+      if (decl) {
+        const declLoc = {
+          uri: table.uri,
+          range: {
+            start: {
+              line: decl.nameRange.start.line,
+              character: decl.nameRange.start.character,
+            },
+            end: {
+              line: decl.nameRange.end.line,
+              character: decl.nameRange.end.character,
+            },
+          },
+        };
+        const isDuplicate = results.some(
+          r =>
+            r.range.start.line === declLoc.range.start.line &&
+            r.range.start.character === declLoc.range.start.character,
+        );
+        if (!isDuplicate) results.unshift(declLoc);
+      }
+    }
+
+    return results;
   });
 
   // -----------------------------------------------------------------------

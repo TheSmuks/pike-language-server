@@ -18,6 +18,7 @@ import { MarkupKind } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parse } from "../parser";
+import type { Tree, Node } from "web-tree-sitter";
 import { getDefinitionAt, type SymbolTable, type Declaration } from "./symbolTable";
 import {
   resolveAccessDeclaration,
@@ -221,6 +222,28 @@ function declForHover(
     character: decl.nameRange.start.character,
   };
 }
+/**
+ * Find the identifier token at a given position in the source.
+ */
+function identifierAtPosition(
+  tree: Tree,
+  line: number,
+  character: number,
+): string | null {
+  // Get the deepest node at the position
+  let node: Node | null = tree.rootNode.descendantForPosition({
+    row: line,
+    column: character,
+  });
+  // Walk up to find the identifier node at this position
+  while (node) {
+    if (node.type === "identifier" || node.type === "predef_identifier") {
+      return node.text;
+    }
+    node = node.parent;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Registration
@@ -293,6 +316,45 @@ export function registerHoverHandler(
       );
       if (accessDecl) {
         return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
+      }
+
+      // Fallback: check if the identifier at cursor is a predef builtin or stdlib symbol.
+      // This handles bare predef calls (e.g. write("hi")) where there is no local
+      // declaration or access path to resolve.
+      const identName = identifierAtPosition(
+        hoverTree,
+        params.position.line,
+        params.position.character,
+      );
+      if (identName) {
+        const line = params.position.line;
+        const char = params.position.character;
+
+        // Check predef builtins first
+        const builtinSig = ctx.predefBuiltins[identName];
+        if (builtinSig) {
+          return formatHover({
+            name: identName,
+            signature: renderPredefSignature(identName, builtinSig),
+            documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+            line,
+            character: char,
+            isAutodoc: true,
+          });
+        }
+
+        // Check stdlib index
+        const stdlibEntry = ctx.stdlibIndex[`predef.${identName}`];
+        if (stdlibEntry) {
+          return formatHover({
+            name: identName,
+            signature: stdlibEntry.signature,
+            documentation: stdlibEntry.markdown,
+            line,
+            character: char,
+            isAutodoc: true,
+          });
+        }
       }
 
       return null;
