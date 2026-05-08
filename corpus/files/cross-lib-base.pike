@@ -6,29 +6,29 @@
 #pragma strict_types
 
 class Formatter {
-    protected string prefix;
-    protected string suffix;
+  protected string prefix;
+  protected string suffix;
 
-    void create(string _prefix, string _suffix) {
-        prefix = _prefix;
-        suffix = _suffix;
-    }
+  void create(string _prefix, string _suffix) {
+    prefix = _prefix;
+    suffix = _suffix;
+  }
 
-    string format(string data) {
-        return prefix + data + suffix;
-    }
+  string format(string data) {
+    return prefix + data + suffix;
+  }
 
-    string get_prefix() { return prefix; }
-    string get_suffix() { return suffix; }
+  string get_prefix() { return prefix; }
+  string get_suffix() { return suffix; }
 }
 
 // Utility functions that the consumer will call
 int parse_int(string s) {
-    return (int)s;
+  return (int)s;
 }
 
 string reverse_string(string s) {
-    return reverse(s);
+  return reverse(s);
 }
 
 constant VERSION = "1.0.0";

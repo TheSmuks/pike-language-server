@@ -17,13 +17,13 @@
 #undef IS_DEBUG
 
 int main() {
-    write("Buffer size: %d\n", MAX_BUFFER);
-    write("Version: %s\n", VERSION);
+  write("Buffer size: %d\n", MAX_BUFFER);
+  write("Version: %s\n", VERSION);
 #ifdef IS_DEBUG
-    write("Debug mode\n");
+  write("Debug mode\n");
 #else
-    write("Release mode\n");
+  write("Release mode\n");
 #endif
-    LOG("Application started");
-    return 0;
+  LOG("Application started");
+  return 0;
 }

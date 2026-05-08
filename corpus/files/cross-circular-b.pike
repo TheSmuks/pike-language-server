@@ -6,8 +6,8 @@
 #pragma strict_types
 
 int func_b(string s) {
-    if (sizeof(s) == 0) return 0;
-    return sizeof(s);
+  if (sizeof(s) == 0) return 0;
+  return sizeof(s);
 }
 
 string label_b() { return "I am B"; }

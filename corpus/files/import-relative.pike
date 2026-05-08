@@ -8,13 +8,13 @@
 // For example, in a subdirectory, ".module" refers to module.pike in same dir
 
 // Standard absolute imports (for reference)
-import Stdio;  // standard stdlib import
+import Stdio; // standard stdlib import
 
 // Relative imports are typically used in Pike like:
-// import .;          // import current directory's module.pike
-// import .sibling;   // import sibling.pike in current directory
-// import ..parent;   // import parent module from parent directory
-// import .foo.bar;   // import bar from foo/ directory
+// import .; // import current directory's module.pike
+// import .sibling; // import sibling.pike in current directory
+// import ..parent; // import parent module from parent directory
+// import .foo.bar; // import bar from foo/ directory
 
 // Example: importing a relative module if it exists in the corpus
 // This would work in a proper module path setup:
@@ -27,5 +27,5 @@ void test_stdio_usage() {
 }
 
 // Module paths can be relative
-// import .;  // import local module
+// import .; // import local module
 // import ..; // import parent module

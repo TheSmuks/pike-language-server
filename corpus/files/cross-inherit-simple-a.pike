@@ -8,25 +8,25 @@
 constant SPECIES = "Animal";
 
 class Animal {
-    protected string name;
-    protected string sound;
+  protected string name;
+  protected string sound;
 
-    void create(string _name, string _sound) {
-        name = _name;
-        sound = _sound;
-    }
+  void create(string _name, string _sound) {
+    name = _name;
+    sound = _sound;
+  }
 
-    string speak() {
-        return name + " says " + sound;
-    }
+  string speak() {
+    return name + " says " + sound;
+  }
 
-    string get_name() {
-        return name;
-    }
+  string get_name() {
+    return name;
+  }
 }
 
 string describe(Animal a) {
-    return SPECIES + ": " + a->get_name();
+  return SPECIES + ": " + a->get_name();
 }
 
 int main() { return 0; }

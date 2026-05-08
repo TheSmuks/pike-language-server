@@ -2,8 +2,8 @@
 // Exercises: Compilation without #pragma strict_types
 // Priority: P0
 // Expected: Compiles cleanly without strict mode.
-//           Same code would produce type errors under strict_types.
-//           This file tests that the harness captures non-strict diagnostics correctly.
+// Same code would produce type errors under strict_types.
+// This file tests that the harness captures non-strict diagnostics correctly.
 
 // No #pragma strict_types — this file compiles in Pike's default lenient mode
 

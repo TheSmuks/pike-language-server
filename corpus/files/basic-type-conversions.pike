@@ -7,10 +7,10 @@
 // Explicit casts with (type) syntax
 int test_explicit_casts() {
   float f = 3.14;
-  int i = (int)f;        // float -> int: truncates to 3
-  string s = (string)i;  // int -> string
-  float f2 = (float)s;   // string -> float
-  int i2 = (int)f2;      // float -> int: truncates
+  int i = (int)f; // float -> int: truncates to 3
+  string s = (string)i; // int -> string
+  float f2 = (float)s; // string -> float
+  int i2 = (int)f2; // float -> int: truncates
   return i2;
 }
 
@@ -22,7 +22,7 @@ int test_explicit_casts() {
 float test_arithmetic() {
   int a = 10;
   float b = 2.5;
-  mixed result = a + b;  // runtime: int + float -> float
+  mixed result = a + b; // runtime: int + float -> float
   return result;
 }
 
@@ -30,9 +30,9 @@ float test_arithmetic() {
 string test_string_conversions() {
   int i = 42;
   float f = 3.14;
-  string from_int = (string)i;    // "42"
-  string from_float = (string)f;  // "3.14"
-  int parsed = (int)from_int;     // back to int
+  string from_int = (string)i; // "42"
+  string from_float = (string)f; // "3.14"
+  int parsed = (int)from_int; // back to int
   return from_float;
 }
 
@@ -49,4 +49,4 @@ array(string) test_array_string() {
 
 // Constant expressions
 constant PI = 3.14159;
-constant INT_MAX = (int)"9223372036854775807";  // max int from string
+constant INT_MAX = (int)"9223372036854775807"; // max int from string

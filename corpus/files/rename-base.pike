@@ -6,19 +6,19 @@
 #pragma strict_types
 
 class BaseShape {
-    protected string color;
+  protected string color;
 
-    void create(string _color) {
-        color = _color;
-    }
+  void create(string _color) {
+    color = _color;
+  }
 
-    string describe() {
-        return "Shape(" + color + ")";
-    }
+  string describe() {
+    return "Shape(" + color + ")";
+  }
 
-    int area() {
-        return 0;
-    }
+  int area() {
+    return 0;
+  }
 }
 
 constant DEFAULT_COLOR = "black";

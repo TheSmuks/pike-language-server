@@ -13,14 +13,14 @@ class DocumentedClass {
 
   //! Create a new DocumentedClass with the given value.
   //! @param v
-  //!   The initial value.
+  //! The initial value.
   void create(int v) {
     value = v;
   }
 
   //! Get the current value.
   //! @returns
-  //!   The stored integer value.
+  //! The stored integer value.
   int get_value() {
     return value;
   }
@@ -28,9 +28,9 @@ class DocumentedClass {
 
 //! A documented standalone function.
 //! @param x
-//!   The input value.
+//! The input value.
 //! @returns
-//!   The doubled input.
+//! The doubled input.
 int documented_function(int x) {
   return x * 2;
 }
