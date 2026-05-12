@@ -9,6 +9,7 @@
 import {
   type Connection,
   type DocumentFormattingParams,
+  type DocumentOnTypeFormattingParams,
   type TextEdit,
   type FormattingOptions,
   type CancellationToken,
@@ -114,6 +115,76 @@ export function registerFormattingHandler(
         connection.console.error(
           `format failed: ${(err as Error).message}`,
         );
+        return null;
+      }
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // On-type formatting: fix indentation when user types '}' or ';'.
+  //
+  // Strategy: format only the affected line range rather than the full
+  // document. We parse the document, find the correct indentation for the
+  // line the trigger character is on (and for '}', also the line above if
+  // it's a closing block), and return minimal edits.
+  // -----------------------------------------------------------------------
+  connection.onDocumentOnTypeFormatting(
+    async (
+      params: DocumentOnTypeFormattingParams,
+      token: CancellationToken,
+    ): Promise<TextEdit[] | null> => {
+      if (token.isCancellationRequested) return null;
+      const doc = ctx.documents.get(params.textDocument.uri);
+      if (!doc) return null;
+
+      const source = doc.getText();
+      const options: FormattingOptions = params.options;
+      const triggerLine = params.position.line;
+
+      try {
+        if (!parserInstance) return null;
+
+        // Format the full document to get the correct indentation.
+        // For on-type formatting we could optimize to only parse/indent
+        // the relevant block, but the parser is fast (<1ms for typical
+        // files) and this guarantees correctness.
+        const formatted = pikeFormat(source, {
+          tabSize: options.tabSize ?? 2,
+          useTabs: options.insertSpaces === false,
+          insertFinalNewline: true,
+          operatorSpacing: false,
+        }, parserInstance);
+
+        // Only return edits for lines near the trigger character.
+        // '}' can affect the closing line and the line above (if the
+        // block was empty). ';' affects only its own line.
+        const rangeStart = params.ch === "}"
+          ? Math.max(0, triggerLine - 1)
+          : triggerLine;
+        const rangeEnd = triggerLine + 1;
+
+        const origLines = source.split("\n");
+        const fmtLines = formatted.split("\n");
+        const edits: TextEdit[] = [];
+
+        for (let i = rangeStart; i < rangeEnd; i++) {
+          if (i >= origLines.length || i >= fmtLines.length) break;
+          const origIndent = origLines[i].match(/^\s*/)?.[0] ?? "";
+          const fmtIndent = fmtLines[i].match(/^\s*/)?.[0] ?? "";
+          if (origIndent !== fmtIndent) {
+            edits.push({
+              range: {
+                start: { line: i, character: 0 },
+                end: { line: i, character: origIndent.length },
+              },
+              newText: fmtIndent,
+            });
+          }
+        }
+
+        return edits.length > 0 ? edits : null;
+      } catch (err) {
+        // On-type formatting should be silent — never bother the user.
         return null;
       }
     },

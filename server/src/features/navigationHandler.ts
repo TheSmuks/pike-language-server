@@ -24,6 +24,7 @@ import {
   type SymbolTable,
 } from "./symbolTable";
 import { getCompletions, type CompletionContext } from "./completion";
+import { findIdentifierPrefixRange } from "./completionTrigger";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { findImplementations } from "./implementation";
 import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
@@ -32,6 +33,7 @@ import { produceSignatureHelp } from "./signatureHelp";
 import { produceCodeActions } from "./codeAction";
 import { searchWorkspaceSymbols } from "./workspaceSymbol";
 import { registerDocumentLinkHandler } from "./documentLink";
+import { getSelectionRange } from "./selectionRange";
 import {
   resolveAccessDefinition,
   type ResolutionContext,
@@ -182,6 +184,29 @@ export function registerNavigationHandlers(
       return [];
     }
   });
+
+  // -----------------------------------------------------------------------
+  // textDocument/selectionRange — shrink/expand selection
+  // -----------------------------------------------------------------------
+
+  connection.onRequest(
+    "textDocument/selectionRange",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return null;
+      const doc = ctx.documents.get(params.textDocument.uri);
+      if (!doc) return null;
+
+      // selectionRange supports multiple positions; handle each
+      const results = [];
+      for (const pos of params.positions) {
+        if (token.isCancellationRequested) return results;
+        const tree = parse(doc.getText(), doc.uri);
+        const range = getSelectionRange(tree, pos.line, pos.character);
+        results.push(range);
+      }
+      return results;
+    },
+  );
 
   // -----------------------------------------------------------------------
   // textDocument/semanticTokens/full
@@ -653,14 +678,43 @@ export function registerNavigationHandlers(
       return { isIncomplete: false, items: [] };
 
     try {
-      const tree = parse(doc.getText(), params.textDocument.uri);
+      const source = doc.getText();
+      const tree = parse(source, params.textDocument.uri);
       if (token.isCancellationRequested)
         return { isIncomplete: false, items: [] };
-      return await getCompletions(table, tree, params.position.line, params.position.character, {
+
+      const result = await getCompletions(table, tree, params.position.line, params.position.character, {
         ...completionCtx,
         uri: params.textDocument.uri,
-        typeInferrer: makeTypeInferrer(doc.getText()),
+        typeInferrer: makeTypeInferrer(source),
       });
+
+      // Add textEdit to each item so the client replaces the identifier
+      // prefix being typed instead of inserting at the cursor position.
+      // This prevents doubled text like "foo.bbar" when completing "bar"
+      // after typing "foo.b".
+      const prefixRange = findIdentifierPrefixRange(
+        tree,
+        params.position.line,
+        params.position.character,
+      );
+      if (prefixRange) {
+        for (const item of result.items) {
+          if (!item.textEdit) {
+            // Use insertText (which may be a snippet) if available, else label.
+            const newText = item.insertText ?? item.label;
+            item.textEdit = {
+              range: prefixRange,
+              newText,
+            };
+            // insertText is redundant when textEdit is present; clear it
+            // unless it's a snippet (in which case the textEdit carries it).
+            delete item.insertText;
+          }
+        }
+      }
+
+      return result;
     } catch (err) {
       connection.console.error(
         `completion failed: ${(err as Error).message}`,

@@ -29,6 +29,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     foldingRange, signatureHelp, codeAction, workspace/symbol, and formatting.
     All handlers now bail early when a newer request supersedes them.
 
+  - **Selection range**: Implemented `textDocument/selectionRange` for
+    shrink/expand selection. Walks the tree-sitter AST from cursor position
+    upward, collecting ranges for meaningful node types (declarations, blocks,
+    expressions). Decision 0025.
+
+  - **On-type formatting**: Added `documentOnTypeFormatting` provider triggered
+    by `}` and `;`. Reuses the existing pike-fmt formatter but returns only
+    the edits near the trigger line for responsiveness. Decision 0025.
+
+  - **Completion textEdit**: All completion items now include a `textEdit`
+    that replaces the identifier prefix being typed. Fixes the "foo.bbar"
+    doubling bug when completing after a dot. Decision 0025.
+
+  - **Completion snippets**: Function and method completions now include
+    LSP snippet tab stops for parameters (e.g., `write(${1:string})`).
+    Gracefully degrades to plain insertion when type info is unavailable.
+    Decision 0025.
+
 ### Fixed
 
   - **Cross-file inherited member completion tests**: Fixed two structural syntax
