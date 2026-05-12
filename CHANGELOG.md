@@ -57,6 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     method declarations. Uses the workspace index to count references across
     the workspace. Decision 0026.
 
+  - **Code actions**: Added three new code action kinds:
+    `source.fixAll` (apply all quick-fixes at once),
+    `source.organizeImports` (sort and deduplicate import statements),
+    `refactor.extract.variable` (extract selected expression to a local
+    variable with auto-generated name). The codeActionProvider now
+    advertises all supported kinds for VSCode's lightbulb menu.
+
 ### Fixed
 
   - **Cross-file inherited member completion tests**: Fixed two structural syntax
