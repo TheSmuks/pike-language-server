@@ -266,6 +266,8 @@ export function createPikeServer(connection: Connection): PikeServer {
           moreTriggerCharacter: [";"],
         },
         selectionRangeProvider: true,
+        callHierarchyProvider: true,
+        codeLensProvider: { resolveProvider: false },
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },

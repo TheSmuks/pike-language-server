@@ -35,6 +35,12 @@ import { searchWorkspaceSymbols } from "./workspaceSymbol";
 import { registerDocumentLinkHandler } from "./documentLink";
 import { getSelectionRange } from "./selectionRange";
 import {
+  prepareCallHierarchy,
+  getIncomingCalls,
+  getOutgoingCalls,
+} from "./callHierarchy";
+import { produceCodeLenses } from "./codeLens";
+import {
   resolveAccessDefinition,
   type ResolutionContext,
 } from "./accessResolver";
@@ -721,6 +727,67 @@ export function registerNavigationHandlers(
       );
       return { isIncomplete: false, items: [] };
     }
+  });
+
+  // -----------------------------------------------------------------------
+  // Call hierarchy — incoming/outgoing calls (decision 0026)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest(
+    "textDocument/prepareCallHierarchy",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return null;
+      const table = await ctx.getSymbolTable(params.textDocument.uri);
+      if (!table) return null;
+      return prepareCallHierarchy(
+        table,
+        params.textDocument.uri,
+        params.position.line,
+        params.position.character,
+      );
+    },
+  );
+
+  connection.onRequest(
+    "callHierarchy/incomingCalls",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return [];
+      const item = params.item;
+      if (!ctx.index) return [];
+      return getIncomingCalls(item, ctx.index);
+    },
+  );
+
+  connection.onRequest(
+    "callHierarchy/outgoingCalls",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return [];
+      const item = params.item;
+      const uri = item.uri;
+      const table = await ctx.getSymbolTable(uri);
+      if (!table) return [];
+      const doc = ctx.documents.get(uri);
+      if (!doc) return [];
+      const tree = parse(doc.getText(), uri);
+      if (!ctx.index) return [];
+      return getOutgoingCalls(item, tree, table, uri, ctx.index);
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // Code lens — reference counts above declarations (decision 0026)
+  // -----------------------------------------------------------------------
+
+  connection.onCodeLens(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
+    const doc = ctx.documents.get(params.textDocument.uri);
+    if (!doc) return null;
+
+    const table = await ctx.getSymbolTable(params.textDocument.uri);
+    if (!table) return null;
+
+    const tree = parse(doc.getText(), params.textDocument.uri);
+    return produceCodeLenses(table, tree, params.textDocument.uri, ctx.index);
   });
 
   // -----------------------------------------------------------------------

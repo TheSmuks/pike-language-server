@@ -47,6 +47,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Gracefully degrades to plain insertion when type info is unavailable.
     Decision 0025.
 
+  - **Call hierarchy**: Implemented `textDocument/prepareCallHierarchy`,
+    `callHierarchy/incomingCalls`, and `callHierarchy/outgoingCalls`.
+    Incoming calls use the cross-file reference index. Outgoing calls walk
+    the tree-sitter AST to find `call_expression` nodes and resolve callees.
+    Decision 0026.
+
+  - **Code lens**: Added reference count annotations above function and
+    method declarations. Uses the workspace index to count references across
+    the workspace. Decision 0026.
+
 ### Fixed
 
   - **Cross-file inherited member completion tests**: Fixed two structural syntax
