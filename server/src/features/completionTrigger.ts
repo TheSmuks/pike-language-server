@@ -441,6 +441,13 @@ export function declToCompletionItem(decl: Declaration, priority: number): Compl
     label: decl.name,
     kind: DECL_KIND_TO_COMPLETION_KIND[decl.kind] ?? CompletionItemKind.Text,
     sortText: padSortKey(priority) + decl.name,
+    // filterText ensures the client matches against the plain identifier,
+    // even if the label were to change (e.g., adding signature suffix).
+    filterText: decl.name,
+    // Add detail for function/method/variable declarations when available.
+    // Type information helps the user pick the right completion without
+    // needing to resolve or hover.
+    detail: decl.declaredType ?? undefined,
   };
 }
 

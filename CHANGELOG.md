@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+  - **Text document sync**: Switched from Full to Incremental sync
+    (`TextDocumentSyncKind.Incremental`). Client now sends only the changed
+    range per keystroke instead of the entire document, reducing latency on
+    large files. Decision 0023.
+
+  - **PikeWorker priority queue**: Converted the PikeWorker FIFO queue to a
+    priority queue. Interactive requests (hover, completion, navigation) are
+    now serviced before background work (diagnostics), preventing visible
+    latency when the diagnostic manager is busy. Decision 0024.
+
+  - **Completion quality**: Added `filterText` to all completion items so the
+    client fuzzy-matches against the plain identifier regardless of label
+    content. Added `detail` (type annotation) to declaration completions.
+
+  - **Cancellation propagation**: Added `CancellationToken` checks to all LSP
+    request handlers that were missing them: documentSymbol, documentHighlight,
+    foldingRange, signatureHelp, codeAction, workspace/symbol, and formatting.
+    All handlers now bail early when a newer request supersedes them.
+
 ### Fixed
 
   - **Cross-file inherited member completion tests**: Fixed two structural syntax

@@ -165,7 +165,7 @@ CI uses separate workflow files, one concern per file. See [docs/ci.md](./docs/c
 
 ## Agent Behavior
 
-Agents can invoke the `template-guide` skill (`.omp/skills/template-guide/SKILL.md`) to look up conventions, audit compliance, or get upgrade guidance. Agents can also invoke the `merge-to-main` skill (`.omp/skills/merge-to-main/SKILL.md`) to automate the PR lifecycle after completing feature work, and the `cut-release` skill (`.omp/skills/cut-release/SKILL.md`) to cut a new release with proper version bumping and GitHub release creation.
+Agents can invoke the `template-guide` skill (`.omp/skills/template-guide/SKILL.md` or Hermes skill `pike-template-guide`) to look up conventions, audit compliance, or get upgrade guidance. Agents can also invoke the `merge-to-main` skill (`.omp/skills/merge-to-main/SKILL.md` or Hermes skill `pike-merge-to-main`) to automate the PR lifecycle after completing feature work, and the `cut-release` skill (`.omp/skills/cut-release/SKILL.md` or Hermes skill `pike-cut-release`) to cut a new release with proper version bumping and GitHub release creation.
 
 When an AI agent is working in this repository:
 
@@ -189,6 +189,7 @@ When an AI agent is working in this repository:
 6. **Check pike-ai-kb before generating Pike code.** The knowledge base is runtime-verified; agent priors on Pike are unreliable.
 7. **Consult docs/lsp-references.md before designing an LSP architectural pattern.** Other LSPs have solved most hard problems; understand their solutions before inventing your own.
 8. **File findings in dependency projects.** When work surfaces a bug or limitation in tree-sitter-pike or pike-ai-kb, don't work around it silently. File an issue against the dependency. The issue must include: (a) a minimal reproduction, (b) expected vs actual behavior, (c) a link back to the LSP test or finding that surfaced it. Add a TODO in the LSP code or an entry in docs/known-limitations.md referencing the upstream issue URL. When the upstream fix lands, remove the workaround.
+9. **No silently ignored pre-existing defects.** When a pre-existing issue is discovered during work, you MUST either (a) file it as a GitHub issue with context, (b) fix it if within scope of the current task, or (c) document it explicitly in `docs/known-limitations.md` with a reason for deferral. Never pass silently. Triggers include: `test.skip`/`test.skipIf` without documented reason, commented-out tests, workarounds missing upstream issue links, bare `// TODO`/`// FIXME` comments without linked issues. The `pike-no-ignored-defects` skill has detailed examples.
 
 ## Conventions
 

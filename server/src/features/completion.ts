@@ -137,6 +137,9 @@ async function completeUnqualified(
       kind: CompletionItemKind.Function,
       detail: cleanPredefSignature(ctx.predefBuiltins[name]),
       sortText: padSortKey(30) + name,
+      // filterText: plain identifier so VSCode fuzzy-matches correctly
+      // even though detail contains a full signature.
+      filterText: name,
     });
   }
 
@@ -149,6 +152,7 @@ async function completeUnqualified(
       label: name,
       kind,
       sortText: padSortKey(40) + name,
+      filterText: name,
     });
   }
 
@@ -231,6 +235,7 @@ async function completeMemberAccess(
         kind: member.kind,
         detail: member.signature || undefined,
         sortText: padSortKey(10) + member.name,
+        filterText: member.name,
       });
     }
   }

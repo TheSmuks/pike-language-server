@@ -11,6 +11,7 @@ import {
   type DocumentFormattingParams,
   type TextEdit,
   type FormattingOptions,
+  type CancellationToken,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { TextDocuments } from "vscode-languageserver/node";
@@ -85,7 +86,8 @@ export function registerFormattingHandler(
   ctx: FormattingContext,
 ): void {
   connection.onDocumentFormatting(
-    async (params: DocumentFormattingParams): Promise<TextEdit[] | null> => {
+    async (params: DocumentFormattingParams, token: CancellationToken): Promise<TextEdit[] | null> => {
+      if (token.isCancellationRequested) return null;
       const doc = ctx.documents.get(params.textDocument.uri);
       if (!doc) return null;
 
