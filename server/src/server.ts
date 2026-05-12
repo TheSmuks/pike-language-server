@@ -257,7 +257,14 @@ export function createPikeServer(connection: Connection): PikeServer {
         signatureHelpProvider: {
           triggerCharacters: ['(', ','],
         },
-        codeActionProvider: true,
+        codeActionProvider: {
+          codeActionKinds: [
+            "quickfix",
+            "source.fixAll",
+            "source.organizeImports",
+            "refactor.extract.variable",
+          ],
+        },
         workspaceSymbolProvider: true,
         documentLinkProvider: { resolveProvider: false },
         documentFormattingProvider: true,
