@@ -133,7 +133,21 @@ interface QueueItem {
   reject: (error: Error) => void;
   timeout: ReturnType<typeof setTimeout>;
   token?: CancellationToken;
+  /** Priority: lower number = higher priority. Default 0 (highest). */
+  priority: number;
 }
+
+/** Priority constants for PikeWorker requests.
+ *  Lower number = higher priority. Interactive requests (hover, completion)
+ *  should be serviced before background work (diagnostics). */
+export const PikePriority = {
+  /** Interactive: typeof_, autodoc for hover/completion. */
+  interactive: 0,
+  /** Default: general requests. */
+  normal: 1,
+  /** Background: diagnostics, indexing. */
+  background: 2,
+} as const;
 // ---------------------------------------------------------------------------
 // PikeWorker class
 // ---------------------------------------------------------------------------
@@ -213,9 +227,9 @@ export class PikeWorker {
   private static readonly MALFORMED_RESTART_THRESHOLD = 5;
   private readonly config: PikeWorkerConfig;
 
-  // FIFO queue — ensures exactly one write to stdin at a time
+  // Priority queue — ensures exactly one write to stdin at a time.
+  // Items with lower priority number are sent first.
   private readonly queue: QueueItem[] = [];
-  private headIdx = 0;
   private sending = false;
 
   // Idle eviction
@@ -331,7 +345,6 @@ export class PikeWorker {
           item.reject(error);
         }
         this.queue.length = 0;
-        this.headIdx = 0;
         this.sending = false;
         this.proc = null;
       }
@@ -351,7 +364,6 @@ export class PikeWorker {
       this.proc = null;
     }
     this.queue.length = 0;
-    this.headIdx = 0;
     this.sending = false;
   }
 
@@ -387,7 +399,7 @@ export class PikeWorker {
    * the Pike worker's response.
    */
 
-  private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken): Promise<PikeResponse> {
+  private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken, priority: number = PikePriority.normal): Promise<PikeResponse> {
     // Fast path: if Pike is known to be unavailable, reject immediately.
     // This avoids spamming stderr with "nice: pike: No such file" on every request.
     if (this.pikeAvailable === false) {
@@ -444,6 +456,7 @@ export class PikeWorker {
         },
         timeout,
         token,
+        priority,
       };
 
       // Register in pending map so processBuffer can resolve it
@@ -459,19 +472,29 @@ export class PikeWorker {
   }
 
   /**
-   * Drain the FIFO queue.  Sends exactly one item at a time.
+   * Drain the priority queue.  Sends exactly one item at a time.
    * Handles stdin backpressure by waiting for the drain event.
+   * Picks the item with the lowest priority number (highest priority) first.
    */
   private drainQueue(): void {
     if (this.sending || this.queue.length === 0) return;
     if (!this.proc || this.proc.killed) return;
 
-    this.sending = true;
-    const item = this.queue[this.headIdx++];
-    if (this.headIdx >= this.queue.length) {
-      this.queue.length = 0;
-      this.headIdx = 0;
+    // Find the highest-priority item (lowest number).
+    let bestIdx = 0;
+    for (let i = 1; i < this.queue.length; i++) {
+      if (this.queue[i].priority < this.queue[bestIdx].priority) {
+        bestIdx = i;
+      }
     }
+
+    this.sending = true;
+    const item = this.queue[bestIdx];
+    // Remove the item by swapping with last and popping (O(1) instead of splice O(n)).
+    // Order within the same priority level is preserved because we scan left-to-right
+    // and only swap when strictly lower priority number.
+    this.queue[bestIdx] = this.queue[this.queue.length - 1];
+    this.queue.pop();
 
     // Check cancellation before writing to subprocess
     if (item.token?.isCancellationRequested) {
@@ -553,7 +576,7 @@ export class PikeWorker {
         module_paths: options?.modulePaths ?? [],
         include_paths: options?.includePaths ?? [],
         program_paths: options?.programPaths ?? [],
-      }, token);
+      }, token, PikePriority.background);
 
       if (response.error) {
         throw new Error(`Pike diagnose failed: ${response.error.message}`);
@@ -578,7 +601,7 @@ export class PikeWorker {
     const response = await this.enqueue("autodoc", {
       source,
       file: file ?? "<autodoc>",
-    }, token);
+    }, token, PikePriority.interactive);
 
     if (response.error) {
       return { xml: "", error: response.error.message };
@@ -592,7 +615,7 @@ export class PikeWorker {
     const response = await this.enqueue("typeof", {
       source,
       expression,
-    }, token);
+    }, token, PikePriority.interactive);
 
     if (response.error) {
       return { type: "mixed", error: response.error.message };
@@ -605,7 +628,7 @@ export class PikeWorker {
   /** Resolve a symbol to its kind, source location, and inheritance chain. */
   async resolve(symbol: string, token?: CancellationToken): Promise<ResolveResult> {
     try {
-      const response = await this.enqueue("resolve", { symbol }, token);
+      const response = await this.enqueue("resolve", { symbol }, token, PikePriority.interactive);
       if (response.error) {
         return { resolved: false, error: response.error.message };
       }

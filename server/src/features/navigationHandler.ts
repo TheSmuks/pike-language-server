@@ -161,7 +161,8 @@ export function registerNavigationHandlers(
   // documentSymbol
   // -----------------------------------------------------------------------
 
-  connection.onDocumentSymbol(async (params) => {
+  connection.onDocumentSymbol(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return [];
 
@@ -234,9 +235,10 @@ export function registerNavigationHandlers(
   // textDocument/documentHighlight (US-015)
   // -----------------------------------------------------------------------
 
-  connection.onDocumentHighlight(async (params) => {
+  connection.onDocumentHighlight(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const table = await ctx.getSymbolTable(params.textDocument.uri);
-    if (!table) return null;
+    if (!table || token.isCancellationRequested) return null;
 
     const refs = getReferencesTo(
       table,
@@ -304,7 +306,8 @@ export function registerNavigationHandlers(
   // textDocument/foldingRange (US-016)
   // -----------------------------------------------------------------------
 
-  connection.onRequest("textDocument/foldingRange", async (params) => {
+  connection.onRequest("textDocument/foldingRange", async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return [];
 
@@ -318,12 +321,13 @@ export function registerNavigationHandlers(
   // textDocument/signatureHelp (US-017)
   // -----------------------------------------------------------------------
 
-  connection.onRequest("textDocument/signatureHelp", async (params) => {
+  connection.onRequest("textDocument/signatureHelp", async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return null;
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return null;
 
     const table = await ctx.getSymbolTable(params.textDocument.uri);
-    if (!table) return null;
+    if (!table || token.isCancellationRequested) return null;
 
     const tree = parse(doc.getText(), doc.uri);
     if (!tree) return null;
@@ -341,7 +345,8 @@ export function registerNavigationHandlers(
   // textDocument/codeAction (US-018)
   // -----------------------------------------------------------------------
 
-  connection.onCodeAction(async (params) => {
+  connection.onCodeAction(async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return [];
 
@@ -352,7 +357,8 @@ export function registerNavigationHandlers(
   // workspace/symbol (US-020)
   // -----------------------------------------------------------------------
 
-  connection.onRequest("workspace/symbol", async (params) => {
+  connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
+    if (token.isCancellationRequested) return [];
     const query = params.query ?? "";
     return searchWorkspaceSymbols(query, ctx.index);
   });

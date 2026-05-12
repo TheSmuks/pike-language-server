@@ -232,7 +232,12 @@ export function createPikeServer(connection: Connection): PikeServer {
       capabilities: {
         textDocumentSync: {
           openClose: true,
-          change: TextDocumentSyncKind.Full,
+          // Incremental sync: client sends only the changed range per keystroke.
+          // vscode-languageserver-textdocument merges incremental edits into
+          // the full document automatically — doc.getText() still works unchanged.
+          // Decision: gopls/rust-analyzer both use incremental for lower latency
+          // on large files (100 bytes per edit vs full document transfer).
+          change: TextDocumentSyncKind.Incremental,
           save: { includeText: true },
         },
         documentSymbolProvider: true,
