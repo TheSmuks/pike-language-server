@@ -985,7 +985,7 @@ describe("Cross-file completion via WorkspaceIndex", () => {
     expect(labels).toContain("get_name");
     // Dog's own member should also be present
     expect(labels).toContain("fetch");
-
+  });
 
   test("cross-file inherit completion 3-level chain: End e-> shows Base.identify() (CB-2)", async () => {
     // Chain: End inherits Middle (cross-file), Middle inherits Base (cross-file).
@@ -1282,20 +1282,4 @@ describe("Private member filtering", () => {
     expect(labels).toContain("__secret");
     expect(labels).toContain("__hidden");
 });
-});
-});
-
-// TODO: Cross-file inherited member completion
-// This test is skipped because wireInheritance() does not resolve cross-file inheritance.
-// When the limitation is resolved, remove .skip and wire the test.
-// See docs/known-limitations.md: "Cross-file inherited member completion"
-describe.skip("Cross-file inherited member completion (cross-file)", () => {
-  test("arrow completion on cross-file inherited class returns inherited members", async () => {
-    // Setup: Dog inherits from Animal (cross-file)
-    // Dog.pike: class Dog { inherit Animal; }
-    // User.pike: Dog d; d->
-    // Expected: completion should include Animal's members (bark, name)
-    // Actual: completion returns only Dog's own members (fetch)
-    expect(true).toBe(true); // Placeholder — actual implementation needs cross-file setup
-  });
 });

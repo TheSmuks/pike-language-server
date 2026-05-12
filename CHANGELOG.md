@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - **Cross-file inherited member completion tests**: Fixed two structural syntax
+    errors in `tests/lsp/completion.test.ts` that prevented cross-file inheritance
+    completion tests from executing:
+    1. Missing `});` closing brace on the US-001 test (~line 988), causing it to
+       merge with the subsequent test.
+    2. Extra `});` at end of file (~line 1286), causing a parse error.
+    Removed the `describe.skip("Cross-file inherited member completion")` placeholder
+    — the feature was already fully implemented; only the tests were broken.
+    All cross-file inheritance tests now pass (US-001, CB-2, US-002, US-007, US-008).
+
 ### Changed
 
   - **Syntax highlighting**: Expanded TextMate grammar (`client/syntaxes/pike.tmLanguage.json`)

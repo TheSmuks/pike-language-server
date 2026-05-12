@@ -26,6 +26,23 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 
 ## Resolved Upstream Issues
 
+### ~~Cross-file inherited member completion~~ — RESOLVED
+
+**Problem**: When class `Dog` inherits from class `Animal` defined in a different file, typing `Dog d; d->` only returned `Dog`'s own members. Inherited members from `Animal` (e.g., `speak`, `get_name`) were missing from completions.
+
+**Root cause**: The test file `tests/lsp/completion.test.ts` had two structural syntax errors that prevented the cross-file inherit completion tests from running:
+1. Missing `});` closing brace on the `US-001` test (line ~988), causing it to merge with the next test.
+2. An extra `});` at the end of the file (line ~1286), causing a parse error.
+
+**Resolution**: The cross-file inheritance completion was already fully implemented in the server code — `WorkspaceIndex.resolveInheritTarget()` correctly resolves cross-file inherit targets, and the completion pipeline uses it. The tests were simply unable to run due to syntax errors. Fixed the test structure and removed the `describe.skip` placeholder.
+
+**Verified by**: `bun test tests/lsp/completion.test.ts` — all cross-file inheritance tests pass:
+- US-001: Dog d-> shows Animal members (speak, get_name, fetch)
+- CB-2: 3-level chain End e-> shows Base.identify()
+- US-002: No duplicate entries when child overrides parent member
+- US-007: Function return type completion (makeDog()-> shows Dog members)
+- US-008: Assignment inference (Dog d = makeDog(); d-> shows Dog members)
+
 ### ~~Unicode identifiers not parsed correctly~~ — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#1](https://github.com/TheSmuks/tree-sitter-pike/issues/1)
@@ -128,9 +145,7 @@ also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter run
 
 pb|### High (Major features impaired)
 
-vo|| Limitation | Impact | Workaround |
-la||------------|-------|------------|
-he|| Cross-file inherited member completion | `Dog d; d->` returns only same-file members when `Dog` inherits from a cross-file class | None — wireInheritance() does not resolve cross-file inheritance |
+*None currently — cross-file inherited member completion was resolved (tests US-001, CB-2, US-002 now pass).*
 
 lb|### Medium (Known workarounds, tracked for resolution)
 
