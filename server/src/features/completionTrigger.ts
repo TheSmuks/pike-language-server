@@ -9,6 +9,7 @@ import { Tree, Node } from "web-tree-sitter";
 import {
   CompletionItem,
   CompletionItemKind,
+  InsertTextFormat,
 } from "vscode-languageserver/node";
 import {
   type SymbolTable,
@@ -437,7 +438,8 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
 
 
 export function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
-  return {
+  const isFunction = decl.kind === "function" || decl.kind === "method";
+  const item: CompletionItem = {
     label: decl.name,
     kind: DECL_KIND_TO_COMPLETION_KIND[decl.kind] ?? CompletionItemKind.Text,
     sortText: padSortKey(priority) + decl.name,
@@ -449,6 +451,62 @@ export function declToCompletionItem(decl: Declaration, priority: number): Compl
     // needing to resolve or hover.
     detail: decl.declaredType ?? undefined,
   };
+
+  // For functions/methods, add snippet support with parameter placeholders.
+  // The snippet looks like: functionName(${1:param1}, ${2:param2})
+  if (isFunction && decl.declaredType) {
+    const params = extractParamsFromType(decl.declaredType);
+    if (params !== null) {
+      item.insertTextFormat = InsertTextFormat.Snippet;
+      item.insertText = decl.name + "(" + params + ")";
+    }
+  }
+
+  return item;
+}
+
+/**
+ * Extract parameter placeholders from a Pike function type string.
+ *
+ * Input:  "function(string, int:void)" or "function(void)"
+ * Output: "${1:string}, ${2:int}" or "" (for void/no params)
+ * Returns null if the type string is not a function type.
+ */
+function extractParamsFromType(typeStr: string): string | null {
+  // Match function(params:return_type) pattern
+  const match = typeStr.match(/^function\s*\(([^)]*)\)/);
+  if (!match) return null;
+
+  const paramList = match[1].trim();
+  if (!paramList || paramList === "void" || paramList === "...") {
+    return "";
+  }
+
+  const parts = paramList.split(",").map(p => p.trim());
+  // Filter out trailing return type separator (":void" etc.)
+  // Pike function types: function(param1, param2 : return_type)
+  const colonIdx = parts.findIndex(p => p.startsWith(":"));
+  let paramTypes: string[];
+  if (colonIdx !== -1) {
+    paramTypes = parts.slice(0, colonIdx);
+  } else {
+    // Check if the last part looks like ":type" attached to previous param
+    const lastPart = parts[parts.length - 1];
+    if (lastPart.includes(":")) {
+      // The last element contains ":returnType" — strip it
+      const beforeColon = lastPart.split(":")[0].trim();
+      paramTypes = [...parts.slice(0, -1), beforeColon];
+    } else {
+      paramTypes = parts;
+    }
+  }
+
+  // Generate snippet tab stops: ${1:type1}, ${2:type2}, ...
+  const placeholders = paramTypes
+    .filter(p => p.length > 0)
+    .map((p, i) => `\${${i + 1}:${p}}`);
+
+  return placeholders.join(", ");
 }
 
 export function padSortKey(n: number): string {
@@ -562,5 +620,70 @@ export function cleanPredefSignature(raw: string): string {
  */
 export function resetCompletionCache(): void {
   stdlibChildrenMap = null;
-  stdlibTopLevelNames = null;
+  stdlibTopLevel = null;
+}
+
+// ---------------------------------------------------------------------------
+// Identifier prefix range detection for textEdit
+// ---------------------------------------------------------------------------
+
+/**
+ * Find the range of the identifier prefix the user has typed.
+ * Used to generate textEdit ranges for completion items.
+ *
+ * Walks the tree-sitter node at the cursor position. If the cursor is
+ * inside an identifier node, returns the range from the identifier start
+ * to the cursor. For dot/arrow/scope access, returns only the trailing
+ * identifier part (after the dot/arrow/scope).
+ *
+ * Returns null if no identifier prefix is found (e.g., completion
+ * triggered right after a dot with nothing typed yet).
+ */
+export function findIdentifierPrefixRange(
+  tree: Tree,
+  line: number,
+  character: number,
+): { start: { line: number; character: number }; end: { line: number; character: number } } | null {
+  const root = tree.rootNode;
+  const pos = { row: line, column: character };
+
+  // Try to find a node at this position. Use namedDescendantForPosition
+  // to skip anonymous nodes (punctuation, whitespace).
+  let node = root.namedDescendantForPosition(pos);
+  if (!node) return null;
+
+  // If the cursor is at the end of an identifier, use its range.
+  // If the cursor is inside an identifier, use from start to cursor.
+  if (node.type === "identifier") {
+    return {
+      start: {
+        line: node.startPosition.row,
+        character: node.startPosition.column,
+      },
+      end: { line, character },
+    };
+  }
+
+  // For error nodes (common during typing), look for an identifier child.
+  if (node.type === "ERROR") {
+    for (let i = 0; i < node.childCount; i++) {
+      const child = node.child(i);
+      if (child && child.type === "identifier") {
+        // Only use if the cursor is inside or at the end of this identifier
+        if (child.endPosition.row >= line && child.startPosition.column <= character) {
+          return {
+            start: {
+              line: child.startPosition.row,
+              character: child.startPosition.column,
+            },
+            end: { line, character },
+          };
+        }
+      }
+    }
+  }
+
+  // No identifier prefix found — completion was triggered at a structural
+  // boundary (e.g., right after a dot with nothing typed yet).
+  return null;
 }

@@ -261,6 +261,11 @@ export function createPikeServer(connection: Connection): PikeServer {
         workspaceSymbolProvider: true,
         documentLinkProvider: { resolveProvider: false },
         documentFormattingProvider: true,
+        documentOnTypeFormattingProvider: {
+          firstTriggerCharacter: "}",
+          moreTriggerCharacter: [";"],
+        },
+        selectionRangeProvider: true,
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
