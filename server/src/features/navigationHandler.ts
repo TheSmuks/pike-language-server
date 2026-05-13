@@ -54,6 +54,7 @@ import type { PikeWorker } from "./pikeWorker";
 import type { LRUCache } from "../util/lruCache";
 import type { DiagnosticManager } from "./diagnosticManager";
 import { computeContentHash } from "./diagnosticManager";
+import { logError, ErrorCategory } from "../util/errorLog.js";
 import stdlibAutodocIndex from "../data/stdlib-autodoc.json";
 import predefBuiltinIndex from "../data/predef-builtin-index.json";
 
@@ -184,9 +185,7 @@ export function registerNavigationHandlers(
       // Return partial symbols — never crash on parse errors.
       return getDocumentSymbols(tree);
     } catch (err) {
-      connection.console.error(
-        `documentSymbol failed: ${(err as Error).message}`,
-      );
+      logError(connection, ErrorCategory.Parse, "navigationHandler.handleDocumentSymbol", err);
       return [];
     }
   });
@@ -253,9 +252,7 @@ export function registerNavigationHandlers(
         const diagnostics = getParseDiagnostics(tree);
         return { kind: "full", items: diagnostics };
       } catch (err) {
-        connection.console.error(
-          `textDocument/diagnostic failed: ${(err as Error).message}`,
-        );
+        logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleDiagnostics", err);
         return { kind: "full", items: [] };
       }
     },
@@ -722,9 +719,7 @@ export function registerNavigationHandlers(
 
       return result;
     } catch (err) {
-      connection.console.error(
-        `completion failed: ${(err as Error).message}`,
-      );
+      logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleCompletion", err);
       return { isIncomplete: false, items: [] };
     }
   });
@@ -802,7 +797,7 @@ export function registerNavigationHandlers(
     // gopls sentinel pattern: return diagnostic-quality error for null/undefined.
     // Empty string is valid content — no guard needed.
     if (source === undefined || source === null) {
-      ctx.connection.console.error(`unexpected null content for ${doc.uri}`);
+      logError(ctx.connection, ErrorCategory.System, `navigationHandler.handleHover(${doc.uri})`, new Error("unexpected null content"));
       return;
     }
     const autodocHash = computeContentHash(source);

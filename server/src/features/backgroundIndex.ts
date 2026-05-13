@@ -15,6 +15,7 @@ import { join, extname } from "node:path";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { ModificationSource } from "./workspaceIndex";
+import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -55,14 +56,14 @@ export async function indexWorkspaceFiles(
   const { connection, index, workspaceRoot, worker } = options;
 
   if (!workspaceRoot) {
-    connection.console.log("Pike LSP: no workspace root, skipping background indexing");
+    logInfo(connection, "no workspace root, skipping background indexing");
     return;
   }
 
   // Skip type-aware indexing if Pike is unavailable.
   // Tree-sitter parsing still runs below for symbol table building.
   if (worker && !worker.isAvailable) {
-    connection.console.log("Pike binary not found — skipping background indexing");
+    logInfo(connection, "Pike binary not found — skipping background indexing");
     return;
   }
 
@@ -72,18 +73,16 @@ export async function indexWorkspaceFiles(
   try {
     await discoverFiles(workspaceRoot, files);
   } catch (err) {
-    connection.console.error(
-      `Pike LSP: workspace file discovery failed: ${(err as Error).message}`,
-    );
+    logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:discoverFiles(${workspaceRoot})`, err);
     return;
   }
 
   if (files.length === 0) {
-    connection.console.log("Pike LSP: no .pike/.pmod files found in workspace");
+    logInfo(connection, "no .pike/.pmod files found in workspace");
     return;
   }
 
-  connection.console.log(`Pike LSP: indexing ${files.length} workspace files`);
+  logInfo(connection, `indexing ${files.length} workspace files`);
 
   // Report progress start
   let progressToken: string | number | undefined;
@@ -145,9 +144,7 @@ export async function indexWorkspaceFiles(
       await new Promise(resolve => setTimeout(resolve, 0));
     } catch (err) {
       errors++;
-      connection.console.error(
-        `Pike LSP: failed to index ${filepath}: ${(err as Error).message}`,
-      );
+      logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:indexFile(${filepath})`, err);
     }
   }
 
@@ -163,8 +160,9 @@ export async function indexWorkspaceFiles(
     }
   }
 
-  connection.console.log(
-    `Pike LSP: background indexing complete — ${indexed} files indexed, ${errors} errors`,
+  logInfo(
+    connection,
+    `background indexing complete — ${indexed} files indexed, ${errors} errors`,
   );
 }
 
