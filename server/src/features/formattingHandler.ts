@@ -19,6 +19,7 @@ import type { TextDocuments } from "vscode-languageserver/node";
 
 import { format as pikeFormat } from "pike-fmt/src/formatter";
 import { parserInstance } from "../parser";
+import { logError, ErrorCategory } from "../util/errorLog.js";
 
 interface FormattingContext {
   documents: TextDocuments<TextDocument>;
@@ -98,7 +99,7 @@ export function registerFormattingHandler(
       try {
         // Use the server's already-initialized parser
         if (!parserInstance) {
-          connection.console.error("format failed: parser not initialized");
+          logError(connection, ErrorCategory.System, "formattingHandler.handleFormatting", new Error("parser not initialized"));
           return null;
         }
         const formatted = pikeFormat(source, {
@@ -112,9 +113,7 @@ export function registerFormattingHandler(
         const edits = computeIndentEdits(source, formatted);
         return edits;
       } catch (err) {
-        connection.console.error(
-          `format failed: ${(err as Error).message}`,
-        );
+        logError(connection, ErrorCategory.System, "formattingHandler.handleFormatting", err);
         return null;
       }
     },

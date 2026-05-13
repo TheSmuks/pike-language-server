@@ -38,6 +38,7 @@ import {
 } from "./features/persistentCache";
 
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
+import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
 import {
   DiagnosticManager,
   type PikeCacheEntry,
@@ -73,6 +74,11 @@ export function createPikeServer(connection: Connection): PikeServer {
   // initParser() is idempotent — returns the same promise on subsequent calls.
   void initParser();
   const worker = new PikeWorker();
+
+  // Wire PikeWorker critical errors through the centralized error log.
+  worker.setErrorHandler((ctx, err) => {
+    logError(connection, ErrorCategory.Worker, ctx, err);
+  });
 
   // -----------------------------------------------------------------
   // Caches (local to this server instance)
@@ -156,13 +162,7 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
       return index.getSymbolTable(uri);
     } catch (err) {
-      try {
-        connection.console.error(
-          `symbolTable build failed: ${(err as Error).message}`,
-        );
-      } catch {
-        // Connection may be closed during teardown
-      }
+      logError(connection, ErrorCategory.Index, `getSymbolTable(${uri})`, err);
       return null;
     }
   }
@@ -193,10 +193,14 @@ export function createPikeServer(connection: Connection): PikeServer {
   let clientSupportsWatchedFiles = false;
 
   connection.onInitialize(async (params: InitializeParams) => {
+    logInfo(connection, "[init] step 6: onInitialize — client connected");
+
     const rootUri = params.rootUri ?? params.rootPath ?? "";
     const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
     clientSupportsWatchedFiles =
       params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
+
+    logInfo(connection, `[init] step 6a: workspace root = ${rootPath || "(none)"}`);
 
     // Read initialization options FIRST — needed for WorkspaceIndex.create
     const initOpts = params.initializationOptions as {
@@ -206,11 +210,13 @@ export function createPikeServer(connection: Connection): PikeServer {
       maxNumberOfProblems?: number;
     } | undefined;
 
+    logInfo(connection, `[init] step 6b: creating workspace index (pikeBinaryPath=${initOpts?.pikeBinaryPath ?? "pike"})`);
     // Pass pikeBinaryPath so module resolution uses the same binary as PikeWorker
     index = await WorkspaceIndex.create(rootPath, initOpts?.pikeBinaryPath);
     diagnosticManager.setIndex(index);
     // Update handler context with resolved index
     (handlerContext as any).index = index;
+    logInfo(connection, "[init] step 6b: workspace index created");
 
     if (initOpts?.diagnosticMode) {
       const mode = initOpts.diagnosticMode;
@@ -285,29 +291,22 @@ export function createPikeServer(connection: Connection): PikeServer {
   });
 
   connection.onInitialized(async () => {
+    logInfo(connection, "[init] step 7: onInitialized — starting post-init");
+
+    // step 7a: parser (tree-sitter WASM + grammar)
     try {
+      logInfo(connection, "[init] step 7a: initializing tree-sitter parser");
       await initParser();
-      connection.console.log("Pike LSP: parser initialized");
+      logInfo(connection, "[init] step 7a: parser initialized");
     } catch (err) {
-      try {
-        connection.console.error(
-          `Pike LSP: parser init failed: ${(err as Error).message}`,
-        );
-      } catch {
-        // Connection may be closed during teardown
-      }
-
-
+      logError(connection, ErrorCategory.System, "[init] step 7a FAILED: parser init", err);
     }
-    // Check Pike availability asynchronously.
-    // If Pike is unavailable, show a one-time warning so the user knows
-    // which features are missing (compile diagnostics, hover types, etc.).
-    // This is fire-and-forget — the worker will surface PikeUnavailableError
-    // to individual request handlers for graceful degradation.
+
+    // step 7b: pike binary probe
+    logInfo(connection, "[init] step 7b: probing Pike binary");
     worker.ping().catch((err: unknown) => {
       if (err instanceof PikeUnavailableError) {
-
-
+        logInfo(connection, "[init] step 7b: Pike binary NOT found — degraded mode");
         try {
           connection.window.showWarningMessage(
             "Pike binary not found. Syntax highlighting and navigation still work. " +
@@ -316,16 +315,14 @@ export function createPikeServer(connection: Connection): PikeServer {
         } catch {
           // Connection may be closed during teardown
         }
+      } else {
+        logError(connection, ErrorCategory.Worker, "[init] step 7b: Pike ping failed", err);
       }
     });
 
-    // Register file watchers for .pike and .pmod files.
-    // Enables notifications when files change externally
-    // (git checkout, file creation/deletion outside the editor).
-    // Only register if the client supports dynamic registration;
-    // the test harness does not, and calling register() on it
-    // causes an unhandled JSON-RPC error.
+    // step 7c: file watchers
     if (clientSupportsWatchedFiles) {
+      logInfo(connection, "[init] step 7c: registering file watchers");
       connection.client.register(
         DidChangeWatchedFilesNotification.type,
         {
@@ -337,9 +334,12 @@ export function createPikeServer(connection: Connection): PikeServer {
       ).catch(() => {
         // Registration may still fail (e.g., client rejects it)
       });
+    } else {
+      logInfo(connection, "[init] step 7c: skipped — client does not support file watchers");
     }
 
-    // Load persistent cache
+    // step 7d: load persistent cache
+    logInfo(connection, "[init] step 7d: loading persistent cache");
     const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
     const currentWasmHash = computeWasmHash(wasmPath);
 
@@ -357,35 +357,28 @@ export function createPikeServer(connection: Connection): PikeServer {
             }
           }
         }
-        connection.console.log(`Pike LSP: restored ${restored} files from cache`);
+        logInfo(connection, `[init] step 7d: restored ${restored} files from cache`);
+      } else {
+        logInfo(connection, "[init] step 7d: no cache found — fresh start");
       }
     } catch (err) {
-      try {
-        connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
-      } catch {
-        // Connection may be closed during teardown
-      }
+      logError(connection, ErrorCategory.System, "[init] step 7d FAILED: cache load", err);
     }
 
-    // Background workspace indexing — fire-and-forget
-    // Discovers and indexes all .pike/.pmod files for workspace/symbol
-    // and cross-file navigation.
-
+    // step 7e: background workspace indexing — fire-and-forget
+    logInfo(connection, "[init] step 7e: starting background workspace indexing");
     indexWorkspaceFiles({
       connection,
       index,
       workspaceRoot: index.workspaceRoot,
       worker,
+    }).then(() => {
+      logInfo(connection, "[init] step 7e: background indexing complete");
     }).catch((err) => {
-      // Connection may be closed during shutdown — do not re-throw.
-      try {
-        connection.console.error(
-          `Pike LSP: background indexing failed: ${(err as Error).message}`,
-        );
-      } catch {
-        // Connection already closed during teardown.
-      }
+      logError(connection, ErrorCategory.Index, "[init] step 7e FAILED: background index", err);
     });
+
+    logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
   });
 
   connection.onDidChangeWatchedFiles((params) => {
@@ -484,7 +477,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     try {
       const content = doc.getText();
       if (content === undefined || content === null) {
-        connection.console.error(`unexpected null content for ${doc.uri}`);
+        logError(connection, ErrorCategory.System, `onDidChangeContent(${doc.uri})`, new Error("unexpected null content"));
         return;
       }
 
@@ -501,18 +494,13 @@ export function createPikeServer(connection: Connection): PikeServer {
       }
 
       if (invalidated.length > 1) {
-        connection.console.log(
+        logInfo(
+          connection,
           `Invalidated ${invalidated.length} files (change in ${doc.uri})`,
         );
       }
     } catch (err) {
-      try {
-        connection.console.error(
-          `parse failed: ${(err as Error).message}`,
-        );
-      } catch {
-        // Connection may be closed during teardown
-      }
+      logError(connection, ErrorCategory.Parse, `onDidChangeContent(${doc.uri})`, err);
     }
 
     // Delegate real-time diagnostics to DiagnosticManager
@@ -540,33 +528,11 @@ export function createPikeServer(connection: Connection): PikeServer {
 }
 
 // ---------------------------------------------------------------------------
-// Production entry point: stdio transport
-// Only runs when this module is executed directly, not when imported by tests.
+// Production entry: handled by main.ts
 // ---------------------------------------------------------------------------
 
-// Production entry point: stdio transport.
-// Only runs when this module is executed directly, not when imported by tests.
-// Bun sets import.meta.main = true.  Node.js ESM does not have the property,
-// so we fall back to comparing import.meta.url against process.argv[1].
-function isDirectExecution(): boolean {
-  // Bun
-  if (typeof (import.meta as any).main === "boolean") {
-    return (import.meta as any).main === true;
-  }
-  // Node.js ESM: check if this module is the entry point
-  if (typeof process === "object" && process.argv?.[1]) {
-    try {
-      const { pathToFileURL } = require("url") as typeof import("url");
-      const entry = pathToFileURL(process.argv[1]).href;
-      return entry === (import.meta as any).url;
-    } catch {
-      return false;
-    }
-  }
-  return false;
-}
-if (isDirectExecution()) {
-  const connection = createConnection(ProposedFeatures.all);
-  const server = createPikeServer(connection);
-  server.connection.listen();
-}
+// server.ts is imported by main.ts, which handles process entry.
+// Do NOT start listening here — main.ts owns the entry point.
+// Having two connection.listen() calls on the same stdio causes protocol
+// corruption (undefined document content → "Cannot read properties of
+// undefined (reading 'charAt')").

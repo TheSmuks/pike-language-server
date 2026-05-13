@@ -26,6 +26,11 @@ import {
 } from "vscode-languageclient/node";
 
 import { TreeSitterSyntacticProvider } from "./treeSitterProvider";
+import {
+  setErrorCount,
+  getErrorCount,
+  onErrorCountChange,
+} from "./errorNotificationState";
 
 let client: LanguageClient | undefined;
 
@@ -51,32 +56,44 @@ function log(label: string, message: string): void {
   outputChannel.appendLine(`[${ts}] [${label}] ${message}`);
 }
 
-/** Update the status bar to reflect server state. */
-function updateStatusBar(state: State): void {
+/** Update the status bar to reflect server state and optional error count. */
+function updateStatusBar(state: State, errorCount = 0): void {
+  const errorSuffix = errorCount > 0 ? ` (${errorCount} error${errorCount === 1 ? "" : "s"})` : "";
   switch (state) {
     case State.Starting: {
-      statusBarItem.text = `$(sync~spin) Pike LSP`;
+      statusBarItem.text = `$(sync~spin) Pike LSP${errorSuffix}`;
       statusBarItem.backgroundColor = undefined;
       statusBarItem.color = undefined;
       break;
     }
     case State.Running: {
-      statusBarItem.text = `$(zap) Pike LSP`;
-      statusBarItem.backgroundColor = undefined;
-      statusBarItem.color = undefined;
+      if (errorCount > 0) {
+        statusBarItem.text = `$(error) Pike LSP${errorSuffix}`;
+        statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
+        statusBarItem.color = new vscode.ThemeColor("statusBarItem.errorForeground");
+      } else {
+        statusBarItem.text = `$(zap) Pike LSP`;
+        statusBarItem.backgroundColor = undefined;
+        statusBarItem.color = undefined;
+      }
       break;
     }
     case State.Stopped: {
-      statusBarItem.text = `$(warning) Pike LSP`;
+      statusBarItem.text = `$(warning) Pike LSP${errorSuffix}`;
       statusBarItem.backgroundColor = new vscode.ThemeColor("statusBarItem.errorBackground");
       statusBarItem.color = new vscode.ThemeColor("statusBarItem.errorForeground");
       break;
     }
     default: {
-      statusBarItem.text = `$(question) Pike LSP`;
+      statusBarItem.text = `$(question) Pike LSP${errorSuffix}`;
       break;
     }
   }
+}
+
+/** Convenience wrapper for updating status bar with error count. */
+function updateStatusBarWithErrors(state: State, errorCount: number): void {
+  updateStatusBar(state, errorCount);
 }
 
 /**
@@ -121,28 +138,25 @@ function getSettings(): Record<string, unknown> {
 // ─── Extension lifecycle ────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
-  log("EXT", "Activating Pike Language Server...");
+  log("EXT", "[init] step 1/6: activate() called");
   const version = context.extension.packageJSON.version as string;
   const buildId = typeof BUILD_NUMBER !== "undefined" ? BUILD_NUMBER : "dev";
-  log("EXT", `Version ${version}+${buildId}`);
-  // Language configuration for Pike — client-side, no LSP traffic.
-  // Handles Enter, Tab, auto-indent, and surrounding pairs.
-  // See client/language-configuration.json for rules.
+  log("EXT", `[init] version ${version}+${buildId}`);
+
+  // step 2: language configuration
   try {
     const langConfigPath = context.asAbsolutePath("language-configuration.json");
     const langConfig = JSON.parse(fs.readFileSync(langConfigPath, "utf8"));
     context.subscriptions.push(
       vscode.languages.setLanguageConfiguration("pike", langConfig),
     );
+    log("EXT", "[init] step 2/6: language configuration loaded");
   } catch (err) {
-    log("EXT", `Warning: language-configuration.json not loaded: ${(err as Error).message}`);
-    log("EXT", "Language configuration (brackets, comments) will use defaults.");
+    log("EXT", `[init] step 2/6: language-configuration.json not loaded — ${(err as Error).message}`);
   }
 
-  // Register tree-sitter syntactic token provider.
-  // Runs at lower priority than LSP — VSCode merges both providers.
-  // Provides instant highlighting for keywords, operators, types, literals
-  // without waiting for project analysis.
+  // step 3: tree-sitter syntactic provider
+  log("EXT", "[init] step 3/6: creating tree-sitter syntactic provider (async init)");
   const syntacticProvider = new TreeSitterSyntacticProvider(context);
   context.subscriptions.push(
     vscode.languages.registerDocumentSemanticTokensProvider(
@@ -151,12 +165,13 @@ export function activate(context: vscode.ExtensionContext): void {
       syntacticProvider.legend,
     ),
   );
-  log("EXT", "Tree-sitter syntactic provider registered.");
+  log("EXT", "[init] step 3/6: tree-sitter provider registered (init runs in background)");
 
-  // Status bar: show starting state and open output channel on click.
+  // step 4: status bar
   updateStatusBar(State.Starting);
   statusBarItem.command = "workbench.action.output.toggleOutput";
   context.subscriptions.push(statusBarItem);
+  log("EXT", "[init] step 4/6: status bar created");
 
   const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
 
@@ -192,6 +207,8 @@ export function activate(context: vscode.ExtensionContext): void {
     outputChannel,
   };
 
+  // step 5: create and start LanguageClient
+  log("EXT", "[init] step 5/6: creating LanguageClient");
   client = new LanguageClient(
     "pikeLanguageServer",
     "Pike Language Server",
@@ -202,24 +219,39 @@ export function activate(context: vscode.ExtensionContext): void {
   // Listen for state transitions to update status bar.
   client.onDidChangeState((event: StateChangeEvent) => {
     updateStatusBar(event.newState);
-    switch (event.newState) {
-      case State.Starting:
-        log("CLIENT", "State: Starting");
-        break;
-      case State.Running:
-        log("CLIENT", "State: Running");
-        break;
-      case State.Stopped:
-        log("CLIENT", "State: Stopped");
-        break;
-      default:
-        log("CLIENT", `State: unknown(${event.newState})`);
-        break;
-    }
+    const label = event.newState === State.Starting ? "Starting"
+      : event.newState === State.Running ? "Running"
+      : event.newState === State.Stopped ? "Stopped"
+      : `unknown(${event.newState})`;
+    log("CLIENT", `[init] state change: ${label}`);
   });
 
-  log("EXT", "Starting server...");
+  log("EXT", "[init] step 5/6: starting server process...");
   client.start();
+
+  // step 6: register commands and notification handlers
+  log("EXT", "[init] step 6/6: registering commands and notification handlers");
+
+  client.onNotification(
+    "pike/errorCount",
+    (params: { count: number }) => {
+      setErrorCount(params.count);
+    },
+  );
+
+  // Register a command that shows the output channel and resets error count.
+  // The user can run this from the Command Palette to see full error details.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("pike.showErrorLog", () => {
+      outputChannel.show(true);
+      setErrorCount(0); // Dismiss badge on view
+    }),
+  );
+
+  // Keep status bar updated when error count changes.
+  onErrorCountChange((count) => {
+    updateStatusBarWithErrors(State.Running, count);
+  });
 
   // Restart the server when settings change.
   // Guard against rapid-fire config changes creating duplicate clients.
@@ -254,9 +286,11 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     }),
   );
+
+  log("EXT", "[init] activate() complete — server starting in background");
 }
 
 export function deactivate(): Thenable<void> | undefined {
-  log("EXT", "Shutting down...");
+  log("EXT", "deactivate() — shutting down");
   return client?.stop();
 }

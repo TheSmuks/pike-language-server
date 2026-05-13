@@ -32,6 +32,23 @@ export const RESOLVE_SCRIPT = join(PROJECT_ROOT, "harness", "resolve.pike");
 /** Pike binary name/path. Configurable via PIKE_BINARY env var, defaults to "pike". */
 export const PIKE_BINARY = process.env.PIKE_BINARY ?? "pike";
 
+// ---------------------------------------------------------------------------
+// Path normalization for portable snapshots
+// ---------------------------------------------------------------------------
+
+/**
+ * Replace absolute paths in a string with a stable placeholder.
+ *
+ * Pike emits fully-resolved paths in diagnostic messages (e.g. include
+ * resolution errors). These paths vary across machines and containers.
+ * Replace `<PROJECT_ROOT>/...` with `<ROOT>/...` so snapshots are portable.
+ */
+function normalizeAbsolutePath(message: string, projectRoot: string): string {
+  // Replace the project root (and any parent path that contains it)
+  // with a stable token. Handle both trailing-slash and no-trailing-slash.
+  return message.split(projectRoot).join("<ROOT>");
+}
+
 
 // ---------------------------------------------------------------------------
 // Runner options
@@ -124,6 +141,17 @@ export async function runIntrospect(
     // Normalize file path to relative from project root
     if (result.file) {
       result.file = relative(PROJECT_ROOT, resolve(PROJECT_ROOT, result.file));
+    }
+    // Normalize absolute paths embedded in diagnostic messages.
+    // Pike includes fully-resolved paths in error messages (e.g. include
+    // resolution), which vary across machines. Replace the project root
+    // with a stable placeholder so snapshots are portable.
+    if (result.diagnostics) {
+      for (const d of result.diagnostics) {
+        if (d.message) {
+          d.message = normalizeAbsolutePath(d.message, PROJECT_ROOT);
+        }
+      }
     }
     return result;
   } catch (e) {

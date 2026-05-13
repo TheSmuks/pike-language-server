@@ -19,7 +19,9 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, statSync } from "node:fs";
+import type { Connection } from "vscode-languageserver/node";
 import type { CancellationToken } from "vscode-languageserver/node";
+import { logError, ErrorCategory } from "../util/errorLog.js";
 // ---------------------------------------------------------------------------
 // Configuration (tunable per deployment)
 // ---------------------------------------------------------------------------
@@ -248,8 +250,23 @@ export class PikeWorker {
    */
   private pikeAvailable: boolean | null = null;
 
+  /**
+   * Callback for critical errors that should be routed through the centralized
+   * error log. Set by the server after construction via `setErrorHandler`.
+   * Signature: (ctx: string, err: unknown) => void.
+   */
+  private onCriticalError: ((ctx: string, err: unknown) => void) | null = null;
+
   constructor(config?: Partial<PikeWorkerConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Install the error handler that routes PikeWorker errors through the
+   * centralized errorLog. Call this once after the server has a Connection.
+   */
+  setErrorHandler(handler: (ctx: string, err: unknown) => void): void {
+    this.onCriticalError = handler;
   }
 
 
@@ -314,7 +331,7 @@ export class PikeWorker {
       // The first occurrence (the "nice: pike: No such file" spam) is
       // unavoidable since pikeAvailable is null at spawn time.
       if (msg && this.pikeAvailable !== false) {
-        console.error("[pike-worker stderr]", msg);
+        this.onCriticalError?.("worker.stderr", new Error(`[pike-worker stderr] ${msg}`));
       }
     });
 
@@ -678,7 +695,7 @@ export class PikeWorker {
     }
 
     const message = 'Pike worker failed to restart after 3 ping attempts';
-    console.error(`[pike-worker] ${message}`);
+    this.onCriticalError?.('worker.restart', new Error(message));
     throw new Error(message);
   }
 
@@ -760,12 +777,15 @@ export class PikeWorker {
         // Malformed response — could be debug output or protocol corruption.
         // Count consecutive failures and restart if threshold exceeded.
         this.consecutiveMalformed++;
-        console.error(`[pike-worker] Malformed response (${this.consecutiveMalformed}/${PikeWorker.MALFORMED_RESTART_THRESHOLD}):`, line.slice(0, 200));
+        this.onCriticalError?.(
+          "worker.malformedResponse",
+          new Error(`Malformed response (${this.consecutiveMalformed}/${PikeWorker.MALFORMED_RESTART_THRESHOLD}): ${line.slice(0, 200)}`),
+        );
         if (this.consecutiveMalformed >= PikeWorker.MALFORMED_RESTART_THRESHOLD) {
-          console.error('[pike-worker] Too many malformed responses — restarting worker');
+          this.onCriticalError?.("worker.malformedThreshold", new Error("Too many malformed responses"));
           this.consecutiveMalformed = 0;
           this.restart().catch((err) => {
-            console.error('[pike-worker] Auto-restart failed after malformed responses:', (err as Error).message);
+            this.onCriticalError?.('worker.autoRestart', err);
           });
         }
       }

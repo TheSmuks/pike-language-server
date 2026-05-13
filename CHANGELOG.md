@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+## [0.4.2] — 2026-05-13
+
+### Fixed
+
+  - **Dual connection.listen() crash**: Removed the `isDirectExecution()` entry
+    block from `server.ts`. When esbuild bundled both `server.ts` and `main.ts`,
+    two `connection.listen()` calls executed on the same stdio transport,
+    corrupting LSP protocol state and causing `FullTextDocument._content` to
+    become `undefined` — the root cause of "Cannot read properties of undefined
+    (reading 'charAt')" on file open.
+
+  - **Portable snapshot paths**: The harness now normalizes absolute paths
+    embedded in Pike diagnostic messages (e.g. include resolution errors)
+    using a `<ROOT>` placeholder. The `cpp-include.pike` snapshot no longer
+    contains a machine-specific path, fixing CI on different environments.
+
+### Added
+
+  - **Structured init logging**: The entire extension startup sequence is now
+    logged as numbered steps across both client and server. Each step logs
+    before and after execution, so the last logged step identifies where
+    startup failed. Client logs to the "Pike Language Server" output channel
+    (`[init] step 1/6` through `step 6/6`). Server logs to stderr before
+    connection (`[init] step 1/5` through `5/5`) and to the LSP console after
+    (`[init] step 6` through `7e`). Tree-sitter initialization on the client
+    side logs `[tree-sitter] step 1/4` through `4/4` to the VSCode console.
+
+  - **Centralized error logging**: All server-side errors now route through
+    `server/src/util/errorLog.ts` (`logInfo`, `logWarn`, `logError`). The format
+    is `<ISO timestamp> <LEVEL> <message>`. Zero `connection.console.log/error`
+    calls remain outside the logging module itself.
+
+  - **Status bar error badge**: The status bar shows `(N errors)` with error
+    styling when the server reports errors. Clicking opens the output channel.
+
+  - **Global error handlers**: `main.ts` installs `uncaughtException` and
+    `unhandledRejection` handlers before any other code runs, ensuring startup
+    crashes are logged instead of silently swallowed.
+
 ## [0.4.1] — 2026-05-13
 
 ### Fixed
@@ -21,8 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `client/dist/` in addition to `server/dist/`. The client resolves WASM paths
     relative to `extension.cjs` (which lives in `client/dist/`), so the runtime WASM
     must be present there for `Parser.init()` to succeed.
-
-## [Unreleased]
 
 ## [0.4.0] — 2026-05-13
 
@@ -193,8 +232,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     structure error in the LSP health-check test file (`tests/health-check.ts`):
     `refs.method`, `refs.parameter`, `rename.prepare-valid`, `rename.execute`,
     `highlight.variable`, `hover.variable-type`, and `codeAction.unused-var`.
-
-## [Unreleased]
 
 ## [0.3.3-beta] — 2026-05-05
 ## [0.3.5-beta] — 2026-05-06

@@ -24,6 +24,7 @@ import { PikeWorker, PikeUnavailableError, type PikeDiagnostic } from "./pikeWor
 import { getParseDiagnostics } from "./diagnostics";
 import { parse, type Tree } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import { logError, ErrorCategory } from "../util/errorLog.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -162,11 +163,7 @@ export class DiagnosticManager {
       }
     } catch (err) {
       // Parse failure — log but don't crash the manager
-      try {
-        this.connection.console.error(`parse failed for ${uri}: ${(err as Error).message}`);
-      } catch {
-        // Connection closed during teardown
-      }
+      logError(this.connection, ErrorCategory.Parse, `diagnosticManager.publishParseDiags(${uri})`, err);
     }
 
     if (this.mode !== "realtime") return;
@@ -338,18 +335,10 @@ export class DiagnosticManager {
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
-        // Only log if it's not the "binary not found" error —
-        // that was already reported by PikeWorker.
         const isPikeUnavailable = err instanceof Error
           && err.name === "PikeUnavailableError";
         if (!isPikeUnavailable) {
-          try {
-            this.connection.console.error(
-              `Pike diagnose failed for ${uri}: ${(err as Error).message}`,
-            );
-          } catch {
-            // Connection may be closed during teardown
-          }
+          logError(this.connection, ErrorCategory.Diagnostics, `diagnosticManager.dispatchDiagnose(${uri})`, err);
         }
       }
       // Keep only parse diagnostics

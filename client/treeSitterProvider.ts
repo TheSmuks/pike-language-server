@@ -222,22 +222,32 @@ export class TreeSitterSyntacticProvider
   /** Initialize web-tree-sitter WASM and load the Pike grammar. */
   async #init(): Promise<void> {
     try {
+      console.log("[tree-sitter] step 1/4: Parser.init() — loading WASM runtime");
       // Parser.init() MUST be called before Language.load() or new Parser().
       // It initializes the Emscripten WASM module (C runtime) that Language.load
       // depends on via C.loadWebAssemblyModule().  Omitting this was the root cause
       // of "Cannot read properties of undefined (reading 'charAt')" and missing
       // syntax highlighting in v0.4.0.
       await treeSitter.Parser.init();
+      console.log("[tree-sitter] step 1/4: Parser.init() complete");
 
+      console.log("[tree-sitter] step 2/4: loading Pike grammar WASM");
       const lang = await treeSitter.Language.load(
         this.context.asAbsolutePath("server/tree-sitter-pike.wasm"),
       );
       this.language = lang;
+      console.log("[tree-sitter] step 2/4: Pike grammar loaded");
+
+      console.log("[tree-sitter] step 3/4: creating parser instance");
       this.parser = new treeSitter.Parser();
       this.parser.setLanguage(this.language);
+      console.log("[tree-sitter] step 3/4: parser created");
+
+      console.log("[tree-sitter] step 4/4: compiling highlights query");
       this.query = new treeSitter.Query(this.language, HIGHLIGHTS_QUERY);
+      console.log("[tree-sitter] step 4/4: highlights query compiled — ready");
     } catch (err) {
-      console.error("[TreeSitterProvider] Init failed:", err);
+      console.error("[tree-sitter] INIT FAILED:", err);
     }
   }
 
