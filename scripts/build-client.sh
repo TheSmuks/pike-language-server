@@ -20,3 +20,9 @@ esbuild "$ROOT/client/extension.ts" \
   --sourcemap \
   --external:vscode \
   --define:BUILD_NUMBER="\"$BUILD_NUM\""
+
+# esbuild converts import.meta to `var import_meta = {}` for CJS format,
+# which breaks web-tree-sitter's WASM resolution (import_meta.url is undefined).
+# Replace the empty object with a proper URL polyfill.
+sed -i 's/var import_meta = {}/var import_meta = { url: require("url").pathToFileURL(__filename).href }/' \
+  "$ROOT/client/dist/extension.cjs"
