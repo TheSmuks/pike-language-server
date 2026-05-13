@@ -41,7 +41,7 @@ Invoke this skill whenever you are ready to cut a new release. Common triggers:
    - `feat:` commits → **minor** bump (e.g. `1.2.0` → `1.3.0`)
    - `fix:` commits → **patch** bump (e.g. `1.2.0` → `1.2.1`)
    - `feat!:` or `BREAKING CHANGE` in body → **major** bump (e.g. `1.2.0` → `2.0.0`)
-   - Pre-release: append `-beta` or `-alpha` (e.g. `0.3.2` → `0.4.0`)
+   - Pre-release: append `-beta` or `-alpha` (e.g. `0.3.2` → `0.4.1`)
 
 4. **Ask user to confirm or override** the computed version before proceeding.
 
@@ -92,7 +92,7 @@ bash scripts/release.sh <OLD_VERSION> <NEW_VERSION>
 
 **Example:**
 ```bash
-bash scripts/release.sh 0.4.0 0.3.7-beta
+bash scripts/release.sh 0.4.1 0.3.7-beta
 ```
 
 ### What the script does
