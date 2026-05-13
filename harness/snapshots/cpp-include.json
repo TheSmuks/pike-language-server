@@ -8,7 +8,7 @@
     {
       "category": "unknown",
       "line": 9,
-      "message": "Couldn't read include file \"/tank/appdata/pike-dev/projects/pike-language-server/corpus/files/nonexistent.pike\".",
+      "message": "Couldn't read include file \"<ROOT>/corpus/files/nonexistent.pike\".",
       "severity": "error"
     }
   ],
