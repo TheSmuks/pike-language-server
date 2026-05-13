@@ -546,11 +546,26 @@ export function createPikeServer(connection: Connection): PikeServer {
 
 // Production entry point: stdio transport.
 // Only runs when this module is executed directly, not when imported by tests.
-// Bun: import.meta.main, Node: not available (ESM mode only).
-const isMain = typeof (import.meta as unknown as Record<string, unknown>).main === 'boolean'
-  ? (import.meta as unknown as Record<string, unknown>).main === true
-  : false;
-if (isMain) {
+// Bun sets import.meta.main = true.  Node.js ESM does not have the property,
+// so we fall back to comparing import.meta.url against process.argv[1].
+function isDirectExecution(): boolean {
+  // Bun
+  if (typeof (import.meta as any).main === "boolean") {
+    return (import.meta as any).main === true;
+  }
+  // Node.js ESM: check if this module is the entry point
+  if (typeof process === "object" && process.argv?.[1]) {
+    try {
+      const { pathToFileURL } = require("url") as typeof import("url");
+      const entry = pathToFileURL(process.argv[1]).href;
+      return entry === (import.meta as any).url;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
+if (isDirectExecution()) {
   const connection = createConnection(ProposedFeatures.all);
   const server = createPikeServer(connection);
   server.connection.listen();
