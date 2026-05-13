@@ -47,8 +47,11 @@ if [ -d "$ROOT/harness" ]; then
   cp "$ROOT/harness/"*.pike "$STAGE/harness/"
 fi
 
-# Copy web-tree-sitter runtime WASM (needed by server AND client)
+# Copy web-tree-sitter runtime WASM (needed by server AND client).
+# Server resolves relative to server/dist/server.mjs → server/dist/web-tree-sitter.wasm
+# Client resolves relative to client/dist/extension.cjs → client/dist/web-tree-sitter.wasm
 cp "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" "$STAGE/server/dist/"
+cp "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" "$STAGE/client/dist/"
 
 # Copy TextMate grammar (instant syntax highlighting before WASM loads)
 if [ -d "$ROOT/client/syntaxes" ]; then

@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.4.1] — 2026-05-13
+
+### Fixed
+
+  - **Client-side tree-sitter initialization**: `TreeSitterSyntacticProvider.#init()`
+    now calls `Parser.init()` before `Language.load()`. Without this call, the
+    Emscripten WASM runtime (`C`) was never initialized, causing all tree-sitter
+    operations on the client side to fail silently. This was the root cause of
+    missing syntax highlighting and the "Unable to open: Cannot read properties of
+    undefined (reading 'charAt')" error in v0.4.0.
+
+  - **VSIX packaging**: `build-vsix.sh` now copies `web-tree-sitter.wasm` to
+    `client/dist/` in addition to `server/dist/`. The client resolves WASM paths
+    relative to `extension.cjs` (which lives in `client/dist/`), so the runtime WASM
+    must be present there for `Parser.init()` to succeed.
+
+## [Unreleased]
+
 ## [0.4.0] — 2026-05-13
 
 ### Added
