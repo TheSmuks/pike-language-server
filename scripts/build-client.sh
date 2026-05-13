@@ -1,14 +1,10 @@
 #!/usr/bin/env bash
 # Build the VSCode extension client bundle.
-# Injects a unique build number (last 6 digits of epoch seconds) at compile time
-# via esbuild --define, so the extension can log it on activation.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
-
-BUILD_NUM=$(date +%s | tail -c 7)
 
 esbuild "$ROOT/client/extension.ts" \
   --bundle \
@@ -18,8 +14,7 @@ esbuild "$ROOT/client/extension.ts" \
   --target=node22 \
   --format=cjs \
   --sourcemap \
-  --external:vscode \
-  --define:BUILD_NUMBER="\"$BUILD_NUM\""
+  --external:vscode
 
 # esbuild converts import.meta to `var import_meta = {}` for CJS format,
 # which breaks web-tree-sitter's WASM resolution (import_meta.url is undefined).

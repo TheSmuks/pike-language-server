@@ -108,8 +108,6 @@ const HIGHLIGHTS_QUERY = `
   "predef" "bits"
   "__attribute__" "__deprecated__"
   "__func__"
-  ; Future reserved keywords
-  "auto" "const"
 ] @keyword
 
 ; Modifiers
@@ -175,17 +173,6 @@ const HIGHLIGHTS_QUERY = `
 
 ; Preprocessor
 (preprocessor_directive) @keyword.directive
-
-
-; Built-in constants
-[
-  "this" "this_program"
-  "__LINE__" "__FILE__" "__DATE__" "__TIME__" "__DIR__"
-  "__VERSION__" "__MAJOR__" "__MINOR__" "__PIKE__"
-  "__REAL_VERSION__" "__REAL_MAJOR__" "__REAL_MINOR__"
-  "__BUILD__" "__REAL_BUILD__"
-  "__AUTO_BIGNUM__" "__COUNTER__"
-] @constant.builtin
 `;
 
 interface ParsedToken {
@@ -214,7 +201,10 @@ export class TreeSitterSyntacticProvider
   private query: treeSitter.Query | null = null;
   private initPromise: Promise<void> | null = null;
 
-  constructor(private readonly context: vscode.ExtensionContext) {
+  constructor(
+    private readonly context: vscode.ExtensionContext,
+    private readonly log: (message: string) => void,
+  ) {
     // Kick off async init; first document request will await it.
     this.initPromise = this.#init();
   }
@@ -222,32 +212,32 @@ export class TreeSitterSyntacticProvider
   /** Initialize web-tree-sitter WASM and load the Pike grammar. */
   async #init(): Promise<void> {
     try {
-      console.log("[tree-sitter] step 1/4: Parser.init() — loading WASM runtime");
+      this.log("[tree-sitter] step 1/4: Parser.init() — loading WASM runtime");
       // Parser.init() MUST be called before Language.load() or new Parser().
       // It initializes the Emscripten WASM module (C runtime) that Language.load
       // depends on via C.loadWebAssemblyModule().  Omitting this was the root cause
       // of "Cannot read properties of undefined (reading 'charAt')" and missing
       // syntax highlighting in v0.4.0.
       await treeSitter.Parser.init();
-      console.log("[tree-sitter] step 1/4: Parser.init() complete");
+      this.log("[tree-sitter] step 1/4: Parser.init() complete");
 
-      console.log("[tree-sitter] step 2/4: loading Pike grammar WASM");
+      this.log("[tree-sitter] step 2/4: loading Pike grammar WASM");
       const lang = await treeSitter.Language.load(
         this.context.asAbsolutePath("server/tree-sitter-pike.wasm"),
       );
       this.language = lang;
-      console.log("[tree-sitter] step 2/4: Pike grammar loaded");
+      this.log("[tree-sitter] step 2/4: Pike grammar loaded");
 
-      console.log("[tree-sitter] step 3/4: creating parser instance");
+      this.log("[tree-sitter] step 3/4: creating parser instance");
       this.parser = new treeSitter.Parser();
       this.parser.setLanguage(this.language);
-      console.log("[tree-sitter] step 3/4: parser created");
+      this.log("[tree-sitter] step 3/4: parser created");
 
-      console.log("[tree-sitter] step 4/4: compiling highlights query");
+      this.log("[tree-sitter] step 4/4: compiling highlights query");
       this.query = new treeSitter.Query(this.language, HIGHLIGHTS_QUERY);
-      console.log("[tree-sitter] step 4/4: highlights query compiled — ready");
+      this.log("[tree-sitter] step 4/4: highlights query compiled — ready");
     } catch (err) {
-      console.error("[tree-sitter] INIT FAILED:", err);
+      this.log(`[tree-sitter] INIT FAILED: ${err}`);
     }
   }
 
@@ -280,14 +270,40 @@ export class TreeSitterSyntacticProvider
         const { startPosition, endPosition } = node;
 
         const { tokenType, tokenModifiers } = mapCapture(capture.name);
-        tokens.push({
-          line: startPosition.row,
-          startCol: startPosition.column,
-          endLine: endPosition.row,
-          endCol: endPosition.column,
-          tokenType,
-          tokenModifiers,
-        });
+
+        if (endPosition.row === startPosition.row) {
+          // Single-line capture — emit as-is.
+          tokens.push({
+            line: startPosition.row,
+            startCol: startPosition.column,
+            endLine: endPosition.row,
+            endCol: endPosition.column,
+            tokenType,
+            tokenModifiers,
+          });
+        } else {
+          // Multi-line capture (block comments, preprocessor directives with
+          // trailing newlines, etc.) — split into per-line segments. Each
+          // segment becomes a separate token on its own line.
+          const lineCount = document.lineCount;
+          for (let row = startPosition.row; row <= endPosition.row && row < lineCount; row++) {
+            const lineLen = document.lineAt(row).text.length;
+            if (lineLen === 0) continue;
+
+            const segStart = row === startPosition.row ? startPosition.column : 0;
+            const segEnd = row === endPosition.row ? endPosition.column : lineLen;
+            if (segStart >= segEnd) continue;
+
+            tokens.push({
+              line: row,
+              startCol: segStart,
+              endLine: row,
+              endCol: segEnd,
+              tokenType,
+              tokenModifiers,
+            });
+          }
+        }
       }
 
       // Sort by start position so tokens are in document order
@@ -297,9 +313,32 @@ export class TreeSitterSyntacticProvider
         return a.startCol - b.startCol;
       });
 
+      // Remove overlapping tokens: keep the longest (most specific) match at
+      // each position. When two captures start at the same offset, the wider
+      // one (e.g., @function for a function name) wins over the narrower
+      // (e.g., @variable for any identifier).
+      const deduped: ParsedToken[] = [];
+      for (const tok of tokens) {
+        const prev = deduped[deduped.length - 1];
+        if (prev) {
+          // Overlap: same start position or prev extends into tok
+          const overlap = prev.line === tok.line && tok.startCol < prev.endCol;
+          if (overlap) {
+            // Keep whichever token is wider (more specific capture)
+            const prevWidth = prev.endCol - prev.startCol;
+            const tokWidth = tok.endCol - tok.startCol;
+            if (tokWidth > prevWidth) {
+              deduped[deduped.length - 1] = tok;
+            }
+            continue;
+          }
+        }
+        deduped.push(tok);
+      }
+
       const builder = new vscode.SemanticTokensBuilder(this.legend);
 
-      for (const tok of tokens) {
+      for (const tok of deduped) {
         builder.push(
           new vscode.Range(
             tok.line,
@@ -314,7 +353,7 @@ export class TreeSitterSyntacticProvider
 
       return builder.build();
     } catch (err) {
-      console.error("[TreeSitterProvider] Failed:", err);
+      this.log(`[TreeSitterProvider] Failed: ${err}`);
       return null;
     }
   }

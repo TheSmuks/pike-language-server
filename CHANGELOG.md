@@ -8,21 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.2] — 2026-05-13
+## [0.4.3] — 2026-05-14
+
+### Added
+
+  - **SIGKILL escalation in PikeWorker.stop()**: If the Pike subprocess does not
+    exit within 3 seconds of SIGTERM, the server escalates to SIGKILL. This
+    prevents zombie Pike processes on shared SSH dev servers where resources are
+    limited.
+
+  - **Process signal handlers in server main.ts**: `process.on('exit')`,
+    `process.on('SIGTERM')`, and `process.on('SIGINT')` handlers now call
+    `worker.stop()` as a last resort, ensuring the Pike subprocess is cleaned up
+    even when the Node server process is force-killed.
+
+  - **Stale VSIX cleanup**: `build-vsix.sh` removes old VSIX files from `out/`
+    before creating a new one. Previously they accumulated indefinitely.
+
+  - **Shutdown test suite** (`tests/lsp/shutdown.test.ts`): 22 tests covering
+    PikeWorker.stop() (subprocess termination, SIGKILL escalation, queue cleanup,
+    idempotency), server onShutdown (diagnosticManager disposal, index clearing,
+    autodoc cache clearing, LSP shutdown protocol), force-close resilience, and
+    createPikeServer interface contract.
+
+### Changed
+
+  - **install-extension.sh**: Removed redundant `bun run build:extension` step
+    (already done by `build-vsix.sh`). Cleaned up phase numbering.
 
 ### Fixed
 
-  - **Dual connection.listen() crash**: Removed the `isDirectExecution()` entry
-    block from `server.ts`. When esbuild bundled both `server.ts` and `main.ts`,
-    two `connection.listen()` calls executed on the same stdio transport,
-    corrupting LSP protocol state and causing `FullTextDocument._content` to
-    become `undefined` — the root cause of "Cannot read properties of undefined
-    (reading 'charAt')" on file open.
+  - **Build suffix doubling**: `build-vsix.sh` now strips any existing `+NNNNNN`
+    build suffix from the version string before appending a new one, preventing
+    corrupted version strings like `0.4.2+704238+704238`.
 
-  - **Portable snapshot paths**: The harness now normalizes absolute paths
-    embedded in Pike diagnostic messages (e.g. include resolution errors)
-    using a `<ROOT>` placeholder. The `cpp-include.pike` snapshot no longer
-    contains a machine-specific path, fixing CI on different environments.
+  - **VSIX install path mismatch**: `install-extension.sh` reads the actual VSIX
+    path from a `.latest-vsix` marker file produced by `build-vsix.sh`, instead of
+    guessing the filename. Previously it looked for `pike-language-server-0.4.2.vsix`
+    (no suffix) but the build produced suffixed names.
+
+  - **Stale OutputChannel logs**: `activate()` now calls `outputChannel.clear()`
+    before logging anything. VSCode OutputChannel content survives window reloads,
+    which caused old version entries from previous installs to accumulate and appear
+    as if multiple versions were running simultaneously.
+
+## [0.4.2] — 2026-05-13
 
 ### Added
 
@@ -46,6 +76,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Global error handlers**: `main.ts` installs `uncaughtException` and
     `unhandledRejection` handlers before any other code runs, ensuring startup
     crashes are logged instead of silently swallowed.
+
+### Fixed
+
+  - **Dual connection.listen() crash**: Removed the `isDirectExecution()` entry
+    block from `server.ts`. When esbuild bundled both `server.ts` and `main.ts`,
+    two `connection.listen()` calls executed on the same stdio transport,
+    corrupting LSP protocol state and causing `FullTextDocument._content` to
+    become `undefined` — the root cause of "Cannot read properties of undefined
+    (reading 'charAt')" on file open.
+
+  - **Portable snapshot paths**: The harness now normalizes absolute paths
+    embedded in Pike diagnostic messages (e.g. include resolution errors)
+    using a `<ROOT>` placeholder. The `cpp-include.pike` snapshot no longer
+    contains a machine-specific path, fixing CI on different environments.
 
 ## [0.4.1] — 2026-05-13
 

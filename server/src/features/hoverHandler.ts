@@ -29,6 +29,8 @@ import { renderAutodoc } from "./autodocRenderer";
 import type { LRUCache } from "../util/lruCache";
 import { stripScopeWrapper } from "../util/stripScope";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import { readFileSync } from "node:fs";
+import { renderAutodocLines } from "./autodocLineRenderer";
 
 // ---------------------------------------------------------------------------
 // Context
@@ -123,10 +125,114 @@ function formatHover(info: HoverInfo | null): Hover | null {
 
 function getSource(uri: string, documents: TextDocuments<TextDocument>): string | null {
   const doc = documents.get(uri);
-  return doc ? doc.getText() : null;
+  if (doc) return doc.getText();
+  // Cross-file: document not open in editor. Read from disk.
+  if (uri.startsWith("file://")) {
+    try {
+      return readFileSync(uri.slice(7), "utf8");
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
-/** Convert a Declaration to hover info. */
+/** Convert a cross-file resolved declaration to hover info. */
+function crossFileHover(
+  crossFile: { uri: string; decl: Declaration },
+  ctx: HoverContext,
+): Hover | null {
+  const decl = crossFile.decl;
+
+  // Synthesized implicit-class declarations (scopeId === -1) point at the
+  // top of a .pike file. Extract the file-level autodoc comment instead of
+  // trying to build a signature from the zero-width range.
+  if (decl.scopeId === -1) {
+    return fileLevelHover(crossFile.uri, decl.name, ctx);
+  }
+
+  return formatHover(declForHover(decl, crossFile.uri, ctx));
+}
+
+/**
+ * Build hover info for an implicit-class .pike file.
+ * Reads the source, finds the first autodoc_comment, and renders it.
+ */
+function fileLevelHover(uri: string, name: string, ctx: HoverContext): Hover | null {
+  // Tier 1: check autodoc XML cache
+  const cachedAutodoc = ctx.autodocCache.get(uri);
+  if (cachedAutodoc?.xml) {
+    const rendered = renderAutodoc(cachedAutodoc.xml, name, `class ${name}`);
+    if (rendered) {
+      return formatHover({
+        name,
+        signature: rendered.signature || `class ${name}`,
+        documentation: rendered.markdown,
+        line: 0,
+        character: 0,
+        isAutodoc: true,
+      });
+    }
+  }
+
+  // Tier 2: extract autodoc_comment from tree-sitter parse.
+  // getSource() already falls back to disk reads for non-open documents.
+  const source = getSource(uri, ctx.documents);
+  if (!source) {
+    return formatHover({
+      name,
+      signature: `class ${name}`,
+      documentation: "",
+      line: 0,
+      character: 0,
+    });
+  }
+
+  const tree = parse(source, uri);
+  if (tree) {
+    // Collect consecutive autodoc_comment nodes from the top of the file.
+    // Each //! line is a separate node. Blank //! lines separate paragraphs.
+    const collectFileAutodoc = (root: Node): string[] => {
+      const lines: string[] = [];
+      for (const child of root.children) {
+        if (child.type === "autodoc_comment") {
+          // Strip //! prefix, keep empty lines as paragraph separators
+          const text = child.text.replace(/^\/\/!\s?/, "");
+          lines.push(text);
+        } else if (child.type === "comment") {
+          // Skip regular comments but keep going
+          continue;
+        } else {
+          // Stop at first non-comment, non-whitespace node
+          break;
+        }
+      }
+      return lines;
+    };
+    const autodocLines = collectFileAutodoc(tree.rootNode);
+    const nonEmpty = autodocLines.filter(l => l.length > 0);
+    if (nonEmpty.length > 0) {
+      const rendered = renderAutodocLines(autodocLines);
+      if (rendered) {
+        return formatHover({
+          name,
+          signature: `class ${name}`,
+          documentation: rendered,
+          line: 0,
+          character: 0,
+        });
+      }
+    }
+  }
+
+  return formatHover({
+    name,
+    signature: `class ${name}`,
+    documentation: "",
+    line: 0,
+    character: 0,
+  });
+}
 function declForHover(
   decl: {
     name: string;
@@ -162,12 +268,14 @@ function declForHover(
     }
     raw = parts.join("\n");
   }
-  // Trim trailing semicolons, opening braces, and inline comments
+  // Trim trailing semicolons, opening braces, and inline comments.
+  // For function/method declarations, strip the body: everything from
+  // the first '{' onward (handles both single-line and multi-line bodies).
   const signature = raw
     .trim()
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/m, "")
-    .replace(/\s*\{\s*$/, "")
+    .replace(/\s*\{[\s\S]*$/, "")
     .replace(/\s*;\s*$/, "")
     .trim();
 
@@ -211,6 +319,69 @@ function declForHover(
       character: decl.nameRange.start.character,
       isAutodoc: true,
     };
+  }
+
+  // Tier 2b: Extract //! autodoc from lines immediately above the declaration.
+  // This handles cross-file hovers where the PikeExtractor XML cache isn't
+  // populated. Collects consecutive //! lines above the declaration, grouping
+  // them into paragraphs on blank //! separators.
+  {
+    const declLine = decl.nameRange.start.line;
+    if (declLine > 0) {
+      const autodocLines: string[] = [];
+      let scanLine = declLine - 1;
+      while (scanLine >= 0) {
+        const lineText = (lines[scanLine] ?? "").trimEnd();
+        if (lineText.endsWith("*/")) {
+          // Block comment end — scan backwards for start
+          const blockEnd = scanLine;
+          let blockStart = scanLine;
+          for (let bl = scanLine; bl >= 0; bl--) {
+            if ((lines[bl] ?? "").includes("/*")) {
+              blockStart = bl;
+              break;
+            }
+          }
+          scanLine = blockStart - 1;
+          continue;
+        }
+        const match = lineText.match(/^\/\/!\s?(.*)/);
+        if (match) {
+          autodocLines.unshift(match[1]);
+          scanLine--;
+        } else if (lineText === "" || lineText.startsWith("//")) {
+          // Blank line or regular comment — skip but keep scanning
+          scanLine--;
+        } else {
+          break;
+        }
+      }
+      // Split into paragraphs on blank //! lines, render autodoc markup
+      const paragraphs: string[] = [];
+      let current: string[] = [];
+      for (const line of autodocLines) {
+        if (line.length === 0) {
+          if (current.length > 0) {
+            paragraphs.push(current.join(" "));
+            current = [];
+          }
+        } else {
+          current.push(line);
+        }
+      }
+      if (current.length > 0) paragraphs.push(current.join(" "));
+      if (paragraphs.length > 0) {
+        const rendered = renderAutodocLines(autodocLines);
+        return {
+          name: decl.name,
+          signature: signature,
+          documentation: rendered || paragraphs.join("\n\n"),
+          line: decl.nameRange.start.line,
+          character: decl.nameRange.start.character,
+          isAutodoc: true,
+        };
+      }
+    }
   }
 
   // Tier 3: Fall through to tree-sitter declared type
@@ -297,7 +468,7 @@ export function registerHoverHandler(
         params.position.character,
       );
       if (crossFile) {
-        return formatHover(declForHover(crossFile.decl, crossFile.uri, ctx));
+        return crossFileHover(crossFile, ctx);
       }
 
       // Try arrow/dot access resolution for hover
@@ -358,6 +529,19 @@ export function registerHoverHandler(
       }
 
       return null;
+    }
+
+    // For inherit/import declarations, resolve to the target file and show
+    // its autodoc (the local declaration has no documentation of its own).
+    if (decl.kind === "inherit" || decl.kind === "import") {
+      const crossFile = await ctx.index.resolveCrossFileDefinition(
+        params.textDocument.uri,
+        params.position.line,
+        params.position.character,
+      );
+      if (crossFile) {
+        return crossFileHover(crossFile, ctx);
+      }
     }
 
     return formatHover(declForHover(decl, params.textDocument.uri, ctx));

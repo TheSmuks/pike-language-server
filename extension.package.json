@@ -59,12 +59,14 @@
     "semanticTokenTypes": [
       {
         "id": "builtinFunction",
-        "superType": "function"
+        "superType": "function",
+        "description": "Built-in Pike functions provided by the runtime or predef"
       }
     ],
     "semanticTokenModifiers": [
       {
-        "id": "mutable"
+        "id": "mutable",
+        "description": "Mutable variables that can be reassigned"
       }
     ],
     "semanticTokenScopes": [
@@ -111,6 +113,84 @@
           "description": "Maximum number of diagnostic problems reported per file.",
           "minimum": 1,
           "maximum": 1000,
+          "scope": "window"
+        },
+        "pike.languageServer.backgroundIndex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable background workspace indexing on startup. Disabling speeds up startup but cross-file features (go-to-definition, hover on inherited symbols) won't work until you open the files manually.",
+          "scope": "window"
+        },
+        "pike.languageServer.backgroundIndex.batchSize": {
+          "type": "number",
+          "default": 8,
+          "description": "Number of files indexed concurrently during background indexing. Higher values use more memory but finish faster. Lower values reduce memory pressure on constrained machines.",
+          "minimum": 1,
+          "maximum": 32,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.requestTimeoutMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Timeout (ms) for individual Pike worker requests. Increase for complex codebases that hit timeouts.",
+          "minimum": 1000,
+          "maximum": 60000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.idleTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "description": "Idle timeout (ms) before the Pike worker subprocess is killed. Set to 0 to keep it alive indefinitely.",
+          "minimum": 0,
+          "maximum": 3600000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.maxRequestsBeforeRestart": {
+          "type": "number",
+          "default": 100,
+          "description": "Force-restart the Pike worker after this many requests, to mitigate memory leaks. Set to 0 to disable.",
+          "minimum": 0,
+          "maximum": 10000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.maxActiveMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "Force-restart the Pike worker after this many minutes of activity. Set to 0 to disable.",
+          "minimum": 0,
+          "maximum": 1440,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.niceValue": {
+          "type": "number",
+          "default": 5,
+          "description": "CPU niceness for the Pike worker on Linux (0–19). Set to 0 to disable. Higher values reduce CPU contention on shared machines.",
+          "minimum": 0,
+          "maximum": 19,
+          "scope": "window"
+        },
+        "pike.languageServer.format.insertFinalNewline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insert a final newline when formatting.",
+          "scope": "window"
+        },
+        "pike.languageServer.format.operatorSpacing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add spaces around operators when formatting.",
+          "scope": "window"
+        },
+        "pike.languageServer.trace.server": {
+          "type": "string",
+          "default": "off",
+          "enum": ["off", "messages", "verbose"],
+          "enumDescriptions": [
+            "No LSP protocol logging",
+            "Log request/notification method names",
+            "Log full request/notification content"
+          ],
+          "description": "Controls the verbosity of LSP protocol tracing to the Output channel. Useful for debugging.",
           "scope": "window"
         }
       }

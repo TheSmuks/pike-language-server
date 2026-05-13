@@ -50,7 +50,7 @@
 			"comment": "Double-quoted strings (escape sequences before end-quote)",
 			"name": "string.quoted.double",
 			"begin": "\"",
-			"end": "\"(?![a-zA-Z])",
+			"end": "\"",
 			"patterns": [
 				{
 					"name": "constant.character.escape",
@@ -62,12 +62,7 @@
 				}
 			]
 		},
-		{
-			"comment": "Backtick strings",
-			"name": "string.quoted.backtick",
-			"begin": "`",
-			"end": "`"
-		},
+
 
 		{
 

@@ -23,6 +23,11 @@ import { logError, ErrorCategory } from "../util/errorLog.js";
 
 interface FormattingContext {
   documents: TextDocuments<TextDocument>;
+  /** Mutable formatting preferences — shared with server.ts, updated on setting changes. */
+  formattingConfig: {
+    insertFinalNewline: boolean;
+    operatorSpacing: boolean;
+  };
 }
 
 /**
@@ -105,8 +110,8 @@ export function registerFormattingHandler(
         const formatted = pikeFormat(source, {
           tabSize: options.tabSize ?? 2,
           useTabs: options.insertSpaces === false,
-          insertFinalNewline: true,
-          operatorSpacing: false,
+          insertFinalNewline: ctx.formattingConfig.insertFinalNewline,
+          operatorSpacing: ctx.formattingConfig.operatorSpacing,
         }, parserInstance);
 
         // Compute indent edits (pike-fmt already handles full formatting)
@@ -150,8 +155,8 @@ export function registerFormattingHandler(
         const formatted = pikeFormat(source, {
           tabSize: options.tabSize ?? 2,
           useTabs: options.insertSpaces === false,
-          insertFinalNewline: true,
-          operatorSpacing: false,
+          insertFinalNewline: ctx.formattingConfig.insertFinalNewline,
+          operatorSpacing: ctx.formattingConfig.operatorSpacing,
         }, parserInstance);
 
         // Only return edits for lines near the trigger character.

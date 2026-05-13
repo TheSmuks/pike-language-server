@@ -11,6 +11,8 @@
  */
 
 import { resolve, dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 
 
 import {
@@ -185,6 +187,16 @@ export function createPikeServer(connection: Connection): PikeServer {
     connection,
   };
 
+  // Mutable formatting config — updated on initialization and setting changes.
+  const formattingConfig = {
+    insertFinalNewline: true,
+    operatorSpacing: false,
+  };
+
+  // Background index config — read before starting the index pass.
+  let backgroundIndexEnabled = true;
+  let backgroundIndexBatchSize = 8;
+
   // -----------------------------------------------------------------------
   // Initialization
   // -----------------------------------------------------------------------
@@ -208,12 +220,38 @@ export function createPikeServer(connection: Connection): PikeServer {
       pikeBinaryPath?: string;
       diagnosticDebounceMs?: number;
       maxNumberOfProblems?: number;
+      backgroundIndexEnabled?: boolean;
+      backgroundIndexBatchSize?: number;
+      workerRequestTimeoutMs?: number;
+      workerIdleTimeoutMs?: number;
+      workerMaxRequestsBeforeRestart?: number;
+      workerMaxActiveMinutes?: number;
+      workerNiceValue?: number;
+      formatInsertFinalNewline?: boolean;
+      formatOperatorSpacing?: boolean;
     } | undefined;
 
     logInfo(connection, `[init] step 6b: creating workspace index (pikeBinaryPath=${initOpts?.pikeBinaryPath ?? "pike"})`);
     // Pass pikeBinaryPath so module resolution uses the same binary as PikeWorker
     index = await WorkspaceIndex.create(rootPath, initOpts?.pikeBinaryPath);
     diagnosticManager.setIndex(index);
+
+    // On-demand indexing: when go-to-definition targets a file not yet
+    // indexed by the background pass, parse and index it on the spot so
+    // the definition handler can resolve into it.
+    index.setOnDemandIndexFn(async (targetUri: string) => {
+      try {
+        const filePath = targetUri.replace("file://", "");
+        const content = await readFile(decodeURIComponent(filePath), "utf-8");
+        const tree = parse(content, targetUri);
+        const entry = await index.upsertFile(
+          targetUri, 0, tree, content, ModificationSource.BackgroundIndex,
+        );
+        return entry;
+      } catch {
+        return null;
+      }
+    });
     // Update handler context with resolved index
     (handlerContext as any).index = index;
     logInfo(connection, "[init] step 6b: workspace index created");
@@ -227,11 +265,42 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (initOpts?.pikeBinaryPath) {
       worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
     }
+    if (initOpts?.workerRequestTimeoutMs != null && initOpts.workerRequestTimeoutMs > 0) {
+      worker.updateConfig({ requestTimeoutMs: initOpts.workerRequestTimeoutMs });
+    }
+    if (initOpts?.workerIdleTimeoutMs != null && initOpts.workerIdleTimeoutMs >= 0) {
+      worker.updateConfig({ idleTimeoutMs: initOpts.workerIdleTimeoutMs });
+    }
+    if (initOpts?.workerMaxRequestsBeforeRestart != null && initOpts.workerMaxRequestsBeforeRestart >= 0) {
+      worker.updateConfig({ maxRequestsBeforeRestart: initOpts.workerMaxRequestsBeforeRestart });
+    }
+    if (initOpts?.workerMaxActiveMinutes != null && initOpts.workerMaxActiveMinutes >= 0) {
+      worker.updateConfig({ maxActiveMinutes: initOpts.workerMaxActiveMinutes });
+    }
+    if (initOpts?.workerNiceValue != null && initOpts.workerNiceValue >= 0) {
+      worker.updateConfig({ niceValue: initOpts.workerNiceValue });
+    }
     if (initOpts?.diagnosticDebounceMs && initOpts.diagnosticDebounceMs > 0) {
       diagnosticManager.setDebounceMs(initOpts.diagnosticDebounceMs);
     }
     if (initOpts?.maxNumberOfProblems && initOpts.maxNumberOfProblems > 0) {
       diagnosticManager.setMaxNumberOfProblems(initOpts.maxNumberOfProblems);
+    }
+
+    // Background index config
+    if (initOpts?.backgroundIndexEnabled != null) {
+      backgroundIndexEnabled = initOpts.backgroundIndexEnabled;
+    }
+    if (initOpts?.backgroundIndexBatchSize != null && initOpts.backgroundIndexBatchSize > 0) {
+      backgroundIndexBatchSize = initOpts.backgroundIndexBatchSize;
+    }
+
+    // Formatting config
+    if (initOpts?.formatInsertFinalNewline != null) {
+      formattingConfig.insertFinalNewline = initOpts.formatInsertFinalNewline;
+    }
+    if (initOpts?.formatOperatorSpacing != null) {
+      formattingConfig.operatorSpacing = initOpts.formatOperatorSpacing;
     }
 
     return {
@@ -366,17 +435,22 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
 
     // step 7e: background workspace indexing — fire-and-forget
-    logInfo(connection, "[init] step 7e: starting background workspace indexing");
-    indexWorkspaceFiles({
-      connection,
-      index,
-      workspaceRoot: index.workspaceRoot,
-      worker,
-    }).then(() => {
-      logInfo(connection, "[init] step 7e: background indexing complete");
-    }).catch((err) => {
-      logError(connection, ErrorCategory.Index, "[init] step 7e FAILED: background index", err);
-    });
+    if (backgroundIndexEnabled) {
+      logInfo(connection, `[init] step 7e: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+      indexWorkspaceFiles({
+        connection,
+        index,
+        workspaceRoot: index.workspaceRoot,
+        worker,
+        batchSize: backgroundIndexBatchSize,
+      }).then(() => {
+        logInfo(connection, "[init] step 7e: background indexing complete");
+      }).catch((err) => {
+        logError(connection, ErrorCategory.Index, "[init] step 7e FAILED: background index", err);
+      });
+    } else {
+      logInfo(connection, "[init] step 7e: background indexing disabled by settings");
+    }
 
     logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
   });
@@ -427,6 +501,38 @@ export function createPikeServer(connection: Connection): PikeServer {
     if (config.maxNumberOfProblems && config.maxNumberOfProblems > 0) {
       diagnosticManager.setMaxNumberOfProblems(config.maxNumberOfProblems);
     }
+
+    // Worker lifecycle config
+    const workerUpdate: Partial<{ pikeBinaryPath: string; requestTimeoutMs: number; idleTimeoutMs: number; maxRequestsBeforeRestart: number; maxActiveMinutes: number; niceValue: number }> = {};
+    if (config.pikeBinaryPath) {
+      workerUpdate.pikeBinaryPath = config.pikeBinaryPath;
+    }
+    if (config.workerRequestTimeoutMs != null && config.workerRequestTimeoutMs > 0) {
+      workerUpdate.requestTimeoutMs = config.workerRequestTimeoutMs;
+    }
+    if (config.workerIdleTimeoutMs != null && config.workerIdleTimeoutMs >= 0) {
+      workerUpdate.idleTimeoutMs = config.workerIdleTimeoutMs;
+    }
+    if (config.workerMaxRequestsBeforeRestart != null && config.workerMaxRequestsBeforeRestart >= 0) {
+      workerUpdate.maxRequestsBeforeRestart = config.workerMaxRequestsBeforeRestart;
+    }
+    if (config.workerMaxActiveMinutes != null && config.workerMaxActiveMinutes >= 0) {
+      workerUpdate.maxActiveMinutes = config.workerMaxActiveMinutes;
+    }
+    if (config.workerNiceValue != null && config.workerNiceValue >= 0) {
+      workerUpdate.niceValue = config.workerNiceValue;
+    }
+    if (Object.keys(workerUpdate).length > 0) {
+      worker.updateConfig(workerUpdate);
+    }
+
+    // Formatting config
+    if (config.formatInsertFinalNewline != null) {
+      formattingConfig.insertFinalNewline = config.formatInsertFinalNewline;
+    }
+    if (config.formatOperatorSpacing != null) {
+      formattingConfig.operatorSpacing = config.formatOperatorSpacing;
+    }
   });
 
   // -----------------------------------------------------------------------
@@ -439,6 +545,7 @@ export function createPikeServer(connection: Connection): PikeServer {
 
   registerFormattingHandler(connection, {
     documents,
+    formattingConfig,
   });
 
   // -----------------------------------------------------------------------
