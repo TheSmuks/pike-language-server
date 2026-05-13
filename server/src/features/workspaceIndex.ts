@@ -577,6 +577,7 @@ export class WorkspaceIndex {
       return {
         uri: targetUri,
         decl: {
+          id: -1,
           name: decl.name,
           kind: "class",
           nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
@@ -598,6 +599,7 @@ export class WorkspaceIndex {
       return {
         uri: targetUri,
         decl: {
+          id: -1,
           name: decl.name,
           kind: "class",
           nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
@@ -622,6 +624,7 @@ export class WorkspaceIndex {
       return {
         uri: targetUri,
         decl: {
+          id: -1,
           name: decl.name,
           kind: "class",
           nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
