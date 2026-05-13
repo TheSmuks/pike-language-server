@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [0.4.0] — 2026-05-13
 
 ### Fixed
 
@@ -169,6 +169,7 @@ th|    files `test2.md`, `test-changelog.md` are no longer tracked by git.
     `refs.method`, `refs.parameter`, `rename.prepare-valid`, `rename.execute`,
     `highlight.variable`, `hover.variable-type`, and `codeAction.unused-var`.
 
+## [Unreleased]
 
 ## [0.3.3-beta] — 2026-05-05
 ## [0.3.5-beta] — 2026-05-06
