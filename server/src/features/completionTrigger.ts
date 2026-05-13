@@ -425,6 +425,7 @@ export function isCompletableIdentifier(name: string): boolean {
 
 const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   function: CompletionItemKind.Function,
+  method: CompletionItemKind.Method,
   class: CompletionItemKind.Class,
   variable: CompletionItemKind.Variable,
   constant: CompletionItemKind.Constant,
@@ -620,7 +621,7 @@ export function cleanPredefSignature(raw: string): string {
  */
 export function resetCompletionCache(): void {
   stdlibChildrenMap = null;
-  stdlibTopLevel = null;
+  stdlibTopLevelNames = null;
 }
 
 // ---------------------------------------------------------------------------
