@@ -57,6 +57,12 @@ export interface WorkspaceIndexOptions {
   pikePaths?: PikePaths;
 }
 
+/**
+ * Callback type for on-demand file indexing.
+ * The server provides this so WorkspaceIndex stays free of parser/file I/O imports.
+ */
+export type OnDemandIndexFn = (uri: string) => Promise<FileEntry | null>;
+
 // ---------------------------------------------------------------------------
 // WorkspaceIndex
 // ---------------------------------------------------------------------------
@@ -80,6 +86,9 @@ export class WorkspaceIndex {
   /** Pike installation paths. */
   readonly pikePaths: PikePaths;
 
+  /** Optional on-demand indexing callback (set by server.ts). */
+  private onDemandIndex: OnDemandIndexFn | null = null;
+
   constructor(options: WorkspaceIndexOptions) {
     this.workspaceRoot = options.workspaceRoot;
     this.pikePaths = options.pikePaths ?? { pikeHome: "", modulePaths: [options.workspaceRoot], includePaths: [options.workspaceRoot], programPaths: [options.workspaceRoot] };
@@ -88,6 +97,11 @@ export class WorkspaceIndex {
       pikePaths: this.pikePaths,
       pikeVersion: null, // Set per-file during resolution
     });
+  }
+
+  /** Set the on-demand indexing callback (called from server.ts after creation). */
+  setOnDemandIndexFn(fn: OnDemandIndexFn): void {
+    this.onDemandIndex = fn;
   }
 
   /** Create a WorkspaceIndex with auto-detected Pike paths. */
@@ -531,7 +545,24 @@ export class WorkspaceIndex {
     const targetUri = await this.resolveInherit(decl.name, isStringLit, fromUri);
     if (!targetUri) return null;
 
-    const targetEntry = this.files.get(targetUri);
+    let targetEntry = this.files.get(targetUri);
+
+    // On-demand indexing: if the target file is not yet indexed and an
+    // on-demand callback is registered, trigger indexing so we can resolve
+    // into it. This handles the common case where the user navigates to a
+    // dependency before background indexing has reached it.
+    if (!targetEntry?.symbolTable && this.onDemandIndex) {
+      try {
+        const indexed = await this.onDemandIndex(targetUri);
+        if (indexed) {
+          targetEntry = indexed;
+        }
+      } catch {
+        // On-demand indexing failure is non-fatal; fall through to the
+        // null-return below.
+      }
+    }
+
     if (!targetEntry?.symbolTable) return null;
 
     // For directory modules (.pmod/), the target brings all top-level symbols into scope.
@@ -542,11 +573,17 @@ export class WorkspaceIndex {
           return { uri: targetUri, decl: targetDecl };
         }
       }
-      // No class — return the first declaration as a representative target
-      if (targetEntry.symbolTable.declarations.length > 0) {
-        return { uri: targetUri, decl: targetEntry.symbolTable.declarations[0] };
-      }
-      return null;
+      // No explicit class — point at top of file.
+      return {
+        uri: targetUri,
+        decl: {
+          name: decl.name,
+          kind: "class",
+          nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          scopeId: -1,
+        },
+      };
     }
 
     // For string literal inherits (file paths like "cross-inherit-simple-a.pike"):
@@ -557,10 +594,41 @@ export class WorkspaceIndex {
           return { uri: targetUri, decl: targetDecl };
         }
       }
-      if (targetEntry.symbolTable.declarations.length > 0) {
-        return { uri: targetUri, decl: targetEntry.symbolTable.declarations[0] };
+      // No explicit class — point at top of file.
+      return {
+        uri: targetUri,
+        decl: {
+          name: decl.name,
+          kind: "class",
+          nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          scopeId: -1,
+        },
+      };
+    }
+
+    // For dotted-path inherits to .pike files (e.g., "inherit Cache.Storage.Base"
+    // resolving to Base.pike): the .pike file is an implicit class.
+    // If there's an explicit class declaration, navigate to that.
+    // Otherwise, point at the top of the file — the file itself is the class.
+    const isDottedPath = decl.name.includes(".");
+    if (isDottedPath && targetUri.endsWith(".pike")) {
+      for (const targetDecl of targetEntry.symbolTable.declarations) {
+        if (targetDecl.kind === "class") {
+          return { uri: targetUri, decl: targetDecl };
+        }
       }
-      return null;
+      // No explicit class — synthesize a target at the start of the file.
+      return {
+        uri: targetUri,
+        decl: {
+          name: decl.name,
+          kind: "class",
+          nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          scopeId: -1,
+        },
+      };
     }
 
     // For identifier inherits to .pike files (e.g., "inherit Animal" where Animal
@@ -626,6 +694,7 @@ export class WorkspaceIndex {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const walk = (node: any): void => {
+      if (!node) return;
       if (node.type === 'inherit_decl' || node.type === 'import_decl') {
         // File-level inherit/import declarations
         const pathNode = node.childForFieldName('path');

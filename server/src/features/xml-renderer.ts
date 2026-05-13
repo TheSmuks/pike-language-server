@@ -191,8 +191,10 @@ export function renderInline(nodes: XmlNode[]): string {
   for (const node of nodes) {
     if (node.type === "text") {
       const t = node.text ?? "";
-      // Collapse whitespace in text nodes
-      parts.push(t.replace(/\s+/g, " "));
+      // Do NOT collapse whitespace here — whitespace is significant in <pre> contexts
+      // and preserving line structure is necessary for proper paragraph handling.
+      // Entities are already decoded by the XML parser.
+      parts.push(t);
       continue;
     }
 
@@ -208,8 +210,12 @@ export function renderInline(nodes: XmlNode[]): string {
       case "code":
         parts.push(`\`${renderInline(node.children ?? [])}\``);
         break;
+      case "pre":
+        // <pre> is preformatted — preserve content as-is
+        parts.push(renderInline(node.children ?? []));
+        break;
 
-      // Cross-references: plain text in v1
+      // Cross-references: render as plain text (not markdown links for now)
       case "ref":
         parts.push(renderInline(node.children ?? []));
         break;
@@ -217,6 +223,36 @@ export function renderInline(nodes: XmlNode[]): string {
       // Pike expressions — render as inline code
       case "expr":
         parts.push(`\`${renderInline(node.children ?? [])}\``);
+        break;
+
+      // Underline
+      case "u":
+        parts.push(`__${renderInline(node.children ?? [])}__`);
+        break;
+
+      // Superscript
+      case "sup":
+        parts.push(`**${renderInline(node.children ?? [])}**^`);
+        break;
+
+      // Subscript
+      case "sub":
+        parts.push(`_${renderInline(node.children ?? [])}_`);
+        break;
+
+      // URL — render as plain text
+      case "url": {
+        const url = (node.attrs?.["href"] ?? "").trim();
+        const label = node.children?.length
+          ? renderInline(node.children)
+          : url;
+        parts.push(label);
+        break;
+      }
+
+      // RFC reference
+      case "rfc":
+        parts.push(`RFC ${renderInline(node.children ?? [])}`);
         break;
 
       // Unknown inline element: render children as text
@@ -253,7 +289,7 @@ export function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
       // Paragraph
       case "p": {
         const text = renderInline(node.children ?? []).trim();
-        if (text) lines.push(prefix + text);
+        if (text) lines.push(text);
         break;
       }
 
@@ -297,12 +333,19 @@ export function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
       }
 
 
-      // Text container
+      // Text container — holds one or more <p> elements (paragraphs).
+      // Paragraph separation is encoded in the <p> structure (each <p> is
+      // a separate element). Join with single newlines (from the rendered
+      // <p> content) — blank lines between paragraphs come from the Pike
+      // DocParser's \n\n between <p> elements.
       case "text": {
         const blockChildren = (node.children ?? []).filter(
           (c) => c.type !== "text" || (c.text?.trim() ?? ""),
         );
-        lines.push(...renderBlocks(blockChildren, indent));
+        const rendered = renderBlocks(blockChildren, 0);
+        if (rendered.length > 0) {
+          lines.push(...rendered);
+        }
         break;
       }
 
@@ -527,6 +570,30 @@ export function renderBlocks(nodes: XmlNode[], indent = 0): string[] {
         break;
       }
 
+      // Ordered list
+      case "ol": {
+        let idx = 0;
+        for (const child of node.children ?? []) {
+          if (child.type === "element" && child.tag === "li") {
+            const text = renderInline(child.children ?? []).trim();
+            if (text) lines.push(`${prefix}${++idx}. ${text}`);
+          }
+        }
+        if (idx > 0) lines.push("");
+        break;
+      }
+
+      // Unordered list
+      case "ul": {
+        for (const child of node.children ?? []) {
+          if (child.type === "element" && child.tag === "li") {
+            const text = renderInline(child.children ?? []).trim();
+            if (text) lines.push(`${prefix}- ${text}`);
+          }
+        }
+        break;
+      }
+
       // Section
       case "section": {
         const title = node.attrs?.["title"] ?? "";
@@ -608,13 +675,13 @@ export function renderDocGroup(group: XmlNode): string[] {
 
   const groupType = markerEl.tag;
 
-  // Get description text
+  // Get description text — join paragraphs with blank lines
   const textEls = children.filter((c) => c.type === "element" && c.tag === "text");
-  const desc = textEls
+  const descParas = textEls
     .flatMap((t) => (t.children ?? []).filter((c) => c.type === "element" && c.tag === "p"))
     .map((p) => renderInline(p.children ?? []).trim())
-    .filter(Boolean)
-    .join(" ");
+    .filter(Boolean);
+  const desc = descParas.join("\n\n");
 
   switch (groupType) {
     case "param": {

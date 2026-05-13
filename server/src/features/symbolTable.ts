@@ -223,11 +223,17 @@ export function getDefinitionAt(
   line: number,
   character: number,
 ): Declaration | null {
-  // Find a reference at this position
+  // Find a reference at this position.
+  // References store only the start position, so check if the cursor is
+  // anywhere within the identifier name (start..start+name.length).
   for (const ref of table.references) {
-    if (ref.loc.line === line && ref.loc.character === character) {
-      if (ref.resolvesTo !== null) {
-        return table.declById.get(ref.resolvesTo) ?? null;
+    if (ref.loc.line === line) {
+      const nameStart = ref.loc.character;
+      const nameEnd = nameStart + ref.name.length;
+      if (character >= nameStart && character < nameEnd) {
+        if (ref.resolvesTo !== null) {
+          return table.declById.get(ref.resolvesTo) ?? null;
+        }
       }
     }
   }
@@ -237,10 +243,13 @@ export function getDefinitionAt(
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
         character >= nr.start.character && character <= nr.end.character) {
-      // For inherit declarations, follow through to the target class
+      // For inherit declarations, follow through to the target class.
+      // If the target isn't resolvable locally (external module), return
+      // null so the caller falls through to cross-file resolution.
       if (decl.kind === 'inherit' || decl.kind === 'import') {
         const target = resolveInheritToClass(decl, table);
         if (target) return target;
+        return null;
       }
       return decl;
     }
@@ -391,9 +400,13 @@ export function getReferencesTo(
   // Is it a reference?
   if (targetDeclId === null) {
     for (const ref of table.references) {
-      if (ref.loc.line === line && ref.loc.character === character) {
-        targetDeclId = ref.resolvesTo;
-        break;
+      if (ref.loc.line === line) {
+        const nameStart = ref.loc.character;
+        const nameEnd = nameStart + ref.name.length;
+        if (character >= nameStart && character < nameEnd) {
+          targetDeclId = ref.resolvesTo;
+          break;
+        }
       }
     }
   }

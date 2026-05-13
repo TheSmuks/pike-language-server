@@ -1,28 +1,27 @@
 /**
  * errorLog.ts — Centralized logging for the Pike Language Server.
  *
- * All log output goes through this module to ensure a consistent format:
+ * All log output goes through this module to ensure a consistent format
+ * matching the client-side output channel:
  *
- *   2026-05-13T14:32:01.456Z INFO  parser initialized
- *   2026-05-13T14:32:01.789Z ERROR [parse] onDidChangeContent(/proj/main.pike)
- *     message: unexpected token at line 42
+ *   [20:08:22.826] [SERVER] [init] step 6: onInitialize — client connected
+ *   [20:08:22.895] [SERVER] ⚠  no cache found — fresh start
+ *   [20:08:22.895] [SERVER] ✖  [index] upsertFile(/path/to/file.pike)
+ *     message: Cannot read properties of null
  *     errorId: #7
  *     stack:
- *       Error: unexpected token at line 42
- *         at parse (parser.ts:123)
- *
- * Format: <ISO timestamp> <LEVEL> <message>
- *
- * Levels: INFO, WARN, ERROR
- * - INFO:  operational messages (startup, cache restore, indexing progress)
- * - WARN:  recoverable issues (pike binary not found, degraded features)
- * - ERROR: failures with stack traces (parse errors, worker crashes)
+ *       Error: ...
  *
  * Architecture:
+ * - Server logs are sent via custom `pike/log` notification to the client,
+ *   which writes them to the shared OutputChannel using the same format as
+ *   client-side logs. This avoids VSCode's `[Error - ...]` / `[Log - ...]`
+ *   prefixes that `connection.console` methods produce.
  * - errorLog is a process-global singleton — instantiated once in main.ts
  * - logError/logWarn/logInfo are the entry points for all server logging
  * - PikeWorker receives an onError callback; all its errors route through logError
- * - The client receives error count via custom notification for status bar badge
+ * - The client receives error count via `pike/errorCount` notification for
+ *   the status bar badge.
  */
 
 import type { Connection } from "vscode-languageserver/node";
@@ -127,30 +126,35 @@ function now(): string {
   return new Date().toISOString();
 }
 
-/** Format a single log line: `2026-05-13T14:32:01.456Z INFO  message` */
-function formatLine(ts: string, level: LogLevel, msg: string): string {
-  // Pad level to 5 chars for alignment: INFO, WARN, ERROR
-  const padded = level.padEnd(5);
-  return `${ts} ${padded} ${msg}`;
-}
-
 // ---------------------------------------------------------------------------
-// Safe connection write
+// Safe connection write via custom notification
 // ---------------------------------------------------------------------------
 
 /**
- * Write lines to the LSP connection console.
- * Falls back to process.stderr if the connection is closed during teardown.
+ * Send log lines to the client via `pike/log` notification.
+ *
+ * The client writes them to the shared OutputChannel using the same
+ * `[HH:MM:SS.mmm] [SERVER]` format as client-side logs, ensuring a
+ * consistent appearance in the Output panel.
+ *
+ * Falls back to `connection.console.error()` (and then stderr) if the
+ * custom notification is not yet registered or the connection is down.
  */
-function safeWrite(connection: Connection, lines: string[]): void {
+function safeWrite(connection: Connection, level: LogLevel, lines: string[]): void {
   const text = lines.join("\n");
   try {
-    connection.console.error(text);
+    connection.sendNotification("pike/log", { level, lines });
   } catch {
+    // Custom notification not registered (early startup or teardown).
+    // Fall back to connection.console so the message is not lost.
     try {
-      process.stderr.write(text + "\n");
+      connection.console.error(text);
     } catch {
-      // Nothing more we can do — both connection and stderr failed.
+      try {
+        process.stderr.write(text + "\n");
+      } catch {
+        // Nothing more we can do — both connection and stderr failed.
+      }
     }
   }
 }
@@ -161,8 +165,6 @@ function safeWrite(connection: Connection, lines: string[]): void {
 
 /**
  * Log an informational message.
- *
- * Format: `2026-05-13T14:32:01.456Z INFO  message`
  */
 export function logInfo(connection: Connection, message: string): void {
   const ts = now();
@@ -173,13 +175,11 @@ export function logInfo(connection: Connection, message: string): void {
     stack: undefined,
     context: undefined,
   });
-  safeWrite(connection, [formatLine(ts, "INFO", message)]);
+  safeWrite(connection, "INFO", [message]);
 }
 
 /**
  * Log a warning message.
- *
- * Format: `2026-05-13T14:32:01.456Z WARN  message`
  */
 export function logWarn(connection: Connection, message: string): void {
   const ts = now();
@@ -190,19 +190,11 @@ export function logWarn(connection: Connection, message: string): void {
     stack: undefined,
     context: undefined,
   });
-  safeWrite(connection, [formatLine(ts, "WARN", message)]);
+  safeWrite(connection, "WARN", [message]);
 }
 
 /**
  * Log an error with full context and stack trace.
- *
- * Format:
- *   2026-05-13T14:32:01.456Z ERROR [category] context
- *     message: error message
- *     errorId: #7
- *     stack:
- *       Error: ...
- *         at ...
  *
  * Also sends a `pike/errorCount` notification to the client for the
  * status bar badge.
@@ -226,17 +218,17 @@ export function logError(
   });
 
   const lines: string[] = [
-    formatLine(ts, "ERROR", `[${category}] ${ctx}`),
-    `  message: ${message}`,
-    `  errorId: #${entry.id}`,
+    `[${category}] ${ctx}`,
+    `    message: ${message}`,
+    `    errorId: #${entry.id}`,
   ];
   if (stack !== undefined) {
     lines.push(
-      `  stack:\n${stack.split("\n").map((l) => "    " + l).join("\n")}`,
+      `    stack:\n${stack.split("\n").map((l) => "      " + l).join("\n")}`,
     );
   }
 
-  safeWrite(connection, lines);
+  safeWrite(connection, "ERROR", lines);
 
   // Notify the client of the updated error count so the status bar badge
   // stays current. Errors are only surfaced in the status bar — the output

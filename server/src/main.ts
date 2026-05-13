@@ -43,24 +43,20 @@ if (shouldListen()) {
     );
   });
 
-  const stderr = (msg: string) => { process.stderr.write(msg + "\n"); };
-
-  stderr("[init] step 1/5: process started — pid=" + process.pid + " node=" + process.version);
-
-  stderr("[init] step 2/5: creating LSP connection");
   const connection = createConnection(ProposedFeatures.all);
-  stderr("[init] step 2/5: connection created");
 
-  stderr("[init] step 3/5: creating server");
   const server = createPikeServer(connection);
-  stderr("[init] step 3/5: server created");
 
-  stderr("[init] step 4/5: registering global error handlers");
-  // (already done above via process.on)
+  // Safety net: ensure Pike worker subprocess is killed if the server Node
+  // process exits unexpectedly (VSCode force-close, OOM kill, etc.).
+  // Without this, the Pike worker becomes an orphan consuming resources
+  // on shared development servers.
+  const cleanupWorker = () => { server.worker.stop(); };
+  process.on("exit", cleanupWorker);
+  process.on("SIGTERM", () => { cleanupWorker(); process.exit(0); });
+  process.on("SIGINT", () => { cleanupWorker(); process.exit(0); });
 
-  stderr("[init] step 5/5: listening on stdio");
   server.connection.listen();
-  stderr("[init] step 5/5: listening — server ready for client connection");
 }
 
 // Re-export for smoke test compatibility (smoke test imports createPikeServer)

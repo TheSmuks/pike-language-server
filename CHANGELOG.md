@@ -8,6 +8,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-05-14
+
+### Fixed
+
+  - **Build suffix doubling**: `build-vsix.sh` now strips any existing `+NNNNNN`
+    build suffix from the version string before appending a new one, preventing
+    corrupted version strings like `0.4.2+704238+704238`.
+
+  - **VSIX install path mismatch**: `install-extension.sh` reads the actual VSIX
+    path from a `.latest-vsix` marker file produced by `build-vsix.sh`, instead of
+    guessing the filename. Previously it looked for `pike-language-server-0.4.2.vsix`
+    (no suffix) but the build produced suffixed names.
+
+  - **Stale OutputChannel logs**: `activate()` now calls `outputChannel.clear()`
+    before logging anything. VSCode OutputChannel content survives window reloads,
+    which caused old version entries from previous installs to accumulate and appear
+    as if multiple versions were running simultaneously.
+
+### Added
+
+  - **SIGKILL escalation in PikeWorker.stop()**: If the Pike subprocess does not
+    exit within 3 seconds of SIGTERM, the server escalates to SIGKILL. This
+    prevents zombie Pike processes on shared SSH dev servers where resources are
+    limited.
+
+  - **Process signal handlers in server main.ts**: `process.on('exit')`,
+    `process.on('SIGTERM')`, and `process.on('SIGINT')` handlers now call
+    `worker.stop()` as a last resort, ensuring the Pike subprocess is cleaned up
+    even when the Node server process is force-killed.
+
+  - **Stale VSIX cleanup**: `build-vsix.sh` removes old VSIX files from `out/`
+    before creating a new one. Previously they accumulated indefinitely.
+
+  - **Shutdown test suite** (`tests/lsp/shutdown.test.ts`): 22 tests covering
+    PikeWorker.stop() (subprocess termination, SIGKILL escalation, queue cleanup,
+    idempotency), server onShutdown (diagnosticManager disposal, index clearing,
+    autodoc cache clearing, LSP shutdown protocol), force-close resilience, and
+    createPikeServer interface contract.
+
+### Changed
+
+  - **install-extension.sh**: Removed redundant `bun run build:extension` step
+    (already done by `build-vsix.sh`). Cleaned up phase numbering.
+
 ## [0.4.2] — 2026-05-13
 
 ### Fixed

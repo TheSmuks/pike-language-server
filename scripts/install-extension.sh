@@ -39,23 +39,19 @@ if [[ "$SKIP_TESTS" == false ]]; then
   bun run typecheck
 fi
 
-# --- Phase 2: Build ---
-echo "==> Building extension..."
-bun run build:extension
-
-# --- Phase 3: Package ---
-echo "==> Packaging VSIX..."
+# --- Phase 2: Build and Package ---
+# build-vsix.sh handles both building (bun run build:extension) and packaging,
+# so we delegate the entire build+package step to it.
+echo "==> Building and packaging VSIX..."
 bash "$SCRIPT_DIR/build-vsix.sh"
-
-# Find the VSIX
-VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').version)")
-VSIX="$ROOT/out/pike-language-server-${VERSION}.vsix"
-if [[ ! -f "$VSIX" ]]; then
-  echo "ERROR: VSIX not found at $VSIX"
+VSIX=$(cat "$ROOT/out/.latest-vsix" 2>/dev/null || true)
+rm -f "$ROOT/out/.latest-vsix"
+if [[ -z "$VSIX" || ! -f "$VSIX" ]]; then
+  echo "ERROR: VSIX not found (build-vsix.sh may have failed)"
   exit 1
 fi
 
-# --- Phase 4: Detect editor ---
+# --- Phase 3: Detect editor ---
 if [[ -z "$EDITOR_CMD" ]]; then
   for cmd in code code-insiders codium; do
     if command -v "$cmd" &>/dev/null; then
@@ -71,11 +67,11 @@ if [[ -z "$EDITOR_CMD" ]]; then
   exit 2
 fi
 
-# --- Phase 5: Install ---
+# --- Phase 4: Install ---
 echo "==> Installing into $EDITOR_CMD..."
 if "$EDITOR_CMD" --install-extension "$VSIX"; then
   echo ""
-  echo "✓ Pike Language Server v${VERSION} installed."
+  echo "✓ Pike Language Server installed."
   echo "  Restart VSCode (or reload window) to activate."
 else
   INSTALL_EXIT=$?

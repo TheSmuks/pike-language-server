@@ -4,10 +4,6 @@
  * Starts the LSP server as a child process communicating over stdio.
  */
 
-// Injected at build time via esbuild --define. Falls back to "dev" for
-// unbundled runs (bun test, typecheck).
-declare const BUILD_NUMBER: string | undefined;
-
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as vscode from "vscode";
@@ -23,6 +19,7 @@ import {
   LanguageClientOptions,
   ServerOptions,
   TransportKind,
+  Trace,
 } from "vscode-languageclient/node";
 
 import { TreeSitterSyntacticProvider } from "./treeSitterProvider";
@@ -36,24 +33,35 @@ let client: LanguageClient | undefined;
 
 // ─── Observability ──────────────────────────────────────────────────────────
 
-/** Output channel capturing extension lifecycle and server events. */
-
-
-
-const outputChannel = vscode.window.createOutputChannel("Pike Language Server");
+/**
+ * Log output channel with native VSCode coloring.
+ * Using `{ log: true }` creates a LogOutputChannel which renders
+ * [INFO] [WARN] [ERROR] [DEBUG] level tags in their respective colors.
+ * VSCode adds its own timestamp, so we only provide the label + message.
+ */
+const outputChannel = vscode.window.createOutputChannel("Pike Language Server", { log: true });
 /** Status bar item reflecting server state. */
 const statusBarItem = vscode.window.createStatusBarItem(
-  vscode.StatusBarAlignment.Left,
+  vscode.StatusBarAlignment.Right,
   /* priority */ 99,
 );
 
+/** Log level matching VSCode LogOutputChannel methods. */
+type LogLevel = "info" | "warn" | "error" | "debug";
+
 /**
- * Log a timestamped message to the output channel.
- * `log: true` channel hides the VSCode timestamp; we add our own.
+ * Log a message to the output channel with a colored level tag.
+ * VSCode's LogOutputChannel adds the timestamp and renders [INFO]/[WARN]/etc.
+ * in their native colors (blue, yellow, red, gray).
  */
-function log(label: string, message: string): void {
-  const ts = new Date().toISOString().substring(11, 23); // HH:MM:SS.mmm
-  outputChannel.appendLine(`[${ts}] [${label}] ${message}`);
+function log(level: LogLevel, label: string, message: string): void {
+  const formatted = `[${label}] ${message}`;
+  switch (level) {
+    case "debug": outputChannel.debug(formatted); break;
+    case "info":  outputChannel.info(formatted); break;
+    case "warn":  outputChannel.warn(formatted); break;
+    case "error": outputChannel.error(formatted); break;
+  }
 }
 
 /** Update the status bar to reflect server state and optional error count. */
@@ -91,6 +99,15 @@ function updateStatusBar(state: State, errorCount = 0): void {
   }
 }
 
+/** Map the `pike.languageServer.trace.server` value to a vscode-languageclient Trace. */
+function applyTraceSetting(langClient: LanguageClient): void {
+  const raw = vscode.workspace.getConfiguration("pike.languageServer").get<string>("trace.server", "off");
+  const trace = raw === "verbose" ? Trace.Verbose
+    : raw === "messages" ? Trace.Messages
+    : Trace.Off;
+  langClient.setTrace(trace);
+}
+
 /** Convenience wrapper for updating status bar with error count. */
 function updateStatusBarWithErrors(state: State, errorCount: number): void {
   updateStatusBar(state, errorCount);
@@ -109,12 +126,12 @@ function makeErrorHandler(label: string): ErrorHandler {
         typeof message === "object" && message !== null && "method" in message
           ? (message as { method: string }).method
           : "unknown";
-      log(label, `Server error during ${method}`);
+      log("error", label, `Server error during ${method}`);
       return { action: ErrorAction.Continue };
     },
 
     closed(): CloseHandlerResult {
-      log(label, "Server process exited");
+      log("warn", label, "Server process exited");
       return { action: CloseAction.DoNotRestart };
     },
   };
@@ -132,16 +149,35 @@ function getSettings(): Record<string, unknown> {
     diagnosticMode: config.get<string>("diagnosticMode", "realtime"),
     diagnosticDebounceMs: config.get<number>("diagnosticDebounceMs", 500),
     maxNumberOfProblems: config.get<number>("maxNumberOfProblems", 100),
+
+    // Background indexing
+    backgroundIndexEnabled: config.get<boolean>("backgroundIndex.enabled", true),
+    backgroundIndexBatchSize: config.get<number>("backgroundIndex.batchSize", 8),
+
+    // Pike worker lifecycle
+    workerRequestTimeoutMs: config.get<number>("worker.requestTimeoutMs", 5000),
+    workerIdleTimeoutMs: config.get<number>("worker.idleTimeoutMs", 300000),
+    workerMaxRequestsBeforeRestart: config.get<number>("worker.maxRequestsBeforeRestart", 100),
+    workerMaxActiveMinutes: config.get<number>("worker.maxActiveMinutes", 30),
+    workerNiceValue: config.get<number>("worker.niceValue", 5),
+
+    // Formatting
+    formatInsertFinalNewline: config.get<boolean>("format.insertFinalNewline", true),
+    formatOperatorSpacing: config.get<boolean>("format.operatorSpacing", false),
   };
 }
 
 // ─── Extension lifecycle ────────────────────────────────────────────────────
 
 export function activate(context: vscode.ExtensionContext): void {
-  log("EXT", "[init] step 1/6: activate() called");
+  // Clear stale output from previous activations (OutputChannel content
+  // survives window reloads, which makes it look like multiple versions
+  // are running simultaneously).
+  outputChannel.clear();
+
+  log("info", "EXT", "[init] step 1/6: activate() called");
   const version = context.extension.packageJSON.version as string;
-  const buildId = typeof BUILD_NUMBER !== "undefined" ? BUILD_NUMBER : "dev";
-  log("EXT", `[init] version ${version}+${buildId}`);
+  log("info", "EXT", `[init] version ${version}`);
 
   // step 2: language configuration
   try {
@@ -150,14 +186,17 @@ export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
       vscode.languages.setLanguageConfiguration("pike", langConfig),
     );
-    log("EXT", "[init] step 2/6: language configuration loaded");
+    log("info", "EXT", "[init] step 2/6: language configuration loaded");
   } catch (err) {
-    log("EXT", `[init] step 2/6: language-configuration.json not loaded — ${(err as Error).message}`);
+    log("info", "EXT", `[init] step 2/6: language-configuration.json not loaded — ${(err as Error).message}`);
   }
 
   // step 3: tree-sitter syntactic provider
-  log("EXT", "[init] step 3/6: creating tree-sitter syntactic provider (async init)");
-  const syntacticProvider = new TreeSitterSyntacticProvider(context);
+  log("info", "EXT", "[init] step 3/6: creating tree-sitter syntactic provider (async init)");
+  const syntacticProvider = new TreeSitterSyntacticProvider(
+    context,
+    (message: string) => log("info", "TREE-SITTER", message),
+  );
   context.subscriptions.push(
     vscode.languages.registerDocumentSemanticTokensProvider(
       { language: "pike" },
@@ -165,13 +204,14 @@ export function activate(context: vscode.ExtensionContext): void {
       syntacticProvider.legend,
     ),
   );
-  log("EXT", "[init] step 3/6: tree-sitter provider registered (init runs in background)");
+  log("info", "EXT", "[init] step 3/6: tree-sitter provider registered (init runs in background)");
 
   // step 4: status bar
   updateStatusBar(State.Starting);
   statusBarItem.command = "workbench.action.output.toggleOutput";
+  statusBarItem.show();
   context.subscriptions.push(statusBarItem);
-  log("EXT", "[init] step 4/6: status bar created");
+  log("info", "EXT", "[init] step 4/6: status bar created");
 
   const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
 
@@ -202,13 +242,13 @@ export function activate(context: vscode.ExtensionContext): void {
     initializationOptions: getSettings(),
     // Route server errors through our custom handler (no popup spam).
     errorHandler: makeErrorHandler("SERVER"),
-    // Share the existing output channel so the LanguageClient does not create
-    // a second one with the same name (which would cause duplicate log output).
+    // Share our LogOutputChannel so the LanguageClient doesn't create
+    // a second one with the same name.
     outputChannel,
   };
 
   // step 5: create and start LanguageClient
-  log("EXT", "[init] step 5/6: creating LanguageClient");
+  log("info", "EXT", "[init] step 5/6: creating LanguageClient");
   client = new LanguageClient(
     "pikeLanguageServer",
     "Pike Language Server",
@@ -223,19 +263,37 @@ export function activate(context: vscode.ExtensionContext): void {
       : event.newState === State.Running ? "Running"
       : event.newState === State.Stopped ? "Stopped"
       : `unknown(${event.newState})`;
-    log("CLIENT", `[init] state change: ${label}`);
+    log("info", "CLIENT", `[init] state change: ${label}`);
   });
 
-  log("EXT", "[init] step 5/6: starting server process...");
+  log("info", "EXT", "[init] step 5/6: starting server process...");
   client.start();
 
+  // Apply initial trace setting.
+  applyTraceSetting(client);
+
   // step 6: register commands and notification handlers
-  log("EXT", "[init] step 6/6: registering commands and notification handlers");
+  log("info", "EXT", "[init] step 6/6: registering commands and notification handlers");
 
   client.onNotification(
     "pike/errorCount",
     (params: { count: number }) => {
       setErrorCount(params.count);
+    },
+  );
+
+  // Server log lines — written to the same output channel with [SERVER] tag
+  // so the format is consistent with client-side logs.
+  client.onNotification(
+    "pike/log",
+    (params: { level: string; lines: string[] }) => {
+      const level = params.level === "WARN" ? "warn"
+        : params.level === "ERROR" ? "error"
+        : params.level === "DEBUG" ? "debug"
+        : "info";
+      for (const line of params.lines) {
+        log(level, "SERVER", line);
+      }
     },
   );
 
@@ -245,6 +303,19 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("pike.showErrorLog", () => {
       outputChannel.show(true);
       setErrorCount(0); // Dismiss badge on view
+    }),
+  );
+
+  // CodeLens "N references" command: trigger VSCode's built-in references
+  // peek UI at the clicked lens position.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("pike.showReferences", (uri, position) => {
+      // VSCode's executeReferenceProvider triggers the same UI as Shift+F12.
+      vscode.commands.executeCommand(
+        "vscode.executeReferenceProvider",
+        vscode.Uri.parse(uri),
+        new vscode.Position(position.line, position.character),
+      );
     }),
   );
 
@@ -261,7 +332,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (event.affectsConfiguration("pike.languageServer")) {
         if (restarting) return;
         restarting = true;
-        log("EXT", "Settings changed — restarting server...");
+        log("info", "EXT", "Settings changed — restarting server...");
         client?.stop().then(() => {
           client = new LanguageClient(
             "pikeLanguageServer",
@@ -272,7 +343,7 @@ export function activate(context: vscode.ExtensionContext): void {
               initializationOptions: getSettings(),
               // Re-apply custom error handler after restart.
               errorHandler: makeErrorHandler("SERVER"),
-              // Share the output channel to avoid duplicate log entries.
+              // Re-share the output channel.
               outputChannel,
             },
           );
@@ -280,6 +351,7 @@ export function activate(context: vscode.ExtensionContext): void {
             updateStatusBar(ev.newState);
           });
           client.start();
+          applyTraceSetting(client);
         }).finally(() => {
           restarting = false;
         });
@@ -287,10 +359,10 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
-  log("EXT", "[init] activate() complete — server starting in background");
+  log("info", "EXT", "[init] activate() complete — server starting in background");
 }
 
 export function deactivate(): Thenable<void> | undefined {
-  log("EXT", "deactivate() — shutting down");
+  log("info", "EXT", "deactivate() — shutting down");
   return client?.stop();
 }
