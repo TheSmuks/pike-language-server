@@ -120,6 +120,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+  - **Critical: client-side tree-sitter WASM loading broken** — esbuild's CJS output
+    set `import.meta` to an empty object, making `import_meta.url` undefined.
+    `web-tree-sitter` could not locate its WASM runtime, silently breaking
+    semantic token highlighting in the editor.  The build script now patches
+    the bundled output so `import_meta.url` resolves to the bundle's real path.
+
+  - **Server `isMain` detection broken in Node.js** — `import.meta.main` is a
+    Bun-only property; in Node.js it is always `undefined`, so the fallback
+    branch never called `connection.listen()`.  Production use was unaffected
+    (the `PIKE_LSP_STDIO` env-var guard in `main.ts` covers that), but running
+    the server standalone under Node.js silently exited.  Replaced with a
+    `process.argv[1]` comparison that works in both runtimes.
+
   - **Typecheck errors**: Fixed 21 TypeScript errors introduced in Phases B–D
     that were not caught locally. Added `'method'` to the `DeclKind` union type
     and all `Record<DeclKind, ...>` maps. Fixed `Reference` property access
