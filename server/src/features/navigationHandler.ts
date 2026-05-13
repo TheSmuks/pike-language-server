@@ -408,6 +408,27 @@ export function registerNavigationHandlers(
     );
 
     if (decl) {
+      // If the cursor is directly on the declaration's own name, the user
+      // is CTRL+CLICKing the definition itself. Return all references as
+      // multiple Locations so VSCode shows a peek list (usages).
+      const nr = decl.nameRange;
+      const cursorOnDeclName = nr.start.line === params.position.line &&
+        params.position.character >= nr.start.character &&
+        params.position.character <= nr.end.character;
+
+      if (cursorOnDeclName && decl.kind !== "inherit" && decl.kind !== "import") {
+        const refs = getReferencesTo(table, params.position.line, params.position.character);
+        if (refs.length > 0) {
+          return refs.map(ref => ({
+            uri: table.uri,
+            range: {
+              start: { line: ref.loc.line, character: ref.loc.character },
+              end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+            },
+          }));
+        }
+      }
+
       const loc: LspLocation = {
         uri: table.uri,
         range: {

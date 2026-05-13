@@ -8,22 +8,44 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 STAGE="$ROOT/out/.vsix-stage"
 
-# Read version from extension manifest
-VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').version)")
+# Read version from extension manifest.
+# Strip any existing build suffix (+NNNNNNN) to prevent doubling when
+# extension.package.json was left with a build-suffixed version from a
+# previous interrupted run or manual edit.
+RAW_VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').version)")
+VERSION="${RAW_VERSION%%+*}"
 BUILD_NUM=$(date +%s | tail -c 7)
-VSIX_NAME="pike-language-server-${VERSION}+${BUILD_NUM}.vsix"
+FULL_VERSION="${VERSION}+${BUILD_NUM}"
+VSIX_NAME="pike-language-server-${FULL_VERSION}.vsix"
 
-echo "Packaging pike-language-server v${VERSION}+${BUILD_NUM}..."
+echo "Packaging pike-language-server v${FULL_VERSION}..."
+
+# Build server and client before packaging.
+echo "Building server and client..."
+(cd "$ROOT" && bun run build:extension)
 
 # Create output directory
 mkdir -p "$ROOT/out"
+
+# Remove stale VSIX files from previous builds.
+if ls "$ROOT/out/"*.vsix &>/dev/null; then
+  STALE_COUNT=$(ls -1 "$ROOT/out/"*.vsix | wc -l)
+  if [[ "$STALE_COUNT" -gt 0 ]]; then
+    echo "Removing ${STALE_COUNT} stale VSIX file(s)..."
+    rm -f "$ROOT/out/"*.vsix
+  fi
+fi
 
 # Clean stage
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
 
-# Copy extension manifest as package.json
-cp "$ROOT/extension.package.json" "$STAGE/package.json"
+# Copy extension manifest as package.json with build number in version
+node -e "
+  const pkg = require('$ROOT/extension.package.json');
+  pkg.version = '${FULL_VERSION}';
+  require('fs').writeFileSync('$STAGE/package.json', JSON.stringify(pkg, null, 2) + '\n');
+"
 
 # Copy extension client
 mkdir -p "$STAGE/client/dist"
@@ -98,12 +120,15 @@ du -sh "$STAGE"/* | sort -rh | head -10
 
 # Package with vsce
 cd "$STAGE"
-npx @vscode/vsce package --no-dependencies -o "$ROOT/out/$VSIX_NAME" 2>&1
+/home/smuks/.bun/bin/vsce package --no-dependencies -o "$ROOT/out/$VSIX_NAME" 2>&1
 
 cd "$ROOT"
 rm -rf "$STAGE"
 
 echo ""
 echo "VSIX: $ROOT/out/$VSIX_NAME"
-echo "VSIX: $ROOT/out/$VSIX_NAME"
 ls -lh "$ROOT/out/$VSIX_NAME"
+
+# Write VSIX path to a marker file so callers (install-extension.sh) can
+# find the exact path without parsing stdout.
+echo "$ROOT/out/$VSIX_NAME" > "$ROOT/out/.latest-vsix"

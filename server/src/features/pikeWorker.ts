@@ -373,13 +373,29 @@ export class PikeWorker {
     this.startTime = Date.now();
   }
 
-  /** Stop the Pike worker process. */
+  /**
+   * Stop the Pike worker process.
+   * Sends SIGTERM first, then escalates to SIGKILL after 3 seconds if the
+   * process hasn't exited. This prevents zombie Pike processes on shared
+   * development servers when the worker is unresponsive.
+   */
   stop(): void {
     this.clearIdleTimer();
     if (this.proc && !this.proc.killed) {
-      this.proc.kill("SIGTERM");
-      this.proc = null;
+      const dying = this.proc;
+      dying.kill("SIGTERM");
+
+      // Force-kill after grace period. Node's ChildProcess.kill() is
+      // idempotent — calling it on an already-exited process is a no-op.
+      const forceTimer = setTimeout(() => {
+        if (!dying.killed) {
+          dying.kill("SIGKILL");
+        }
+      }, 3000);
+      // Don't let the timer prevent process exit.
+      forceTimer.unref();
     }
+    this.proc = null;
     this.queue.length = 0;
     this.sending = false;
   }
