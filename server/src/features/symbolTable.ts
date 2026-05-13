@@ -33,6 +33,7 @@ export interface Declaration {
 
 export type DeclKind =
   | 'function'
+  | 'method'
   | 'class'
   | 'variable'
   | 'constant'

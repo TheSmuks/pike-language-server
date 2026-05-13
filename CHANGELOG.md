@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - **Typecheck errors**: Fixed 21 TypeScript errors introduced in Phases B–D
+    that were not caught locally. Added `'method'` to the `DeclKind` union type
+    and all `Record<DeclKind, ...>` maps. Fixed `Reference` property access
+    (`ref.line` → `ref.loc.line`) in call hierarchy and code lens. Fixed
+    `SelectionRange` property access (`lastRange.start` →
+    `lastRange.range.start`) in selection range. Fixed wrong variable name
+    (`stdlibTopLevel` → `stdlibTopLevelNames`) in completion cache reset.
+
 ### Changed
 
   - **Text document sync**: Switched from Full to Incremental sync

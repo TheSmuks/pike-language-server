@@ -78,8 +78,8 @@ function countReferences(
   // Each reference from a different location counts
   // (exclude the declaration itself)
   for (const { ref } of sameFileRefs) {
-    if (ref.line !== decl.nameRange.start.line ||
-        ref.character !== decl.nameRange.start.character) {
+    if (ref.loc.line !== decl.nameRange.start.line ||
+        ref.loc.character !== decl.nameRange.start.character) {
       count++;
     }
   }
