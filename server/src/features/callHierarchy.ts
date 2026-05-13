@@ -122,8 +122,8 @@ export function getIncomingCalls(
     // Find the function that contains this reference
     const caller = findEnclosingFunction(
       entry.symbolTable,
-      ref.line,
-      ref.character,
+      ref.loc.line,
+      ref.loc.character,
     );
     if (!caller) continue;
 
@@ -139,15 +139,15 @@ export function getIncomingCalls(
     );
     if (existing) {
       existing.fromRanges.push({
-        start: { line: ref.line, character: ref.character },
-        end: { line: ref.line, character: ref.character + (item.name?.length ?? 0) },
+        start: { line: ref.loc.line, character: ref.loc.character },
+        end: { line: ref.loc.line, character: ref.loc.character + (item.name?.length ?? 0) },
       });
     } else {
       calls.push({
         from: callerItem,
         fromRanges: [{
-          start: { line: ref.line, character: ref.character },
-          end: { line: ref.line, character: ref.character + (item.name?.length ?? 0) },
+          start: { line: ref.loc.line, character: ref.loc.character },
+          end: { line: ref.loc.line, character: ref.loc.character + (item.name?.length ?? 0) },
         }],
       });
     }

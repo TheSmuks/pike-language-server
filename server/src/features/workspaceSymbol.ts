@@ -22,6 +22,7 @@ import { SymbolKind } from "vscode-languageserver/node";
 
 const DECL_KIND_TO_SYMBOL_KIND: Record<DeclKind, SymbolKind> = {
   function: SymbolKind.Function,
+  method: SymbolKind.Method,
   class: SymbolKind.Class,
   variable: SymbolKind.Variable,
   constant: SymbolKind.Constant,
