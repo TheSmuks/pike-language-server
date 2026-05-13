@@ -113,10 +113,10 @@ export function getSelectionRange(
       // Deduplicate: skip if same range as last added
       const lastRange = ranges.length > 0 ? ranges[ranges.length - 1] : null;
       if (!lastRange ||
-          lastRange.start.line !== range.start.line ||
-          lastRange.start.character !== range.start.character ||
-          lastRange.end.line !== range.end.line ||
-          lastRange.end.character !== range.end.character) {
+          lastRange.range.start.line !== range.start.line ||
+          lastRange.range.start.character !== range.start.character ||
+          lastRange.range.end.line !== range.end.line ||
+          lastRange.range.end.character !== range.end.character) {
         ranges.push({ range });
       }
     }
