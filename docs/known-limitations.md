@@ -352,4 +352,22 @@ Neither requires WASM in the extension host.
 
 **Impact**: No change to user-visible highlighting. Server-side semantic tokens and
 TextMate grammar already covered all cases.
- **Unaffected tests**: Extension activation, LSP protocol features (hover, definition, etc.)
+
+## Inlay Hints Limitations
+
+### Parameter name hints blocked — tree-sitter-pike AST structure
+
+G2 (parameter name inlay hints at call sites) is blocked because tree-sitter-pike
+does not produce dedicated AST nodes for function call arguments. Function calls
+like `greet("Rex", 5)` are parsed as `comma_expr > assign_expr` with no
+`argument_list` or `postfix_expr` wrapper. This makes it impossible to reliably
+distinguish call arguments from other comma-separated expressions at the AST level.
+
+**Mitigation**: Type-aware signature help (F2/F3) already provides parameter
+information at call sites via the signature popup. Parameter name inlay hints
+would need either an upstream tree-sitter-pike grammar change to introduce
+explicit call-site nodes, or a heuristic approach that matches `identifier`
+followed by `(` in the source text (fragile).
+
+**Action**: File upstream issue against tree-sitter-pike for explicit call-site
+AST nodes.
