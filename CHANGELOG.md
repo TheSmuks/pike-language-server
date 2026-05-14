@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [Unreleased]
+## [0.6.0] — 2026-05-14
 
 ### Added
 
@@ -110,6 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
     referenced the deleted provider have been removed. The remaining output
     channel test is documented as a manual smoke test.
+
+## [Unreleased]
 
 ## [0.5.0] — 2026-05-14
 
