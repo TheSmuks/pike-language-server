@@ -17,6 +17,7 @@ import {
   type DeclKind,
   getSymbolsInScope,
   resolveTypeName,
+  PRIMITIVE_TYPES,
 } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveType, collectClassMembers } from "./typeResolver";
@@ -119,6 +120,88 @@ export function getStdlibTopLevel(
     stdlibTopLevelNames = [...names.entries()].map(([name, kind]) => ({ name, kind }));
   }
   return stdlibTopLevelNames;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-import reverse index — unqualified name → modules providing it
+// ---------------------------------------------------------------------------
+
+interface AutoImportEntry {
+  /** Unqualified symbol name (e.g. "write"). */
+  name: string;
+  /** Top-level module providing it (e.g. "Stdio"). */
+  module: string;
+  /** CompletionItemKind inferred from signature. */
+  kind: CompletionItemKind;
+  /** Signature from stdlib index. */
+  signature: string;
+}
+
+let autoImportMap: Map<string, AutoImportEntry[]> | null = null;
+
+/**
+ * Build the reverse index: unqualified symbol name → modules that provide it.
+ *
+ * Only indexes symbols from top-level modules (second segment in the FQN).
+ * Deeply nested class members are excluded — they require qualified access
+ * anyway and auto-importing the parent module wouldn't bring them into scope.
+ */
+function buildAutoImportMap(
+  stdlibIndex: Record<string, StdlibEntry>,
+): Map<string, AutoImportEntry[]> {
+  const map = new Map<string, AutoImportEntry[]>();
+
+  for (const [fqn, entry] of Object.entries(stdlibIndex)) {
+    const parts = fqn.split(".");
+    // Need at least: predef.Module.Symbol (3 segments)
+    if (parts.length < 3 || parts[0] !== "predef") continue;
+
+    const moduleName = parts[1];
+    const symbolName = parts[parts.length - 1];
+
+    // Skip operator identifiers and private symbols
+    if (!isCompletableIdentifier(symbolName)) continue;
+    if (symbolName.startsWith("_")) continue;
+
+    const autoEntry: AutoImportEntry = {
+      name: symbolName,
+      module: moduleName,
+      kind: inferStdlibKind(entry.signature),
+      signature: entry.signature,
+    };
+
+    const existing = map.get(symbolName);
+    if (existing) {
+      // Avoid duplicates from the same module
+      if (!existing.some(e => e.module === moduleName)) {
+        existing.push(autoEntry);
+      }
+    } else {
+      map.set(symbolName, [autoEntry]);
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Get all auto-import entries from the stdlib index.
+ * Used by completion to filter by prefix and add auto-import suggestions.
+ */
+export function getAllAutoImportEntries(
+  stdlibIndex: Record<string, StdlibEntry>,
+): Map<string, AutoImportEntry[]> {
+  if (!autoImportMap) {
+    autoImportMap = buildAutoImportMap(stdlibIndex);
+  }
+  return autoImportMap;
+}
+
+/**
+ * Reset the auto-import index. Called when the stdlib index is rebuilt.
+ */
+export function resetAutoImportCache(): void {
+  autoImportMap = null;
 }
 
 /**
@@ -355,7 +438,12 @@ function findLhsBeforePosition(rootNode: Node, line: number, column: number): No
       for (let i = errorIdx - 1; i >= 0; i--) {
         const sib = siblings[i];
         if (sib.type === "comma_expr" || sib.type === "expression_statement") {
-          // Drill into expression to find the identifier
+          // For chained calls (a()->b()->), we need the postfix_expr node
+          // so decomposePostfixChain can walk the full chain. For simple
+          // identifiers, the postfix_expr is a single-child wrapper and
+          // the chain decomposition produces the same result.
+          const postfix = findPostfixExprOrIdentifier(sib);
+          if (postfix) return postfix;
           return findIdentifierInExpr(sib);
         }
       }
@@ -366,6 +454,11 @@ function findLhsBeforePosition(rootNode: Node, line: number, column: number): No
   if (column > 0) {
     const fallbackPos = { row: line, column: column - 1 };
     const fallback = rootNode.descendantForPosition(fallbackPos);
+    // Prefer postfix_expr (for chained calls) over bare identifiers.
+    if (fallback) {
+      const postfix = findPostfixExprOrIdentifier(fallback);
+      if (postfix) return postfix;
+    }
     if (fallback && (fallback.type === "identifier" || fallback.type === "identifier_expr")) {
       return fallback;
     }
@@ -392,6 +485,26 @@ function findIdentifierInExpr(node: Node): Node | null {
   const child = node.child(node.childCount - 1);
   if (child) {
     return findIdentifierInExpr(child);
+  }
+  return null;
+}
+
+/**
+ * Drill into an expression node tree to find the outermost postfix_expr.
+ * Returns the postfix_expr node for chained calls (e.g., getContainer()->getItem())
+ * so that decomposePostfixChain can walk the full chain.
+ * Falls back to the leaf identifier for simple expressions.
+ */
+function findPostfixExprOrIdentifier(node: Node): Node | null {
+  // If we've reached a postfix_expr, return it — the caller will
+  // decompose the chain.
+  if (node.type === "postfix_expr") return node;
+  if (node.type === "identifier" || node.type === "identifier_expr") {
+    return node;
+  }
+  const child = node.child(node.childCount - 1);
+  if (child) {
+    return findPostfixExprOrIdentifier(child);
   }
   return null;
 }
@@ -463,7 +576,59 @@ export function declToCompletionItem(decl: Declaration, priority: number): Compl
     }
   }
 
+  // Commit characters: typing these after selecting a completion item
+  // commits the item and inserts the character, triggering the next
+  // action (dot-access completion or function-call parens).
+  const commitChars = computeCommitCharacters(decl, isFunction);
+  if (commitChars.length > 0) {
+    item.commitCharacters = commitChars;
+  }
+
   return item;
+}
+
+/**
+ * Determine commit characters for a completion item.
+ *
+ * - Functions/methods: "(" commits and opens parens for the call.
+ * - Classes: "." triggers dot completion, "(" for constructor calls.
+ * - Variables/parameters/inherit with a non-primitive type: "." triggers
+ *   dot completion on the instance.
+ */
+function computeCommitCharacters(decl: Declaration, isFunction: boolean): string[] {
+  if (isFunction) {
+    return ["("];
+  }
+
+  if (decl.kind === "class") {
+    // Classes can be constructed with () or dot-accessed for static members.
+    return [".", "("];
+  }
+
+  // Variables, parameters, and inherit aliases with a known class type
+  // get dot-commit so the user can chain into member access.
+  const hasClassType = decl.kind === "variable"
+    || decl.kind === "parameter"
+    || decl.kind === "inherit";
+
+  if (hasClassType && hasNonPrimitiveType(decl)) {
+    return ["."];
+  }
+
+  return [];
+}
+
+/**
+ * Check if a declaration has a declared or assigned type that is a class
+ * (non-primitive) type. Primitive types like "string", "int", "mixed" etc.
+ * never have members, so dot-access would not be useful.
+ */
+function hasNonPrimitiveType(decl: Declaration): boolean {
+  const typeStr = decl.declaredType ?? decl.assignedType;
+  if (!typeStr) return false;
+  // The type string may contain qualifiers or whitespace — trim before
+  // checking against the primitive set.
+  return !PRIMITIVE_TYPES.has(typeStr.trim());
 }
 
 /**

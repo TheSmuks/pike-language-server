@@ -37,6 +37,8 @@ import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
 import { produceCodeActions } from "./codeAction";
+import { produceAutodocTemplateActions } from "./autodocTemplate";
+import { produceGetterSetterActions } from "./getterSetter";
 import { searchWorkspaceSymbols } from "./workspaceSymbol";
 import { registerDocumentLinkHandler } from "./documentLink";
 import { getSelectionRange } from "./selectionRange";
@@ -575,7 +577,11 @@ export function registerNavigationHandlers(
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return [];
 
-    return produceCodeActions(params, doc.getText(), { stdlibModules });
+    const text = doc.getText();
+    const diagnosticActions = produceCodeActions(params, text, { stdlibModules });
+    const autodocActions = produceAutodocTemplateActions(params, text);
+    const getterSetterActions = produceGetterSetterActions(params, text, { stdlibModules });
+    return [...diagnosticActions, ...autodocActions, ...getterSetterActions];
   });
 
   // -----------------------------------------------------------------------

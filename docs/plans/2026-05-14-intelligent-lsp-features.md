@@ -4,6 +4,27 @@
 
 **Goal:** Transform the Pike LSP from a syntax-aware editor into an intelligent development tool that provides real-time type-aware completion, signature help, syntax/semantic diagnostics, and code quality warnings.
 
+## Implementation Status (updated 2026-05-14)
+
+| Task | Description | Status | Commit |
+|------|-------------|--------|--------|
+| E1 | Unused variable/parameter detection | DONE | `bf130a8` |
+| E2 | Unreachable code detection | DONE | `bf130a8` |
+| E3 | Missing return statement | DONE | `09f8dbc` |
+| E4 | Unused imports | DONE | `09f8dbc` |
+| E5 | Lint pipeline orchestrator | DONE | `bf130a8` |
+| F1 | Type-aware method completion | DONE | Chained call type inference via `resolveChainedType` |
+| F2 | Constructor signature help | DONE | `3653a64` |
+| F3 | Method signature help | DONE | `3653a64` |
+| F4 | Commit characters | DONE | `.` and `(` as commit characters |
+| F5 | Auto-import suggestions | DONE | Reverse stdlib index, `inherit Module;` text edit |
+| G1 | Inlay type hints | DONE | `7f79a9b` |
+| G2 | Parameter name inlay hints | DONE | tree-sitter-pike v1.2.2 fixed call-site AST (#18) |
+| H1 | Pre-warm PikeWorker | DONE | `dd1cac8` |
+| H2 | Arity quick-fix | DONE | Code action for "Wrong number of arguments" |
+| AU1 | Autodoc template (`//!!`) | DONE | Code action replacing `//!!` with //! skeleton |
+| GS1 | Getters/setters generation | DONE | Code action for class member variables |
+
 **Architecture:** Two complementary layers: (1) a **fast tree-sitter lint layer** that provides instant feedback on keystroke (syntax errors, unused variables, unreachable code) using only the AST and symbol table data already in memory, and (2) the **existing Pike compiler layer** for deep semantic errors (type mismatches, wrong arity, missing symbols). The fast layer runs synchronously on every parse; the Pike layer runs asynchronously via PikeWorker with debouncing.
 
 **Tech Stack:** tree-sitter-pike (already integrated), PikeWorker (already integrated), LSP Diagnostics protocol, LSP SignatureHelp protocol, LSP Completion protocol.

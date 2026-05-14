@@ -355,19 +355,15 @@ TextMate grammar already covered all cases.
 
 ## Inlay Hints Limitations
 
-### Parameter name hints blocked — tree-sitter-pike AST structure
+### ~~Parameter name hints blocked — tree-sitter-pike AST structure~~ — UNBLOCKED
 
-G2 (parameter name inlay hints at call sites) is blocked because tree-sitter-pike
-does not produce dedicated AST nodes for function call arguments. Function calls
-like `greet("Rex", 5)` are parsed as `comma_expr > assign_expr` with no
-`argument_list` or `postfix_expr` wrapper. This makes it impossible to reliably
-distinguish call arguments from other comma-separated expressions at the AST level.
+G2 (parameter name inlay hints at call sites) was blocked because tree-sitter-pike
+did not produce dedicated AST nodes for function call arguments at statement level.
+Bare function calls like `greet("Rex", 5)` were parsed as `macro_invocation_stmt`
+instead of `postfix_expr` with `argument_list`.
 
-**Mitigation**: Type-aware signature help (F2/F3) already provides parameter
-information at call sites via the signature popup. Parameter name inlay hints
-would need either an upstream tree-sitter-pike grammar change to introduce
-explicit call-site nodes, or a heuristic approach that matches `identifier`
-followed by `(` in the source text (fragile).
+**Fixed in**: tree-sitter-pike v1.2.2 — bare function calls at statement level now
+parse as `postfix_expr` with `argument_list`. All call sites now have proper AST
+structure for argument extraction.
 
-**Action**: File upstream issue against tree-sitter-pike for explicit call-site
-AST nodes.
+**Upstream issue**: [TheSmuks/tree-sitter-pike#18](https://github.com/TheSmuks/tree-sitter-pike/issues/18)

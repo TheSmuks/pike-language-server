@@ -18,10 +18,12 @@ describe("Inlay hints (G1)", () => {
     await initParser();
   });
 
+  let counter = 0;
   function getHints(source: string, startLine = 0, endLine = 999) {
-    const tree = parse(source, "file:///test.pike");
+    const uri = `file:///test-inlay-${++counter}.pike`;
+    const tree = parse(source, uri);
     assert(tree);
-    const table = buildSymbolTable(tree, source);
+    const table = buildSymbolTable(tree, uri, 0);
     return produceInlayHints({
       tree,
       table,

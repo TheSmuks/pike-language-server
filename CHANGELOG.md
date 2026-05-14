@@ -6,6 +6,79 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Added
+
+  - **Intelligent LSP features**: Complete implementation of the intelligent
+    features plan (E1-E5, F1-F5, G1-G2, H1-H2, AU1, GS1):
+
+  - **Fast lint layer** (E1-E5): Real-time syntax diagnostics on every keystroke
+    via tree-sitter — unused variables/parameters (P3001/P3002), unreachable
+    code (P3003), missing return statements (P3004), unused imports (P3005).
+    Suppressed on lines where Pike compiler provides diagnostics.
+
+  - **Type-aware completion** (F1): Chained call type inference via
+    `resolveChainedType` and `decomposePostfixChain`. Completes members through
+    multi-step `d->get_dog()->bark()` chains.
+
+  - **Constructor and method signature help** (F2-F3): Resolves `Dog("Rex",`
+    to constructor `create()` params, and `d->bark("hi",` to method signature
+    via type → class → method lookup.
+
+  - **Commit characters** (F4): `.` and `(` as commit characters in completion
+    items for immediate acceptance.
+
+  - **Auto-import suggestions** (F5): When typing an unqualified identifier
+    matching a stdlib symbol (e.g., `get_v`), offers completion with
+    `additionalTextEdits` that inserts `inherit Module;`. Uses reverse index
+    from stdlib-autodoc.json. Suppresses when module is already inherited.
+
+  - **Inlay type hints** (G1): Shows inferred types for untyped variable
+    declarations.
+
+  - **Parameter name inlay hints** (G2): Shows `param:` labels at call sites.
+    Handles `comma_expr` unwrapping and arrow/dot method resolution. Requires
+    tree-sitter-pike v1.2.2+ (issue #18 fixed).
+
+  - **PikeWorker pre-warming** (H1): `warmUp()` during initialization eliminates
+    ~200ms cold start on first completion/hover request.
+
+  - **Arity quick-fix** (H2): Code action for "Wrong number of arguments to foo()"
+    diagnostics — adds or removes argument slots.
+
+  - **Autodoc template generation** (AU1): Type `//!!` above a function, method,
+    class, or variable declaration. Code action replaces it with a `//!` autodoc
+    skeleton populated with parameter names and return type sections.
+
+  - **Getters/setters generation** (GS1): Code action on class member variables
+    generates `get_name()` / `set_name(value)` methods. Uses declared type for
+    return/parameter types. Skips if method already exists.
+
+  - **Call hierarchy**: Incoming/outgoing call hierarchy support
+    (`textDocument/callHierarchy`).
+
+  - Updated tree-sitter-pike WASM to v1.2.2 (fixes bare function call parsing,
+    issue #18).
+
+### Fixed
+
+  - **Parser cache corruption in tests**: `parse()` uses incremental parsing
+    with old tree cache keyed by URI. Tests reusing the same URI across
+    different sources got garbled parse trees. Fixed with unique URIs per test.
+
+### Changed
+
+  - **SignatureHelp rewrite**: `extractCalleeInfo()` now returns `objectName`
+    for method calls. `resolveMethodOnType()` does type → class → method
+    lookup. `resolveConstructor()` uses range overlap for scope discovery.
+
+### Known Limitations
+
+  - Bare (untyped) member variables in class bodies are not detected by the
+    symbol table — tree-sitter-pike parses them as `(identifier)` instead of
+    `variable_decl`. Upstream issue: TheSmuks/tree-sitter-pike#19.
+
 ## [0.5.0] — 2026-05-14
 
 ### Added
