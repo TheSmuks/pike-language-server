@@ -918,6 +918,23 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     expect(result.range.start.line).toBe(10); // parameter declaration line
   });
 
+  test("angle-bracket #include resolves to system include path", async () => {
+    // stdio.h exists in Pike's include directory.
+    const src = [
+      "#include <stdio.h>",
+      "int main() { return 0; }",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/include-stdio.pike", src);
+    // Click on the path portion (character 10 is inside <stdio.h>)
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 0, character: 10 },
+    });
+    expect(result).not.toBeNull();
+    expect(result.uri).toContain("stdio.h");
+    expect(result.uri).toMatch(/include/);
+  });
+
   test("type reference resolves to class declaration via LSP", async () => {
     const src = readCorpusSource("class-single-inherit.pike");
     const uri = server.openDoc(corpusUri("class-single-inherit.pike"), src);

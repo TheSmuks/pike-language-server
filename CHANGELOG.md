@@ -65,6 +65,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Updated tree-sitter-pike WASM** to v1.1.3 with structured `preproc_include`
     node (upstream fix for TheSmuks/tree-sitter-pike#17).
 
+## [0.5.1] — 2026-05-14
+
+### Fixed
+
+  - **Angle-bracket `#include <file>` navigation**: CTRL+CLICK and document links
+    now resolve `#include <stdio.h>` directives against Pike's system include paths
+    (from `pike --show-paths`). Previously these were explicitly skipped with a
+    `return null` bail-out.
+
+  - **UriError on Windows paths**: Replaced fragile `"file://" + encodeURI(path)`
+    URI construction with Node.js `pathToFileURL()` across all handlers
+    (definition, document link, background index). The old pattern produced
+    malformed URIs on paths containing special characters, causing VSCode to
+    throw "UriError: Scheme contains illegal characters".
+
+  - **Fact-check audit of `docs/known-limitations.md`**: Corrected 5 factual
+    errors — stale "PARTIALLY RESOLVED" / "MOSTLY RESOLVED" statuses for
+    `for_statement` and `switch_statement` (both fully resolved), removed a
+    fabricated `BLOCK_SCOPES` constant reference, removed stale line-number
+    anchors from `typeof_()` entries, and fixed corrupted severity table headers.
+
 ## [Unreleased]
 
 ## [0.4.3] — 2026-05-14

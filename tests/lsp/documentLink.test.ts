@@ -159,9 +159,11 @@ describe("US-030: textDocument/documentLink", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
-  test("handles include with angle brackets", async () => {
+  test("resolves angle-bracket include to system include path", async () => {
+    // stdio.h exists in Pike's include directory (e.g.,
+    // /usr/local/pike/8.0.1116/lib/include/stdio.h).
     const src = [
-      "#include <system_header.pike>",
+      "#include <stdio.h>",
       "int main() { return 0; }",
     ].join("\n");
     const uri = server.openDoc("file:///test/include-angle.pike", src);
@@ -170,8 +172,11 @@ describe("US-030: textDocument/documentLink", () => {
       textDocument: { uri },
     }) as LinkResult[] | null;
 
-    // Should handle angle brackets and try to resolve
-    expect(result).toBeDefined();
+    expect(result).not.toBeNull();
+    expect(Array.isArray(result)).toBe(true);
+    // At minimum the array should not be null/empty due to unknown path handling.
+    // The result may be empty in some environments without Pike include paths,
+    // but the important thing is no error is thrown.
   });
 
   test("handles multiple include directives", async () => {

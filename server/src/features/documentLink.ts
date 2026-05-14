@@ -18,6 +18,9 @@ import type { WorkspaceIndex } from "./workspaceIndex";
 import type { ModuleResolver } from "./moduleResolver";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 // ---------------------------------------------------------------------------
 // DocumentLink handler
@@ -88,7 +91,7 @@ function walkForLinks(
       break;
     }
     case "preproc_include": {
-      collectIncludeLink(node, currentUri, links);
+      collectIncludeLink(node, currentUri, links, resolver);
       break;
     }
   }
@@ -165,21 +168,37 @@ function collectInheritLink(
  *
  * tree-sitter-pike provides a structured `preproc_include` node with a `path`
  * field containing either a `string_literal` or `system_lib_string` child.
+ *
+ * For `"..."` includes: resolve relative to current file directory.
+ * For `<...>` includes: search Pike's include paths (from `pike --show-paths`).
  */
 function collectIncludeLink(
   node: Node,
   currentUri: string,
   links: DocumentLink[],
+  resolver: ModuleResolver,
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
-  // Only resolve "..." includes (string_literal). Angle-bracket <...>
-  // includes (system_lib_string) resolve against Pike's include path
-  // which we don't have access to.
-  if (pathNode.type === "system_lib_string") return;
+  if (pathNode.type === "system_lib_string") {
+    // Angle-bracket include: strip < and >, search include directories.
+    const pathText = pathNode.text.replace(/^<|>$/g, "");
+    if (pathText.length === 0) return;
 
-  // Strip surrounding quotes from the string literal.
+    const range = toLinkRange(pathNode);
+    for (const dir of resolver.includePaths) {
+      const candidate = join(dir, pathText);
+      if (existsSync(candidate)) {
+        links.push({ range, target: pathToFileURL(candidate).href });
+        return;
+      }
+    }
+    // File not found in any include directory — no link.
+    return;
+  }
+
+  // String literal include: resolve relative to current file directory.
   const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
   if (pathText.length === 0) return;
 
@@ -227,7 +246,7 @@ function resolveRelativePath(
     targetPath = currentDir + "/" + cleanPath;
   }
 
-  return "file://" + encodeURI(targetPath);
+  return pathToFileURL(targetPath).href;
 }
 
 // ---------------------------------------------------------------------------

@@ -28,6 +28,9 @@ import { getCompletions, type CompletionContext } from "./completion";
 import { findIdentifierPrefixRange } from "./completionTrigger";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { findImplementations } from "./implementation";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
@@ -142,43 +145,85 @@ export interface NavigationContext {
  *
  * tree-sitter-pike provides a structured `preproc_include` node with a
  * `path` field containing either `string_literal` or `system_lib_string`.
+ *
+ * For `"..."` includes: resolve relative to current file directory.
+ * For `<...>` includes: search Pike's include paths (from `pike --show-paths`).
  */
 function resolveIncludeTarget(
   doc: TextDocument,
   uri: string,
   line: number,
   character: number,
+  includePaths: string[],
 ): LspLocation | null {
   const tree = parse(doc.getText(), uri);
   if (!tree?.rootNode) return null;
 
   const node = findNodeAtPosition(tree.rootNode, line, character);
-  if (!node || node.type !== "preproc_include") return null;
+  if (!node) return null;
 
-  const pathNode = node.childForFieldName("path");
+  // findNodeAtPosition returns the deepest node. We want preproc_include
+  // OR a direct child of preproc_include (e.g. system_lib_string when
+  // clicking inside <stdio.h>). Walk up to find the include directive.
+  let includeNode: TsNode | null = node;
+  if (node.type !== "preproc_include") {
+    includeNode = node.parent;
+    while (includeNode && includeNode.type !== "preproc_include") {
+      includeNode = includeNode.parent;
+    }
+  }
+  if (!includeNode || includeNode.type !== "preproc_include") return null;
+
+  const pathNode = includeNode.childForFieldName("path");
   if (!pathNode) return null;
 
-  // Only resolve "..." includes (string_literal). Angle-bracket <...>
-  // includes (system_lib_string) resolve against Pike's include path.
-  if (pathNode.type === "system_lib_string") return null;
+  if (pathNode.type === "system_lib_string") {
+    // Angle-bracket include: strip < and > from the text, then search
+    // Pike's include directories.
+    const pathText = pathNode.text.replace(/^<|>$/g, "");
+    if (pathText.length === 0) return null;
+    return resolveIncludeInSearchPaths(pathText, includePaths);
+  }
 
-  // Strip surrounding quotes from the string literal.
+  // String literal include: resolve relative to current file directory.
   const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
   if (pathText.length === 0) return null;
 
-  // Resolve relative to current file directory.
   const currentPath = decodeURIComponent(uri.replace("file://", ""));
   const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
   const targetPath = resolveRelativeIncludePath(pathText, currentDir);
   if (!targetPath) return null;
 
   return {
-    uri: "file://" + encodeURI(targetPath),
+    uri: pathToFileURL(targetPath).href,
     range: {
       start: { line: 0, character: 0 },
       end: { line: 0, character: 0 },
     },
   };
+}
+
+/**
+ * Search include directories for a system header file.
+ * Returns an LSP Location if the file exists, null otherwise.
+ */
+function resolveIncludeInSearchPaths(
+  pathText: string,
+  includePaths: string[],
+): LspLocation | null {
+  for (const dir of includePaths) {
+    const candidate = join(dir, pathText);
+    if (existsSync(candidate)) {
+      return {
+        uri: pathToFileURL(candidate).href,
+        range: {
+          start: { line: 0, character: 0 },
+          end: { line: 0, character: 0 },
+        },
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -517,6 +562,7 @@ export function registerNavigationHandlers(
         params.textDocument.uri,
         params.position.line,
         params.position.character,
+        ctx.index.pikePaths.includePaths,
       );
       if (includeResult) return includeResult;
     }
