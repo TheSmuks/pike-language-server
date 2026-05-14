@@ -108,7 +108,7 @@ export function registerFormattingHandler(
           return null;
         }
         const formatted = pikeFormat(source, {
-          tabSize: options.tabSize ?? 2,
+          tabSize: options.tabSize ?? 4,
           useTabs: options.insertSpaces === false,
           insertFinalNewline: ctx.formattingConfig.insertFinalNewline,
           operatorSpacing: ctx.formattingConfig.operatorSpacing,
@@ -153,7 +153,7 @@ export function registerFormattingHandler(
         // the relevant block, but the parser is fast (<1ms for typical
         // files) and this guarantees correctness.
         const formatted = pikeFormat(source, {
-          tabSize: options.tabSize ?? 2,
+          tabSize: options.tabSize ?? 4,
           useTabs: options.insertSpaces === false,
           insertFinalNewline: ctx.formattingConfig.insertFinalNewline,
           operatorSpacing: ctx.formattingConfig.operatorSpacing,

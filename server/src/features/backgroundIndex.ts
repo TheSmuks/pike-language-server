@@ -16,7 +16,7 @@ import { join, extname } from "node:path";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { ModificationSource } from "./workspaceIndex";
-import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory } from "../util/errorLog.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -160,8 +160,15 @@ export async function indexWorkspaceFiles(
           const tree = parse(content);
           return { filepath, uri, content, tree };
         } catch (err) {
-          errors++;
-          logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:readFile(${filepath})`, err);
+          const code = (err as NodeJS.ErrnoException).code;
+          // Permission and not-found errors are expected on shared servers.
+          // Log as warnings, not errors — they don't indicate a bug.
+          if (code === "EACCES" || code === "EPERM" || code === "ENOENT") {
+            logWarn(connection, `skipping ${filepath}: ${code}`);
+          } else {
+            errors++;
+            logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:readFile(${filepath})`, err);
+          }
           return null;
         }
       }),
