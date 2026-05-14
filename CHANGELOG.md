@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   - **Constructor and method signature help** (F2-F3): Resolves `Dog("Rex",`
     to constructor `create()` params, and `d->bark("hi",` to method signature
-    via type → class → method lookup.
+    via type -> class -> method lookup.
 
   - **Commit characters** (F4): `.` and `(` as commit characters in completion
     items for immediate acceptance.
@@ -58,8 +58,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Call hierarchy**: Incoming/outgoing call hierarchy support
     (`textDocument/callHierarchy`).
 
+  - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
+    `function_type` nodes, ensuring rename propagates through compound type
+    annotations like `array(Dog)` and `mapping(Dog:int)`.
+
+  - **Recursive `.pmod` directory discovery**: The harness now recurses into
+    `.pmod` directories (which are directories, not files) to discover nested
+    Pike sources like `module.pmod` and `helpers.pike`.
+
   - Updated tree-sitter-pike WASM to v1.2.2 (fixes bare function call parsing,
     issue #18).
+
+### Changed
+
+  - **SignatureHelp rewrite**: `extractCalleeInfo()` now returns `objectName`
+    for method calls. `resolveMethodOnType()` does type -> class -> method
+    lookup. `resolveConstructor()` uses range overlap for scope discovery.
+
+  - **Removed client-side tree-sitter syntactic provider**
+    (`TreeSitterSyntacticProvider`): Server semantic tokens and VSCode TextMate
+    grammar already cover all highlighting. The client-side provider was
+    redundant and has been deleted.
+
+  - **Hardened `build-vsix.sh`**: `vsce` binary is now resolved from `$PATH`
+    with fallback to `$HOME/.bun/bin/vsce` instead of using a hardcoded
+    absolute path.
+
+  - **`release.yml` uses `.latest-vsix`**: The upload step now reads the exact
+    VSIX path written by `build-vsix.sh`, eliminating BUILD_NUM skew between
+    build and release steps.
+
+  - **`ci.yml` uses `$PIKE_VERSION` variable**: Replaced hardcoded `8.0.1116`
+    in PATH and PIKE_BINARY entries with the existing `PIKE_VERSION` env var.
 
 ### Fixed
 
@@ -67,17 +97,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with old tree cache keyed by URI. Tests reusing the same URI across
     different sources got garbled parse trees. Fixed with unique URIs per test.
 
-### Changed
+  - **Non-null assertion safety in completion**: Replaced unsafe `child(0)!`
+    with a null-checked loop in dot-access completion, preventing potential
+    crashes on unexpected tree-sitter node structures.
 
-  - **SignatureHelp rewrite**: `extractCalleeInfo()` now returns `objectName`
-    for method calls. `resolveMethodOnType()` does type → class → method
-    lookup. `resolveConstructor()` uses range overlap for scope discovery.
+  - **Harness uses `PIKE_BINARY` for outer invocation**: `runIntrospect()` was
+    passing `PIKE_BINARY` to the introspect script (correct) but using a
+    hardcoded `"pike"` string for the outer process that runs the script.
 
-### Known Limitations
+  - **Removed dead `getErrorCount` import** from `client/extension.ts`.
 
-  - Bare (untyped) member variables in class bodies are not detected by the
-    symbol table — tree-sitter-pike parses them as `(identifier)` instead of
-    `variable_decl`. Upstream issue: TheSmuks/tree-sitter-pike#19.
+  - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
+    referenced the deleted provider have been removed. The remaining output
+    channel test is documented as a manual smoke test.
 
 ## [0.5.0] — 2026-05-14
 
@@ -158,75 +190,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `for_statement` and `switch_statement` (both fully resolved), removed a
     fabricated `BLOCK_SCOPES` constant reference, removed stale line-number
     anchors from `typeof_()` entries, and fixed corrupted severity table headers.
-
-## [Unreleased]
-
-### Added
-
-  - **Fast lint layer**: tree-sitter-based lint rules run on every keystroke
-    (<5ms), providing instant diagnostics for unused variables/parameters
-    (P3001/P3002) and unreachable code (P3003). Lint diagnostics merge
-    with Pike compiler diagnostics — Pike is authoritative on same-line
-    conflicts.
-
-  - **Type-aware signature help**: `obj->method(` now resolves `obj`'s type
-    and shows the method's parameter signature. Constructor calls like
-    `Dog("Rex", 5)` show the `create()` parameters. Active parameter tracking
-    highlights which parameter the cursor is on.
-
-  - **Missing return lint (P3004)**: Functions declaring a non-void, non-mixed
-    return type with zero `return` statements are flagged as Hint diagnostics.
-    Constructors (`create`), void, mixed, and untyped functions are excluded.
-
-  - **Unused import lint (P3005)**: `inherit`/`import` declarations that are
-    never referenced in the file are flagged. Uses word-boundary matching
-    combined with symbol table reference checks.
-
-  - **Inlay type hints (G1)**: Variable declarations without explicit type
-    annotations display inferred types inline as quiet type hints. Requires
-    `editor.inlayHints.enabled` in VSCode.
-
-  - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
-    `function_type` nodes, ensuring rename propagates through compound type
-    annotations like `array(Dog)` and `mapping(Dog:int)`.
-
-  - **Recursive `.pmod` directory discovery**: The harness now recurses into
-    `.pmod` directories (which are directories, not files) to discover nested
-    Pike sources like `module.pmod` and `helpers.pike`.
-
-### Changed
-
-  - **Removed client-side tree-sitter syntactic provider**
-    (`TreeSitterSyntacticProvider`): Server semantic tokens and VSCode TextMate
-    grammar already cover all highlighting. The client-side provider was
-    redundant and has been deleted.
-
-  - **Hardened `build-vsix.sh`**: `vsce` binary is now resolved from `$PATH`
-    with fallback to `$HOME/.bun/bin/vsce` instead of using a hardcoded
-    absolute path.
-
-  - **`release.yml` uses `.latest-vsix`**: The upload step now reads the exact
-    VSIX path written by `build-vsix.sh`, eliminating BUILD_NUM skew between
-    build and release steps.
-
-  - **`ci.yml` uses `$PIKE_VERSION` variable**: Replaced hardcoded `8.0.1116`
-    in PATH and PIKE_BINARY entries with the existing `PIKE_VERSION` env var.
-
-### Fixed
-
-  - **Non-null assertion safety in completion**: Replaced unsafe `child(0)!`
-    with a null-checked loop in dot-access completion, preventing potential
-    crashes on unexpected tree-sitter node structures.
-
-  - **Harness uses `PIKE_BINARY` for outer invocation**: `runIntrospect()` was
-    passing `PIKE_BINARY` to the introspect script (correct) but using a
-    hardcoded `"pike"` string for the outer process that runs the script.
-
-  - **Removed dead `getErrorCount` import** from `client/extension.ts`.
-
-  - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
-    referenced the deleted provider have been removed. The remaining output
-    channel test is documented as a manual smoke test.
 
 ## [0.4.3] — 2026-05-14
 
