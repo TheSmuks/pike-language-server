@@ -255,7 +255,7 @@ async function resolveCrossFileType(
     }
     if (!targetUri) continue;
 
-    const targetTable = context.index.getSymbolTable(targetUri);
+    const targetTable = await context.index.getOrIndexSymbolTable(targetUri);
     if (!targetTable) continue;
 
     // Look for the class in the target file

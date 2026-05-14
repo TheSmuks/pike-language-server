@@ -1,0 +1,42 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/lint-unused-var.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 10,
+      "name": "test_function"
+    },
+    {
+      "kind": "function",
+      "line": 19,
+      "name": "helper_fn"
+    },
+    {
+      "kind": "class",
+      "line": 25,
+      "members": [
+        {
+          "kind": "variable",
+          "name": "age"
+        },
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "variable",
+          "name": "name"
+        }
+      ],
+      "name": "Animal"
+    }
+  ]
+}

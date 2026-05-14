@@ -1,0 +1,33 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": false
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/lint-unreachable.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 9,
+      "name": "test_return"
+    },
+    {
+      "kind": "function",
+      "line": 14,
+      "name": "test_break"
+    },
+    {
+      "kind": "function",
+      "line": 24,
+      "name": "test_continue"
+    },
+    {
+      "kind": "function",
+      "line": 35,
+      "name": "test_guard"
+    }
+  ]
+}

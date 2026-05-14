@@ -21,6 +21,14 @@
     "import-pmod.pike": {
       "strict": true,
       "modulePath": "corpus/files"
+    },
+    "cross_pmod_dir.pmod/module.pmod": {
+      "strict": true,
+      "modulePath": "corpus/files"
+    },
+    "cross_pmod_dir.pmod/helpers.pike": {
+      "strict": true,
+      "modulePath": "corpus/files"
     }
   }
 }
