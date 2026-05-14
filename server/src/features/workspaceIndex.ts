@@ -634,13 +634,32 @@ export class WorkspaceIndex {
       };
     }
 
-    // For identifier inherits to .pike files (e.g., "inherit Animal" where Animal
-    // is a class in cross-inherit-simple-a.pike): look for a matching class.
+    // For identifier inherits/imports to .pike files (e.g., "inherit Animal"
+    // or "import Foo" where Foo resolves to Foo.pike): look for a matching
+    // declaration first, then fall back to top-of-file for implicit classes.
+    // Most .pike files are implicit classes — they have no explicit class decl.
     const inheritName = decl.alias ?? decl.name;
     for (const targetDecl of targetEntry.symbolTable.declarations) {
       if (targetDecl.name === inheritName) {
         return { uri: targetUri, decl: targetDecl };
       }
+    }
+
+    // No matching declaration found — for .pike files the file IS the class.
+    // Navigate to the top of the file (same fallback as string-literal and
+    // .pmod paths above).
+    if (targetUri.endsWith(".pike") || targetUri.endsWith(".pmod")) {
+      return {
+        uri: targetUri,
+        decl: {
+          id: -1,
+          name: inheritName,
+          kind: "class",
+          nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          scopeId: -1,
+        },
+      };
     }
 
     return null;

@@ -15,6 +15,7 @@ import {
 } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import type { Node as TsNode } from "web-tree-sitter";
 import { parse } from "../parser";
 import { getDocumentSymbols } from "./documentSymbol";
 import { getParseDiagnostics } from "./diagnostics";
@@ -129,6 +130,113 @@ export interface NavigationContext {
   predefBuiltins: Record<string, string>;
   /** Connection for logging when content is unexpectedly null. */
   connection: Connection;
+}
+
+// ---------------------------------------------------------------------------
+// #include resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * If the cursor is on a `preproc_include` node, resolve the target file
+ * and return an LSP Location for navigation (CTRL+CLICK on #include).
+ *
+ * tree-sitter-pike provides a structured `preproc_include` node with a
+ * `path` field containing either `string_literal` or `system_lib_string`.
+ */
+function resolveIncludeTarget(
+  doc: TextDocument,
+  uri: string,
+  line: number,
+  character: number,
+): LspLocation | null {
+  const tree = parse(doc.getText(), uri);
+  if (!tree?.rootNode) return null;
+
+  const node = findNodeAtPosition(tree.rootNode, line, character);
+  if (!node || node.type !== "preproc_include") return null;
+
+  const pathNode = node.childForFieldName("path");
+  if (!pathNode) return null;
+
+  // Only resolve "..." includes (string_literal). Angle-bracket <...>
+  // includes (system_lib_string) resolve against Pike's include path.
+  if (pathNode.type === "system_lib_string") return null;
+
+  // Strip surrounding quotes from the string literal.
+  const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
+  if (pathText.length === 0) return null;
+
+  // Resolve relative to current file directory.
+  const currentPath = decodeURIComponent(uri.replace("file://", ""));
+  const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
+  const targetPath = resolveRelativeIncludePath(pathText, currentDir);
+  if (!targetPath) return null;
+
+  return {
+    uri: "file://" + encodeURI(targetPath),
+    range: {
+      start: { line: 0, character: 0 },
+      end: { line: 0, character: 0 },
+    },
+  };
+}
+
+/**
+ * Walk the tree to find the deepest node at a given position.
+ */
+function findNodeAtPosition(
+  node: TsNode,
+  line: number,
+  character: number,
+): TsNode | null {
+  if (
+    line < node.startPosition.row ||
+    line > node.endPosition.row
+  ) return null;
+  if (
+    line === node.startPosition.row && character < node.startPosition.column
+  ) return null;
+  if (
+    line === node.endPosition.row && character > node.endPosition.column
+  ) return null;
+
+  for (const child of node.children) {
+    const found = findNodeAtPosition(child, line, character);
+    if (found) return found;
+  }
+
+  return node;
+}
+
+/**
+ * Resolve a relative include path against a base directory.
+ * Handles `../`, `./`, and bare filenames.
+ */
+function resolveRelativeIncludePath(
+  rawPath: string,
+  baseDir: string,
+): string | null {
+  const cleanPath = rawPath.replace(/^["]+|["]+$/g, "");
+  if (cleanPath.length === 0) return null;
+
+  let targetPath: string;
+  if (cleanPath.startsWith("../")) {
+    let upCount = 0;
+    let remaining = cleanPath;
+    while (remaining.startsWith("../")) {
+      upCount++;
+      remaining = remaining.substring(3);
+    }
+    const parts = baseDir.split("/");
+    if (upCount >= parts.length) return null;
+    targetPath = parts.slice(0, -upCount).join("/") + "/" + remaining;
+  } else if (cleanPath.startsWith("./")) {
+    targetPath = baseDir + "/" + cleanPath.substring(2);
+  } else {
+    targetPath = baseDir + "/" + cleanPath;
+  }
+
+  return targetPath;
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +505,22 @@ export function registerNavigationHandlers(
 
   connection.onDefinition(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
+
+    // Fast path: #include directive click-to-navigate.
+    // #include is a preprocessor directive that won't appear in the symbol
+    // table. Check the tree-sitter AST directly for a preprocessor_directive
+    // node at the cursor position.
+    const includeDoc = ctx.documents.get(params.textDocument.uri);
+    if (includeDoc) {
+      const includeResult = resolveIncludeTarget(
+        includeDoc,
+        params.textDocument.uri,
+        params.position.line,
+        params.position.character,
+      );
+      if (includeResult) return includeResult;
+    }
+
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
@@ -429,8 +553,12 @@ export function registerNavigationHandlers(
         }
       }
 
+      // Synthetic declarations from cross-file inheritance carry sourceUri
+      // pointing to the original file. Use that for navigation so CTRL+CLICK
+      // on an imported/inherited symbol jumps to the source definition.
+      const targetUri = decl.sourceUri ?? table.uri;
       const loc: LspLocation = {
-        uri: table.uri,
+        uri: targetUri,
         range: {
           start: {
             line: decl.nameRange.start.line,

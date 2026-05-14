@@ -40,7 +40,7 @@ import {
 } from "./features/persistentCache";
 
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
-import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import {
   DiagnosticManager,
   type PikeCacheEntry,
@@ -248,7 +248,11 @@ export function createPikeServer(connection: Connection): PikeServer {
           targetUri, 0, tree, content, ModificationSource.BackgroundIndex,
         );
         return entry;
-      } catch {
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException).code;
+        if (code === "EACCES" || code === "EPERM" || code === "ENOENT") {
+          logWarn(connection, `on-demand index: skipping ${targetUri}: ${code}`);
+        }
         return null;
       }
     });

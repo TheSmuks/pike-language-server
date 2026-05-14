@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.5.0] — 2026-05-14
+
+### Added
+
+  - **Clickable `#include` navigation**: CTRL+CLICK on `#include "file"` directives
+    now navigates to the target file. Also exposed as document links (underlined
+    clickable path). Requires tree-sitter-pike v1.1.3+ for structured `preproc_include`
+    node with `path` field.
+
+  - **Corpus manifest management tool** (`scripts/manifest.ts`): Scans `corpus/files/`,
+    parses `manifest.md`, detects drift between disk state and manifest entries.
+    Supports `--sync` to apply changes, `--version <VERSION>` to bump the manifest
+    version. Registered as `pike-corpus-manifest` Hermes skill.
+
+  - **4-space indentation default**: New Pike files now default to 4-space
+    indentation via `configurationDefaults` in the extension manifest. Configurable
+    per-workspace and per-file through VSCode settings.
+
+  - **Repository-based TextMate grammar**: Rewrote `pike.tmLanguage.json` with a
+    repository-based structure using standard scope names (`storage.type.pike`,
+    `entity.name.function.pike`, `entity.name.type.class.pike`, `variable.parameter`).
+    Ensures consistent syntax highlighting across all VSCode themes.
+
+### Changed
+
+  - **Formatter default tab size**: Changed from 2-space to 4-space fallback when
+    VSCode does not pass explicit formatting options.
+
+  - **PikeWorker idle eviction**: Now calls `this.stop()` instead of raw
+    `this.proc.kill("SIGTERM")`, ensuring SIGKILL escalation and proper cleanup
+    on idle timeout.
+
+  - **PikeWorker pending rejection**: `stop()` now rejects all pending promises
+    in the response map before clearing it, preventing leaked promises on restart.
+
+### Fixed
+
+  - **EACCES during background indexing**: Permission errors (EACCES, EPERM, ENOENT)
+    during workspace file indexing are now logged as warnings instead of errors
+    and excluded from the error count. Expected on shared servers with inaccessible
+    directories.
+
+  - **Cross-file go-to-definition**: Navigation on imported/inherited symbols now
+    uses `decl.sourceUri` to navigate to the original source file, not the file
+    where the symbol was inherited into.
+
+  - **Implicit class navigation fallback**: `import Foo` and `inherit Animal` now
+    navigate to the top of the target `.pike`/`.pmod` file when no explicit `class`
+    declaration is found (covers the common case where a `.pike` file IS the class).
+
+  - **Corpus manifest sync**: 10 new corpus files that were on disk but not in the
+    manifest have been added: `basic-int-ranges.pike`, `basic-string-types.pike`,
+    `basic-type-conversions.pike`, `cross_import_a.pmod`, `err-syntax-partial.pike`,
+    `err-type-member.pike`, `import-relative.pike`, `stdlib-array.pike`,
+    `stdlib-mapping.pike`, `stdlib-string.pike`.
+
+  - **Updated tree-sitter-pike WASM** to v1.1.3 with structured `preproc_include`
+    node (upstream fix for TheSmuks/tree-sitter-pike#17).
+
 ## [Unreleased]
 
 ## [0.4.3] — 2026-05-14

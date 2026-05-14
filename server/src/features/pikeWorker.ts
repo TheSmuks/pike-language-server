@@ -396,6 +396,19 @@ export class PikeWorker {
       forceTimer.unref();
     }
     this.proc = null;
+
+    // Reject all pending requests so their Promises don't leak.
+    // The exit handler won't fire for this proc because stop() nulls
+    // this.proc before the async exit event arrives.
+    if (this.pending.size > 0) {
+      const error = new Error("Pike worker stopped");
+      for (const [, pending] of this.pending) {
+        clearTimeout(pending.timeout);
+        pending.reject(error);
+      }
+      this.pending.clear();
+    }
+
     this.queue.length = 0;
     this.sending = false;
   }
@@ -722,9 +735,11 @@ export class PikeWorker {
   private resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
-      if (this.proc && !this.proc.killed && this.pending.size === 0) {
-        this.proc.kill("SIGTERM");
-        this.proc = null;
+      if (this.proc && !this.proc.killed && this.pending.size === 0 && this.queue.length === 0) {
+        // Delegate to stop() for SIGTERM→SIGKILL escalation and full cleanup.
+        // Direct kill+null would bypass escalation, risking zombie processes
+        // on shared servers when Pike ignores SIGTERM.
+        this.stop();
       }
     }, this.config.idleTimeoutMs);
     // Don't prevent process exit

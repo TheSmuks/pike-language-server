@@ -59,11 +59,9 @@ async function produceDocumentLinks(
 ): Promise<DocumentLink[]> {
   const links: DocumentLink[] = [];
 
-  // Parse the document to get the tree
   const tree = parse(doc.getText(), uri);
   if (!tree?.rootNode) return [];
 
-  // Walk the tree looking for relevant nodes
   walkForLinks(tree.rootNode, uri, links, resolver);
 
   return links;
@@ -95,7 +93,7 @@ function walkForLinks(
     }
   }
 
-  // Recurse into children
+  // Recurse into children.
   for (const child of node.children) {
     walkForLinks(child, currentUri, links, resolver);
   }
@@ -114,24 +112,19 @@ function collectImportLink(
   links: DocumentLink[],
   resolver: ModuleResolver,
 ): void {
-  // import_decl has a 'path' field with the module name
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const moduleName = pathNode.text;
   const range = toLinkRange(pathNode);
 
-  // Try cached resolution first (sync)
   const cached = resolver.getCachedModule(moduleName, currentUri);
   if (cached && cached.uri) {
     links.push({
       range,
       target: cached.uri,
     });
-    return;
   }
-
-  // For unresolved modules, the link has no target — editor may show as unresolved
 }
 
 /**
@@ -145,66 +138,55 @@ function collectInheritLink(
   links: DocumentLink[],
   resolver: ModuleResolver,
 ): void {
-  // inherit_decl has a 'path' field with the path/module name
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const pathText = pathNode.text;
   const range = toLinkRange(pathNode);
 
-  // Check if path is a string literal (direct file path) or identifier (module)
   const isStringLiteral = pathNode.type === "string";
 
   if (isStringLiteral) {
-    // Direct file path like "foo/bar.pike" or "../lib.pike"
     const resolved = resolveRelativePath(pathText, currentUri);
     if (resolved) {
-      links.push({
-        range,
-        target: resolved,
-      });
+      links.push({ range, target: resolved });
     }
   } else {
-    // Module name like Stdio or Calendar.ISO
     const cached = resolver.getCachedModule(pathText, currentUri);
     if (cached && cached.uri) {
-      links.push({
-        range,
-        target: cached.uri,
-      });
+      links.push({ range, target: cached.uri });
     }
-    // Unresolved modules get no link — VSCode will fall through to
-    // the definition handler (textDocument/definition) instead.
   }
 }
 
 /**
- * Collect DocumentLink for preprocessor include directives:
+ * Collect DocumentLink for #include directives:
  * `#include "path"` or `#include <path>`
+ *
+ * tree-sitter-pike provides a structured `preproc_include` node with a `path`
+ * field containing either a `string_literal` or `system_lib_string` child.
  */
 function collectIncludeLink(
   node: Node,
   currentUri: string,
   links: DocumentLink[],
 ): void {
-  // preproc_include children include the #include keyword and the path
-  // Find string or preproc_string child
-  const pathNode = node.children.find(
-    (c) => c.type === "string" || c.type === "preproc_string",
-  );
+  const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
-  // Strip quotes/brackets from path
-  const pathText = pathNode.text.replace(/^["<>]+|["<>]+$/g, "");
-  const range = toLinkRange(pathNode);
+  // Only resolve "..." includes (string_literal). Angle-bracket <...>
+  // includes (system_lib_string) resolve against Pike's include path
+  // which we don't have access to.
+  if (pathNode.type === "system_lib_string") return;
 
-  // Resolve relative to current file directory
+  // Strip surrounding quotes from the string literal.
+  const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
+  if (pathText.length === 0) return;
+
+  const range = toLinkRange(pathNode);
   const resolved = resolveRelativePath(pathText, currentUri);
   if (resolved) {
-    links.push({
-      range,
-      target: resolved,
-    });
+    links.push({ range, target: resolved });
   }
 }
 
@@ -220,18 +202,16 @@ function resolveRelativePath(
   pathText: string,
   currentUri: string,
 ): string | null {
-  // Strip quotes from string literal
   const cleanPath = pathText.replace(/^["]+|["]+$/g, "");
+  if (cleanPath.length === 0) return null;
 
-  // Compute absolute path relative to current file's directory
+  // Compute absolute path relative to current file's directory.
   // currentUri is like "file:///path/to/file.pike"
   const currentPath = decodeURIComponent(currentUri.replace("file://", ""));
   const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
 
-  // Simple relative path resolution
   let targetPath: string;
   if (cleanPath.startsWith("../")) {
-    // Go up directories
     let upCount = 0;
     let remaining = cleanPath;
     while (remaining.startsWith("../")) {
@@ -239,16 +219,14 @@ function resolveRelativePath(
       remaining = remaining.substring(3);
     }
     const parts = currentDir.split("/");
+    if (upCount >= parts.length) return null;
     targetPath = parts.slice(0, -upCount).join("/") + "/" + remaining;
   } else if (cleanPath.startsWith("./")) {
-    // Same directory
     targetPath = currentDir + "/" + cleanPath.substring(2);
   } else {
-    // Same directory (no prefix)
     targetPath = currentDir + "/" + cleanPath;
   }
 
-  // Convert to file:// URI
   return "file://" + encodeURI(targetPath);
 }
 
@@ -263,7 +241,6 @@ interface LspRange {
 
 /**
  * Convert tree-sitter positions to LSP range for DocumentLink.
- * DocumentLink uses LSP Range format.
  */
 function toLinkRange(node: Node): LspRange {
   return {
