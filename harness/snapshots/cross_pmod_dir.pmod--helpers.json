@@ -1,0 +1,23 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross_pmod_dir.pmod/helpers.pike",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "function",
+      "line": 5,
+      "name": "add"
+    },
+    {
+      "kind": "function",
+      "line": 6,
+      "name": "multiply"
+    }
+  ]
+}

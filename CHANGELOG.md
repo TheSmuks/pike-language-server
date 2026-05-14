@@ -88,6 +88,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - **On-demand cross-file indexing**: `getOrIndexSymbolTable()` triggers
+    workspace indexing when a target file hasn't been indexed yet, enabling
+    cross-file type resolution without requiring a full workspace scan first.
+
+  - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
+    into `array_type`, `mapping_type`, `multiset_type`, `generic_type`, and
+    `function_type` nodes, ensuring rename propagates through compound type
+    annotations like `array(Dog)` and `mapping(Dog:int)`.
+
+  - **Recursive `.pmod` directory discovery**: The harness now recurses into
+    `.pmod` directories (which are directories, not files) to discover nested
+    Pike sources like `module.pmod` and `helpers.pike`.
+
+### Changed
+
+  - **Removed client-side tree-sitter syntactic provider**
+    (`TreeSitterSyntacticProvider`): Server semantic tokens and VSCode TextMate
+    grammar already cover all highlighting. The client-side provider was
+    redundant and has been deleted.
+
+  - **Hardened `build-vsix.sh`**: `vsce` binary is now resolved from `$PATH`
+    with fallback to `$HOME/.bun/bin/vsce` instead of using a hardcoded
+    absolute path.
+
+  - **`release.yml` uses `.latest-vsix`**: The upload step now reads the exact
+    VSIX path written by `build-vsix.sh`, eliminating BUILD_NUM skew between
+    build and release steps.
+
+  - **`ci.yml` uses `$PIKE_VERSION` variable**: Replaced hardcoded `8.0.1116`
+    in PATH and PIKE_BINARY entries with the existing `PIKE_VERSION` env var.
+
+### Fixed
+
+  - **Non-null assertion safety in completion**: Replaced unsafe `child(0)!`
+    with a null-checked loop in dot-access completion, preventing potential
+    crashes on unexpected tree-sitter node structures.
+
+  - **Harness uses `PIKE_BINARY` for outer invocation**: `runIntrospect()` was
+    passing `PIKE_BINARY` to the introspect script (correct) but using a
+    hardcoded `"pike"` string for the outer process that runs the script.
+
+  - **Removed dead `getErrorCount` import** from `client/extension.ts`.
+
+  - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
+    referenced the deleted provider have been removed. The remaining output
+    channel test is documented as a manual smoke test.
+
 ## [0.4.3] — 2026-05-14
 
 ### Added

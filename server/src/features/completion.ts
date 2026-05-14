@@ -250,7 +250,9 @@ async function completeMemberAccess(
       // Drill down to the identifier inside the call expression
       let nameNode = innerIdent;
       while (nameNode.childCount > 0 && nameNode.type !== 'identifier') {
-        nameNode = nameNode.child(0)!;
+        const child = nameNode.child(0);
+        if (!child) break;
+        nameNode = child;
       }
       if (nameNode.type === 'identifier') {
         lookupName = nameNode.text;

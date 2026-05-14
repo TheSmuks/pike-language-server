@@ -236,6 +236,54 @@ Dog getDog();`;
     expect(result!.locations[1].line).toBe(2);
   });
 
+  test("renames a class inside array(Dog) variable type", async () => {
+    // Renaming Dog inside array(Dog) should produce a type_ref for the Dog
+    // identifier inside the complex type expression.
+    const src = `class Dog {
+}
+array(Dog) dogs = ({});`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const decl = findDecl(table, "Dog", "class");
+    expect(decl).toBeDefined();
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("Dog");
+    // Declaration (line 0) + type_ref inside array(Dog) on line 2 = 2 locations
+    expect(result!.locations).toHaveLength(2);
+    expect(result!.locations[0].line).toBe(0);
+    expect(result!.locations[1].line).toBe(2);
+  });
+
+  test("renames a class inside mapping(Dog:int) variable type", async () => {
+    const src = `class Dog {
+}
+mapping(Dog : int) dogMap = ([]);`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const decl = findDecl(table, "Dog", "class");
+    expect(decl).toBeDefined();
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("Dog");
+    expect(result!.locations).toHaveLength(2);
+  });
+
+  test("renames a class and updates parameter type annotation", async () => {
+    const src = `class Dog {
+}
+void feed(Dog d) {}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const decl = findDecl(table, "Dog", "class");
+    expect(decl).toBeDefined();
+    const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
+    expect(result).not.toBeNull();
+    expect(result!.oldName).toBe("Dog");
+    // Declaration (line 0) + parameter type ref (line 2) = 2 locations
+    expect(result!.locations).toHaveLength(2);
+  });
+
   test("renames a function parameter", async () => {
     const src = `int add(int a, int b) {
   return a + b;

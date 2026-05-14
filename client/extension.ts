@@ -22,10 +22,8 @@ import {
   Trace,
 } from "vscode-languageclient/node";
 
-import { TreeSitterSyntacticProvider } from "./treeSitterProvider";
 import {
   setErrorCount,
-  getErrorCount,
   onErrorCountChange,
 } from "./errorNotificationState";
 
@@ -191,20 +189,10 @@ export function activate(context: vscode.ExtensionContext): void {
     log("info", "EXT", `[init] step 2/6: language-configuration.json not loaded — ${(err as Error).message}`);
   }
 
-  // step 3: tree-sitter syntactic provider
-  log("info", "EXT", "[init] step 3/6: creating tree-sitter syntactic provider (async init)");
-  const syntacticProvider = new TreeSitterSyntacticProvider(
-    context,
-    (message: string) => log("info", "TREE-SITTER", message),
-  );
-  context.subscriptions.push(
-    vscode.languages.registerDocumentSemanticTokensProvider(
-      { language: "pike" },
-      syntacticProvider,
-      syntacticProvider.legend,
-    ),
-  );
-  log("info", "EXT", "[init] step 3/6: tree-sitter provider registered (init runs in background)");
+  // step 3: tree-sitter syntactic provider removed (the LSP server provides
+  // semantic tokens via the symbol table; VSCode's TextMate grammar handles
+  // basic keyword/comment/string highlighting).
+  log("info", "EXT", "[init] step 3/6: skipped (server-side semantic tokens)");
 
   // step 4: status bar
   updateStatusBar(State.Starting);

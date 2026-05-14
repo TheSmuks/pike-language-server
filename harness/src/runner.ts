@@ -113,7 +113,7 @@ export async function runIntrospect(
   }
   args.push(absCorpusFile);
 
-  const proc = Bun.spawn(["pike", "-M", "harness", INTROSPECT_SCRIPT, ...args], {
+  const proc = Bun.spawn([PIKE_BINARY, "-M", "harness", INTROSPECT_SCRIPT, ...args], {
 
   });
 
@@ -177,17 +177,26 @@ export function listCorpusFiles(): string[] {
   for (const entry of entries) {
     if (entry.isFile() && (entry.name.endsWith(".pike") || entry.name.endsWith(".pmod"))) {
       results.push(entry.name);
+    } else if (entry.isDirectory() && entry.name.endsWith(".pmod")) {
+      // Directory-based .pmod module: enumerate child files.
+      const subDir = join(CORPUS_DIR, entry.name);
+      const subEntries = readdirSync(subDir, { withFileTypes: true });
+      for (const sub of subEntries) {
+        if (sub.isFile() && (sub.name.endsWith(".pike") || sub.name.endsWith(".pmod"))) {
+          results.push(`${entry.name}/${sub.name}`);
+        }
+      }
     }
-    // .pmod directory modules are NOT listed individually.
-    // Pike resolves them as whole modules via -M path.
-    // Their contents are tested via cross-pmod-user.pike (consumer file).
   }
   return results.sort();
 }
 
-/** Derive a flat snapshot name from a corpus file path. */
+/** Derive a flat snapshot name from a corpus file path.
+ *  Flattens directory separators (e.g., "cross_pmod_dir.pmod/module" →
+ *  "cross_pmod_dir.pmod--module") so nested corpus files produce valid
+ *  snapshot filenames. */
 export function snapshotNameForFile(corpusFile: string): string {
-  return corpusFile.replace(/\.(pike|pmod)$/, "");
+  return corpusFile.replace(/\.(pike|pmod)$/, "").replace(/\//g, "--");
 }
 
 export function getRunnerOptionsForFile(filename: string): RunnerOptions {

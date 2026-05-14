@@ -139,10 +139,9 @@ also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter run
 
 ### Medium (Known workarounds, tracked for resolution)
 
-| Limitation | Severity | Workaround |
-|------------|----------|------------|
+|| Limitation | Severity | Workaround ||
+|------------|----------|------------||
 | Complex initializer type inference | Medium | `extractInitializerType` handles constructors and ternary. Complex expressions need explicit annotations. |
-| Cross-file type resolution freshness | Medium | Background indexing mitigates. |
 | pike-fmt formatting | Medium | Phase 1: indentation normalization only. Operator spacing future work. |
 
 ### Low (Minor impact, rare occurrence)
@@ -176,22 +175,17 @@ Import resolution searches workspace and system module paths. It does not query 
 
 **Rationale**: Dynamic compilation-time module registration requires running Pike at LSP startup time for every file, which is too slow. File-system path resolution is the practical trade-off.
 
-### .pmod directory contents not individually introspected by harness
+### ~~.pmod directory contents not individually introspected by harness~~ — RESOLVED
 
-The harness has snapshots for file-based `.pmod` modules (`cross_import_a.pmod`, `cross_lib_module.pmod`) with full symbol extraction from Pike. However, directory-based `.pmod` modules (`cross_pmod_dir.pmod/`) are not individually introspected.
+The harness now recurses into directory-based `.pmod` modules via `listCorpusFiles()`.
+Snapshot names use `--` to flatten directory separators (e.g., `cross_pmod_dir.pmod/module.pmod`
+becomes `cross_pmod_dir.pmod--module`). Both child files of `cross_pmod_dir.pmod/` now have
+snapshots: `cross_pmod_dir.pmod--module.json` and `cross_pmod_dir.pmod--helpers.json`.
 
-**Corpus .pmod inventory:**
-- `cross_import_a.pmod` — FILE (26 lines). Harness snapshot: YES. Ground truth: Pike oracle.
-- `cross_lib_module.pmod` — FILE (22 lines). Harness snapshot: YES. Ground truth: Pike oracle.
-- `cross_pmod_dir.pmod/` — DIRECTORY (2 entries: `module.pmod`, `helpers.pike`). Harness snapshot: NO. Not introspected.
-- `cross_pmod_dir.pmod/module.pmod` — child of directory module. Harness snapshot: NO.
-- `cross_pmod_dir.pmod/helpers.pike` — child of directory module. Harness snapshot: NO.
+**Implementation**: `listCorpusFiles()` in `harness/src/runner.ts` checks for `.pmod` suffix
+and recurses if the path is a directory. `snapshotNameForFile()` flattens `/` to `--`.
 
-**What works:** File-based `.pmod` modules are fully tested via harness snapshots. The LSP's documentSymbol output for `cross_import_a.pmod` is compared against Pike's introspection.
-
-**What's missing:** Directory module member enumeration. The LSP's cross-file tests only verify that `cross-pmod-user.pike` indexes successfully. They don't verify that the LSP discovers the same members from `cross_pmod_dir.pmod/` that Pike resolves. This is a semantic correctness gap.
-
-**Phase 5 prerequisite:** Build `harness/resolve.pike` to introspect directory modules and cross-file member availability.
+**Verified by**: `bun test harness/__tests__/` — all snapshot tests pass for the new entries.
 ## Phase 5: Diagnostics and Hover Limitations
 
 ### Diagnostics are real-time with debouncing (Phase 6 P2)
@@ -261,9 +255,14 @@ simple constructor or ternary call still require explicit type annotations.
 variables initialized with simple constructors or ternary expressions, even when
 declared as `mixed`. Other complex initializers still require explicit annotations.
 
-### Type resolution is same-file only for direct class lookup
+### ~~Type resolution is same-file only for direct class lookup~~ — RESOLVED
 
-`resolveType()` finds classes in the same file first, then falls through to cross-file resolution and stdlib. But cross-file resolution depends on the WorkspaceIndex having the target file indexed. If the target file hasn't been opened or changed since indexing, the resolution may return null.
+`resolveCrossFileType()` in `typeResolver.ts` now uses `getOrIndexSymbolTable()`
+instead of the sync `getSymbolTable()`. When the target file is not yet indexed,
+this triggers on-demand indexing (same mechanism used by `resolveInheritTarget()`)
+so that cross-file type resolution works even for files not yet opened in the
+editor. Combined with background indexing at startup and `onDidChangeWatchedFiles`
+re-indexing, the staleness window is effectively eliminated.
 
 ### ~~No inference through function return types~~ — RESOLVED
 
@@ -284,9 +283,23 @@ class are excluded.
 `isReceiverTypeMatch()` check for same-file refs and cross-file refs (when
 `lhsName` is present in the reference).
 
-### Rename does not rename through function return types
+### ~~Rename does not rename through function return types~~ — RESOLVED
 
-If `makeDog()` returns `Dog`, renaming `Dog` class won't update the return type annotation of `makeDog()`. Type annotation renaming is not implemented.
+The reference collector already produces `type_ref` references for function return
+types, variable type annotations, and parameter types. `getRenameLocations()` picks
+them up and includes them in the rename edit.
+
+**Additional fix**: `collectTypeRefsRecursive()` in `referenceCollector.ts` was
+extended to recurse into `array_type`, `mapping_type`, `multiset_type`,
+`generic_type`, and `function_type` child nodes — bringing the generic type ref
+collector to parity with `collectReturnTypeIdRecursive()`. This means renaming
+`Dog` inside `array(Dog)` or `mapping(Dog:int)` now works correctly.
+
+**Verified by**: `bun test tests/lsp/rename.test.ts` — all tests pass including:
+- Renames a class and updates function return type annotations
+- Renames a class inside array(Dog) variable type
+- Renames a class inside mapping(Dog:int) variable type
+- Renames a class and updates parameter type annotation
 
 ## Resolved: Type Inference (US-008/009/010)
 
@@ -328,21 +341,15 @@ CI installs pike-introspect via `pmp install` after the pmp step in `.github/wor
  
  ## VSCode Extension Host Environment Limitations
  
- ### Tree-sitter WASM unavailability in VSCode extension host
- 
- The `web-tree-sitter` package uses WebAssembly APIs (`loadWebAssemblyModule`) that are
- not available in Node.js environments. While the LSP server itself runs correctly in
- Node.js, the tree-sitter-based syntactic token provider (`TreeSitterSyntacticProvider`)
- cannot initialize inside VSCode's extension host.
- 
- **Error**: `TypeError: Cannot read properties of undefined (reading 'loadWebAssemblyModule')`
- 
- **Impact**: Semantic token highlighting based on tree-sitter fails in the extension host.
- The LSP server (which runs as a separate Node.js process) works correctly for hover,
- go-to-definition, completion, and other language features.
- 
- **Workaround**: Tests that require tree-sitter WASM gracefully skip with appropriate
- messages. The extension still activates and the LSP server functions normally.
- 
- **Affected tests**: `documentSymbol` (via tree-sitter), semantic token provider
+ ### ~~Tree-sitter WASM unavailability in VSCode extension host~~ — RESOLVED
+
+The client-side `TreeSitterSyntacticProvider` was removed entirely. The LSP server
+provides semantic tokens via the standard `textDocument/semanticTokens` protocol,
+and VSCode's TextMate grammar (`pike.tmLanguage.json`) handles syntactic highlighting.
+Neither requires WASM in the extension host.
+
+**Deleted**: `client/treeSitterProvider.ts` (no longer imported by `extension.ts`).
+
+**Impact**: No change to user-visible highlighting. Server-side semantic tokens and
+TextMate grammar already covered all cases.
  **Unaffected tests**: Extension activation, LSP protocol features (hover, definition, etc.)

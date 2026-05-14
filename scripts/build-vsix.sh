@@ -118,9 +118,10 @@ echo "Stage directory:"
 du -sh "$STAGE"
 du -sh "$STAGE"/* | sort -rh | head -10
 
-# Package with vsce
+# Package with vsce (resolve from PATH; falls back to bun global bin)
 cd "$STAGE"
-/home/smuks/.bun/bin/vsce package --no-dependencies -o "$ROOT/out/$VSIX_NAME" 2>&1
+VSCE_BIN="$(command -v vsce || echo "$HOME/.bun/bin/vsce")"
+"$VSCE_BIN" package --no-dependencies -o "$ROOT/out/$VSIX_NAME" 2>&1
 
 cd "$ROOT"
 rm -rf "$STAGE"

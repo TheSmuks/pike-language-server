@@ -246,6 +246,32 @@ export class WorkspaceIndex {
   }
 
   /**
+   * Get the symbol table for a file, triggering on-demand indexing if not
+   * yet available. This bridges the gap between the sync lookup in
+   * getSymbolTable() and the on-demand indexing used by resolveInheritTarget().
+   *
+   * Returns null only if the file cannot be indexed (e.g., doesn't exist).
+   */
+  async getOrIndexSymbolTable(uri: string): Promise<SymbolTable | null> {
+    const existing = this.getSymbolTable(uri);
+    if (existing) return existing;
+
+    // Trigger on-demand indexing if available.
+    if (this.onDemandIndex) {
+      try {
+        const indexed = await this.onDemandIndex(uri);
+        if (indexed?.symbolTable && !indexed.stale) {
+          return indexed.symbolTable;
+        }
+      } catch {
+        // On-demand indexing failed — return null.
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Get all URIs that depend on the given file.
    */
   getDependents(uri: string): Set<string> {
