@@ -96,8 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with Pike compiler diagnostics — Pike is authoritative on same-line
     conflicts.
 
+  - **Type-aware signature help**: `obj->method(` now resolves `obj`'s type
+    and shows the method's parameter signature. Constructor calls like
+    `Dog("Rex", 5)` show the `create()` parameters. Active parameter tracking
+    highlights which parameter the cursor is on.
+
   - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
-    into `array_type`, `mapping_type`, `multiset_type`, `generic_type`, and
     `function_type` nodes, ensuring rename propagates through compound type
     annotations like `array(Dog)` and `mapping(Dog:int)`.
 

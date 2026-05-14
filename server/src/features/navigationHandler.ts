@@ -519,6 +519,22 @@ export function registerNavigationHandlers(
       params.position.line,
       params.position.character,
       ctx.stdlibIndex,
+      {
+        table,
+        uri: params.textDocument.uri,
+        index: ctx.index,
+        stdlibIndex: ctx.stdlibIndex,
+        typeInferrer: ctx.worker
+          ? async (varName: string) => {
+              try {
+                const result = await ctx.worker.typeof_(doc.uri, varName);
+                return result.type ?? null;
+              } catch {
+                return null;
+              }
+            }
+          : undefined,
+      },
     );
   });
 

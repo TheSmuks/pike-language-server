@@ -1,11 +1,18 @@
-/* --- Original signatureHelp.ts imports --- */
-/* (preserved, see below) */
+/**
+ * SignatureHelp — provides function/method/constructor signatures.
+ *
+ * Resolution chain:
+ * 1. Local function/method declaration (same file)
+ * 2. Class constructor (ClassName → create method)
+ * 3. Method on resolved type (obj->method → resolve obj's type → find method)
+ * 4. Stdlib function/class
+ */
+
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
-
-
-
 import { findClassScope } from "./typeResolver";
+import { resolveTypeName } from "./symbolTable";
+import { containsRange } from "./scopeBuilder";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -28,6 +35,15 @@ export interface SignatureHelpResult {
   activeParameter: number;
 }
 
+/** Extended context for type-aware signature resolution. */
+export interface SignatureContext {
+  table: SymbolTable;
+  uri: string;
+  index: import("./workspaceIndex").WorkspaceIndex;
+  stdlibIndex?: Record<string, { signature: string; markdown: string }>;
+  typeInferrer?: (varName: string) => Promise<string | null>;
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
@@ -40,6 +56,7 @@ export interface SignatureHelpResult {
  * @param line - cursor line (0-based)
  * @param character - cursor character (0-based)
  * @param stdlibIndex - optional stdlib autodoc index
+ * @param ctx - optional full resolution context for type-aware method resolution
  */
 export function produceSignatureHelp(
   tree: Tree,
@@ -47,6 +64,7 @@ export function produceSignatureHelp(
   line: number,
   character: number,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
+  ctx?: SignatureContext,
 ): SignatureHelpResult | null {
   // Find the node at the cursor
   const node = tree.rootNode.descendantForPosition({ row: line, column: character });
@@ -56,17 +74,17 @@ export function produceSignatureHelp(
   const callExpr = findEnclosingCall(node, line, character);
   if (!callExpr) return null;
 
-  // Get callee name and argument list
+  // Get callee name, object name, and argument list
   const calleeInfo = extractCalleeInfo(callExpr);
   if (!calleeInfo) return null;
 
-  const { calleeName, argsNode } = calleeInfo;
+  const { calleeName, objectName, argsNode } = calleeInfo;
 
   // Count active parameter (commas before cursor)
   const activeParam = countActiveParameter(argsNode, line, character);
 
   // Try to resolve to a local/workspace function
-  const sig = resolveSignature(calleeName, table, stdlibIndex);
+  const sig = resolveSignature(calleeName, objectName, table, stdlibIndex, ctx);
   if (!sig) return null;
 
   return {
@@ -130,11 +148,19 @@ function findEnclosingCall(node: Node, line?: number, character?: number): Node 
 
 interface CalleeInfo {
   calleeName: string;
+  /** For method calls (obj->method): the object identifier name. */
+  objectName: string | null;
   argsNode: Node;
 }
 
 /**
- * Extract the callee name and argument list node from a call expression.
+ * Extract the callee name, optional object name, and argument list node.
+ *
+ * Examples:
+ * - `add(1, 2)` → calleeName='add', objectName=null
+ * - `d->speak("hello")` → calleeName='speak', objectName='d'
+ * - `Module.func()` → calleeName='func', objectName='Module'
+ * - `Dog("Rex")` → calleeName='Dog', objectName=null (constructor)
  */
 function extractCalleeInfo(callExpr: Node): CalleeInfo | null {
   const children = callExpr.children;
@@ -153,32 +179,44 @@ function extractCalleeInfo(callExpr: Node): CalleeInfo | null {
 
   if (!calleeNode || !openParen) return null;
 
-  // Extract just the function/method name from the callee text.
-  // For 'add' → 'add', for 'd->speak' → 'speak', for 'Module.func' → 'func'
+  // Extract the function/method name and object name.
   let name = calleeNode.text;
+  let objectName: string | null = null;
+
   const arrowIdx = name.lastIndexOf("->");
   if (arrowIdx !== -1) {
+    // obj->method: object is everything before ->, method is after
+    objectName = name.slice(0, arrowIdx);
     name = name.slice(arrowIdx + 2);
   }
   const dotIdx = name.lastIndexOf(".");
   if (dotIdx !== -1) {
+    // Module.func: object is everything before ., method is after
+    objectName = name.slice(0, dotIdx);
     name = name.slice(dotIdx + 1);
   }
 
-  // Build argsNode: everything from '(' to ')'
-  // Find the matching ')'
-  const argsStart = openParen.startPosition;
-  let argsEnd = argsStart;
-  for (let i = children.length - 1; i >= 0; i--) {
-    if (children[i].type === ")") {
-      argsEnd = children[i].endPosition;
-      break;
+  // For object names like "this" or nested expressions, extract just the
+  // trailing identifier to use for type resolution.
+  if (objectName) {
+    // Handle chained calls: extract the first identifier for type lookup.
+    // E.g., "getContainer()->getItem" → objectName = "getContainer()"
+    // For now, take the first identifier segment.
+    const firstArrow = objectName.indexOf("->");
+    const firstDot = objectName.indexOf(".");
+    if (firstArrow !== -1 || firstDot !== -1) {
+      // Chained call — extract the first identifier
+      const cutAt = firstArrow !== -1 && firstDot !== -1
+        ? Math.min(firstArrow, firstDot)
+        : firstArrow !== -1 ? firstArrow : firstDot;
+      objectName = objectName.slice(0, cutAt);
     }
   }
 
   return {
     calleeName: name,
-    argsNode: openParen, // We'll use the parent callExpr for position counting
+    objectName,
+    argsNode: openParen,
   };
 }
 
@@ -230,48 +268,46 @@ function countActiveParameter(openParen: Node, line: number, character: number):
 /**
  * Resolve a callee name to a signature.
  *
- * Tries local workspace functions first, then class constructors, then stdlib.
+ * Resolution order:
+ * 1. Local function/method declaration
+ * 2. Method on resolved type (if objectName is provided)
+ * 3. Class constructor (ClassName → create method)
+ * 4. Stdlib
  */
 function resolveSignature(
   calleeName: string,
+  objectName: string | null,
   table: SymbolTable,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
+  ctx?: SignatureContext,
 ): SignatureInfo | null {
-  // Try local function/method declaration
+  // 1. Try local function/method declaration
   const funcDecl = table.declarations.find(
-    d => d.name === calleeName && (d.kind === "function"),
+    d => d.name === calleeName && d.kind === "function",
   );
 
   if (funcDecl) {
     return buildSignatureFromDecl(funcDecl, table);
   }
 
-  // Try class constructor: look for class named calleeName, then find its create method
+  // 2. Method on resolved type: obj->method(
+  //    Resolve obj's type, find method in that type's class scope.
+  if (objectName && ctx) {
+    const methodSig = resolveMethodOnType(objectName, calleeName, table, ctx);
+    if (methodSig) return methodSig;
+  }
+
+  // 3. Constructor: ClassName(
+  //    Look for a class named calleeName, then find its create method.
   const classDecl = table.declarations.find(
     d => d.name === calleeName && d.kind === "class",
   );
   if (classDecl) {
-    // Find the class's scope
-    const classScope = table.scopes.find(s => s.declarations.includes(classDecl.id));
-    if (classScope) {
-      const createDeclId = classScope.declarations.find(id => {
-        const decl = table.declById.get(id);
-        return decl?.name === "create" && decl.kind === "function";
-      });
-
-      if (createDeclId !== undefined) {
-        const createDecl = table.declById.get(createDeclId);
-        if (createDecl) {
-          const sig = buildSignatureFromDecl(createDecl, table);
-          if (sig && sig.parameters.length > 0) return sig;
-          // Fall through to stdlib if we could not extract parameters
-        }
-
-      }
+    const constructorSig = resolveConstructor(classDecl, table, ctx);
+    if (constructorSig) return constructorSig;
   }
 
-  }
-  // Try stdlib
+  // 4. Stdlib
   if (stdlibIndex) {
     const entry = stdlibIndex[`predef.${calleeName}`];
     if (entry) {
@@ -280,17 +316,180 @@ function resolveSignature(
   }
 
   return null;
-
 }
 
+// ---------------------------------------------------------------------------
+// Method resolution on type
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a method on an object's type.
+ *
+ * Given `obj->method(`, resolve `obj`'s declared type, find the class
+ * declaration for that type, and look up `method` in its class scope.
+ */
+function resolveMethodOnType(
+  objectName: string,
+  methodName: string,
+  table: SymbolTable,
+  ctx: SignatureContext,
+): SignatureInfo | null {
+  // Find the object's declaration
+  const objDecl = findDeclarationForName(table, objectName);
+  if (!objDecl) return null;
+
+  // Resolve the object's type name
+  const typeName = resolveTypeName(objDecl);
+  if (!typeName) return null;
+
+  // Resolve the type to a class declaration
+  const typeResult = resolveTypeSync(typeName, table, ctx);
+  if (!typeResult) return null;
+
+  // Find the method in the class scope
+  const classScope = typeResult.table.scopes.find(
+    s => s.kind === "class" && s.declarations.includes(typeResult.decl.id),
+  );
+  if (!classScope) return null;
+
+  // Look for the method in the class scope (and inherited scopes)
+  const methodDecl = findMethodInClassScope(typeResult.table, classScope, methodName);
+  if (!methodDecl) return null;
+
+  return buildSignatureFromDecl(methodDecl, typeResult.table);
+}
+
+/** Synchronous type resolution — checks same-file and cross-file index. */
+function resolveTypeSync(
+  typeName: string,
+  table: SymbolTable,
+  ctx: SignatureContext,
+): { decl: Declaration; table: SymbolTable } | null {
+  // Same-file: find a class declaration with this name
+  const classDecl = table.declarations.find(
+    d => d.name === typeName && d.kind === "class",
+  );
+  if (classDecl) {
+    return { decl: classDecl, table };
+  }
+
+  // Cross-file: look up in workspace index
+  if (ctx.index) {
+    const uris = ctx.index.getAllUris();
+    for (const uri of uris) {
+      const targetTable = ctx.index.getSymbolTable(uri);
+      if (!targetTable) continue;
+      const targetDecl = targetTable.declarations.find(
+        d => d.name === typeName && d.kind === "class",
+      );
+      if (targetDecl) {
+        return { decl: targetDecl, table: targetTable };
+      }
+    }
+  }
+
+  return null;
+}
+
+/** Find a method declaration in a class scope or its inherited scopes. */
+function findMethodInClassScope(
+  table: SymbolTable,
+  classScope: import("./symbolTable").Scope,
+  methodName: string,
+): Declaration | null {
+  // Direct members
+  for (const declId of classScope.declarations) {
+    const decl = table.declById.get(declId);
+    if (decl && decl.name === methodName && (decl.kind === "function" || decl.kind === "method")) {
+      return decl;
+    }
+  }
+
+  // Inherited scopes
+  for (const inheritedScopeId of classScope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedScopeId);
+    if (!inheritedScope) continue;
+    const found = findMethodInClassScope(table, inheritedScope, methodName);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Constructor resolution
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve a constructor for a class declaration.
+ *
+ * Looks for a `create` method in the class scope. Also checks cross-file
+ * classes via the workspace index.
+ */
+function resolveConstructor(
+  classDecl: Declaration,
+  table: SymbolTable,
+  ctx?: SignatureContext,
+): SignatureInfo | null {
+  // Find the class scope by range overlap (the class decl is in the file
+  // scope, not the class scope — the class scope contains the members).
+  const classScope = table.scopes.find(
+    s => s.kind === "class" && containsRange(s.range, classDecl.range),
+  );
+  if (!classScope) return null;
+
+  // Look for the create method
+  const createDeclId = classScope.declarations.find(id => {
+    const decl = table.declById.get(id);
+    return decl?.name === "create" && decl.kind === "function";
+  });
+
+  if (createDeclId !== undefined) {
+    const createDecl = table.declById.get(createDeclId);
+    if (createDecl) {
+      const sig = buildSignatureFromDecl(createDecl, table);
+      if (sig) return sig;
+    }
+  }
+
+  // Check inherited scopes for create
+  for (const inheritedScopeId of classScope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedScopeId);
+    if (!inheritedScope) continue;
+    const inheritedCreateId = inheritedScope.declarations.find(id => {
+      const decl = table.declById.get(id);
+      return decl?.name === "create" && decl.kind === "function";
+    });
+    if (inheritedCreateId !== undefined) {
+      const createDecl = table.declById.get(inheritedCreateId);
+      if (createDecl) {
+        return buildSignatureFromDecl(createDecl, table);
+      }
+    }
+  }
+
+  // No create method found — return a no-args constructor signature
+  return {
+    label: `${classDecl.name}()`,
+    parameters: [],
+  };
+}
+
+/** Find a declaration by name, preferring declarations in the closest scope. */
+function findDeclarationForName(table: SymbolTable, name: string): Declaration | null {
+  // Find any declaration matching this name (function, variable, parameter, class)
+  return table.declarations.find(d => d.name === name) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Signature builders
+// ---------------------------------------------------------------------------
 
 /**
  * Build a SignatureInfo from a local function declaration.
  */
 function buildSignatureFromDecl(decl: Declaration, table: SymbolTable): SignatureInfo | null {
   // Find the scope that contains this declaration.
-  // For top-level functions this is the file scope; for class methods it is the
-  // class scope.
   const containingScope = table.scopes.find(s =>
     s.declarations.includes(decl.id),
   );
@@ -304,8 +503,6 @@ function buildSignatureFromDecl(decl: Declaration, table: SymbolTable): Signatur
 
   // Find the function's own scope — a child of containingScope with kind
   // "function" whose range overlaps with the declaration range.
-  // This is necessary because for class methods, `decl` is in the class scope
-  // (not the function scope), so we must locate the child function scope.
   let funcScopeId: number | null = null;
   for (const scope of table.scopes) {
     if (
@@ -319,11 +516,9 @@ function buildSignatureFromDecl(decl: Declaration, table: SymbolTable): Signatur
     }
   }
 
-  // Collect parameters from the function scope (or containing scope for
-  // top-level functions that have no child function scope).
+  // Collect parameters from the function scope.
   const params: ParameterInfo[] = [];
   if (funcScopeId !== null) {
-    // Parameters live in the function scope itself.
     const funcScope = table.scopes.find(s => s.id === funcScopeId);
     if (funcScope) {
       for (const declId of funcScope.declarations) {
@@ -372,7 +567,6 @@ function buildSignatureFromStdlib(
   if (openParen !== -1 && closeParen !== -1) {
     const paramText = sig.slice(openParen + 1, closeParen).trim();
     if (paramText) {
-      // Split by comma — simple approach, doesn't handle nested parens perfectly
       const parts = splitParams(paramText);
       for (const part of parts) {
         params.push({ label: part.trim() });
@@ -386,6 +580,10 @@ function buildSignatureFromStdlib(
     parameters: params,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 /**
  * Split parameter text by commas, respecting nested parentheses.
@@ -426,7 +624,6 @@ function countCommasInNode(node: Node, line: number, character: number): number 
         count++;
       }
     }
-    // Recurse into child nodes (e.g., comma_expr wraps comma-separated args)
     if (child.childCount > 0) {
       count += countCommasInNode(child, line, character);
     }
