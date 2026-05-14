@@ -336,6 +336,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         signatureHelpProvider: {
           triggerCharacters: ['(', ','],
         },
+        inlayHintProvider: { resolveProvider: false },
         codeActionProvider: {
           codeActionKinds: [
             "quickfix",

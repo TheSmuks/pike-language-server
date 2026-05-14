@@ -11,6 +11,7 @@ import {
   type CancellationToken,
   type Location as LspLocation,
   type DocumentHighlight,
+  type Position,
   DocumentHighlightKind,
 } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
@@ -34,6 +35,7 @@ import { pathToFileURL } from "node:url";
 import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
+import { produceInlayHints } from "./inlayHints";
 import { produceCodeActions } from "./codeAction";
 import { searchWorkspaceSymbols } from "./workspaceSymbol";
 import { registerDocumentLinkHandler } from "./documentLink";
@@ -537,6 +539,32 @@ export function registerNavigationHandlers(
       },
     );
   });
+
+  // -----------------------------------------------------------------------
+  // textDocument/inlayHint (G1)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest(
+    "textDocument/inlayHint",
+    async (params: { textDocument: { uri: string }; range: { start: Position; end: Position } }, token: CancellationToken) => {
+      if (token.isCancellationRequested) return [];
+
+      const doc = ctx.documents.get(params.textDocument.uri);
+      if (!doc) return [];
+
+      const table = await ctx.getSymbolTable(params.textDocument.uri);
+      if (!table || token.isCancellationRequested) return [];
+
+      const tree = parse(doc.getText(), doc.uri);
+      if (!tree) return [];
+
+      return produceInlayHints({
+        tree,
+        table,
+        range: params.range,
+      });
+    },
+  );
 
   // -----------------------------------------------------------------------
   // textDocument/codeAction (US-018)

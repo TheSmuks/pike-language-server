@@ -101,6 +101,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `Dog("Rex", 5)` show the `create()` parameters. Active parameter tracking
     highlights which parameter the cursor is on.
 
+  - **Missing return lint (P3004)**: Functions declaring a non-void, non-mixed
+    return type with zero `return` statements are flagged as Hint diagnostics.
+    Constructors (`create`), void, mixed, and untyped functions are excluded.
+
+  - **Unused import lint (P3005)**: `inherit`/`import` declarations that are
+    never referenced in the file are flagged. Uses word-boundary matching
+    combined with symbol table reference checks.
+
+  - **Inlay type hints (G1)**: Variable declarations without explicit type
+    annotations display inferred types inline as quiet type hints. Requires
+    `editor.inlayHints.enabled` in VSCode.
+
   - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
     `function_type` nodes, ensuring rename propagates through compound type
     annotations like `array(Dog)` and `mapping(Dog:int)`.
