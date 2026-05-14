@@ -696,6 +696,27 @@ export class PikeWorker {
     return response.result as { status: string; pike_version: string };
   }
 
+  /**
+   * Pre-warm the worker: spawn the Pike process and verify it responds.
+   *
+   * Call during initialization (before user interaction) so the first real
+   * request doesn't pay the cold-start cost of process spawning.
+   * No-op if the worker is already running.
+   *
+   * @returns true if the worker is ready, false if Pike is unavailable
+   */
+  async warmUp(): Promise<boolean> {
+    try {
+      this.start(); // Idempotent — no-op if already running
+      await this.ping();
+      return true;
+    } catch {
+      // Pike may not be installed or the harness may be missing.
+      // This is fine — features that need Pike will gracefully degrade.
+      return false;
+    }
+  }
+
   /** Restart the worker (after crash, idle eviction, or memory ceiling). */
   async restart(): Promise<void> {
     this.restarting = true;

@@ -441,6 +441,16 @@ export function createPikeServer(connection: Connection): PikeServer {
 
     // step 7e: background workspace indexing — fire-and-forget
     if (backgroundIndexEnabled) {
+      // Pre-warm the Pike worker during initialization so the first user
+      // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
+      worker.warmUp().then((ready) => {
+        if (ready) {
+          logInfo(connection, "[init] step 7d: Pike worker pre-warmed successfully");
+        } else {
+          logInfo(connection, "[init] step 7d: Pike worker warm-up skipped (Pike unavailable)");
+        }
+      });
+
       logInfo(connection, `[init] step 7e: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
       indexWorkspaceFiles({
         connection,
