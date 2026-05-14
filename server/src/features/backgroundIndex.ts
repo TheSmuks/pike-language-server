@@ -13,6 +13,7 @@ import type { Connection } from "vscode-languageserver/node";
 import { ProgressType } from "vscode-jsonrpc";
 import { readdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { ModificationSource } from "./workspaceIndex";
@@ -138,7 +139,7 @@ export async function indexWorkspaceFiles(
 
   // Filter out already-indexed files (open documents) before batching.
   const pending = files.filter(filepath => {
-    const uri = 'file://' + encodeURI(filepath);
+    const uri = pathToFileURL(filepath).href;
     return !index.getFile(uri);
   });
 
@@ -154,7 +155,7 @@ export async function indexWorkspaceFiles(
     // null out rootNode before Phase 2 reads it.
     const parsed: (ParsedFile | null)[] = await Promise.all(
       batch.map(async (filepath) => {
-        const uri = 'file://' + encodeURI(filepath);
+        const uri = pathToFileURL(filepath).href;
         try {
           const content = await readFile(filepath, "utf-8");
           const tree = parse(content);
