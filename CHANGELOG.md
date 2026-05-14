@@ -90,9 +90,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-  - **On-demand cross-file indexing**: `getOrIndexSymbolTable()` triggers
-    workspace indexing when a target file hasn't been indexed yet, enabling
-    cross-file type resolution without requiring a full workspace scan first.
+  - **Fast lint layer**: tree-sitter-based lint rules run on every keystroke
+    (<5ms), providing instant diagnostics for unused variables/parameters
+    (P3001/P3002) and unreachable code (P3003). Lint diagnostics merge
+    with Pike compiler diagnostics — Pike is authoritative on same-line
+    conflicts.
 
   - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
     into `array_type`, `mapping_type`, `multiset_type`, `generic_type`, and
