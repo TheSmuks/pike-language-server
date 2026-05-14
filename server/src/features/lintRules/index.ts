@@ -8,18 +8,26 @@
  * Rules are ordered by typical output count (cheapest first):
  * 1. Unused symbols (few diagnostics, uses symbol table)
  * 2. Unreachable code (rare, pure AST walk)
+ * 3. Missing return (only non-void functions)
+ * 4. Unused imports (few, uses symbol table + text scan)
  */
 
-import { Tree } from "web-tree-sitter";
+import type { Tree } from "web-tree-sitter";
 import type { SymbolTable } from "../symbolTable";
-import { Diagnostic } from "../diagnostics";
+import type { Diagnostic } from "vscode-languageserver-types";
 import { detectUnusedSymbols, type LintOptions } from "./unusedSymbols";
 import { detectUnreachableCode } from "./unreachableCode";
+import { detectMissingReturn } from "./missingReturn";
+import { detectUnusedImports } from "./unusedImports";
 
 export { detectUnusedSymbols } from "./unusedSymbols";
 export { detectUnreachableCode } from "./unreachableCode";
+export { detectMissingReturn } from "./missingReturn";
+export { detectUnusedImports } from "./unusedImports";
 export { CODE_UNUSED_VARIABLE, CODE_UNUSED_PARAMETER } from "./unusedSymbols";
 export { CODE_UNREACHABLE } from "./unreachableCode";
+export { CODE_MISSING_RETURN } from "./missingReturn";
+export { CODE_UNUSED_IMPORT } from "./unusedImports";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -29,6 +37,8 @@ export interface AllLintOptions extends LintOptions {
   /** Enable/disable individual rules. Default: all enabled. */
   unusedSymbols?: boolean;
   unreachableCode?: boolean;
+  missingReturn?: boolean;
+  unusedImports?: boolean;
 }
 
 /**
@@ -52,6 +62,14 @@ export function runLintRules(
 
   if (options?.unreachableCode !== false) {
     diagnostics.push(...detectUnreachableCode(tree));
+  }
+
+  if (options?.missingReturn !== false) {
+    diagnostics.push(...detectMissingReturn(tree, table));
+  }
+
+  if (options?.unusedImports !== false) {
+    diagnostics.push(...detectUnusedImports(tree, table));
   }
 
   return diagnostics;

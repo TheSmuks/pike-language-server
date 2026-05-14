@@ -16,6 +16,8 @@ import { initParser, parse } from "../../server/src/parser";
 import { buildSymbolTable } from "../../server/src/features/symbolTable";
 import { detectUnusedSymbols, CODE_UNUSED_VARIABLE, CODE_UNUSED_PARAMETER } from "../../server/src/features/lintRules/unusedSymbols";
 import { detectUnreachableCode, CODE_UNREACHABLE } from "../../server/src/features/lintRules/unreachableCode";
+import { detectMissingReturn, CODE_MISSING_RETURN } from "../../server/src/features/lintRules/missingReturn";
+import { detectUnusedImports, CODE_UNUSED_IMPORT } from "../../server/src/features/lintRules/unusedImports";
 import { runLintRules } from "../../server/src/features/lintRules";
 
 // ---------------------------------------------------------------------------
@@ -300,5 +302,132 @@ int foo() {
     const diags = runLintRules(tree, table, { unusedSymbols: false });
     const hasUnused = diags.some((d) => d.code === CODE_UNUSED_VARIABLE);
     expect(hasUnused).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E3: Missing return
+// ---------------------------------------------------------------------------
+
+describe("Missing return lint rule (E3)", () => {
+  test("flags non-void function with no return", () => {
+    const src = `int getAge() {
+    write("oops");
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(1);
+    expect(diags[0].code).toBe(CODE_MISSING_RETURN);
+    expect(diags[0].message).toContain("getAge");
+  });
+
+  test("does not flag void function", () => {
+    const src = `void doStuff() {
+    write("ok");
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(0);
+  });
+
+  test("does not flag function with return", () => {
+    const src = `int getAge() {
+    return 42;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(0);
+  });
+
+  test("does not flag untyped function", () => {
+    const src = `getAge() {
+    write("ok");
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(0);
+  });
+
+  test("does not flag mixed return type", () => {
+    const src = `mixed getValue() {
+    write("ok");
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(0);
+  });
+
+  test("does not flag create constructor", () => {
+    const src = `void create(string name) {
+    this.name = name;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectMissingReturn(tree, table);
+    expect(diags.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// E4: Unused imports
+// ---------------------------------------------------------------------------
+
+describe("Unused imports lint rule (E4)", () => {
+  test("flags unused inherit", () => {
+    const src = `inherit Animal;
+
+int main() {
+    return 1;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectUnusedImports(tree, table);
+    expect(diags.length).toBe(1);
+    expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
+    expect(diags[0].message).toContain("Animal");
+  });
+
+  test("does not flag used inherit", () => {
+    const src = `inherit Animal;
+
+int main() {
+    Animal a = Animal("Rex");
+    return 1;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectUnusedImports(tree, table);
+    expect(diags.length).toBe(0);
+  });
+
+  test("flags unused import", () => {
+    const src = `import Stdio;
+
+int main() {
+    return 1;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectUnusedImports(tree, table);
+    expect(diags.length).toBe(1);
+    expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
+  });
+
+  test("does not flag used import", () => {
+    const src = `import Stdio;
+
+int main() {
+    Stdio.write("hello");
+    return 1;
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, src, 1);
+    const diags = detectUnusedImports(tree, table);
+    expect(diags.length).toBe(0);
   });
 });
