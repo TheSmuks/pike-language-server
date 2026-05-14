@@ -278,7 +278,16 @@ function collectTypeRefsRecursive(node: Node, state: BuildState): void {
           confidence: declId !== null ? 'high' : 'low',
         });
       }
-    } else if (child.type === 'type' || child.type === 'union_type' || child.type === 'intersection_type') {
+    } else if (
+      child.type === 'type' ||
+      child.type === 'union_type' ||
+      child.type === 'intersection_type' ||
+      child.type === 'generic_type' ||
+      child.type === 'function_type' ||
+      child.type === 'array_type' ||
+      child.type === 'mapping_type' ||
+      child.type === 'multiset_type'
+    ) {
       collectTypeRefsRecursive(child, state);
     }
   }

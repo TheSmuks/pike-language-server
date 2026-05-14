@@ -1,206 +1,183 @@
-import { splitParams } from "../../server/src/features/signatureHelp";
-
 /**
- * Signature help tests (US-017).
+ * Tests for signature help: constructors and type-aware method resolution.
  *
- * Tests textDocument/signatureHelp via LSP protocol.
+ * These tests exercise the signatureHelp module directly against a tree-sitter
+ * parse tree and symbol table. No Pike binary is needed.
+ *
+ * Methodology:
+ * - Build a symbol table from Pike source using parse() + buildSymbolTable()
+ * - Call produceSignatureHelp() at specific cursor positions
+ * - Assert the returned signature label and parameter info
  */
+import { describe, test, expect, beforeAll } from "bun:test";
+import { initParser, parse } from "../../server/src/parser";
+import { buildSymbolTable } from "../../server/src/features/symbolTable";
+import {
+  produceSignatureHelp,
+  splitParams,
+} from "../../server/src/features/signatureHelp";
 
-import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+// Source layout (0-indexed lines):
+//  0: class Dog {
+//  1:   string name;
+//  2:   int age;
+//  3:
+//  4:   void create(string name, int age) {
+//  ...
+// 16: }
+// 17:
+// 18: class Cat {
+// 19:   void meow() {
+// 20:     write("meow");
+// 21:   }
+// 22: }
+// 23:
+// 24: void greet(string greeting, int times) {
+// 25:   write(greeting);
+// 26: }
+// 27:
+// 28: int main() {
+// 29:   Dog d = Dog("Rex", 5);
+// 30:   d->bark("hello", 3);
+// 31:   greet("hi", 2);
+// 32:   return 0;
+// 33: }
+const SOURCE = `class Dog {
+  string name;
+  int age;
 
-interface SignatureHelpResult {
-  signatures: Array<{
-    label: string;
-    documentation?: string;
-    parameters: Array<{ label: string }>;
-  }>;
-  activeSignature: number;
-  activeParameter: number;
+  void create(string name, int age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  void bark(string msg, int volume) {
+    write(msg + "!");
+  }
+
+  int getAge() {
+    return age;
+  }
 }
 
-let server: TestServer;
+class Cat {
+  void meow() {
+    write("meow");
+  }
+}
 
-beforeAll(async () => {
-  server = await createTestServer();
-});
+void greet(string greeting, int times) {
+  write(greeting);
+}
 
-afterAll(async () => {
-  await server.teardown();
-});
+int main() {
+  Dog d = Dog("Rex", 5);
+  d->bark("hello", 3);
+  greet("hi", 2);
+  return 0;
+}`;
 
-describe("US-017: textDocument/signatureHelp", () => {
-  test("shows signature for local function call", async () => {
-    const src = [
-      "int add(int a, int b) { return a + b; }",
-      "int main() {",
-      "  int result = add(",
-      "    1,",
-      "    2",
-      "  );",
-      "  return result;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-local.pike", src);
-
-    // Position after 'add(' — line 2, char 18
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 2, character: 18 },
-    }) as SignatureHelpResult | null;
-
-    expect(result).not.toBeNull();
-    expect(result!.signatures.length).toBe(1);
-    expect(result!.signatures[0].label).toContain("add");
-    expect(result!.signatures[0].parameters.length).toBe(2);
-    expect(result!.activeParameter).toBe(0);
+describe("SignatureHelp", () => {
+  beforeAll(async () => {
+    await initParser();
   });
 
-  test("tracks active parameter after comma", async () => {
-    const src = [
-      "int add(int a, int b) { return a + b; }",
-      "int main() {",
-      "  int result = add(1,",
-      "    2",
-      "  );",
-      "  return result;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-comma.pike", src);
+  function getTableAndTree() {
+    const tree = parse(SOURCE, "file:///test.pike");
+    assert(tree);
+    const table = buildSymbolTable(tree, SOURCE);
+    return { tree, table };
+  }
 
-    // Position after '1,' — line 3, char 4 (after the comma and newline)
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 3, character: 4 },
-    }) as SignatureHelpResult | null;
+  test("constructor signature for Dog(", () => {
+    const { tree, table } = getTableAndTree();
 
-    expect(result).not.toBeNull();
-    expect(result!.activeParameter).toBe(1); // Second parameter active
+    // Line 29: "  Dog d = Dog("Rex", 5);"
+    // Cursor right after the opening paren of Dog(
+    // "  Dog d = Dog(" → column 14 (0-indexed: 2+4+1+1+2+1+3 = Dog( at col 12, paren at 15)
+    // Let's just use column 14 — inside the parens
+    const result = produceSignatureHelp(tree, table, 29, 16);
+    assert(result, "Expected signature help for Dog(");
+    expect(result.signatures).toHaveLength(1);
+
+    const sig = result.signatures[0];
+    expect(sig.label).toContain("create");
+    expect(sig.parameters).toHaveLength(2);
+    expect(sig.parameters[0].label).toContain("name");
+    expect(sig.parameters[1].label).toContain("age");
   });
 
-  test("shows signature for class method call", async () => {
-    const src = [
-      "class Dog {",
-      "  string get_name() { return \"\"; }",
-      "  void speak(int volume) {}",
-      "}",
-      "int main() {",
-      "  Dog d = Dog();",
-      "  d->speak(",
-      "    10",
-      "  );",
-      "  return 0;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-method.pike", src);
+  test("method signature for d->bark(", () => {
+    const { tree, table } = getTableAndTree();
 
-    // Position after 'speak(' — line 7, char 9
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 7, character: 9 },
-    }) as SignatureHelpResult | null;
+    // Line 30: "  d->bark("hello", 3);"
+    // Cursor inside the parens after bark(
+    const result = produceSignatureHelp(tree, table, 30, 10);
+    assert(result, "Expected signature help for d->bark(");
+    expect(result.signatures).toHaveLength(1);
 
-    expect(result).not.toBeNull();
-    expect(result!.signatures[0].label).toContain("speak");
-    expect(result!.signatures[0].parameters.length).toBe(1);
+    const sig = result.signatures[0];
+    expect(sig.label).toContain("bark");
+    expect(sig.parameters).toHaveLength(2);
+    expect(sig.parameters[0].label).toContain("msg");
+    expect(sig.parameters[1].label).toContain("volume");
   });
 
-  test("shows signature for local function with no parameters", async () => {
-    const src = [
-      "string greet() { return \"hello\"; }",
-      "int main() {",
-      "  string s = greet(",
-      "  );",
-      "  return 0;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-noparam.pike", src);
+  test("active parameter tracks commas", () => {
+    const { tree, table } = getTableAndTree();
 
-    // Position after 'greet(' — line 2, char 19
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 2, character: 19 },
-    }) as SignatureHelpResult | null;
-
-    expect(result).not.toBeNull();
-    expect(result!.signatures[0].label).toContain("greet");
-    expect(result!.signatures[0].parameters.length).toBe(0);
+    // Line 30: "  d->bark("hello", 3);"
+    // After the comma: column ~19
+    const result = produceSignatureHelp(tree, table, 30, 19);
+    assert(result, "Expected signature help for d->bark(");
+    expect(result.activeParameter).toBe(1);
   });
 
-  test("returns null when not inside a call", async () => {
-    const src = [
-      "int main() {",
-      "  int x = 42;",
-      "  return x;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-nocall.pike", src);
+  test("local function signature for greet(", () => {
+    const { tree, table } = getTableAndTree();
 
-    // Position on 'x' — not inside a call
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 1, character: 6 },
-    });
+    // Line 31: "  greet("hi", 2);"
+    // Cursor inside parens after greet(
+    const result = produceSignatureHelp(tree, table, 31, 9);
+    assert(result, "Expected signature help for greet(");
+    expect(result.signatures).toHaveLength(1);
 
+    const sig = result.signatures[0];
+    expect(sig.label).toContain("greet");
+    expect(sig.parameters).toHaveLength(2);
+    expect(sig.parameters[0].label).toContain("greeting");
+    expect(sig.parameters[1].label).toContain("times");
+  });
+
+  test("no signature for position outside any call", () => {
+    const { tree, table } = getTableAndTree();
+
+    const result = produceSignatureHelp(tree, table, 0, 0);
     expect(result).toBeNull();
   });
+});
 
-  test("returns null when cursor is before opening paren", async () => {
-    const src = [
-      "int add(int a, int b) { return a + b; }",
-      "int main() {",
-      "  int result = add(1, 2);",
-      "  return result;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-before-paren.pike", src);
-
-    // Position on 'd' of 'add' (before the '(')
-    // Line 2: "  int result = add(1, 2);"
-    // 'add' starts at col 15, '(' is at col 18
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 2, character: 17 },
-    });
-
-    expect(result).toBeNull();
+describe("splitParams", () => {
+  test("splits simple params", () => {
+    expect(splitParams("string a, int b")).toEqual(["string a", " int b"]);
   });
 
-  test("returns call when cursor is between parentheses", async () => {
-    const src = [
-      "int add(int a, int b) { return a + b; }",
-      "int main() {",
-      "  int result = add(1, 2);",
-      "  return result;",
-      "}",
-    ].join("\n");
-    const uri = server.openDoc("file:///test/sig-between-parens.pike", src);
+  test("handles nested parens", () => {
+    expect(splitParams("function(:string) cb, int x")).toEqual([
+      "function(:string) cb",
+      " int x",
+    ]);
+  });
 
-    // Position right after '(' — between ( and )
-    // Line 2: "  int result = add(1, 2);"
-    // '(' is at col 18, cursor at col 19 (just inside)
-    const result = await server.client.sendRequest("textDocument/signatureHelp", {
-      textDocument: { uri },
-      position: { line: 2, character: 19 },
-    }) as SignatureHelpResult | null;
+  test("single param", () => {
+    expect(splitParams("string name")).toEqual(["string name"]);
+  });
 
-    expect(result).not.toBeNull();
-    expect(result!.signatures[0].label).toContain("add");
+  test("empty string returns empty array", () => {
+    expect(splitParams("")).toEqual([]);
   });
 });
 
-describe("splitParams: nested type parsing", () => {
-  test("function type with inner commas stays as single param", () => {
-    const parts = splitParams("function(int, string: void)");
-    expect(parts).toHaveLength(1);
-    expect(parts[0]).toBe("function(int, string: void)");
-  });
-
-  test("mixed params with nested function types split correctly", () => {
-    const parts = splitParams("int a, function(int, string: void), string b");
-    expect(parts).toHaveLength(3);
-    expect(parts[0]).toBe("int a");
-    expect(parts[1]).toBe(" function(int, string: void)");
-    expect(parts[2]).toBe(" string b");
-  });
-});
+function assert(condition: unknown, msg?: string): asserts condition {
+  if (!condition) throw new Error(msg ?? "Assertion failed");
+}

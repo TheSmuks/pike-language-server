@@ -1,0 +1,22 @@
+{
+  "autodoc": null,
+  "compilation": {
+    "exit_code": 0,
+    "strict_types": true
+  },
+  "diagnostics": [],
+  "error": null,
+  "file": "corpus/files/cross_pmod_dir.pmod/module.pmod",
+  "pike_version": "8.0.1116",
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "MODULE_NAME"
+    },
+    {
+      "kind": "function",
+      "line": 8,
+      "name": "capitalize"
+    }
+  ]
+}

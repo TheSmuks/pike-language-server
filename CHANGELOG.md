@@ -6,6 +6,111 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [Unreleased]
+
+### Added
+
+  - **Intelligent LSP features**: Complete implementation of the intelligent
+    features plan (E1-E5, F1-F5, G1-G2, H1-H2, AU1, GS1):
+
+  - **Fast lint layer** (E1-E5): Real-time syntax diagnostics on every keystroke
+    via tree-sitter — unused variables/parameters (P3001/P3002), unreachable
+    code (P3003), missing return statements (P3004), unused imports (P3005).
+    Suppressed on lines where Pike compiler provides diagnostics.
+
+  - **Type-aware completion** (F1): Chained call type inference via
+    `resolveChainedType` and `decomposePostfixChain`. Completes members through
+    multi-step `d->get_dog()->bark()` chains.
+
+  - **Constructor and method signature help** (F2-F3): Resolves `Dog("Rex",`
+    to constructor `create()` params, and `d->bark("hi",` to method signature
+    via type -> class -> method lookup.
+
+  - **Commit characters** (F4): `.` and `(` as commit characters in completion
+    items for immediate acceptance.
+
+  - **Auto-import suggestions** (F5): When typing an unqualified identifier
+    matching a stdlib symbol (e.g., `get_v`), offers completion with
+    `additionalTextEdits` that inserts `inherit Module;`. Uses reverse index
+    from stdlib-autodoc.json. Suppresses when module is already inherited.
+
+  - **Inlay type hints** (G1): Shows inferred types for untyped variable
+    declarations.
+
+  - **Parameter name inlay hints** (G2): Shows `param:` labels at call sites.
+    Handles `comma_expr` unwrapping and arrow/dot method resolution. Requires
+    tree-sitter-pike v1.2.2+ (issue #18 fixed).
+
+  - **PikeWorker pre-warming** (H1): `warmUp()` during initialization eliminates
+    ~200ms cold start on first completion/hover request.
+
+  - **Arity quick-fix** (H2): Code action for "Wrong number of arguments to foo()"
+    diagnostics — adds or removes argument slots.
+
+  - **Autodoc template generation** (AU1): Type `//!!` above a function, method,
+    class, or variable declaration. Code action replaces it with a `//!` autodoc
+    skeleton populated with parameter names and return type sections.
+
+  - **Getters/setters generation** (GS1): Code action on class member variables
+    generates `get_name()` / `set_name(value)` methods. Uses declared type for
+    return/parameter types. Skips if method already exists.
+
+  - **Call hierarchy**: Incoming/outgoing call hierarchy support
+    (`textDocument/callHierarchy`).
+
+  - **Complex type rename support**: `collectTypeRefsRecursive()` now recurses
+    `function_type` nodes, ensuring rename propagates through compound type
+    annotations like `array(Dog)` and `mapping(Dog:int)`.
+
+  - **Recursive `.pmod` directory discovery**: The harness now recurses into
+    `.pmod` directories (which are directories, not files) to discover nested
+    Pike sources like `module.pmod` and `helpers.pike`.
+
+  - Updated tree-sitter-pike WASM to v1.2.2 (fixes bare function call parsing,
+    issue #18).
+
+### Changed
+
+  - **SignatureHelp rewrite**: `extractCalleeInfo()` now returns `objectName`
+    for method calls. `resolveMethodOnType()` does type -> class -> method
+    lookup. `resolveConstructor()` uses range overlap for scope discovery.
+
+  - **Removed client-side tree-sitter syntactic provider**
+    (`TreeSitterSyntacticProvider`): Server semantic tokens and VSCode TextMate
+    grammar already cover all highlighting. The client-side provider was
+    redundant and has been deleted.
+
+  - **Hardened `build-vsix.sh`**: `vsce` binary is now resolved from `$PATH`
+    with fallback to `$HOME/.bun/bin/vsce` instead of using a hardcoded
+    absolute path.
+
+  - **`release.yml` uses `.latest-vsix`**: The upload step now reads the exact
+    VSIX path written by `build-vsix.sh`, eliminating BUILD_NUM skew between
+    build and release steps.
+
+  - **`ci.yml` uses `$PIKE_VERSION` variable**: Replaced hardcoded `8.0.1116`
+    in PATH and PIKE_BINARY entries with the existing `PIKE_VERSION` env var.
+
+### Fixed
+
+  - **Parser cache corruption in tests**: `parse()` uses incremental parsing
+    with old tree cache keyed by URI. Tests reusing the same URI across
+    different sources got garbled parse trees. Fixed with unique URIs per test.
+
+  - **Non-null assertion safety in completion**: Replaced unsafe `child(0)!`
+    with a null-checked loop in dot-access completion, preventing potential
+    crashes on unexpected tree-sitter node structures.
+
+  - **Harness uses `PIKE_BINARY` for outer invocation**: `runIntrospect()` was
+    passing `PIKE_BINARY` to the introspect script (correct) but using a
+    hardcoded `"pike"` string for the outer process that runs the script.
+
+  - **Removed dead `getErrorCount` import** from `client/extension.ts`.
+
+  - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
+    referenced the deleted provider have been removed. The remaining output
+    channel test is documented as a manual smoke test.
+
 ## [0.5.0] — 2026-05-14
 
 ### Added
@@ -85,8 +190,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `for_statement` and `switch_statement` (both fully resolved), removed a
     fabricated `BLOCK_SCOPES` constant reference, removed stale line-number
     anchors from `typeof_()` entries, and fixed corrupted severity table headers.
-
-## [Unreleased]
 
 ## [0.4.3] — 2026-05-14
 

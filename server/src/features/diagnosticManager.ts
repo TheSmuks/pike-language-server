@@ -22,7 +22,9 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { PikeWorker, PikeUnavailableError, type PikeDiagnostic } from "./pikeWorker";
 import { getParseDiagnostics } from "./diagnostics";
+import { runLintRules } from "./lintRules";
 import { parse, type Tree } from "../parser";
+import { buildSymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, ErrorCategory } from "../util/errorLog.js";
 
@@ -156,9 +158,13 @@ export class DiagnosticManager {
     try {
       const tree = parse(doc.getText(), uri);
       if (!this.disposed) {
+        const parseDiags = getParseDiagnostics(tree);
+        // Run lint rules (unused vars, unreachable code) — fast, synchronous.
+        const table = buildSymbolTable(tree, uri, doc.version);
+        const lintDiags = runLintRules(tree, table);
         this.connection.sendDiagnostics({
           uri,
-          diagnostics: getParseDiagnostics(tree),
+          diagnostics: [...parseDiags, ...lintDiags],
         });
       }
     } catch (err) {
@@ -268,7 +274,8 @@ export class DiagnosticManager {
     if (cached && cached.contentHash === contentHash) {
       const parseDiags = this.safeParseDiagnostics(source);
       const tree = parse(source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, tree);
+      const lintDiags = this.safeLintDiagnostics(tree, uri, doc.version);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, tree, lintDiags);
       this.publishDiagnostics(uri, lspDiagnostics);
       return;
     }
@@ -326,7 +333,8 @@ export class DiagnosticManager {
       // Merge and publish
       const parseDiags = this.safeParseDiagnostics(source);
       const tree = parse(source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, tree);
+      const lintDiags = this.safeLintDiagnostics(tree, uri, doc.version);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, tree, lintDiags);
       this.publishDiagnostics(uri, lspDiagnostics);
 
       // Cross-file propagation: schedule re-diagnosis of dependents
@@ -449,6 +457,16 @@ export class DiagnosticManager {
       return [];
     }
   }
+
+  /** Lint diagnostics (unused vars, unreachable code). Returns [] on parse failure. */
+  private safeLintDiagnostics(tree: Tree, uri: string, version: number): Diagnostic[] {
+    try {
+      const table = buildSymbolTable(tree, uri, version);
+      return runLintRules(tree, table);
+    } catch {
+      return [];
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -471,6 +489,7 @@ export function mergeDiagnostics(
   parseDiags: Diagnostic[],
   pikeDiags: PikeDiagnostic[],
   tree?: Tree,
+  lintDiags?: Diagnostic[],
 ): Diagnostic[] {
   // Build set of line numbers that have Pike diagnostics.
   // Parse diagnostics on these lines will be suppressed (Pike is more precise).
@@ -484,7 +503,12 @@ export function mergeDiagnostics(
     return !pikeLines.has(diag.range.start.line);
   });
 
-  const result: Diagnostic[] = [...suppressedParseDiags];
+  // Filter lint diagnostics: suppress if the same line has a Pike diagnostic.
+  const suppressedLintDiags = (lintDiags ?? []).filter((diag) => {
+    return !pikeLines.has(diag.range.start.line);
+  });
+
+  const result: Diagnostic[] = [...suppressedParseDiags, ...suppressedLintDiags];
 
   for (const pd of pikeDiags) {
     const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
