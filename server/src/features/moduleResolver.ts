@@ -70,6 +70,9 @@ export class ModuleResolver {
     this.pikeVersion = options.pikeVersion;
   }
 
+  /** Pike include paths (-I), from `pike --show-paths`. */
+  get includePaths(): string[] { return this.pikePaths.includePaths; }
+
   /** Clear the resolution cache. */
   clearCache(): void {
     this.cache.clear();

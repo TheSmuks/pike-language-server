@@ -66,7 +66,8 @@ blocks are correctly scoped (not leaking to enclosing scope). Reference resoluti
 go-to-definition work for catch-block variables.
 
 **Implementation**: `collectCatchExpr()` in `declarationCollector.ts` pushes a `'catch'`
-scope for the block. `'catch_expr'` added to `BLOCK_SCOPES` for nested reference resolution.
+scope for the block. References inside catch blocks are resolved correctly via the
+scope stack.
 
 ### pike-ai-kb: pike-signature cannot resolve C-level predef builtins
 
@@ -76,34 +77,23 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
 
-### ~~Missing field names on for_statement children~~ — PARTIALLY RESOLVED
+### ~~Missing field names on for_statement children~~ — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#2](https://github.com/TheSmuks/tree-sitter-pike/issues/2)
 
-**Fixed in**: WASM binary updated 2026-05-03 — `for_statement` now has `body` and
-`condition` fields. `childForFieldName('body')` and `childForFieldName('condition')` work.
+**Fixed in**: WASM binary updated — `for_statement` now has `body`, `condition`, and
+`initializer` fields. `collectForStatement()` uses `childForFieldName('initializer')`,
+`childForFieldName('condition')`, and `childForFieldName('body')` directly. No positional
+scans remain.
 
-**Still present**: `for_statement` has no `initializer` field. The positional child scan for
-`for_init_decl` in `collectForStatement()` is still required.
-
-**Workaround**: `collectForStatement()` walks `node.children` directly, checking
-`child.type === 'for_init_decl'`. For `for_init_decl`, `childrenForFieldName('name')` correctly
-extracts variable name identifiers.
-
-### ~~No scope-introducing nodes for while/switch/plain blocks~~ — MOSTLY RESOLVED
+### ~~No scope-introducing nodes for while/switch/plain blocks~~ — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#4](https://github.com/TheSmuks/tree-sitter-pike/issues/4)
 
-**Fixed in**: WASM binary updated 2026-05-03 — `while_statement` and `do_while_statement`
-now have `body` fields. `collectWhileStatement()` and `collectDoWhileStatement()` use
-`childForFieldName('body')` directly. No more positional scans needed for these two.
-
-**Still present**: `switch_statement` has no `body` field. The positional scan for the
-block in `collectSwitchStatement()` is still required. The `value` field (switch expression)
-works correctly.
-
-**Workaround**: `collectWhileStatement()` and `collectDoWhileStatement()` use field names
-directly. `collectSwitchStatement()` uses a positional scan for the block.
+**Fixed in**: WASM binary updated (tree-sitter-pike v1.1.1+) — `while_statement`,
+`do_while_statement`, and `switch_statement` all have `body` fields.
+`collectWhileStatement()`, `collectDoWhileStatement()`, and `collectSwitchStatement()`
+all use `childForFieldName('body')` directly. No positional scans remain for any of these.
 
 ### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED
 
@@ -143,11 +133,11 @@ also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter run
 *None currently.*
 
 
-pb|### High (Major features impaired)
+### High (Major features impaired)
 
 *None currently — cross-file inherited member completion was resolved (tests US-001, CB-2, US-002 now pass).*
 
-lb|### Medium (Known workarounds, tracked for resolution)
+### Medium (Known workarounds, tracked for resolution)
 
 | Limitation | Severity | Workaround |
 |------------|----------|------------|
@@ -159,8 +149,6 @@ lb|### Medium (Known workarounds, tracked for resolution)
 
 | Limitation | Severity | Workaround |
 |------------|----------|------------|
-| for_statement missing initializer field | Low | Positional scan workaround in `collectForStatement()` |
-| switch_statement missing body field | Low | Positional scan workaround in `collectSwitchStatement()` |
 | pike-introspect availability | Low | CI installs it. Worker starts without it. Only `resolve` calls fail. |
 | pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
 
@@ -225,8 +213,8 @@ Pike's `compile_error` handler reports line numbers but not column positions. Wh
 ### ~~Hover does not use Pike runtime for type inference~~ — RESOLVED
 
 **US-009 update**: The `typeof_()` method is wired into the hover provider
-(`server.ts`), completion provider (`navigationHandler.ts:565`), and definition
-provider (`navigationHandler.ts:397`). Member access on `mixed`-typed variables
+(`server.ts`), completion provider (`navigationHandler.ts`), and definition
+provider (`navigationHandler.ts`). Member access on `mixed`-typed variables
 now resolves through runtime inference.
 
 **Impact**: Hover, completion, and definition are type-aware for `mixed`
@@ -310,7 +298,7 @@ now get `assignedType = Dog`.
 ### ~~typeof_() is only called for hover, not completion or definition~~ — RESOLVED
 
 `typeof_()` is wired into the hover provider (`server.ts`), completion provider
-(`navigationHandler.ts:565`), and definition provider (`navigationHandler.ts:397`).
+(`navigationHandler.ts`), and definition provider (`navigationHandler.ts`).
 Member access on `mixed`-typed variables now resolves through runtime inference.
 
 ### ~~PRIMITIVE_TYPES centralization is incomplete~~ — RESOLVED
