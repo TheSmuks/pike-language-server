@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/rename-child.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 8
+        },
+        "end": {
+          "line": 8,
+          "character": 26
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module '\"rename-base.pike\"' is never used"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 11,
+          "character": 10
+        },
+        "end": {
+          "line": 11,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module 'BaseShape' is never used"
+    }
+  ]
+}

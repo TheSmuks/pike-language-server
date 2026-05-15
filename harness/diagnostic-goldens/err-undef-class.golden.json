@@ -1,0 +1,23 @@
+{
+  "file": "corpus/files/err-undef-class.pike",
+  "parseCount": 0,
+  "lintCount": 1,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 19
+        },
+        "end": {
+          "line": 12,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'o' is unused"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/stdlib-fileio.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 24,
+          "character": 10
+        },
+        "end": {
+          "line": 24,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'line' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 10
+        },
+        "end": {
+          "line": 32,
+          "character": 15
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'whole' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 37,
+          "character": 6
+        },
+        "end": {
+          "line": 37,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'exists' is unused"
+    }
+  ]
+}

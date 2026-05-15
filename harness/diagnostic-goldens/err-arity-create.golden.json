@@ -1,0 +1,119 @@
+{
+  "file": "corpus/files/err-arity-create.pike",
+  "parseCount": 0,
+  "lintCount": 7,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 18
+        },
+        "end": {
+          "line": 8,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'a' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 18
+        },
+        "end": {
+          "line": 13,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'a' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 25
+        },
+        "end": {
+          "line": 13,
+          "character": 26
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'b' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 32
+        },
+        "end": {
+          "line": 13,
+          "character": 33
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'c' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 35,
+          "character": 6
+        },
+        "end": {
+          "line": 35,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 38,
+          "character": 6
+        },
+        "end": {
+          "line": 38,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'b' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 41,
+          "character": 6
+        },
+        "end": {
+          "line": 41,
+          "character": 8
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f2' is unused"
+    }
+  ]
+}

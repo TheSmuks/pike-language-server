@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/lint-unused-var.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 37
+        },
+        "end": {
+          "line": 9,
+          "character": 49
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'unused_param' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 11,
+          "character": 11
+        },
+        "end": {
+          "line": 11,
+          "character": 23
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'unused_local' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 20,
+          "character": 8
+        },
+        "end": {
+          "line": 20,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'inner_unused' is unused"
+    }
+  ]
+}

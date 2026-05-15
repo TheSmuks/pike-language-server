@@ -20,6 +20,7 @@ import type { Tree, Node } from "web-tree-sitter";
 import type { Diagnostic } from "vscode-languageserver-types";
 import { DiagnosticSeverity } from "vscode-languageserver-types";
 import type { SymbolTable, Declaration } from "../symbolTable";
+import { utf16ToUtf8, getLineText } from "../../util/positionConverter";
 
 /** Diagnostic code for missing return. */
 export const CODE_MISSING_RETURN = "P3004";
@@ -50,10 +51,12 @@ export function detectMissingReturn(
     // Skip constructors
     if (decl.name === "create") continue;
 
-    // Find the function's AST node
+    // Find the function's AST node — decl.range is in UTF-16, convert to UTF-8 for tree-sitter
+    const declLineText = getLineText(tree.rootNode.text, decl.range.start.line);
+    const utf8Col = utf16ToUtf8(declLineText, decl.range.start.character);
     const funcNode = tree.rootNode.descendantForPosition({
       row: decl.range.start.line,
-      column: decl.range.start.character,
+      column: utf8Col,
     });
     if (!funcNode) continue;
 

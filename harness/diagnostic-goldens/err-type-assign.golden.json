@@ -1,0 +1,23 @@
+{
+  "file": "corpus/files/err-type-assign.pike",
+  "parseCount": 0,
+  "lintCount": 1,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 9
+        },
+        "end": {
+          "line": 13,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 's' is unused"
+    }
+  ]
+}

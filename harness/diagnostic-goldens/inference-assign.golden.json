@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/inference-assign.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 48,
+          "character": 9
+        },
+        "end": {
+          "line": 48,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'info' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 55,
+          "character": 8
+        },
+        "end": {
+          "line": 55,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'eng' is unused"
+    }
+  ]
+}

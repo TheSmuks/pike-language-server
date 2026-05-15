@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/class-create.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 51,
+          "character": 9
+        },
+        "end": {
+          "line": 51,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 56,
+          "character": 9
+        },
+        "end": {
+          "line": 56,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'info' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 59,
+          "character": 9
+        },
+        "end": {
+          "line": 59,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'n' is unused"
+    }
+  ]
+}

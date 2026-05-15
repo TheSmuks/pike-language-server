@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/import-stdlib.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 9
+        },
+        "end": {
+          "line": 10,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 6
+        },
+        "end": {
+          "line": 13,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'bytes' is unused"
+    }
+  ]
+}

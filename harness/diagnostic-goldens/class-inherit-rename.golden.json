@@ -1,0 +1,23 @@
+{
+  "file": "corpus/files/class-inherit-rename.pike",
+  "parseCount": 0,
+  "lintCount": 1,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 21,
+          "character": 9
+        },
+        "end": {
+          "line": 21,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'label' is unused"
+    }
+  ]
+}

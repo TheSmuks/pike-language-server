@@ -1,0 +1,167 @@
+{
+  "file": "corpus/files/stdlib-array.pike",
+  "parseCount": 0,
+  "lintCount": 10,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 13
+        },
+        "end": {
+          "line": 9,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'doubled' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 16
+        },
+        "end": {
+          "line": 10,
+          "character": 23
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'strings' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 13
+        },
+        "end": {
+          "line": 17,
+          "character": 17
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'odds' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 23,
+          "character": 13
+        },
+        "end": {
+          "line": 23,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sorted' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 25,
+          "character": 16
+        },
+        "end": {
+          "line": 25,
+          "character": 28
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sorted_words' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 13
+        },
+        "end": {
+          "line": 32,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'common' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 33,
+          "character": 13
+        },
+        "end": {
+          "line": 33,
+          "character": 17
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'diff' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 39,
+          "character": 23
+        },
+        "end": {
+          "line": 39,
+          "character": 33
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'transposed' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 51,
+          "character": 6
+        },
+        "end": {
+          "line": 51,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'total' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 52,
+          "character": 13
+        },
+        "end": {
+          "line": 52,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'prefix' is unused"
+    }
+  ]
+}

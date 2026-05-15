@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/rename-crossfile-main.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 3,
+          "character": 8
+        },
+        "end": {
+          "line": 3,
+          "character": 35
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module '\"rename-crossfile-dog.pike\"' is never used"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 4,
+          "character": 8
+        },
+        "end": {
+          "line": 4,
+          "character": 35
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module '\"rename-crossfile-cat.pike\"' is never used"
+    }
+  ]
+}

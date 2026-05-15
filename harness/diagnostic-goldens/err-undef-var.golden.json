@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/err-undef-var.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 6
+        },
+        "end": {
+          "line": 10,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 6
+        },
+        "end": {
+          "line": 13,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'y' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 6
+        },
+        "end": {
+          "line": 16,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'z' is unused"
+    }
+  ]
+}

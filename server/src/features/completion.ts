@@ -40,6 +40,7 @@ import {
 import { resolveChainedType } from "./completion-chain";
 import { completeScopeAccess } from "./completion-scopeAccess";
 import { completeCallArgs } from "./completion-callArgs";
+import { utf16ToUtf8 } from "../util/positionConverter";
 
 // Re-export for backward compatibility
 export { type CompletionContext, resetCompletionCache } from "./completionTrigger";
@@ -59,8 +60,10 @@ export async function getCompletions(
   ctx: CompletionContext,
 ): Promise<CompletionList> {
   const root = tree.rootNode;
-  // Position in tree-sitter is 0-indexed
-  const pos = { row: line, column: character };
+  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
+  const lines = ctx.source.split("\n");
+  const utf8Col = utf16ToUtf8(lines[line] ?? "", character);
+  const pos = { row: line, column: utf8Col };
 
   // Get the node at or immediately before the cursor position
   let node = root.descendantForPosition(pos);
@@ -69,7 +72,7 @@ export async function getCompletions(
   }
 
   // Determine completion context
-  const triggerContext = detectTriggerContext(node, line, character, tree, ctx.source.split("\n")[line] ?? "");
+  const triggerContext = detectTriggerContext(node, line, character, tree, lines[line] ?? "");
 
   let items: CompletionItem[];
 
