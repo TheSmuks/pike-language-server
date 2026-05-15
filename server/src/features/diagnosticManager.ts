@@ -27,6 +27,7 @@ import { parse, type Tree } from "../parser";
 import { buildSymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, ErrorCategory } from "../util/errorLog.js";
+import { uriToPath } from "../util/uri";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -147,24 +148,24 @@ export class DiagnosticManager {
 
   /**
    * Called on didChange. In realtime mode, resets debounce timer.
-   * Parse diagnostics are published immediately (they're free).
+   * Parse diagnostics are published immediately (they're cheap — tree-sitter ERROR scan).
+   * Lint diagnostics (unused vars, unreachable code) are deferred to the debounced path
+   * because buildSymbolTable is expensive.
    */
   onDidChange(uri: string): void {
     if (this.disposed) return;
     const doc = this.documents.get(uri);
     if (!doc) return;
 
-    // Always publish parse diagnostics immediately (tree-sitter, no worker)
+    // Always publish parse diagnostics immediately (tree-sitter, no worker).
+    // Only scan for ERROR nodes — buildSymbolTable is deferred to the debounced path.
     try {
       const tree = parse(doc.getText(), uri);
       if (!this.disposed) {
         const parseDiags = getParseDiagnostics(tree);
-        // Run lint rules (unused vars, unreachable code) — fast, synchronous.
-        const table = buildSymbolTable(tree, uri, doc.version);
-        const lintDiags = runLintRules(tree, table);
         this.connection.sendDiagnostics({
           uri,
-          diagnostics: [...parseDiags, ...lintDiags],
+          diagnostics: parseDiags,
         });
       }
     } catch (err) {
@@ -272,10 +273,9 @@ export class DiagnosticManager {
     // Check cache
     const cached = this.pikeCache.get(uri);
     if (cached && cached.contentHash === contentHash) {
-      const parseDiags = this.safeParseDiagnostics(source);
-      const tree = parse(source);
-      const lintDiags = this.safeLintDiagnostics(tree, uri, doc.version);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, tree, lintDiags);
+      const { tree: parseTree, diagnostics: parseDiags } = this.safeParse(source, uri);
+      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, parseTree ?? undefined, lintDiags);
       this.publishDiagnostics(uri, lspDiagnostics);
       return;
     }
@@ -302,14 +302,14 @@ export class DiagnosticManager {
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
-      const filepath = uri.startsWith("file://") ? uri.slice(7) : uri;
+      const filepath = uriToPath(uri);
       const result = await this.worker.diagnose(source, filepath);
 
       // Clear staleness timer
       this.clearStaleTimer(state);
 
       if (result.timedOut) {
-        const parseDiags = this.safeParseDiagnostics(source);
+        const { diagnostics: parseDiags } = this.safeParse(source, uri);
         const timeoutDiag: Diagnostic = {
           range: {
             start: { line: 0, character: 0 },
@@ -331,10 +331,9 @@ export class DiagnosticManager {
       });
 
       // Merge and publish
-      const parseDiags = this.safeParseDiagnostics(source);
-      const tree = parse(source);
-      const lintDiags = this.safeLintDiagnostics(tree, uri, doc.version);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, tree, lintDiags);
+      const { tree: parseTree, diagnostics: parseDiags } = this.safeParse(source, uri);
+      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, parseTree ?? undefined, lintDiags);
       this.publishDiagnostics(uri, lspDiagnostics);
 
       // Cross-file propagation: schedule re-diagnosis of dependents
@@ -350,7 +349,7 @@ export class DiagnosticManager {
         }
       }
       // Keep only parse diagnostics
-      const parseDiags = this.safeParseDiagnostics(source);
+      const { diagnostics: parseDiags } = this.safeParse(source, uri);
       if (!this.disposed) {
         this.publishDiagnostics(uri, parseDiags);
       }
@@ -448,18 +447,20 @@ export class DiagnosticManager {
     }
   }
 
-  /** Parse diagnostics with error suppression. */
-  private safeParseDiagnostics(source: string): Diagnostic[] {
+  /** Parse the source and extract parse diagnostics. Returns both to avoid double-parsing.
+   *  When uri is provided, the parser cache is used instead of re-parsing from scratch. */
+  private safeParse(source: string, uri?: string): { tree: Tree | null; diagnostics: Diagnostic[] } {
     try {
-      return getParseDiagnostics(parse(source));
+      const tree = parse(source, uri);
+      return { tree, diagnostics: getParseDiagnostics(tree) };
     } catch {
-      // Tree-sitter parse threw (OOM or invalid input) — return no diagnostics
-      return [];
+      return { tree: null, diagnostics: [] };
     }
   }
 
   /** Lint diagnostics (unused vars, unreachable code). Returns [] on parse failure. */
-  private safeLintDiagnostics(tree: Tree, uri: string, version: number): Diagnostic[] {
+  private safeLintDiagnostics(tree: Tree | null, uri: string, version: number): Diagnostic[] {
+    if (tree === null) return [];
     try {
       const table = buildSymbolTable(tree, uri, version);
       return runLintRules(tree, table);

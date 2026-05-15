@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "activationEvents": [
     "onLanguage:pike"
   ],
@@ -16,7 +16,7 @@
   "scripts": {
     "build:extension": "bash scripts/build-server.sh && bash scripts/build-client.sh",
     "build:standalone": "scripts/build-standalone.sh",
-    "test": "bun test",
+    "test": "bun test tests/ harness/",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
     "test:integration": "cd tests/integration && npm test",

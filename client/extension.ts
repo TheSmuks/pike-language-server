@@ -172,6 +172,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // survives window reloads, which makes it look like multiple versions
   // are running simultaneously).
   outputChannel.clear();
+  context.subscriptions.push(outputChannel);
 
   log("info", "EXT", "[init] step 1/6: activate() called");
   const version = context.extension.packageJSON.version as string;
@@ -199,6 +200,7 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBarItem.command = "workbench.action.output.toggleOutput";
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
+  context.subscriptions.push(outputChannel);
   log("info", "EXT", "[init] step 4/6: status bar created");
 
   const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
@@ -245,6 +247,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Listen for state transitions to update status bar.
+  let restartAttempt = 0;
+  const maxRestartAttempts = 3;
   client.onDidChangeState((event: StateChangeEvent) => {
     updateStatusBar(event.newState);
     const label = event.newState === State.Starting ? "Starting"
@@ -252,6 +256,27 @@ export function activate(context: vscode.ExtensionContext): void {
       : event.newState === State.Stopped ? "Stopped"
       : `unknown(${event.newState})`;
     log("info", "CLIENT", `[init] state change: ${label}`);
+
+    // Auto-restart on unexpected server crash (Stopped without explicit deactivate).
+    if (event.newState === State.Stopped && event.oldState === State.Running) {
+      if (restartAttempt < maxRestartAttempts) {
+        restartAttempt++;
+        const delayMs = restartAttempt * 2000; // 2s, 4s, 6s backoff
+        log("warn", "CLIENT", `Server crashed — restarting in ${delayMs}ms (attempt ${restartAttempt}/${maxRestartAttempts})`);
+        setTimeout(() => {
+          if (client) {
+            client.start();
+          }
+        }, delayMs);
+      } else {
+        log("error", "CLIENT", `Server crashed ${maxRestartAttempts} times — giving up. Reload window to retry.`);
+      }
+    }
+
+    // Reset restart counter on successful start.
+    if (event.newState === State.Running) {
+      restartAttempt = 0;
+    }
   });
 
   log("info", "EXT", "[init] step 5/6: starting server process...");
@@ -335,9 +360,29 @@ export function activate(context: vscode.ExtensionContext): void {
               outputChannel,
             },
           );
-          client.onDidChangeState((ev: StateChangeEvent) => {
+          const stateDisposable = client.onDidChangeState((ev: StateChangeEvent) => {
             updateStatusBar(ev.newState);
           });
+          context.subscriptions.push(stateDisposable);
+
+          // Re-register notification handlers on the new client.
+          context.subscriptions.push(
+            client.onNotification(
+              "pike/errorCount",
+              (params: { count: number }) => {
+                setErrorCount(params.count);
+              },
+            ),
+          );
+          context.subscriptions.push(
+            client.onNotification(
+              "pike/serverLog",
+              (params: { level: string; message: string }) => {
+                log("info", "SERVER", params.message);
+              },
+            ),
+          );
+
           client.start();
           applyTraceSetting(client);
         }).finally(() => {
@@ -352,5 +397,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): Thenable<void> | undefined {
   log("info", "EXT", "deactivate() — shutting down");
-  return client?.stop();
+  if (!client) return undefined;
+  const result = client.stop();
+  client.dispose();
+  return result;
 }

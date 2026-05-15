@@ -19,8 +19,9 @@ import type { ModuleResolver } from "./moduleResolver";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { uriToPath } from "../util/uri";
 
 // ---------------------------------------------------------------------------
 // DocumentLink handler
@@ -43,7 +44,7 @@ export function registerDocumentLinkHandler(
     const doc = documents.get(uri);
     if (!doc) return [];
 
-    return produceDocumentLinks(doc, uri, resolver);
+    return produceDocumentLinks(doc, uri, resolver, index.workspaceRoot);
   });
 }
 
@@ -59,13 +60,14 @@ async function produceDocumentLinks(
   doc: TextDocument,
   uri: string,
   resolver: ModuleResolver,
+  workspaceRoot: string,
 ): Promise<DocumentLink[]> {
   const links: DocumentLink[] = [];
 
   const tree = parse(doc.getText(), uri);
   if (!tree?.rootNode) return [];
 
-  walkForLinks(tree.rootNode, uri, links, resolver);
+  walkForLinks(tree.rootNode, uri, links, resolver, workspaceRoot);
 
   return links;
 }
@@ -78,6 +80,7 @@ function walkForLinks(
   currentUri: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
+  workspaceRoot: string,
 ): void {
   if (node.isError || node.isMissing) return;
 
@@ -87,18 +90,18 @@ function walkForLinks(
       break;
     }
     case "inherit_decl": {
-      collectInheritLink(node, currentUri, links, resolver);
+      collectInheritLink(node, currentUri, links, resolver, workspaceRoot);
       break;
     }
     case "preproc_include": {
-      collectIncludeLink(node, currentUri, links, resolver);
+      collectIncludeLink(node, currentUri, links, resolver, workspaceRoot);
       break;
     }
   }
 
   // Recurse into children.
   for (const child of node.children) {
-    walkForLinks(child, currentUri, links, resolver);
+    walkForLinks(child, currentUri, links, resolver, workspaceRoot);
   }
 }
 
@@ -140,6 +143,7 @@ function collectInheritLink(
   currentUri: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
+  workspaceRoot: string,
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
@@ -150,7 +154,7 @@ function collectInheritLink(
   const isStringLiteral = pathNode.type === "string";
 
   if (isStringLiteral) {
-    const resolved = resolveRelativePath(pathText, currentUri);
+    const resolved = resolveRelativePath(pathText, currentUri, workspaceRoot);
     if (resolved) {
       links.push({ range, target: resolved });
     }
@@ -177,6 +181,7 @@ function collectIncludeLink(
   currentUri: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
+  workspaceRoot: string,
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
@@ -203,7 +208,7 @@ function collectIncludeLink(
   if (pathText.length === 0) return;
 
   const range = toLinkRange(pathNode);
-  const resolved = resolveRelativePath(pathText, currentUri);
+  const resolved = resolveRelativePath(pathText, currentUri, workspaceRoot);
   if (resolved) {
     links.push({ range, target: resolved });
   }
@@ -220,13 +225,14 @@ function collectIncludeLink(
 function resolveRelativePath(
   pathText: string,
   currentUri: string,
+  workspaceRoot: string,
 ): string | null {
   const cleanPath = pathText.replace(/^["]+|["]+$/g, "");
   if (cleanPath.length === 0) return null;
 
   // Compute absolute path relative to current file's directory.
   // currentUri is like "file:///path/to/file.pike"
-  const currentPath = decodeURIComponent(currentUri.replace("file://", ""));
+  const currentPath = uriToPath(currentUri);
   const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
 
   let targetPath: string;
@@ -246,7 +252,11 @@ function resolveRelativePath(
     targetPath = currentDir + "/" + cleanPath;
   }
 
-  return pathToFileURL(targetPath).href;
+  // Security: reject paths that escaped the workspace.
+  const normalized = resolve(targetPath);
+  if (!normalized.startsWith(workspaceRoot)) return null;
+
+  return pathToFileURL(normalized).href;
 }
 
 // ---------------------------------------------------------------------------

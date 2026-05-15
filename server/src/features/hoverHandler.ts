@@ -30,6 +30,7 @@ import type { LRUCache } from "../util/lruCache";
 import { stripScopeWrapper } from "../util/stripScope";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { readFileSync } from "node:fs";
+import { uriToPath } from "../util/uri";
 import { renderAutodocLines } from "./autodocLineRenderer";
 
 // ---------------------------------------------------------------------------
@@ -129,7 +130,7 @@ function getSource(uri: string, documents: TextDocuments<TextDocument>): string 
   // Cross-file: document not open in editor. Read from disk.
   if (uri.startsWith("file://")) {
     try {
-      return readFileSync(uri.slice(7), "utf8");
+      return readFileSync(uriToPath(uri), "utf8");
     } catch {
       return null;
     }

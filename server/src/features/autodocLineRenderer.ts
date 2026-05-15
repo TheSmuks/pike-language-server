@@ -175,7 +175,10 @@ function renderParagraph(lines: string[]): string {
   if (/^@example\b/.test(first)) {
     const content = lines.map(l => l.trim()).join("\n")
       .replace(/^@example\s*/, "");
-    return `\`\`\`pike\n${content}\n\`\`\``;
+    // Code blocks are inherently safe — VSCode renders them as-is.
+    // But strip any trailing backtick triple to avoid breaking the fence.
+    const safe = content.replace(/```/g, "`` ");
+    return `\`\`\`pike\n${safe}\n\`\`\``;
   }
 
   // Default: join lines, render inline markup
@@ -191,19 +194,32 @@ function renderParagraph(lines: string[]): string {
  * Render Pike AutoDoc inline markup to markdown.
  */
 function renderInline(text: string): string {
-  let result = text;
+  // Sanitize first: escape HTML entities in raw text so user-written
+  // doc comments cannot inject HTML or break markdown rendering.
+  let result = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 
   // @[Symbol] → `Symbol`
-  result = result.replace(/@\[([^\]]+)\]/g, "`$1`");
+  result = result.replace(/@\[([^\]]+)\]/g, (_, sym: string) => {
+    return "`" + sym.replace(/`/g, "\\`") + "`";
+  });
 
   // @b{bold@} → **bold**
-  result = result.replace(/@b\{([^@]*)@\}/g, "**$1**");
+  result = result.replace(/@b\{([^@]*)@\}/g, (_, content: string) => {
+    return "**" + content.replace(/\*/g, "\\*") + "**";
+  });
 
   // @i{italic@} → *italic*
-  result = result.replace(/@i\{([^@]*)@\}/g, "*$1*");
+  result = result.replace(/@i\{([^@]*)@\}/g, (_, content: string) => {
+    return "*" + content.replace(/\*/g, "\\*") + "*";
+  });
 
   // @tt{code@} → `code`
-  result = result.replace(/@tt\{([^@]*)@\}/g, "`$1`");
+  result = result.replace(/@tt\{([^@]*)@\}/g, (_, content: string) => {
+    return "`" + content.replace(/`/g, "\\`") + "`";
+  });
 
   // @url{URL@} → URL
   result = result.replace(/@url\{([^@]*)@\}/g, "$1");

@@ -13,6 +13,7 @@
 import { resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
+import { uriToPath } from "./util/uri";
 
 
 import {
@@ -29,7 +30,7 @@ import {
 } from "vscode-languageserver/node";
 import type { InitializeParams, InitializeResult } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initParser, isParserReady, parse, deleteTree, clearTreeCache } from "./parser";
+import { initParser, isParserReady, parse, deleteTree, clearTreeCache, getTreeCacheStats, evictTreeCacheOldest } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { indexWorkspaceFiles } from "./features/backgroundIndex";
 import {
@@ -208,7 +209,7 @@ export function createPikeServer(connection: Connection): PikeServer {
     logInfo(connection, "[init] step 6: onInitialize — client connected");
 
     const rootUri = params.rootUri ?? params.rootPath ?? "";
-    const rootPath = rootUri.startsWith("file://") ? rootUri.slice(7) : rootUri;
+    const rootPath = uriToPath(rootUri);
     clientSupportsWatchedFiles =
       params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
 
@@ -241,8 +242,8 @@ export function createPikeServer(connection: Connection): PikeServer {
     // the definition handler can resolve into it.
     index.setOnDemandIndexFn(async (targetUri: string) => {
       try {
-        const filePath = targetUri.replace("file://", "");
-        const content = await readFile(decodeURIComponent(filePath), "utf-8");
+        const filePath = uriToPath(targetUri);
+        const content = await readFile(filePath, "utf-8");
         const tree = parse(content, targetUri);
         const entry = await index.upsertFile(
           targetUri, 0, tree, content, ModificationSource.BackgroundIndex,
@@ -355,6 +356,11 @@ export function createPikeServer(connection: Connection): PikeServer {
         selectionRangeProvider: true,
         callHierarchyProvider: true,
         codeLensProvider: { resolveProvider: false },
+        implementationProvider: true,
+        diagnosticProvider: {
+          interFileDependencies: false,
+          workspaceDiagnostics: false,
+        },
         workspace: {
           fileOperations: {
             didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },
@@ -445,7 +451,13 @@ export function createPikeServer(connection: Connection): PikeServer {
       // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
       worker.warmUp().then((ready) => {
         if (ready) {
-          logInfo(connection, "[init] step 7d: Pike worker pre-warmed successfully");
+          const version = worker.pikeVersion ?? "unknown";
+          logInfo(connection, `[init] step 7d: Pike worker pre-warmed successfully (Pike ${version})`);
+
+          // Warn if Pike version predates 8.0 — features may not work correctly.
+          if (version && !version.startsWith("8.")) {
+            logWarn(connection, `[init] Pike version ${version} predates 8.0 — some features may not work correctly`);
+          }
         } else {
           logInfo(connection, "[init] step 7d: Pike worker warm-up skipped (Pike unavailable)");
         }
@@ -468,6 +480,37 @@ export function createPikeServer(connection: Connection): PikeServer {
     }
 
     logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
+
+    // step 7f: periodic memory monitor — log warnings and trigger eviction
+    // when heap usage is high. Checks every 60 seconds. Timer is unreffed
+    // so it doesn't prevent the process from exiting.
+    const MEMORY_CHECK_INTERVAL_MS = 60_000;
+    const HEAP_USAGE_WARNING_RATIO = 0.80;
+
+    const memoryTimer = setInterval(() => {
+      const mem = process.memoryUsage();
+      const heapRatio = mem.heapUsed / mem.heapTotal;
+
+      if (heapRatio > HEAP_USAGE_WARNING_RATIO) {
+        const treeStats = getTreeCacheStats();
+
+        logWarn(connection,
+          `Memory pressure: heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / `
+          + `${Math.round(mem.heapTotal / 1024 / 1024)}MB `
+          + `(${Math.round(heapRatio * 100)}%). `
+          + `Tree cache: ${treeStats.size} entries (${Math.round(treeStats.bytes / 1024)}KB). `
+          + `Consider reducing backgroundIndex.batchSize.`
+        );
+
+        // Aggressively evict half the tree cache under memory pressure.
+        if (treeStats.size > 5) {
+          const evictCount = Math.ceil(treeStats.size / 2);
+          const evicted = evictTreeCacheOldest(evictCount);
+          logWarn(connection, `Evicted ${evicted} tree cache entries due to memory pressure`);
+        }
+      }
+    }, MEMORY_CHECK_INTERVAL_MS);
+    if (memoryTimer.unref) memoryTimer.unref();
   });
 
   connection.onDidChangeWatchedFiles((params) => {
@@ -489,6 +532,37 @@ export function createPikeServer(connection: Connection): PikeServer {
           autodocCache.delete(uri);
           diagnosticManager.onDidClose(uri);
           break;
+        }
+      }
+    }
+  });
+
+  // Handle file renames: update the index by removing the old URI and
+  // re-indexing the new one. The file watcher sends Created/Deleted but
+  // that loses the old→new mapping needed for dependency propagation.
+  (connection as any).onDidRenameFiles?.((params: { files: Array<{ oldUri: string; newUri: string }> }) => {
+    for (const rename of params.files) {
+      const dependents = index.getDependents(rename.oldUri);
+      index.removeFile(rename.oldUri);
+      deleteTree(rename.oldUri);
+
+      // Re-index the renamed file if it's currently open.
+      const doc = documents.get(rename.newUri);
+      if (doc) {
+        const tree = parse(doc.getText(), rename.newUri);
+        if (tree) {
+          index.upsertFile(rename.newUri, doc.version, tree, doc.getText(), ModificationSource.DidOpen);
+        }
+      }
+
+      // Re-index dependents so their cross-file references point to the new URI.
+      for (const depUri of dependents) {
+        const depDoc = documents.get(depUri);
+        if (depDoc) {
+          const depTree = parse(depDoc.getText(), depUri);
+          if (depTree) {
+            index.upsertFile(depUri, depDoc.version, depTree, depDoc.getText(), ModificationSource.DidOpen);
+          }
         }
       }
     }

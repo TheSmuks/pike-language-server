@@ -19,8 +19,15 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { resolve, join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync, statSync } from "node:fs";
-import type { Connection } from "vscode-languageserver/node";
-import type { CancellationToken } from "vscode-languageserver/node";
+import {
+  type Connection,
+  type CancellationToken,
+  ErrorCodes,
+  ResponseError,
+} from "vscode-languageserver/node";
+// LSP extended error codes (RequestCancelled, ServerCancelled, ContentModified)
+// from the protocol extension range (-32800 to -32899).
+import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import { logError, ErrorCategory } from "../util/errorLog.js";
 // ---------------------------------------------------------------------------
 // Configuration (tunable per deployment)
@@ -150,6 +157,14 @@ export const PikePriority = {
   /** Background: diagnostics, indexing. */
   background: 2,
 } as const;
+
+/** Clamp a priority number to a valid sub-queue index (0–2). */
+function clampPriority(p: number): 0 | 1 | 2 {
+  if (p <= 0) return 0;
+  if (p >= 2) return 2;
+  return 1;
+}
+
 // ---------------------------------------------------------------------------
 // PikeWorker class
 // ---------------------------------------------------------------------------
@@ -230,8 +245,8 @@ export class PikeWorker {
   private readonly config: PikeWorkerConfig;
 
   // Priority queue — ensures exactly one write to stdin at a time.
-  // Items with lower priority number are sent first.
-  private readonly queue: QueueItem[] = [];
+  // Three FIFO sub-queues indexed by PikePriority value. O(1) enqueue and dequeue.
+  private readonly queues: [QueueItem[], QueueItem[], QueueItem[]] = [[], [], []];
   private sending = false;
 
   // Idle eviction
@@ -249,6 +264,12 @@ export class PikeWorker {
    * - false = unavailable (exit code 127 or pike not found)
    */
   private pikeAvailable: boolean | null = null;
+
+  /**
+   * Pike version string from the last successful ping. Null until warmUp succeeds.
+   * Used for version-aware feature gating and mismatch warnings.
+   */
+  pikeVersion: string | null = null;
 
   /**
    * Callback for critical errors that should be routed through the centralized
@@ -357,11 +378,13 @@ export class PikeWorker {
         }
         this.pending.clear();
         // Also reject everything still in the queue
-        for (const item of this.queue) {
-          clearTimeout(item.timeout);
-          item.reject(error);
+        for (const q of this.queues) {
+          for (const item of q) {
+            clearTimeout(item.timeout);
+            item.reject(error);
+          }
         }
-        this.queue.length = 0;
+        for (const q of this.queues) q.length = 0;
         this.sending = false;
         this.proc = null;
       }
@@ -409,7 +432,7 @@ export class PikeWorker {
       this.pending.clear();
     }
 
-    this.queue.length = 0;
+    for (const q of this.queues) q.length = 0;
     this.sending = false;
   }
 
@@ -481,11 +504,14 @@ export class PikeWorker {
         // Remove from pending map (may already be resolved)
         this.pending.delete(id);
         // Also remove from queue if not yet sent
-        const queueIdx = this.queue.findIndex(item =>
-          item.payload === payload
-        );
-        if (queueIdx !== -1) {
-          this.queue.splice(queueIdx, 1);
+        for (const q of this.queues) {
+          const queueIdx = q.findIndex(item =>
+            item.payload === payload
+          );
+          if (queueIdx !== -1) {
+            q.splice(queueIdx, 1);
+            break;
+          }
         }
         reject(new Error(`TIMEOUT: Pike worker timeout for ${method} (id=${id})`));
       }, this.config.requestTimeoutMs);
@@ -512,7 +538,7 @@ export class PikeWorker {
         timeout: item.timeout,
       });
 
-      this.queue.push(item);
+      this.queues[clampPriority(item.priority)].push(item);
       this.drainQueue();
     });
   }
@@ -523,53 +549,48 @@ export class PikeWorker {
    * Picks the item with the lowest priority number (highest priority) first.
    */
   private drainQueue(): void {
-    if (this.sending || this.queue.length === 0) return;
+    if (this.sending) return;
     if (!this.proc || this.proc.killed) return;
 
-    // Find the highest-priority item (lowest number).
-    let bestIdx = 0;
-    for (let i = 1; i < this.queue.length; i++) {
-      if (this.queue[i].priority < this.queue[bestIdx].priority) {
-        bestIdx = i;
-      }
-    }
+    // Drain highest-priority non-empty sub-queue first (O(1) dequeue).
+    for (const q of this.queues) {
+      if (q.length === 0) continue;
 
-    this.sending = true;
-    const item = this.queue[bestIdx];
-    // Remove the item by swapping with last and popping (O(1) instead of splice O(n)).
-    // Order within the same priority level is preserved because we scan left-to-right
-    // and only swap when strictly lower priority number.
-    this.queue[bestIdx] = this.queue[this.queue.length - 1];
-    this.queue.pop();
+      const item = q.shift()!;
 
-    // Check cancellation before writing to subprocess
-    if (item.token?.isCancellationRequested) {
-      const parsed: { id: number } = JSON.parse(item.payload);
-      const pending = this.pending.get(parsed.id);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        this.pending.delete(parsed.id);
+      // Check cancellation before writing to subprocess
+      if (item.token?.isCancellationRequested) {
+        const parsed: { id: number } = JSON.parse(item.payload);
+        const pending = this.pending.get(parsed.id);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          this.pending.delete(parsed.id);
+        }
+        item.resolve({ id: parsed.id, error: { code: LSPErrorCodes.RequestCancelled, message: "Request cancelled" } });
+        this.drainQueue();
+        return;
       }
-      item.resolve({ id: parsed.id, error: { code: -32800, message: "Request cancelled" } });
-      this.sending = false;
-      this.drainQueue();
+
+      this.sending = true;
+
+      this.writeToStdin(item.payload).then(
+        () => {
+          // Write succeeded — response will be resolved by processBuffer
+          // via the pending map.  Allow next item to be sent.
+          this.sending = false;
+          this.drainQueue();
+        },
+        (err) => {
+          // Write failed — reject this item
+          item.reject(err instanceof Error ? err : new Error(String(err)));
+          this.sending = false;
+          this.drainQueue();
+        },
+      );
+
+      // Found an item to send — stop scanning sub-queues.
       return;
     }
-
-    this.writeToStdin(item.payload).then(
-      () => {
-        // Write succeeded — response will be resolved by processBuffer
-        // via the pending map.  Allow next item to be sent.
-        this.sending = false;
-        this.drainQueue();
-      },
-      (err) => {
-        // Write failed — reject this item
-        item.reject(err instanceof Error ? err : new Error(String(err)));
-        this.sending = false;
-        this.drainQueue();
-      },
-    );
   }
 
   /**
@@ -708,7 +729,8 @@ export class PikeWorker {
   async warmUp(): Promise<boolean> {
     try {
       this.start(); // Idempotent — no-op if already running
-      await this.ping();
+      const pong = await this.ping();
+      this.pikeVersion = pong.pike_version ?? null;
       return true;
     } catch {
       // Pike may not be installed or the harness may be missing.
@@ -756,7 +778,7 @@ export class PikeWorker {
   private resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
-      if (this.proc && !this.proc.killed && this.pending.size === 0 && this.queue.length === 0) {
+      if (this.proc && !this.proc.killed && this.pending.size === 0 && this.queues.every(q => q.length === 0)) {
         // Delegate to stop() for SIGTERM→SIGKILL escalation and full cleanup.
         // Direct kill+null would bypass escalation, risking zombie processes
         // on shared servers when Pike ignores SIGTERM.
