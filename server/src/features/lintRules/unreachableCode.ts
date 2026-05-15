@@ -59,6 +59,15 @@ export function detectUnreachableCode(tree: Tree): Diagnostic[] {
  */
 function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[]): void {
   if (node.type === "block") {
+    // Switch bodies contain case/default clauses as direct children in a
+    // flat block. Each case is an independent control-flow entry point, so
+    // a terminator in one case does not make subsequent cases unreachable.
+    // Use segmented checking for switch blocks.
+    const parent = node.parent;
+    if (parent && parent.type === "switch_statement") {
+      checkSwitchBlock(node, diagnostics);
+      return;
+    }
     checkBlock(node, diagnostics);
   }
 
@@ -119,4 +128,66 @@ function namedChildren(node: import("web-tree-sitter").Node): import("web-tree-s
     }
   }
   return result;
+}
+
+// Node types that start a new case segment in a switch block.
+const CASE_ENTRY_TYPES = new Set(["case_clause", "default_clause"]);
+
+/**
+ * Check a switch body block for unreachable code.
+ *
+ * The switch body is a flat block where case/default clauses and their
+ * statements are siblings. Each case/default starts a new control-flow
+ * segment. We check reachability only within a segment (between two
+ * case/default entries), not across segments.
+ */
+function checkSwitchBlock(
+  block: import("web-tree-sitter").Node,
+  diagnostics: Diagnostic[],
+): void {
+  const children = namedChildren(block);
+
+  // Build segments: each segment starts at a case/default clause (or the
+  // beginning of the block for statements before the first case).
+  let currentSegment: import("web-tree-sitter").Node[] = [];
+  const segments: import("web-tree-sitter").Node[][] = [currentSegment];
+
+  for (const child of children) {
+    if (CASE_ENTRY_TYPES.has(child.type)) {
+      currentSegment = [];
+      segments.push(currentSegment);
+    }
+    currentSegment.push(child);
+  }
+
+  // Check each segment independently.
+  for (const segment of segments) {
+    let foundTerminator = false;
+    for (const child of segment) {
+      if (foundTerminator) {
+        // Still flag unreachable code within a single case segment.
+        // E.g.: `case 1: return 1; foo();` — foo() is unreachable.
+        // But skip case/default entries themselves.
+        if (!CASE_ENTRY_TYPES.has(child.type)) {
+          diagnostics.push(
+            Diagnostic.create(
+              Range.create(
+                { line: child.startPosition.row, character: child.startPosition.column },
+                { line: child.endPosition.row, character: child.endPosition.column },
+              ),
+              "Unreachable code",
+              DiagnosticSeverity.Warning,
+              CODE_UNREACHABLE,
+              "pike-lsp-lint",
+            ),
+          );
+        }
+        continue;
+      }
+
+      if (TERMINATOR_TYPES.has(child.type)) {
+        foundTerminator = true;
+      }
+    }
+  }
 }
