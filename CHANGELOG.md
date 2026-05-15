@@ -32,7 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     markdown metacharacters in inline content to prevent injection from
     user-written Pike doc comments.
 
-## [Unreleased]
+## [0.7.0] — 2026-05-16
 
 ### Added
 
@@ -101,6 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Fixed `export { FileEntry }` → `export type { FileEntry }` in
     `workspaceIndex.ts` re-export — bun's ESM loader crashes on runtime
     re-export of type-only symbols.
+
+## [Unreleased]
 
 ## [0.6.4] — 2026-05-15
 
