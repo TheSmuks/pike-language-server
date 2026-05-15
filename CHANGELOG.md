@@ -41,6 +41,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Call hierarchy tests: 11 tests for prepare/incoming/outgoing call
     hierarchy. Documents known bug: `collectCallExpressions` looks for
     `call_expression` but tree-sitter-pike produces `postfix_expr` nodes (T4.2).
+  - Runtime JSON validation for Pike subprocess responses (`jsonValidation.ts`):
+    6 validator functions replace bare `as unknown as` casts with fail-fast
+    type guards.
+  - `completionItem/resolve` provider for lazy stdlib markdown documentation
+    loading on demand instead of eagerly during completion.
+  - `workspaceResolution.ts`, `workspaceDependencies.ts`, `workspaceTypes.ts`:
+    extracted from `workspaceIndex.ts` for focused module boundaries.
+  - `pikeWorkerProcess.ts`, `pikeWorkerTypes.ts`: extracted from
+    `pikeWorker.ts`.
+  - `serverCapabilities.ts`, `serverLifecycle.ts`: extracted from `server.ts`.
+  - `completion-chain.ts`, `completion-callArgs.ts`, `completion-scopeAccess.ts`,
+    `completion-snippets.ts`, `completion-stdlib.ts`, `completion-items.ts`:
+    extracted from `completionTrigger.ts` and `completion.ts`.
+  - `navigationGoTo.ts`, `navigationRefactoring.ts`, `navigationCompletion.ts`,
+    `navigationDocumentFeatures.ts`, `navigationAdvanced.ts`,
+    `navigationInclude.ts`: extracted from `navigationHandler.ts`.
+  - `codeActionSourceActions.ts`, `diagnosticUtils.ts`,
+    `declarationBlockCollectors.ts`, `hoverContent.ts`,
+    `signatureHelp-resolve.ts`, `pikeDetection.ts`, `completion-scope.ts`,
+    `xml-renderer-blocks.ts`, `xml-renderer-inline.ts`, `xml-renderer-types.ts`:
+    further module boundary extractions.
 
 ### Changed
 
@@ -48,6 +69,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`getAutoImportByPrefix`) instead of O(n) linear scan over all stdlib
     entries. Per-keystroke filtering is O(log n + k) where k is the number
     of matching symbols (X3.6).
+  - All 13 source files that exceeded the TigerStyle 500-line limit have been
+    split into focused modules. Largest file is now 500 lines (was 1166).
+  - `outputChannel.clear()` replaced with session separator in client — crash
+    logs from previous sessions are preserved.
+  - FileSystemWatcher now properly disposed before recreation on config change,
+    preventing watcher leaks across restarts.
+  - Modernized README.md with complete feature inventory (23 LSP providers),
+    architecture overview, and development section.
+
+### Fixed
+
+  - Removed non-null assertion `targetDecl!` in `workspaceIndex.ts` — replaced
+    with narrowed local after null check.
+  - Fixed `export { FileEntry }` → `export type { FileEntry }` in
+    `workspaceIndex.ts` re-export — bun's ESM loader crashes on runtime
+    re-export of type-only symbols.
 
 ## [0.6.4] — 2026-05-15
 

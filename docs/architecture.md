@@ -73,31 +73,60 @@ Pike source files exercising the language features the LSP must handle: cross-mo
 
 Tree-sitter-based lint rules running on every keystroke (<5ms). Detects structural issues: unused variables/parameters (P3001/P3002), unreachable code (P3003), missing return statements (P3004), unused imports (P3005). Lint diagnostics are suppressed on lines where the Pike compiler provides diagnostics — Pike is always authoritative.
 
-### Completion Engine (`server/src/features/completion.ts`, `completionTrigger.ts`)
+### Completion Engine (`completion*.ts`, 9 modules)
 
 Multi-stage completion: (1) keyword, (2) scoped local symbols from symbol table, (3) dot/arrow member access with type resolution, (4) chained call type inference via `resolveChainedType`/`decomposePostfixChain`, (5) auto-import suggestions from stdlib reverse index. Commit characters (`.` and `(`) for immediate acceptance.
 
-### Signature Help (`server/src/features/signatureHelp.ts`)
+- `completionTrigger.ts` — main trigger and dispatcher
+- `completion.ts` — orchestrator and public API
+- `completion-items.ts` — item construction and filtering
+- `completion-stdlib.ts` — stdlib index loading and search
+- `completion-chain.ts` — chained call resolution
+- `completion-callArgs.ts` — argument-list completion
+- `completion-scopeAccess.ts` — `::` scope access completion
+- `completion-snippets.ts` — snippet generation helpers
+- `completion-scope.ts` — scope symbol resolution
+
+### Signature Help (`signatureHelp*.ts`)
 
 Type-aware: resolves `Dog("Rex",` to constructor `create()` params, and `d->bark("hi",` to method signature via type -> class -> method lookup. Active parameter tracking highlights which parameter the cursor is on.
 
-### Inlay Hints (`server/src/features/inlayHints.ts`)
+- `signatureHelp.ts` — main handler
+- `signatureHelp-resolve.ts` — parameter resolution logic
+
+### Inlay Hints (`inlayHints.ts`)
 
 Two modes: (1) type hints for untyped variable declarations (G1), (2) parameter name labels at call sites with `comma_expr` unwrapping and method resolution (G2).
 
-### Code Actions (`server/src/features/codeAction.ts`, `autodocTemplate.ts`, `getterSetter.ts`)
+### Code Actions (`codeAction*.ts`, `autodocTemplate.ts`, `getterSetter.ts`)
 
 - **Arity quick-fix** (H2): Adds/removes argument slots for "Wrong number of arguments" diagnostics.
 - **Autodoc template** (AU1): `//!!` trigger above a declaration generates a `//!` skeleton with `@param` and `@returns` sections.
 - **Getters/setters** (GS1): Generates `get_x()` / `set_x(value)` methods for class member variables.
 
-### Type Resolver (`server/src/features/typeResolver.ts`)
+### Type Resolver (`typeResolver.ts`)
 
 Centralized type inference: resolves member access (`obj.field`), arrow access (`obj->method`), chained calls, and constructor types. Uses symbol table scope lookup with range-overlap for class scope discovery.
 
-### PikeWorker (`server/src/features/pikeWorker.ts`)
+### PikeWorker (`pikeWorker*.ts`, 3 modules)
 
-Manages the Pike compiler subprocess with priority queue, idle eviction, and SIGKILL escalation. Supports `warmUp()` for pre-warming during initialization.
+Manages the Pike compiler subprocess with priority queue, idle eviction, and SIGKILL escalation. Supports `warmUp()` for pre-warming during initialization. All responses validated at runtime via `jsonValidation.ts`.
+
+- `pikeWorker.ts` — public API
+- `pikeWorkerProcess.ts` — subprocess lifecycle and communication
+- `pikeWorkerTypes.ts` — shared types
+
+### Navigation (`navigation*.ts`, 7 modules)
+
+Go-to-definition, references, implementation, document highlights, call hierarchy, folding ranges, selection ranges, and document symbols. Cross-file resolution via inherit/import chains.
+
+- `navigationHandler.ts` — dispatcher
+- `navigationGoTo.ts` — definition/implementation
+- `navigationRefactoring.ts` — rename/prepare rename
+- `navigationCompletion.ts` — references/highlights
+- `navigationDocumentFeatures.ts` — document symbol/folding/selection
+- `navigationAdvanced.ts` — call hierarchy/workspace symbol
+- `navigationInclude.ts` — include/import navigation
 
 ## Two-Speed Diagnostics
 
