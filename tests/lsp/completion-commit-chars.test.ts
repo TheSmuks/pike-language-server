@@ -12,7 +12,7 @@
  *   4. Everything else gets no commit characters
  */
 import { describe, it, expect } from "bun:test";
-import { declToCompletionItem } from "../../server/src/features/completionTrigger";
+import { declToCompletionItem } from "../../server/src/features/completion-items";
 import type { Declaration } from "../../server/src/features/symbolTable";
 
 // ---------------------------------------------------------------------------

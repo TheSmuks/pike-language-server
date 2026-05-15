@@ -29,6 +29,9 @@ import {
 
 let client: LanguageClient | undefined;
 
+/** Tracked FileSystemWatcher so it can be disposed on restart. */
+let fileWatcher: vscode.FileSystemWatcher | undefined;
+
 // ─── Observability ──────────────────────────────────────────────────────────
 
 /**
@@ -171,7 +174,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // Clear stale output from previous activations (OutputChannel content
   // survives window reloads, which makes it look like multiple versions
   // are running simultaneously).
-  outputChannel.clear();
+  // Append a session separator instead of clearing — crash logs from the
+  // previous session may be valuable for debugging.
+  outputChannel.appendLine('');
+  outputChannel.appendLine('─'.repeat(60));
+  outputChannel.appendLine(`Pike LSP v${context.extension.packageJSON.version} — session started`);
+  outputChannel.appendLine('─'.repeat(60));
   context.subscriptions.push(outputChannel);
 
   log("info", "EXT", "[init] step 1/6: activate() called");
@@ -200,7 +208,6 @@ export function activate(context: vscode.ExtensionContext): void {
   statusBarItem.command = "workbench.action.output.toggleOutput";
   statusBarItem.show();
   context.subscriptions.push(statusBarItem);
-  context.subscriptions.push(outputChannel);
   log("info", "EXT", "[init] step 4/6: status bar created");
 
   const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
@@ -222,12 +229,17 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   };
 
+  // Dispose any previous watcher before creating a new one (prevents leak on restart).
+  fileWatcher?.dispose();
+  fileWatcher = vscode.workspace.createFileSystemWatcher("**/*.{pike,pmod,mmod}");
+  context.subscriptions.push(fileWatcher);
+
   const clientOptions: LanguageClientOptions = {
     documentSelector: [
       { scheme: "file", language: "pike" },
     ],
     synchronize: {
-      fileEvents: vscode.workspace.createFileSystemWatcher("**/*.{pike,pmod,mmod}"),
+      fileEvents: fileWatcher,
     },
     initializationOptions: getSettings(),
     // Route server errors through our custom handler (no popup spam).

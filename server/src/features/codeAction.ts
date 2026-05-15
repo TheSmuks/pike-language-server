@@ -10,7 +10,6 @@
  * and produce workspace edits.
  */
 
-import assert from "node:assert/strict";
 import type {
   CodeAction,
   CodeActionParams,
@@ -19,6 +18,9 @@ import type {
   TextEdit,
   WorkspaceEdit,
 } from "vscode-languageserver/node";
+
+// Re-export source actions for backward compatibility
+export { organizeImports, extractVariable } from "./codeActionSourceActions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -174,11 +176,6 @@ function addMissingImport(diag: Diagnostic, text: string, ctx: CodeActionContext
 /**
  * Regex to extract function name, expected, and actual argument counts
  * from Pike "Wrong number of arguments" messages.
- *
- * Matches two Pike compiler message formats:
- *   "Wrong number of arguments to foo(). Expected 3, got 2."
- *   "Expected 3, got 2"
- * Also captures bare "Wrong number of arguments to foo()" without counts.
  */
 const WRONG_ARITY_RE =
   /Wrong number of arguments to (\w+)\(\)(?:\.?\s*Expected\s+(\d+),?\s*got\s+(\d+))?/;
@@ -263,12 +260,6 @@ function findClosingParen(lineText: string, openPos: number): number | null {
 
 /**
  * Produce edit: insert placeholder arguments for missing parameters.
- *
- * When too few arguments are passed, inserts `, mixed` for each missing
- * argument before the closing `)` of the function call on the diagnostic line.
- *
- * When too many arguments are passed, no edit is produced (ambiguous which
- * arguments to remove).
  */
 function fixArityMismatch(
   diag: Diagnostic,
@@ -277,9 +268,6 @@ function fixArityMismatch(
 ): TextEdit[] {
   const info = extractArityInfo(diag);
   if (!info) return [];
-
-  assert(info.expected >= 0, "Expected count must be non-negative");
-  assert(info.actual >= 0, "Actual count must be non-negative");
 
   // Too many arguments — ambiguous which to remove, produce no edit.
   if (info.actual > info.expected) return [];
@@ -294,7 +282,6 @@ function fixArityMismatch(
   const lineText = lines[lineIndex];
 
   // Find the function call's opening `(` on this line.
-  // Search for functionName followed by `(`.
   const funcPattern = info.functionName + "(";
   const funcPos = lineText.indexOf(funcPattern);
   if (funcPos === -1) return [];
@@ -356,13 +343,6 @@ const QUICK_FIXES: QuickFix[] = [
 
 /**
  * Produce code actions for the given parameters.
- *
- * Only returns actions for diagnostics that are present in the params context
- * and match a registered quick-fix.
- *
- * Also produces source actions:
- * - source.fixAll: apply all matching quick-fixes in one action
- * - source.organizeImports: sort and deduplicate import statements
  */
 export function produceCodeActions(
   params: CodeActionParams,
@@ -433,6 +413,7 @@ export function produceCodeActions(
 
   // --- source.organizeImports: sort and deduplicate imports ---
   if (wantsOrganizeImports) {
+    const { organizeImports } = require("./codeActionSourceActions");
     const edits = organizeImports(text);
     if (edits.length > 0) {
       const changes: Record<string, TextEdit[]> = {};
@@ -447,6 +428,7 @@ export function produceCodeActions(
 
   // --- refactor.extract: extract variable ---
   if (wantsRefactor) {
+    const { extractVariable } = require("./codeActionSourceActions");
     const extractEdits = extractVariable(params, text);
     if (extractEdits) {
       const changes: Record<string, TextEdit[]> = {};
@@ -460,174 +442,4 @@ export function produceCodeActions(
   }
 
   return actions;
-}
-
-// ---------------------------------------------------------------------------
-// Source action: organize imports
-// ---------------------------------------------------------------------------
-
-/**
- * Organize imports: sort alphabetically and remove duplicates.
- * Returns TextEdits or empty array if no changes needed.
- */
-function organizeImports(text: string): TextEdit[] {
-  const lines = text.split("\n");
-  const importLines: { line: number; text: string }[] = [];
-  let firstImport = -1;
-  let lastImport = -1;
-
-  // Collect all import lines and their positions
-  for (let i = 0; i < lines.length; i++) {
-    const trimmed = lines[i].trim();
-    if (trimmed.startsWith("import ")) {
-      if (firstImport === -1) firstImport = i;
-      lastImport = i;
-      importLines.push({ line: i, text: trimmed });
-    }
-    // Stop at first non-directive, non-comment, non-blank after imports start
-    if (firstImport !== -1 && i > lastImport &&
-        trimmed !== "" && !trimmed.startsWith("//") && !trimmed.startsWith("/*") &&
-        !trimmed.startsWith("import ") && !trimmed.startsWith("inherit ") &&
-        !trimmed.startsWith("#pike")) {
-      break;
-    }
-  }
-
-  if (importLines.length <= 1) return [];
-
-  // Sort and deduplicate
-  const sorted = [...new Set(importLines.map(i => i.text))].sort();
-
-  // Check if already sorted and deduplicated
-  const original = importLines.map(i => i.text);
-  if (original.length === sorted.length && original.every((v, i) => v === sorted[i])) {
-    return [];
-  }
-
-  // Replace the import block
-  const edits: TextEdit[] = [];
-  // Delete all existing import lines
-  for (const { line } of importLines) {
-    edits.push({
-      range: {
-        start: { line, character: 0 },
-        end: { line: line + 1, character: 0 },
-      },
-      newText: "",
-    });
-  }
-  // Insert sorted imports at the first import position
-  edits.push({
-    range: {
-      start: { line: firstImport, character: 0 },
-      end: { line: firstImport, character: 0 },
-    },
-    newText: sorted.join("\n") + "\n",
-  });
-
-  return edits;
-}
-
-// ---------------------------------------------------------------------------
-// Refactor: extract variable
-// ---------------------------------------------------------------------------
-
-/**
- * Extract the selected expression into a local variable.
- * Returns null if the selection is empty or not a valid expression.
- */
-function extractVariable(
-  params: CodeActionParams,
-  text: string,
-): { edits: TextEdit[]; varName: string } | null {
-  const range = params.range;
-  // Need a non-empty selection
-  if (range.start.line !== range.end.line) return null;
-  if (range.start.character === range.end.character) return null;
-
-  const line = range.start.line;
-  const lines = text.split("\n");
-  if (line >= lines.length) return null;
-
-  const lineText = lines[line];
-  const startChar = range.start.character;
-  const endChar = range.end.character;
-
-  if (endChar > lineText.length) return null;
-  const selectedText = lineText.slice(startChar, endChar).trim();
-  if (!selectedText) return null;
-
-  // Don't extract if it's a full statement (ends with ;)
-  if (selectedText.endsWith(";")) return null;
-  // Don't extract identifiers (too simple to be useful)
-  if (/^[a-zA-Z_]\w*$/.test(selectedText)) return null;
-
-  // Generate a variable name from the expression
-  const varName = generateVarName(selectedText);
-
-  // Find the enclosing statement start (for insertion point)
-  // Walk backward to find the beginning of the statement
-  let statementStart = startChar;
-  for (let c = startChar - 1; c >= 0; c--) {
-    if (lineText[c] === ";") {
-      statementStart = c + 1;
-      break;
-    }
-    if (c === 0) statementStart = 0;
-  }
-
-  // Compute indentation of the current line
-  const indent = lineText.match(/^\s*/)?.[0] ?? "";
-
-  const edits: TextEdit[] = [];
-
-  // Insert the variable declaration before the statement
-  edits.push({
-    range: {
-      start: { line, character: statementStart },
-      end: { line, character: statementStart },
-    },
-    newText: `${indent}${declKeyword(selectedText)} ${varName} = ${selectedText};\n`,
-  });
-
-  // Replace the selected expression with the variable name
-  edits.push({
-    range: {
-      start: { line, character: startChar },
-      end: { line, character: endChar },
-    },
-    newText: varName,
-  });
-
-  return { edits, varName };
-}
-
-/**
- * Generate a variable name from an expression.
- * Uses simple heuristics: function calls → call result, member access → member name, etc.
- */
-function generateVarName(expr: string): string {
-  // function_call(...) → result
-  const callMatch = expr.match(/^([a-zA-Z_]\w*)\s*\(/);
-  if (callMatch) return `${callMatch[1]}Result`;
-
-  // obj.member → member
-  const memberMatch = expr.match(/\.([a-zA-Z_]\w*)$/);
-  if (memberMatch) return memberMatch[1];
-
-  // obj->member → member
-  const arrowMatch = expr.match(/->([a-zA-Z_]\w*)$/);
-  if (arrowMatch) return arrowMatch[1];
-
-  return "extracted";
-}
-
-/**
- * Determine declaration keyword based on expression content.
- * Pike uses `string`, `int`, `mixed`, etc. for typed declarations.
- * Use `mixed` as fallback when type is unknown.
- */
-function declKeyword(_expr: string): string {
-  // For now, always use mixed. Type inference could be added later.
-  return "mixed";
 }
