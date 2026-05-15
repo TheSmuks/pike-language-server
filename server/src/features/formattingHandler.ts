@@ -13,7 +13,11 @@ import {
   type TextEdit,
   type FormattingOptions,
   type CancellationToken,
+  ResponseError,
+  ErrorCodes,
 } from "vscode-languageserver/node";
+// LSP extended error codes from vscode-languageserver-protocol.
+import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { TextDocuments } from "vscode-languageserver/node";
 
@@ -188,7 +192,7 @@ export function registerFormattingHandler(
 
         return edits.length > 0 ? edits : null;
       } catch (err) {
-        // On-type formatting should be silent — never bother the user.
+        logError(connection, ErrorCategory.System, "formattingHandler.handleOnTypeFormatting", err);
         return null;
       }
     },

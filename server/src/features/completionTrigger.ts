@@ -38,6 +38,8 @@ export interface CompletionContext {
   stdlibIndex: Record<string, StdlibEntry>;
   predefBuiltins: Record<string, string>;
   uri: string;
+  /** Full document text — used for line extraction in detectTriggerContext. */
+  source: string;
   /** Optional runtime type inferrer (PikeWorker.typeof_()). */
   typeInferrer?: (varName: string) => Promise<string | null>;
 }
@@ -234,6 +236,7 @@ export function detectTriggerContext(
   line: number,
   character: number,
   tree: Tree,
+  lineText: string,
 ): TriggerContext {
   // Check if the cursor is right after a trigger character
   // The node at the cursor might be the trigger itself or an error node
@@ -328,11 +331,12 @@ export function detectTriggerContext(
   // Check if the text right before the cursor is "->" or "::"
   // This handles the case where the tree hasn't been updated yet
   // or where trailing expressions (e.g., 'Stdio.\n') produce ERROR nodes.
-  const rootNode = tree.rootNode;
-  const lineText = rootNode.text.split("\n")[line] ?? "";
+  // lineText is passed from the caller (document text) to avoid rootNode.text
+  // which materializes the entire file into a string.
 
   if (character >= 1) {
     const oneBefore = lineText[character - 1];
+    const rootNode = tree.rootNode;
 
     // Dot access: 'Foo.' → find 'Foo' before the dot
     if (oneBefore === ".") {
@@ -345,31 +349,31 @@ export function detectTriggerContext(
       const lhs = findLhsBeforePosition(rootNode, line, character - 2);
       if (lhs) return { type: "arrow", lhsNode: lhs };
     }
-  }
 
-  if (character >= 2) {
-    const twoBefore = lineText.substring(character - 2, character);
+    if (character >= 2) {
+      const twoBefore = lineText.substring(character - 2, character);
 
-    // Arrow access: 'obj->'
-    if (twoBefore === "->") {
-      const lhs = findLhsBeforePosition(rootNode, line, character - 2);
-      if (lhs) return { type: "arrow", lhsNode: lhs };
+      // Arrow access: 'obj->'
+      if (twoBefore === "->") {
+        const lhs = findLhsBeforePosition(rootNode, line, character - 2);
+        if (lhs) return { type: "arrow", lhsNode: lhs };
+      }
+
+      // Scope access: 'Foo::'
+      if (twoBefore === "::") {
+        const lhs = findLhsBeforePosition(rootNode, line, character - 2);
+        if (lhs) return { type: "scope", scopeNode: lhs };
+      }
     }
 
-    // Scope access: 'Foo::'
-    if (twoBefore === "::") {
-      const lhs = findLhsBeforePosition(rootNode, line, character - 2);
-      if (lhs) return { type: "scope", scopeNode: lhs };
-    }
-  }
-
-  // Call-args trigger: cursor right after '(' typed after an identifier.
-  // Pattern: 'funcName(' or 'obj->method(' — the '(' is already in the
-  // document and we want to offer argument-placeholder completion.
-  if (character >= 1 && lineText[character - 1] === "(") {
-    const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1);
-    if (callee) {
-      return { type: "call_args", calleeNode: callee, calleeName: callee.text };
+    // Call-args trigger: cursor right after '(' typed after an identifier.
+    // Pattern: 'funcName(' or 'obj->method(' — the '(' is already in the
+    // document and we want to offer argument-placeholder completion.
+    if (lineText[character - 1] === "(") {
+      const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1);
+      if (callee) {
+        return { type: "call_args", calleeNode: callee, calleeName: callee.text };
+      }
     }
   }
 

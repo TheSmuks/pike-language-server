@@ -13,7 +13,11 @@ import {
   type DocumentHighlight,
   type Position,
   DocumentHighlightKind,
+  ResponseError,
+  ErrorCodes,
 } from "vscode-languageserver/node";
+// LSP extended error codes for the Language Server Protocol extension range.
+import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Node as TsNode } from "web-tree-sitter";
@@ -30,7 +34,8 @@ import { findIdentifierPrefixRange } from "./completionTrigger";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { findImplementations } from "./implementation";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { uriToPath } from "../util/uri";
 import { pathToFileURL } from "node:url";
 import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
@@ -62,7 +67,7 @@ import type { PikeWorker } from "./pikeWorker";
 import type { LRUCache } from "../util/lruCache";
 import type { DiagnosticManager } from "./diagnosticManager";
 import { computeContentHash } from "./diagnosticManager";
-import { logError, ErrorCategory } from "../util/errorLog.js";
+import { logError, logWarn, ErrorCategory } from "../util/errorLog.js";
 import stdlibAutodocIndex from "../data/stdlib-autodoc.json";
 import predefBuiltinIndex from "../data/predef-builtin-index.json";
 
@@ -159,6 +164,7 @@ function resolveIncludeTarget(
   line: number,
   character: number,
   includePaths: string[],
+  workspaceRoot: string,
 ): LspLocation | null {
   const tree = parse(doc.getText(), uri);
   if (!tree?.rootNode) return null;
@@ -193,9 +199,9 @@ function resolveIncludeTarget(
   const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
   if (pathText.length === 0) return null;
 
-  const currentPath = decodeURIComponent(uri.replace("file://", ""));
+  const currentPath = uriToPath(uri);
   const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
-  const targetPath = resolveRelativeIncludePath(pathText, currentDir);
+  const targetPath = resolveRelativeIncludePath(pathText, currentDir, workspaceRoot);
   if (!targetPath) return null;
 
   return {
@@ -264,6 +270,7 @@ function findNodeAtPosition(
 function resolveRelativeIncludePath(
   rawPath: string,
   baseDir: string,
+  workspaceRoot: string,
 ): string | null {
   const cleanPath = rawPath.replace(/^["]+|["]+$/g, "");
   if (cleanPath.length === 0) return null;
@@ -285,7 +292,11 @@ function resolveRelativeIncludePath(
     targetPath = baseDir + "/" + cleanPath;
   }
 
-  return targetPath;
+  // Security: reject paths that escaped the workspace.
+  const normalized = resolve(targetPath);
+  if (!normalized.startsWith(workspaceRoot)) return null;
+
+  return normalized;
 }
 
 // ---------------------------------------------------------------------------
@@ -335,11 +346,8 @@ export function registerNavigationHandlers(
     try {
       const tree = parse(doc.getText(), doc.uri);
 
-      // Report parse errors as diagnostics.
-      const diagnostics = getParseDiagnostics(tree);
-      connection.sendDiagnostics({ uri: doc.uri, diagnostics });
-
       // Return partial symbols — never crash on parse errors.
+      // Note: parse diagnostics are handled by the diagnostic manager on didChange.
       return getDocumentSymbols(tree);
     } catch (err) {
       logError(connection, ErrorCategory.Parse, "navigationHandler.handleDocumentSymbol", err);
@@ -613,6 +621,7 @@ export function registerNavigationHandlers(
         params.position.line,
         params.position.character,
         ctx.index.pikePaths.includePaths,
+        ctx.index.workspaceRoot,
       );
       if (includeResult) return includeResult;
     }
@@ -886,11 +895,10 @@ export function registerNavigationHandlers(
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
-    // Validate new name
+    // Validate new name — return a descriptive error, not silent null.
     const validationError = validateRenameName(params.newName);
     if (validationError) {
-      // LSP spec: return null or throw. We return null — client shows error UI.
-      return null;
+      return new ResponseError(ErrorCodes.InvalidRequest, validationError);
     }
 
     const renameResult = await getRenameLocations(
@@ -902,10 +910,20 @@ export function registerNavigationHandlers(
       protectedNames,
     );
 
-    if (!renameResult) return null;
+    if (!renameResult) {
+      return new ResponseError(
+        ErrorCodes.InvalidRequest,
+        "No renamable symbol at the given position",
+      );
+    }
 
     // Don't rename if old name equals new name
-    if (renameResult.oldName === params.newName) return null;
+    if (renameResult.oldName === params.newName) {
+      return new ResponseError(
+        ErrorCodes.InvalidRequest,
+        "New name is the same as the current name",
+      );
+    }
 
     return buildWorkspaceEdit(renameResult.locations, params.newName);
   });
@@ -943,6 +961,7 @@ export function registerNavigationHandlers(
       const result = await getCompletions(table, tree, params.position.line, params.position.character, {
         ...completionCtx,
         uri: params.textDocument.uri,
+        source,
         typeInferrer: makeTypeInferrer(source),
       });
 
@@ -1057,9 +1076,7 @@ export function registerNavigationHandlers(
     const autodocHash = computeContentHash(source);
     const cachedAutodoc = ctx.autodocCache.get(doc.uri);
     if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
-      const filepath = doc.uri.startsWith("file://")
-        ? doc.uri.slice(7)
-        : doc.uri;
+      const filepath = uriToPath(doc.uri);
       ctx.worker
         .autodoc(source, filepath)
         .then((result) => {
@@ -1071,7 +1088,9 @@ export function registerNavigationHandlers(
             });
           }
         })
-        .catch(() => {}); // Non-critical
+        .catch((err: unknown) => {
+          logWarn(ctx.connection, `AutoDoc extraction failed on didOpen for ${doc.uri}: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
   });
 
@@ -1090,9 +1109,7 @@ export function registerNavigationHandlers(
     const autodocHash = computeContentHash(source);
     const cachedAutodoc = ctx.autodocCache.get(doc.uri);
     if (!cachedAutodoc || cachedAutodoc.hash !== autodocHash) {
-      const filepath = doc.uri.startsWith("file://")
-        ? doc.uri.slice(7)
-        : doc.uri;
+      const filepath = uriToPath(doc.uri);
       ctx.worker
         .autodoc(source, filepath)
         .then((result) => {
@@ -1104,7 +1121,9 @@ export function registerNavigationHandlers(
             });
           }
         })
-        .catch(() => {}); // Non-critical
+        .catch((err: unknown) => {
+          logWarn(ctx.connection, `AutoDoc extraction failed on didSave for ${doc.uri}: ${err instanceof Error ? err.message : String(err)}`);
+        });
     }
   });
 
