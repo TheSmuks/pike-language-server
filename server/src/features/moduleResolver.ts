@@ -366,6 +366,34 @@ export class ModuleResolver {
     }
     return null;
   }
+
+  /**
+   * If the given file is inside a `.pmod/` directory, return the URI of
+   * `module.pmod` in that directory (if it exists). In Pike, files inside a
+   * `Foo.pmod/` directory automatically inherit from `Foo.pmod/module.pmod` —
+   * its symbols are visible to siblings without explicit import/inherit.
+   *
+   * Returns `null` if the file is not inside a `.pmod/` directory or no
+   * `module.pmod` exists.
+   */
+  async findDirectoryModulePmod(fileUri: string): Promise<string | null> {
+    const filePath = fileURLToPath(fileUri);
+    const dir = dirname(filePath);
+    const dirName = basename(dir);
+
+    // Parent directory must be named `*.pmod`.
+    if (!dirName.endsWith(".pmod")) return null;
+
+    // Don't match module.pmod itself — it doesn't inherit from itself.
+    if (basename(filePath) === "module.pmod") return null;
+
+    const modulePmodPath = join(dir, "module.pmod");
+    if (await pathExists(modulePmodPath)) {
+      return pathToFileURL(modulePmodPath).href;
+    }
+
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

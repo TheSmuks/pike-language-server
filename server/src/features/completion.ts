@@ -163,6 +163,24 @@ async function completeUnqualified(
     }
   }
 
+  // 2b. Implicit directory module.pmod — files inside Foo.pmod/ see symbols
+  // from Foo.pmod/module.pmod without explicit inherit/import.
+  const directoryModule = await ctx.index.resolver.findDirectoryModulePmod(ctx.uri);
+  if (directoryModule) {
+    const moduleTable = ctx.index.getSymbolTable(directoryModule);
+    if (moduleTable) {
+      const fileScope = moduleTable.scopes.find(s => s.kind === "file");
+      if (fileScope) {
+        const moduleDecls = getDeclarationsInScope(moduleTable, fileScope.id);
+        for (const decl of moduleDecls) {
+          if (seenNames.has(decl.name)) continue;
+          seenNames.add(decl.name);
+          items.push(declToCompletionItem(decl, 15, moduleTable));
+        }
+      }
+    }
+  }
+
   // 3. Predef builtins (skip operator-like backtick identifiers)
   for (const name of Object.keys(ctx.predefBuiltins)) {
     if (seenNames.has(name)) continue;

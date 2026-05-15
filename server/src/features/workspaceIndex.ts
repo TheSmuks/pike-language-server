@@ -700,12 +700,12 @@ export class WorkspaceIndex {
     table: SymbolTable,
     uri: string,
   ): Promise<{ uri: string; decl: Declaration } | null> {
-    // Try to find the name through inheritance chains
+    // Try to find the name through explicit inheritance/import chains.
     for (const decl of table.declarations) {
       if (decl.kind === "inherit" || decl.kind === "import") {
         const target = await this.resolveInheritTarget(decl, uri);
         if (target) {
-          // Check if the target file has a declaration matching the reference name
+          // Check if the target file has a declaration matching the reference name.
           const targetEntry = this.files.get(target.uri);
           if (targetEntry?.symbolTable) {
             for (const targetDecl of targetEntry.symbolTable.declarations) {
@@ -713,6 +713,20 @@ export class WorkspaceIndex {
                 return { uri: target.uri, decl: targetDecl };
               }
             }
+          }
+        }
+      }
+    }
+
+    // Try the implicit directory module.pmod: files inside Foo.pmod/
+    // automatically see symbols from Foo.pmod/module.pmod.
+    const directoryModule = await this.resolver.findDirectoryModulePmod(uri);
+    if (directoryModule) {
+      const moduleEntry = this.files.get(directoryModule);
+      if (moduleEntry?.symbolTable) {
+        for (const moduleDecl of moduleEntry.symbolTable.declarations) {
+          if (moduleDecl.name === ref.name) {
+            return { uri: directoryModule, decl: moduleDecl };
           }
         }
       }
@@ -799,6 +813,14 @@ export class WorkspaceIndex {
           deps.add(targetUri);
         }
       }
+    }
+
+    // Implicit dependency: files inside a Foo.pmod/ directory inherit from
+    // Foo.pmod/module.pmod. This is Pike's directory module convention —
+    // symbols in module.pmod are automatically visible to siblings.
+    const directoryModule = await this.resolver.findDirectoryModulePmod(currentUri);
+    if (directoryModule && directoryModule !== currentUri) {
+      deps.add(directoryModule);
     }
 
     return deps;
