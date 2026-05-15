@@ -8,14 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.6] — 2026-05-15
 
-### Fixed
+### Added
 
-  - Rename now returns a descriptive `ResponseError` instead of silent `null`
-    when no renamable symbol is at the given position or the new name matches
-    the old name.
-  - Autodoc renderer sanitizes HTML entities (`<`, `>`, `&`) and escapes
-    markdown metacharacters in inline content to prevent injection from
-    user-written Pike doc comments.
+  - CodeLens provider tests: 7 tests covering reference count lenses, self-
+    reference exclusion, singular/plural titles, and mixed declaration scenarios.
 
 ### Changed
 
@@ -27,10 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - PikeWorker priority queue replaced with three FIFO sub-queues (interactive,
     normal, background). Dequeue is now O(1) instead of O(n) linear scan.
 
-### Added
+### Fixed
 
-  - CodeLens provider tests: 7 tests covering reference count lenses, self-
-    reference exclusion, singular/plural titles, and mixed declaration scenarios.
+  - Rename now returns a descriptive `ResponseError` instead of silent `null`
+    when no renamable symbol is at the given position or the new name matches
+    the old name.
+  - Autodoc renderer sanitizes HTML entities (`<`, `>`, `&`) and escapes
+    markdown metacharacters in inline content to prevent injection from
+    user-written Pike doc comments.
 
 ## [Unreleased]
 
@@ -55,8 +55,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Unreachable code lint (P3003) no longer flags comments after a terminator.
     Comments are not executable code and were incorrectly included in the
     named-children scan. Affects both regular blocks and switch case segments.
-
-## [Unreleased]
 
 ## [0.6.3] — 2026-05-15
 
@@ -184,8 +182,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Removed dead `treeSitterProvider` tests**: Two `it.skip` tests that
     referenced the deleted provider have been removed. The remaining output
     channel test is documented as a manual smoke test.
-
-## [Unreleased]
 
 ## [0.5.0] — 2026-05-14
 
