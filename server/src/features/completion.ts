@@ -23,7 +23,7 @@ import {
   getStdlibChildrenMap,
   getStdlibTopLevel,
   isCompletableIdentifier,
-  getAllAutoImportEntries,
+  getAutoImportByPrefix,
   declToCompletionItem,
   padSortKey,
   findDeclarationForName,
@@ -233,15 +233,13 @@ async function completeUnqualified(
   const prefixLower = typedPrefix.toLowerCase();
 
   if (prefixLower.length >= 2) {
-    const allEntries = getAllAutoImportEntries(ctx.stdlibIndex);
+    const matchingEntries = getAutoImportByPrefix(ctx.stdlibIndex, prefixLower);
     // Cap auto-import results to avoid flooding the completion list.
     let autoImportCount = 0;
     const AUTO_IMPORT_CAP = 10;
 
-    for (const [symbolName, candidates] of allEntries) {
+    for (const [symbolName, candidates] of matchingEntries) {
       if (autoImportCount >= AUTO_IMPORT_CAP) break;
-      // Prefix filter — case-insensitive to match VSCode behavior
-      if (!symbolName.toLowerCase().startsWith(prefixLower)) continue;
       // Skip symbols already available in the completion list
       if (seenNames.has(symbolName)) continue;
 

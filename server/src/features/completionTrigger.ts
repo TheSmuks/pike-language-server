@@ -141,6 +141,8 @@ interface AutoImportEntry {
 }
 
 let autoImportMap: Map<string, AutoImportEntry[]> | null = null;
+/** Sorted keys for O(log n) prefix lookup. Built alongside autoImportMap. */
+let autoImportSortedKeys: string[] | null = null;
 
 /**
  * Build the reverse index: unqualified symbol name → modules that provide it.
@@ -196,8 +198,45 @@ export function getAllAutoImportEntries(
 ): Map<string, AutoImportEntry[]> {
   if (!autoImportMap) {
     autoImportMap = buildAutoImportMap(stdlibIndex);
+    autoImportSortedKeys = [...autoImportMap.keys()].sort();
   }
   return autoImportMap;
+}
+
+/**
+ * Get auto-import entries matching a case-insensitive prefix.
+ * Uses binary search for O(log n + k) performance instead of scanning
+ * the full map. Returns entries in sorted order.
+ */
+export function getAutoImportByPrefix(
+  stdlibIndex: Record<string, StdlibEntry>,
+  prefixLower: string,
+): Array<[string, AutoImportEntry[]]> {
+  const map = getAllAutoImportEntries(stdlibIndex);
+  const keys = autoImportSortedKeys!;
+
+  // Binary search for the first key that is >= prefixLower.
+  let lo = 0;
+  let hi = keys.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (keys[mid].toLowerCase().localeCompare(prefixLower) < 0) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+
+  // Collect consecutive keys that start with the prefix.
+  const results: Array<[string, AutoImportEntry[]]> = [];
+  for (let i = lo; i < keys.length; i++) {
+    if (!keys[i].toLowerCase().startsWith(prefixLower)) break;
+    const entries = map.get(keys[i]);
+    if (entries) {
+      results.push([keys[i], entries]);
+    }
+  }
+  return results;
 }
 
 /**
@@ -205,6 +244,7 @@ export function getAllAutoImportEntries(
  */
 export function resetAutoImportCache(): void {
   autoImportMap = null;
+  autoImportSortedKeys = null;
 }
 
 /**
