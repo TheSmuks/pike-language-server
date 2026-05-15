@@ -16,6 +16,7 @@ import {
   type Declaration,
   type DeclKind,
   getSymbolsInScope,
+  getDeclarationsInScope,
   resolveTypeName,
   PRIMITIVE_TYPES,
 } from "./symbolTable";
@@ -222,6 +223,7 @@ export type TriggerContext =
   | { type: "dot"; lhsNode: Node }
   | { type: "arrow"; lhsNode: Node }
   | { type: "scope"; scopeNode: Node }
+  | { type: "call_args"; calleeNode: Node; calleeName: string }
   | { type: "unqualified" };
 
 /**
@@ -358,6 +360,16 @@ export function detectTriggerContext(
     if (twoBefore === "::") {
       const lhs = findLhsBeforePosition(rootNode, line, character - 2);
       if (lhs) return { type: "scope", scopeNode: lhs };
+    }
+  }
+
+  // Call-args trigger: cursor right after '(' typed after an identifier.
+  // Pattern: 'funcName(' or 'obj->method(' — the '(' is already in the
+  // document and we want to offer argument-placeholder completion.
+  if (character >= 1 && lineText[character - 1] === "(") {
+    const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1);
+    if (callee) {
+      return { type: "call_args", calleeNode: callee, calleeName: callee.text };
     }
   }
 
@@ -509,6 +521,99 @@ function findPostfixExprOrIdentifier(node: Node): Node | null {
   return null;
 }
 
+/**
+ * Find the callee identifier/node immediately before an opening paren '('.
+ *
+ * Used by the call_args trigger to detect `funcName(` or `obj->method(`
+ * patterns. Walks backward from the '(' position to find the function
+ * name or method-access expression.
+ *
+ * Returns the identifier node for simple calls, or the full postfix_expr
+ * for chained access like `obj->method(`.
+ */
+function findCalleeBeforeOpenParen(rootNode: Node, line: number, parenColumn: number): Node | null {
+  // Position just before '('
+  const pos = { row: line, column: parenColumn };
+  const node = rootNode.descendantForPosition(pos);
+  if (!node) return null;
+
+  // The '(' token itself — look for an identifier sibling before it.
+  if (node.type === "(" && node.parent) {
+    const siblings = node.parent.children;
+    const parenIdx = siblings.findIndex(s => s.equals(node));
+    // Walk backward from '(' to find the callee
+    for (let i = parenIdx - 1; i >= 0; i--) {
+      const sib = siblings[i];
+      if (sib.type === "identifier" || sib.type === "identifier_expr") {
+        return sib;
+      }
+      // For `obj->method(`, the callee is the `->` + identifier pair inside
+      // a postfix_expr. The last named child before '(' is the method name.
+      if (sib.isNamed) {
+        const ident = findIdentifierInExpr(sib);
+        if (ident) return ident;
+      }
+    }
+  }
+
+  // argument_list node — its parent is a postfix_expr, callee is before it
+  if (node.type === "argument_list" && node.parent) {
+    const siblings = node.parent.children;
+    const argIdx = siblings.findIndex(s => s.equals(node));
+    for (let i = argIdx - 1; i >= 0; i--) {
+      const sib = siblings[i];
+      if (sib.type === "identifier" || sib.type === "identifier_expr") {
+        return sib;
+      }
+      if (sib.isNamed) {
+        const ident = findIdentifierInExpr(sib);
+        if (ident) return ident;
+      }
+    }
+  }
+
+  // postfix_expr that contains the '(' — find the callee before the '('
+  if (node.type === "postfix_expr") {
+    const siblings = node.children;
+    // Find the '(' or argument_list, then look before it
+    for (let i = siblings.length - 1; i >= 0; i--) {
+      const sib = siblings[i];
+      if (sib.type === "(" || sib.type === "argument_list") {
+        // Look at the node just before the paren
+        for (let j = i - 1; j >= 0; j--) {
+          const callee = siblings[j];
+          if (callee.type === "identifier" || callee.type === "identifier_expr") {
+            return callee;
+          }
+          // For `obj->method(`, the last named child before '(' is the method
+          if (callee.isNamed) {
+            const ident = findIdentifierInExpr(callee);
+            if (ident) return ident;
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  // Fallback: look at the node right before '(' using position
+  if (parenColumn > 0) {
+    const beforePos = { row: line, column: parenColumn - 1 };
+    const beforeNode = rootNode.descendantForPosition(beforePos);
+    if (beforeNode && (beforeNode.type === "identifier" || beforeNode.type === "identifier_expr")) {
+      return beforeNode;
+    }
+    // Might be inside a postfix_expr — walk up
+    let cur: Node | null = beforeNode;
+    while (cur) {
+      if (cur.type === "identifier" || cur.type === "identifier_expr") return cur;
+      cur = cur.parent;
+    }
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -551,7 +656,7 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
 };
 
 
-export function declToCompletionItem(decl: Declaration, priority: number): CompletionItem {
+export function declToCompletionItem(decl: Declaration, priority: number, table?: SymbolTable): CompletionItem {
   const isFunction = decl.kind === "function" || decl.kind === "method";
   const item: CompletionItem = {
     label: decl.name,
@@ -576,6 +681,16 @@ export function declToCompletionItem(decl: Declaration, priority: number): Compl
     }
   }
 
+  // For classes, generate a constructor snippet from the create() method's
+  // parameters. This gives the user tab-to-fill when constructing: ClassName(${1:arg1}).
+  if (decl.kind === "class" && table) {
+    const createParams = extractConstructorParams(decl, table);
+    if (createParams !== null) {
+      item.insertTextFormat = InsertTextFormat.Snippet;
+      item.insertText = decl.name + "(" + createParams + ")";
+    }
+  }
+
   // Commit characters: typing these after selecting a completion item
   // commits the item and inserts the character, triggering the next
   // action (dot-access completion or function-call parens).
@@ -590,19 +705,24 @@ export function declToCompletionItem(decl: Declaration, priority: number): Compl
 /**
  * Determine commit characters for a completion item.
  *
- * - Functions/methods: "(" commits and opens parens for the call.
- * - Classes: "." triggers dot completion, "(" for constructor calls.
+ * - Functions/methods: no commit characters — the snippet already includes
+ *   the opening paren, so adding '(' as a commit char would double it.
+ * - Classes: "." triggers dot completion. "(" is NOT included because
+ *   constructor snippets already include it.
  * - Variables/parameters/inherit with a non-primitive type: "." triggers
  *   dot completion on the instance.
  */
 function computeCommitCharacters(decl: Declaration, isFunction: boolean): string[] {
   if (isFunction) {
-    return ["("];
+    // The snippet insertText already includes '(' — adding it as a commit
+    // character causes double parens: name(${1:arg})( instead of name(arg).
+    return [];
   }
 
   if (decl.kind === "class") {
-    // Classes can be constructed with () or dot-accessed for static members.
-    return [".", "("];
+    // Classes can be dot-accessed for static members.
+    // '(' omitted for the same reason as functions (constructor snippet).
+    return ["."];
   }
 
   // Variables, parameters, and inherit aliases with a known class type
@@ -638,7 +758,7 @@ function hasNonPrimitiveType(decl: Declaration): boolean {
  * Output: "${1:string}, ${2:int}" or "" (for void/no params)
  * Returns null if the type string is not a function type.
  */
-function extractParamsFromType(typeStr: string): string | null {
+export function extractParamsFromType(typeStr: string): string | null {
   // Match function(params:return_type) pattern
   const match = typeStr.match(/^function\s*\(([^)]*)\)/);
   if (!match) return null;
@@ -673,6 +793,152 @@ function extractParamsFromType(typeStr: string): string | null {
     .map((p, i) => `\${${i + 1}:${p}}`);
 
   return placeholders.join(", ");
+}
+
+/**
+ * Extract constructor parameter placeholders for a class declaration.
+ *
+ * Looks up the class scope, finds the `create()` method, and extracts
+ * its parameters as snippet tab stops.
+ * Returns null if the class has no create() method or it has no parameters.
+ */
+export function extractConstructorParams(classDecl: Declaration, table: SymbolTable): string | null {
+  // Find the class scope that overlaps with the class declaration range
+  const classScope = table.scopes.find(
+    s => s.kind === "class" && rangesOverlap(s.range, classDecl.range),
+  );
+  if (!classScope) return null;
+
+  // Find the create() method declaration in the class scope (or inherited)
+  const createDecl = findCreateMethod(table, classScope);
+  if (!createDecl || !createDecl.declaredType) return null;
+
+  const params = extractParamsFromType(createDecl.declaredType);
+  return params; // null if not a function type, "" if void/no-params
+}
+
+/**
+ * Walk inheritance chain to find a create() method.
+ */
+function findCreateMethod(table: SymbolTable, scope: { id: number }): Declaration | null {
+  const decls = getDeclarationsInScope(table, scope.id);
+  const create = decls.find(d => d.name === "create" && (d.kind === "method" || d.kind === "function"));
+  if (create) return create;
+
+  // Check inherited scopes
+  for (const decl of decls) {
+    if (decl.kind === "inherit" && decl.scopeId != null) {
+      const inherited = findCreateMethod(table, { id: decl.scopeId });
+      if (inherited) return inherited;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if two ranges overlap (used to match class scope to class declaration).
+ */
+function rangesOverlap(a: { start: { line: number; character: number }; end: { line: number; character: number } }, b: { start: { line: number; character: number }; end: { line: number; character: number } }): boolean {
+  if (a.start.line > b.end.line || (a.start.line === b.end.line && a.start.character > b.end.character)) return false;
+  if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) return false;
+  return true;
+}
+
+/**
+ * Extract parameter placeholders from a predef builtin type string.
+ *
+ * Predef signatures look like:
+ *   "function(string, int:void)"
+ *   "scope(0, function(string, int | string, void | int : int) | function(...))"
+ *   "function( : int)"          (no params)
+ *
+ * Takes the first overload, strips scope wrapper, extracts param types.
+ */
+export function extractParamsFromPredefType(raw: string): string | null {
+  let sig = stripScopeWrapper(raw);
+  // Take the first overload if multiple (separated by " | function")
+  const overloadSplit = sig.split(" | function");
+  sig = overloadSplit[0].trim();
+  // Strip leading "function" keyword
+  if (sig.startsWith("function")) sig = sig.slice(8).trim();
+
+  // Now parse function(params : returnType) or function(params)
+  const match = sig.match(/^\(([^)]*)\)/);
+  if (!match) return null;
+
+  const paramList = match[1].trim();
+  if (!paramList || paramList === "void" || paramList === "...") return "";
+
+  // Split by comma, stop at colon (return type separator)
+  const parts = paramList.split(",").map(p => p.trim());
+  const colonIdx = parts.findIndex(p => p.startsWith(":"));
+  const paramTypes = colonIdx !== -1
+    ? parts.slice(0, colonIdx)
+    : parts;
+
+  // Filter out empty and produce tab stops
+  const placeholders = paramTypes
+    .filter(p => p.length > 0)
+    .map((p, i) => `\${${i + 1}:${p}}`);
+
+  return placeholders.join(", ");
+}
+
+/**
+ * Extract parameter placeholders from a stdlib C-style signature.
+ *
+ * Stdlib signatures look like:
+ *   "mixed get_value(array(string) argv, mapping(string : string) env, int|string previous)"
+ *   "string __sprintf()"
+ *   "inherit Opt"
+ *
+ * Parses the param list to extract param names (or types if no names).
+ */
+export function extractParamsFromStdlibSignature(signature: string): string | null {
+  // Match returnType functionName(params) pattern
+  const match = signature.match(/\(([^)]*)\)\s*$/);
+  if (!match) return null;
+
+  const paramList = match[1].trim();
+  if (!paramList) return "";
+
+  // Split params by comma, handling nested parens/angles
+  const paramParts = splitParams(paramList);
+  if (paramParts.length === 0) return "";
+
+  const placeholders: string[] = [];
+  for (let i = 0; i < paramParts.length; i++) {
+    const part = paramParts[i].trim();
+    if (!part || part === "void") continue;
+    // Try to extract the param name (last word after type)
+    const nameMatch = part.match(/(\w+)\s*$/);
+    const label = nameMatch ? nameMatch[1] : part;
+    placeholders.push(`\${${i + 1}:${label}}`);
+  }
+
+  if (placeholders.length === 0) return "";
+  return placeholders.join(", ");
+}
+
+/**
+ * Split a parameter list by commas, respecting nested parens and angles.
+ */
+function splitParams(paramList: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const ch of paramList) {
+    if (ch === "(" || ch === "<" || ch === "[") depth++;
+    else if (ch === ")" || ch === ">" || ch === "]") depth--;
+    if (ch === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim()) parts.push(current);
+  return parts;
 }
 
 export function padSortKey(n: number): string {
@@ -717,7 +983,7 @@ export async function resolveTypeMembers(
   if (decl.kind === "class") {
     const memberDecls = collectClassMembers(table, decl);
     for (const cd of memberDecls) {
-      items.push(declToCompletionItem(cd, 5));
+      items.push(declToCompletionItem(cd, 5, table));
     }
   }
 
@@ -752,7 +1018,7 @@ export async function resolveTypeMembers(
         const ownerTable = result.table;
         const memberDecls = collectClassMembers(ownerTable, result.decl);
         for (const cd of memberDecls) {
-          items.push(declToCompletionItem(cd, 5));
+          items.push(declToCompletionItem(cd, 5, ownerTable));
         }
       }
     }
@@ -811,6 +1077,7 @@ export function findIdentifierPrefixRange(
   character: number,
 ): { start: { line: number; character: number }; end: { line: number; character: number } } | null {
   const root = tree.rootNode;
+  if (!root) return null;
   const pos = { row: line, column: character };
 
   // Try to find a node at this position. Use namedDescendantForPosition

@@ -325,7 +325,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         renameProvider: { prepareProvider: true },
         hoverProvider: true,
         completionProvider: {
-          triggerCharacters: ['.', '>', ':'],
+          triggerCharacters: ['.', '>', ':', '('],
         },
         semanticTokensProvider: {
           legend: SEMANTIC_TOKENS_LEGEND,

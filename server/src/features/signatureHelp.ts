@@ -119,23 +119,58 @@ function findEnclosingCall(node: Node, line?: number, character?: number): Node 
           closeParen = children[i];
         }
       }
-      if (!openParen || !closeParen) {
+      if (!openParen) {
         current = current.parent;
         continue;
       }
+
       if (line !== undefined && character !== undefined) {
         const openStart = openParen.startPosition;
-        const closeStart = closeParen.startPosition;
+        // Cursor must be at or after the open paren.
         const cursorBeforeOpen =
           line < openStart.row || (line === openStart.row && character < openStart.column);
-        const cursorAtOrAfterClose =
-          line > closeStart.row || (line === closeStart.row && character >= closeStart.column);
-        if (cursorBeforeOpen || cursorAtOrAfterClose) {
+        if (cursorBeforeOpen) {
           current = current.parent;
           continue;
         }
+        // If there is a close paren, cursor must be before it.
+        if (closeParen) {
+          const closeStart = closeParen.startPosition;
+          const cursorAtOrAfterClose =
+            line > closeStart.row || (line === closeStart.row && character >= closeStart.column);
+          if (cursorAtOrAfterClose) {
+            current = current.parent;
+            continue;
+          }
+        }
+        // No close paren: the user is actively typing arguments.
+        // Accept this as the enclosing call as long as the cursor is
+        // after the open paren (checked above).
       }
       return current;
+    }
+    // For ERROR nodes (common while typing), check if there's an
+    // incomplete call pattern: identifier followed by '('.
+    if (current.type === "ERROR" && line !== undefined && character !== undefined) {
+      const errChildren = current.children;
+      let errIdent: Node | null = null;
+      let errOpen: Node | null = null;
+      for (const child of errChildren) {
+        if (child.type === "identifier" && !errIdent) {
+          errIdent = child;
+        }
+        if (child.type === "(" && !errOpen) {
+          errOpen = child;
+        }
+      }
+      if (errIdent && errOpen) {
+        const openStart = errOpen.startPosition;
+        const cursorBeforeOpen =
+          line < openStart.row || (line === openStart.row && character < openStart.column);
+        if (!cursorBeforeOpen) {
+          return current;
+        }
+      }
     }
     current = current.parent;
   }
@@ -171,8 +206,18 @@ function extractCalleeInfo(callExpr: Node): CalleeInfo | null {
   for (let i = 0; i < children.length; i++) {
     if (children[i].type === "(") {
       openParen = children[i];
-      // Callee is the first child before '('
-      calleeNode = children[0];
+      // Callee is the first child before '('. Walk backwards from '('
+      // to find the last named child (handles arrow/dot operators).
+      for (let j = i - 1; j >= 0; j--) {
+        if (children[j].isNamed) {
+          calleeNode = children[j];
+          break;
+        }
+      }
+      // Fallback: first child.
+      if (!calleeNode && children[0]) {
+        calleeNode = children[0];
+      }
       break;
     }
   }
@@ -305,6 +350,17 @@ function resolveSignature(
   if (classDecl) {
     const constructorSig = resolveConstructor(classDecl, table, ctx);
     if (constructorSig) return constructorSig;
+  }
+
+  // 3b. Cross-file constructor: if the class is not in the current file,
+  //     search the workspace index for it (handles inherited classes from
+  //     other modules, e.g. Cache.Storage.Base).
+  if (!classDecl && ctx?.index) {
+    const crossFileType = resolveTypeSync(calleeName, table, ctx);
+    if (crossFileType) {
+      const constructorSig = resolveConstructor(crossFileType.decl, crossFileType.table, ctx);
+      if (constructorSig) return constructorSig;
+    }
   }
 
   // 4. Stdlib

@@ -931,6 +931,15 @@ export function registerNavigationHandlers(
       if (token.isCancellationRequested)
         return { isIncomplete: false, items: [] };
 
+      // Capture the identifier prefix range synchronously before any async
+      // gap. The tree is stored in the parse() LRU cache and can be evicted
+      // (and deleted) during an await — after which tree.rootNode is null.
+      const prefixRange = findIdentifierPrefixRange(
+        tree,
+        params.position.line,
+        params.position.character,
+      );
+
       const result = await getCompletions(table, tree, params.position.line, params.position.character, {
         ...completionCtx,
         uri: params.textDocument.uri,
@@ -941,11 +950,11 @@ export function registerNavigationHandlers(
       // prefix being typed instead of inserting at the cursor position.
       // This prevents doubled text like "foo.bbar" when completing "bar"
       // after typing "foo.b".
-      const prefixRange = findIdentifierPrefixRange(
-        tree,
-        params.position.line,
-        params.position.character,
-      );
+      //
+      // For call_args items (triggered by '('), the insertText is a snippet
+      // that should be inserted at the cursor (right after the '('). These
+      // items already have insertText but no textEdit — VSCode will insert
+      // at cursor position, which is the desired behavior.
       if (prefixRange) {
         for (const item of result.items) {
           if (!item.textEdit) {

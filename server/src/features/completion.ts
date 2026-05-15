@@ -12,6 +12,7 @@ import {
   CompletionItem,
   CompletionItemKind,
   CompletionList,
+  InsertTextFormat,
 } from "vscode-languageserver/node";
 import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
 import { resolveMemberAccess } from "./typeResolver";
@@ -29,6 +30,10 @@ import {
   resolveTypeMembers,
   cleanPredefSignature,
   resetCompletionCache,
+  extractParamsFromPredefType,
+  extractParamsFromStdlibSignature,
+  extractConstructorParams,
+  extractParamsFromType,
 } from "./completionTrigger";
 
 // Re-export for backward compatibility
@@ -72,6 +77,9 @@ export async function getCompletions(
       break;
     case "scope":
       items = await completeScopeAccess(table, tree, line, character, triggerContext.scopeNode, ctx);
+      break;
+    case "call_args":
+      items = await completeCallArgs(table, tree, line, character, triggerContext.calleeName, ctx);
       break;
     case "unqualified":
     default:
@@ -134,7 +142,7 @@ async function completeUnqualified(
   for (const decl of localSymbols) {
     if (seenNames.has(decl.name)) continue;
     seenNames.add(decl.name);
-    items.push(declToCompletionItem(decl, 0));
+    items.push(declToCompletionItem(decl, 0, table));
   }
 
   // 2. Imported symbols (cross-file)
@@ -151,7 +159,7 @@ async function completeUnqualified(
     for (const decl of importedDecls) {
       if (seenNames.has(decl.name)) continue;
       seenNames.add(decl.name);
-      items.push(declToCompletionItem(decl, 20));
+      items.push(declToCompletionItem(decl, 20, targetTable));
     }
   }
 
@@ -161,7 +169,7 @@ async function completeUnqualified(
     // Skip Pike operator identifiers (backtick-prefixed, operators, brackets)
     if (!isCompletableIdentifier(name)) continue;
     seenNames.add(name);
-    items.push({
+    const builtinItem: CompletionItem = {
       label: name,
       kind: CompletionItemKind.Function,
       detail: cleanPredefSignature(ctx.predefBuiltins[name]),
@@ -169,7 +177,14 @@ async function completeUnqualified(
       // filterText: plain identifier so VSCode fuzzy-matches correctly
       // even though detail contains a full signature.
       filterText: name,
-    });
+    };
+    // Add argument snippet for predef builtins
+    const predefParams = extractParamsFromPredefType(ctx.predefBuiltins[name]);
+    if (predefParams !== null) {
+      builtinItem.insertTextFormat = InsertTextFormat.Snippet;
+      builtinItem.insertText = name + "(" + predefParams + ")";
+    }
+    items.push(builtinItem);
   }
 
   // 4. Top-level stdlib modules/classes
@@ -300,7 +315,7 @@ async function completeMemberAccess(
         for (const decl of decls) {
           if (seenNames.has(decl.name)) continue;
           seenNames.add(decl.name);
-          items.push(declToCompletionItem(decl, 0));
+          items.push(declToCompletionItem(decl, 0, targetTable));
         }
       }
     }
@@ -314,13 +329,22 @@ async function completeMemberAccess(
     for (const member of stdlibMembers) {
       if (seenNames.has(member.name)) continue;
       seenNames.add(member.name);
-      items.push({
+      const memberItem: CompletionItem = {
         label: member.name,
         kind: member.kind,
         detail: member.signature || undefined,
         sortText: padSortKey(10) + member.name,
         filterText: member.name,
-      });
+      };
+      // Add argument snippet for stdlib methods/functions
+      if (member.signature && (member.kind === CompletionItemKind.Method || member.kind === CompletionItemKind.Function)) {
+        const stdlibParams = extractParamsFromStdlibSignature(member.signature);
+        if (stdlibParams !== null) {
+          memberItem.insertTextFormat = InsertTextFormat.Snippet;
+          memberItem.insertText = member.name + "(" + stdlibParams + ")";
+        }
+      }
+      items.push(memberItem);
     }
   }
 
@@ -384,7 +408,7 @@ async function completeScopeAccess(
         for (const decl of decls) {
           if (seenNames.has(decl.name)) continue;
           seenNames.add(decl.name);
-          items.push(declToCompletionItem(decl, 0));
+          items.push(declToCompletionItem(decl, 0, table));
         }
       }
     }
@@ -407,7 +431,7 @@ async function completeScopeAccess(
           for (const decl of decls) {
             if (seenNames.has(decl.name)) continue;
             seenNames.add(decl.name);
-            items.push(declToCompletionItem(decl, 0));
+            items.push(declToCompletionItem(decl, 0, table));
           }
         }
       }
@@ -437,7 +461,7 @@ async function completeScopeAccess(
                 for (const td of targetDecls) {
                   if (seenNames.has(td.name)) continue;
                   seenNames.add(td.name);
-                  items.push(declToCompletionItem(td, 0));
+                  items.push(declToCompletionItem(td, 0, targetTable));
                 }
               }
             }
@@ -455,7 +479,7 @@ async function completeScopeAccess(
                     for (const td of targetDecls) {
                       if (seenNames.has(td.name)) continue;
                       seenNames.add(td.name);
-                      items.push(declToCompletionItem(td, 5));
+                      items.push(declToCompletionItem(td, 5, table));
                     }
                   }
                 }
@@ -651,4 +675,115 @@ function extractIdentifier(node: Node | null): string | null {
     return extractIdentifier(node.child(0));
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Call-args completion (triggered by '(' after a function name)
+// ---------------------------------------------------------------------------
+
+/**
+ * When the user types `funcName(`, offer a single completion item that
+ * inserts argument placeholders with tab stops. This gives "type `(` and
+ * get prompted with args" behavior.
+ *
+ * Resolution chain: local scope → imports → predef → stdlib → class constructors.
+ */
+async function completeCallArgs(
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  calleeName: string,
+  ctx: CompletionContext,
+): Promise<CompletionItem[]> {
+  // 1. Local/inner-function lookup
+  const localDecl = findDeclarationForName(table, calleeName, line, character);
+  if (localDecl && (localDecl.kind === "function" || localDecl.kind === "method") && localDecl.declaredType) {
+    const params = extractParamsFromType(localDecl.declaredType);
+    if (params !== null) {
+      return [makeArgSnippet(calleeName, params, localDecl.declaredType)];
+    }
+  }
+
+  // 2. Class constructor lookup (same file)
+  if (localDecl && localDecl.kind === "class") {
+    const createParams = extractConstructorParams(localDecl, table);
+    if (createParams !== null) {
+      return [makeArgSnippet(calleeName, createParams, "constructor")];
+    }
+  }
+
+  // 3. Predef builtins
+  const predefSig = ctx.predefBuiltins[calleeName];
+  if (predefSig) {
+    const params = extractParamsFromPredefType(predefSig);
+    if (params !== null) {
+      return [makeArgSnippet(calleeName, params, cleanPredefSignature(predefSig))];
+    }
+  }
+
+  // 4. Cross-file: check imports for the function
+  const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
+  for (const importDecl of importDecls) {
+    const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
+    if (!targetUri) continue;
+    const targetTable = ctx.index.getSymbolTable(targetUri);
+    if (!targetTable) continue;
+    const fileScope = targetTable.scopes.find(s => s.kind === "file");
+    if (!fileScope) continue;
+    const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
+    const funcDecl = importedDecls.find(d => d.name === calleeName && (d.kind === "function" || d.kind === "method"));
+    if (funcDecl && funcDecl.declaredType) {
+      const params = extractParamsFromType(funcDecl.declaredType);
+      if (params !== null) {
+        return [makeArgSnippet(calleeName, params, funcDecl.declaredType)];
+      }
+    }
+    // Also check class constructors in imported modules
+    const classDecl = importedDecls.find(d => d.name === calleeName && d.kind === "class");
+    if (classDecl) {
+      const createParams = extractConstructorParams(classDecl, targetTable);
+      if (createParams !== null) {
+        return [makeArgSnippet(calleeName, createParams, "constructor")];
+      }
+    }
+  }
+
+  // 5. Stdlib lookup — search all stdlib entries for matching function name
+  for (const [fqn, entry] of Object.entries(ctx.stdlibIndex)) {
+    // fqn is like "predef.Module.method" — check last segment
+    const parts = fqn.split(".");
+    const lastName = parts[parts.length - 1];
+    if (lastName !== calleeName) continue;
+    // Skip class/module entries (they have "inherit" signatures)
+    if (entry.signature.startsWith("inherit")) continue;
+    const params = extractParamsFromStdlibSignature(entry.signature);
+    if (params !== null) {
+      return [makeArgSnippet(calleeName, params, entry.signature)];
+    }
+  }
+
+  // No resolution found — return empty so no completion dropdown appears.
+  return [];
+}
+
+/**
+ * Build a single completion item that inserts argument placeholders.
+ * The item is meant to be accepted immediately after the user types '('.
+ *
+ * newText inserts the args and closing paren, with $0 exit cursor after.
+ */
+function makeArgSnippet(name: string, params: string, detail: string): CompletionItem {
+  return {
+    label: params.length > 0 ? `${name}(${params})` : `${name}()`,
+    kind: CompletionItemKind.Snippet,
+    detail,
+    sortText: "0000", // highest priority
+    filterText: name,
+    insertTextFormat: InsertTextFormat.Snippet,
+    // Insert the args + closing paren. The '(' is already typed by the user.
+    // Cursor exits after the closing paren via $0.
+    insertText: params.length > 0 ? `${params})$0` : `)$0`,
+    preselect: true,
+  };
 }
