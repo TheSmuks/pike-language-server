@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/err-arity-few.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 9
+        },
+        "end": {
+          "line": 18,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 's' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 21,
+          "character": 6
+        },
+        "end": {
+          "line": 21,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'n' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 24,
+          "character": 9
+        },
+        "end": {
+          "line": 24,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'ok' is unused"
+    }
+  ]
+}

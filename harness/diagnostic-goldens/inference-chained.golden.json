@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/inference-chained.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 55,
+          "character": 9
+        },
+        "end": {
+          "line": 55,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'info' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 62,
+          "character": 9
+        },
+        "end": {
+          "line": 62,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'make' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 68,
+          "character": 8
+        },
+        "end": {
+          "line": 68,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'v' is unused"
+    }
+  ]
+}

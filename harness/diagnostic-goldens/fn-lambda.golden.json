@@ -1,0 +1,119 @@
+{
+  "file": "corpus/files/fn-lambda.pike",
+  "parseCount": 0,
+  "lintCount": 7,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 22
+        },
+        "end": {
+          "line": 14,
+          "character": 32
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'add_offset' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 26
+        },
+        "end": {
+          "line": 19,
+          "character": 32
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'logger' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 25,
+          "character": 13
+        },
+        "end": {
+          "line": 25,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'squares' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 28,
+          "character": 33
+        },
+        "end": {
+          "line": 28,
+          "character": 44
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'compare_len' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 40,
+          "character": 9
+        },
+        "end": {
+          "line": 40,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'msg' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 48,
+          "character": 6
+        },
+        "end": {
+          "line": 48,
+          "character": 8
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'c1' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 49,
+          "character": 6
+        },
+        "end": {
+          "line": 49,
+          "character": 8
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'c2' is unused"
+    }
+  ]
+}

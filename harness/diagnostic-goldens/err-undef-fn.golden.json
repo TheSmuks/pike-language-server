@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/err-undef-fn.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 15,
+          "character": 6
+        },
+        "end": {
+          "line": 15,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 9
+        },
+        "end": {
+          "line": 18,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 's' is unused"
+    }
+  ]
+}

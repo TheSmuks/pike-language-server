@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/inference-return.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 28,
+          "character": 9
+        },
+        "end": {
+          "line": 28,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'desc' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 38,
+          "character": 8
+        },
+        "end": {
+          "line": 38,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'm' is unused"
+    }
+  ]
+}

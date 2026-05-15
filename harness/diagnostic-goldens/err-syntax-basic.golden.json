@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/err-syntax-basic.pike",
+  "parseCount": 2,
+  "lintCount": 1,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 11,
+          "character": 2
+        },
+        "end": {
+          "line": 11,
+          "character": 5
+        }
+      },
+      "severity": 1,
+      "code": "P1000",
+      "source": "pike-lsp",
+      "message": "Expected '}' to close block"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 0
+        },
+        "end": {
+          "line": 17,
+          "character": 6
+        }
+      },
+      "severity": 1,
+      "code": "P1001",
+      "source": "pike-lsp",
+      "message": "Parse error: unexpected '}'"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 4
+        },
+        "end": {
+          "line": 9,
+          "character": 8
+        }
+      },
+      "severity": 4,
+      "code": "P3004",
+      "source": "pike-lint",
+      "message": "Function 'main' declares return type 'int' but contains no return statement"
+    }
+  ]
+}

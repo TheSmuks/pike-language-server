@@ -1,0 +1,87 @@
+{
+  "file": "corpus/files/err-type-generic.pike",
+  "parseCount": 0,
+  "lintCount": 5,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 13
+        },
+        "end": {
+          "line": 9,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'a' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 22
+        },
+        "end": {
+          "line": 12,
+          "character": 23
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'm' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 15,
+          "character": 16
+        },
+        "end": {
+          "line": 15,
+          "character": 18
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'ms' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 21
+        },
+        "end": {
+          "line": 18,
+          "character": 22
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 39
+        },
+        "end": {
+          "line": 18,
+          "character": 40
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 's' is unused"
+    }
+  ]
+}

@@ -111,6 +111,7 @@ export interface BuildState {
   scopeMap: Map<number, Scope>; // ID → Scope for O(1) lookup
   declMap: Map<number, Declaration>; // ID → Declaration for O(1) lookup
   scopeStack: number[]; // stack of scope IDs (innermost last)
+  lines: string[]; // pre-split source lines for UTF-16 position conversion
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +133,7 @@ export { wireInheritance } from './scopeBuilder';
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { pushScope, popScope, toRange, resolveTypeName } from './scope-helpers';
+import { pushScope, popScope, toRangeUtf16, resolveTypeName } from './scope-helpers';
 import { wireInheritance } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
@@ -182,10 +183,11 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     scopeMap: new Map(),
     declMap: new Map(),
     scopeStack: [],
+    lines: root.text.split('\n'),
   };
 
   // Pass 1: declarations + scope tree
-  pushScope(state, 'file', toRange(root));
+  pushScope(state, 'file', toRangeUtf16(root, state.lines));
   collectDeclarations(root, state);
   popScope(state); // file scope
 

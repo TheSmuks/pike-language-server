@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/cross-inherit-rename-b.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 18
+        },
+        "end": {
+          "line": 13,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'hp' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 8
+        },
+        "end": {
+          "line": 8,
+          "character": 37
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module 'motor' is never used"
+    }
+  ]
+}

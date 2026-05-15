@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/class-single-inherit.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 61,
+          "character": 9
+        },
+        "end": {
+          "line": 61,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'desc' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 62,
+          "character": 9
+        },
+        "end": {
+          "line": 62,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 65,
+          "character": 9
+        },
+        "end": {
+          "line": 65,
+          "character": 16
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'gd_desc' is unused"
+    }
+  ]
+}

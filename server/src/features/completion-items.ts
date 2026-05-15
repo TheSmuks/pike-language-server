@@ -31,6 +31,7 @@ import {
   extractParamsFromStdlibSignature,
   cleanPredefSignature,
 } from "./completion-snippets";
+import { utf8ToUtf16 } from "../util/positionConverter";
 
 // Re-export snippet helpers for backward compatibility
 export {
@@ -273,6 +274,7 @@ export function findIdentifierPrefixRange(
   const root = tree.rootNode;
   if (!root) return null;
   const pos = { row: line, column: character };
+  const lines = root.text.split('\n');
 
   // Try to find a node at this position. Use namedDescendantForPosition
   // to skip anonymous nodes (punctuation, whitespace).
@@ -285,7 +287,7 @@ export function findIdentifierPrefixRange(
     return {
       start: {
         line: node.startPosition.row,
-        character: node.startPosition.column,
+        character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
       },
       end: { line, character },
     };
@@ -301,7 +303,7 @@ export function findIdentifierPrefixRange(
           return {
             start: {
               line: child.startPosition.row,
-              character: child.startPosition.column,
+              character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column),
             },
             end: { line, character },
           };

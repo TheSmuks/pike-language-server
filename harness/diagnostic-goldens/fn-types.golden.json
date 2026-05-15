@@ -1,0 +1,103 @@
+{
+  "file": "corpus/files/fn-types.pike",
+  "parseCount": 0,
+  "lintCount": 6,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 20,
+          "character": 46
+        },
+        "end": {
+          "line": 20,
+          "character": 47
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 39,
+          "character": 6
+        },
+        "end": {
+          "line": 39,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sum' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 41,
+          "character": 6
+        },
+        "end": {
+          "line": 41,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'len' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 45,
+          "character": 6
+        },
+        "end": {
+          "line": 45,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 48,
+          "character": 13
+        },
+        "end": {
+          "line": 48,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'doubled' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 51,
+          "character": 27
+        },
+        "end": {
+          "line": 51,
+          "character": 30
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sub' is unused"
+    }
+  ]
+}
