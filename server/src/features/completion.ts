@@ -15,26 +15,31 @@ import {
   InsertTextFormat,
 } from "vscode-languageserver/node";
 import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
-import { resolveMemberAccess } from "./typeResolver";
 import {
   type CompletionContext,
-  type TriggerContext,
   detectTriggerContext,
+  resetCompletionCache,
+} from "./completionTrigger";
+import {
   getStdlibChildrenMap,
   getStdlibTopLevel,
   isCompletableIdentifier,
   getAutoImportByPrefix,
+} from "./completion-stdlib";
+import {
+  resolveTypeMembers,
   declToCompletionItem,
   padSortKey,
   findDeclarationForName,
-  resolveTypeMembers,
   cleanPredefSignature,
-  resetCompletionCache,
   extractParamsFromPredefType,
   extractParamsFromStdlibSignature,
   extractConstructorParams,
   extractParamsFromType,
-} from "./completionTrigger";
+} from "./completion-items";
+import { resolveChainedType } from "./completion-chain";
+import { completeScopeAccess } from "./completion-scopeAccess";
+import { completeCallArgs } from "./completion-callArgs";
 
 // Re-export for backward compatibility
 export { type CompletionContext, resetCompletionCache } from "./completionTrigger";
@@ -76,7 +81,7 @@ export async function getCompletions(
       items = await completeArrowAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
       break;
     case "scope":
-      items = await completeScopeAccess(table, tree, line, character, triggerContext.scopeNode, ctx);
+      items = await completeScopeAccess(table, line, character, triggerContext.scopeNode, ctx);
       break;
     case "call_args":
       items = await completeCallArgs(table, tree, line, character, triggerContext.calleeName, ctx);
@@ -256,6 +261,7 @@ async function completeUnqualified(
           detail: `Auto-import from ${candidate.module}`,
           sortText: padSortKey(50) + candidate.name,
           filterText: candidate.name,
+          data: { source: "autoimport", fqn: "predef." + candidate.module + "." + candidate.name, module: candidate.module, symbolName: candidate.name },
           additionalTextEdits: [
             {
               range: {
@@ -351,6 +357,7 @@ async function completeMemberAccess(
         detail: member.signature || undefined,
         sortText: padSortKey(10) + member.name,
         filterText: member.name,
+        data: { source: "stdlib", fqn: member.fqn },
       };
       // Add argument snippet for stdlib methods/functions
       if (member.signature && (member.kind === CompletionItemKind.Method || member.kind === CompletionItemKind.Function)) {
@@ -396,410 +403,4 @@ async function completeMemberAccess(
     return items.filter(item => !item.label.startsWith("__"));
   }
   return items;
-}
-
-// ---------------------------------------------------------------------------
-// Scope access completion (:: )
-// ---------------------------------------------------------------------------
-
-async function completeScopeAccess(
-  table: SymbolTable,
-  tree: Tree,
-  line: number,
-  character: number,
-  scopeNode: Node,
-  ctx: CompletionContext,
-): Promise<CompletionItem[]> {
-  const items: CompletionItem[] = [];
-  const seenNames = new Set<string>();
-  const scopeText = scopeNode.text;
-
-  // local:: — complete from enclosing class + inherited
-  if (scopeText === "local") {
-    const classScopeId = findClassScopeAt(table, line, character);
-    if (classScopeId !== null) {
-      const classScope = table.scopeById.get(classScopeId);
-      if (classScope) {
-        const decls = getDeclarationsInScope(table, classScopeId);
-        for (const decl of decls) {
-          if (seenNames.has(decl.name)) continue;
-          seenNames.add(decl.name);
-          items.push(declToCompletionItem(decl, 0, table));
-        }
-      }
-    }
-    return items;
-  }
-
-  // Bare :: — first inherited class
-  if (scopeText === "::" || scopeNode.type === "inherit_specifier") {
-    // Check if this is a bare :: (no identifier before it)
-    const children = scopeNode.children;
-    const hasIdentifier = children.some(c => c.type === "identifier");
-    if (!hasIdentifier) {
-      // Bare :: — members of first inherited class
-      const classScopeId = findClassScopeAt(table, line, character);
-      if (classScopeId !== null) {
-        const classScope = table.scopeById.get(classScopeId);
-        if (classScope && classScope.inheritedScopes.length > 0) {
-          const firstInherited = classScope.inheritedScopes[0];
-          const decls = getDeclarationsInScope(table, firstInherited);
-          for (const decl of decls) {
-            if (seenNames.has(decl.name)) continue;
-            seenNames.add(decl.name);
-            items.push(declToCompletionItem(decl, 0, table));
-          }
-        }
-      }
-      return items;
-    }
-  }
-
-  // Identifier:: — resolve identifier to inherit declaration
-  const inheritName = scopeText;
-  // Find the inherit declaration with this name/alias in the enclosing class
-  const classScopeId = findClassScopeAt(table, line, character);
-  if (classScopeId !== null) {
-    const classScope = table.scopeById.get(classScopeId);
-    if (classScope) {
-      // Find the inherit declaration
-      for (const declId of classScope.declarations) {
-        const decl = table.declById.get(declId);
-        if (decl && (decl.kind === "inherit" || decl.kind === "import") && (decl.name === inheritName || decl.alias === inheritName)) {
-          // Resolve to target
-          const targetUri = await ctx.index.resolveInherit(decl.name, false, ctx.uri);
-          if (targetUri) {
-            const targetTable = ctx.index.getSymbolTable(targetUri);
-            if (targetTable) {
-              const fileScope = targetTable.scopes.find(s => s.kind === "file");
-              if (fileScope) {
-                const targetDecls = getDeclarationsInScope(targetTable, fileScope.id);
-                for (const td of targetDecls) {
-                  if (seenNames.has(td.name)) continue;
-                  seenNames.add(td.name);
-                  items.push(declToCompletionItem(td, 0, targetTable));
-                }
-              }
-            }
-          }
-          // Also check same-file inheritance
-          for (const inheritedId of classScope.inheritedScopes) {
-            const inheritedScope = table.scopeById.get(inheritedId);
-            if (inheritedScope) {
-              const parentScope = inheritedScope.parentId !== null ? table.scopeById.get(inheritedScope.parentId) : undefined;
-              if (parentScope) {
-                for (const parentDeclId of parentScope.declarations) {
-                  const parentDecl = table.declById.get(parentDeclId);
-                  if (parentDecl && parentDecl.kind === "class" && parentDecl.name === decl.name) {
-                    const targetDecls = getDeclarationsInScope(table, inheritedId);
-                    for (const td of targetDecls) {
-                      if (seenNames.has(td.name)) continue;
-                      seenNames.add(td.name);
-                      items.push(declToCompletionItem(td, 5, table));
-                    }
-                  }
-                }
-              }
-            }
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  return items;
-}
-
-// ---------------------------------------------------------------------------
-// Chained call type resolution
-// ---------------------------------------------------------------------------
-
-/**
- * Maximum depth for chained call type resolution.
- * Prevents runaway resolution on deeply nested or recursive chains.
- */
-const MAX_CHAIN_DEPTH = 5;
-
-/**
- * Resolve the type of an LHS expression for member access completion.
- *
- * Handles three patterns:
- * 1. Simple identifier: `d->` — look up `d`'s declaration, resolve its type.
- * 2. Single function call: `makeDog()->` — look up `makeDog`, resolve return type.
- * 3. Chained calls: `getContainer()->getItem()->` — walk the chain step by step,
- *    resolving each method's return type.
- *
- * Returns the Declaration whose type should be enumerated for completion items.
- * For chained calls, returns the declaration of the rightmost call's return type.
- * Returns null if the chain cannot be resolved.
- */
-async function resolveChainedType(
-  lhsNode: Node,
-  table: SymbolTable,
-  line: number,
-  character: number,
-  ctx: CompletionContext,
-): Promise<Declaration | null> {
-  // Decompose the postfix_expr chain into steps.
-  // Each step is either a base identifier or a ->memberName operation.
-  const steps = decomposePostfixChain(lhsNode);
-  if (steps.length === 0) {
-    // Fallback: try simple name lookup on the raw node text.
-    const name = lhsNode.text;
-    return findDeclarationForName(table, name, line, character);
-  }
-
-  // Step 0: resolve the base identifier's declaration.
-  const baseName = steps[0].baseName;
-  let currentDecl = findDeclarationForName(table, baseName, line, character);
-  if (!currentDecl) return null;
-
-  // If there are no arrow steps, this is a simple case.
-  // Return the base declaration so resolveTypeMembers can do its work.
-  if (steps.length === 1 && !steps[0].memberName) {
-    return currentDecl;
-  }
-
-  // Walk the chain: for each ->memberName step, resolve the member on
-  // the current type, then set currentDecl to the member's declaration
-  // (whose return type becomes the next step's type context).
-  const typeCtx = {
-    table,
-    uri: ctx.uri,
-    index: ctx.index,
-    stdlibIndex: ctx.stdlibIndex,
-    typeInferrer: ctx.typeInferrer,
-  };
-
-  for (let i = 0; i < steps.length && i < MAX_CHAIN_DEPTH; i++) {
-    const step = steps[i];
-    if (!step.memberName) continue;
-
-    // Resolve the current type through the member access.
-    // For each step, use that step's baseName (the identifier before the ->)
-    // as the lookup name for the member access resolution.
-    const member = await resolveMemberAccess(
-      step.baseName,
-      step.memberName,
-      currentDecl,
-      typeCtx,
-    );
-    if (!member) return null;
-
-    // The member becomes the new "current declaration" for the next step.
-    // If the member is a method/function, its declaredType is the return type.
-    currentDecl = member;
-  }
-
-  return currentDecl;
-}
-
-/**
- * A single step in a postfix_expr chain.
- *
- * `baseName` is always set — it's the leftmost identifier.
- * `memberName` is set for arrow/dot access steps.
- */
-interface ChainStep {
-  baseName: string;
-  memberName: string | null;
-}
-
-/**
- * Decompose a postfix_expr tree into a chain of steps.
- *
- * Given: `getContainer()->getItem()`
- * Tree: postfix_expr(postfix_expr(postfix_expr("getContainer") -> "getItem") (args))
- *
- * Returns:
- *   [{ baseName: "getContainer", memberName: null },
- *    { baseName: "getContainer", memberName: "getItem" }]
- *
- * Given: `d->bark()`
- * Tree: postfix_expr(postfix_expr("d") -> "bark") (args))
- *
- * Returns:
- *   [{ baseName: "d", memberName: null },
- *    { baseName: "d", memberName: "bark" }]
- *
- * Given: `makeDog()`
- * Tree: postfix_expr(postfix_expr("makeDog") (args))
- *
- * Returns:
- *   [{ baseName: "makeDog", memberName: null }]
- */
-function decomposePostfixChain(node: Node): ChainStep[] {
-  const steps: ChainStep[] = [];
-
-  // Walk the postfix_expr chain from outside in, collecting ->member steps.
-  let current: Node | null = node;
-  const arrowSteps: string[] = [];
-
-  while (current && current.type === "postfix_expr") {
-    const children = current.children;
-    // Look for arrow/dot operator followed by an identifier.
-    for (let i = 0; i < children.length; i++) {
-      const child = children[i];
-      if ((child.type === "->" || child.type === "->?" || child.type === "?->")
-          && i + 1 < children.length) {
-        const memberIdent = children[i + 1];
-        if (memberIdent && memberIdent.type === "identifier") {
-          arrowSteps.push(memberIdent.text);
-        }
-      }
-    }
-
-    // Move to the first child (the nested postfix_expr or primary_expr).
-    const inner = current.child(0);
-    if (inner && inner.type === "postfix_expr") {
-      current = inner;
-    } else {
-      // Reached the base: extract the identifier.
-      const baseName = extractIdentifier(inner);
-      if (baseName) {
-        steps.push({ baseName, memberName: null });
-      }
-      break;
-    }
-  }
-
-  // Arrow steps were collected outside-in, so reverse them to get
-  // the correct left-to-right order.
-  arrowSteps.reverse();
-  if (steps.length > 0) {
-    for (const member of arrowSteps) {
-      steps.push({ baseName: steps[0].baseName, memberName: member });
-    }
-  }
-
-  return steps;
-}
-
-/**
- * Extract the identifier name from a node.
- * Handles identifier, identifier_expr, and primary_expr wrapping.
- */
-function extractIdentifier(node: Node | null): string | null {
-  if (!node) return null;
-  if (node.type === "identifier") return node.text;
-  if (node.type === "identifier_expr") {
-    const nameNode = node.childForFieldName("name");
-    return nameNode?.text ?? null;
-  }
-  if (node.type === "primary_expr") {
-    return extractIdentifier(node.child(0));
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Call-args completion (triggered by '(' after a function name)
-// ---------------------------------------------------------------------------
-
-/**
- * When the user types `funcName(`, offer a single completion item that
- * inserts argument placeholders with tab stops. This gives "type `(` and
- * get prompted with args" behavior.
- *
- * Resolution chain: local scope → imports → predef → stdlib → class constructors.
- */
-async function completeCallArgs(
-  table: SymbolTable,
-  tree: Tree,
-  line: number,
-  character: number,
-  calleeName: string,
-  ctx: CompletionContext,
-): Promise<CompletionItem[]> {
-  // 1. Local/inner-function lookup
-  const localDecl = findDeclarationForName(table, calleeName, line, character);
-  if (localDecl && (localDecl.kind === "function" || localDecl.kind === "method") && localDecl.declaredType) {
-    const params = extractParamsFromType(localDecl.declaredType);
-    if (params !== null) {
-      return [makeArgSnippet(calleeName, params, localDecl.declaredType)];
-    }
-  }
-
-  // 2. Class constructor lookup (same file)
-  if (localDecl && localDecl.kind === "class") {
-    const createParams = extractConstructorParams(localDecl, table);
-    if (createParams !== null) {
-      return [makeArgSnippet(calleeName, createParams, "constructor")];
-    }
-  }
-
-  // 3. Predef builtins
-  const predefSig = ctx.predefBuiltins[calleeName];
-  if (predefSig) {
-    const params = extractParamsFromPredefType(predefSig);
-    if (params !== null) {
-      return [makeArgSnippet(calleeName, params, cleanPredefSignature(predefSig))];
-    }
-  }
-
-  // 4. Cross-file: check imports for the function
-  const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
-  for (const importDecl of importDecls) {
-    const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
-    if (!targetUri) continue;
-    const targetTable = ctx.index.getSymbolTable(targetUri);
-    if (!targetTable) continue;
-    const fileScope = targetTable.scopes.find(s => s.kind === "file");
-    if (!fileScope) continue;
-    const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
-    const funcDecl = importedDecls.find(d => d.name === calleeName && (d.kind === "function" || d.kind === "method"));
-    if (funcDecl && funcDecl.declaredType) {
-      const params = extractParamsFromType(funcDecl.declaredType);
-      if (params !== null) {
-        return [makeArgSnippet(calleeName, params, funcDecl.declaredType)];
-      }
-    }
-    // Also check class constructors in imported modules
-    const classDecl = importedDecls.find(d => d.name === calleeName && d.kind === "class");
-    if (classDecl) {
-      const createParams = extractConstructorParams(classDecl, targetTable);
-      if (createParams !== null) {
-        return [makeArgSnippet(calleeName, createParams, "constructor")];
-      }
-    }
-  }
-
-  // 5. Stdlib lookup — search all stdlib entries for matching function name
-  for (const [fqn, entry] of Object.entries(ctx.stdlibIndex)) {
-    // fqn is like "predef.Module.method" — check last segment
-    const parts = fqn.split(".");
-    const lastName = parts[parts.length - 1];
-    if (lastName !== calleeName) continue;
-    // Skip class/module entries (they have "inherit" signatures)
-    if (entry.signature.startsWith("inherit")) continue;
-    const params = extractParamsFromStdlibSignature(entry.signature);
-    if (params !== null) {
-      return [makeArgSnippet(calleeName, params, entry.signature)];
-    }
-  }
-
-  // No resolution found — return empty so no completion dropdown appears.
-  return [];
-}
-
-/**
- * Build a single completion item that inserts argument placeholders.
- * The item is meant to be accepted immediately after the user types '('.
- *
- * newText inserts the args and closing paren, with $0 exit cursor after.
- */
-function makeArgSnippet(name: string, params: string, detail: string): CompletionItem {
-  return {
-    label: params.length > 0 ? `${name}(${params})` : `${name}()`,
-    kind: CompletionItemKind.Snippet,
-    detail,
-    sortText: "0000", // highest priority
-    filterText: name,
-    insertTextFormat: InsertTextFormat.Snippet,
-    // Insert the args + closing paren. The '(' is already typed by the user.
-    // Cursor exits after the closing paren via $0.
-    insertText: params.length > 0 ? `${params})$0` : `)$0`,
-    preselect: true,
-  };
 }
