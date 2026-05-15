@@ -1,0 +1,199 @@
+{
+  "file": "corpus/files/basic-types.pike",
+  "parseCount": 0,
+  "lintCount": 12,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 6
+        },
+        "end": {
+          "line": 8,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'count' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 6
+        },
+        "end": {
+          "line": 9,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'negative' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 6
+        },
+        "end": {
+          "line": 10,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'hex' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 11,
+          "character": 6
+        },
+        "end": {
+          "line": 11,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'octal' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 6
+        },
+        "end": {
+          "line": 12,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'binary' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 15,
+          "character": 8
+        },
+        "end": {
+          "line": 15,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'pi' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 8
+        },
+        "end": {
+          "line": 16,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sci' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 9
+        },
+        "end": {
+          "line": 19,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 20,
+          "character": 9
+        },
+        "end": {
+          "line": 20,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'empty' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 21,
+          "character": 9
+        },
+        "end": {
+          "line": 21,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'multi' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 8
+        },
+        "end": {
+          "line": 32,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'z' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 35,
+          "character": 12
+        },
+        "end": {
+          "line": 35,
+          "character": 16
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'flag' is unused"
+    }
+  ]
+}

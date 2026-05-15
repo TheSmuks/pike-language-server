@@ -23,6 +23,7 @@ import type {
 } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration, Reference } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import { utf8ToUtf16 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Prepare call hierarchy
@@ -178,6 +179,7 @@ export function getOutgoingCalls(
   const root = tree.rootNode;
   const calls: CallHierarchyOutgoingCall[] = [];
   const seen = new Set<string>();
+  const lines = root.text.split('\n');
 
   collectCallExpressions(
     root,
@@ -188,6 +190,7 @@ export function getOutgoingCalls(
     workspaceIndex,
     calls,
     seen,
+    lines,
   );
 
   return calls;
@@ -205,6 +208,7 @@ function collectCallExpressions(
   workspaceIndex: WorkspaceIndex,
   results: CallHierarchyOutgoingCall[],
   seen: Set<string>,
+  lines: string[],
 ): void {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
@@ -237,11 +241,11 @@ function collectCallExpressions(
                 fromRanges: [{
                   start: {
                     line: child.startPosition.row,
-                    character: child.startPosition.column,
+                    character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column),
                   },
                   end: {
                     line: child.startPosition.row,
-                    character: child.startPosition.column + calleeName.length,
+                    character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) + calleeName.length,
                   },
                 }],
               });
@@ -253,7 +257,7 @@ function collectCallExpressions(
 
     // Recurse into children
     collectCallExpressions(
-      child, startLine, endLine, table, uri, workspaceIndex, results, seen,
+      child, startLine, endLine, table, uri, workspaceIndex, results, seen, lines,
     );
   }
 }

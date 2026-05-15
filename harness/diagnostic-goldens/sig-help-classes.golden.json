@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/sig-help-classes.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 6,
+          "character": 9
+        },
+        "end": {
+          "line": 6,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 28
+        },
+        "end": {
+          "line": 14,
+          "character": 34
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'volume' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 24,
+          "character": 9
+        },
+        "end": {
+          "line": 24,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'color' is unused"
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "file": "corpus/files/enum-basic.pike",
+  "parseCount": 0,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 40,
+          "character": 9
+        },
+        "end": {
+          "line": 40,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 43,
+          "character": 6
+        },
+        "end": {
+          "line": 43,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sval' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 51,
+          "character": 15
+        },
+        "end": {
+          "line": 51,
+          "character": 21
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'colors' is unused"
+    }
+  ]
+}

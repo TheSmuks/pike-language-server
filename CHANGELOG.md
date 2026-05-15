@@ -62,6 +62,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `signatureHelp-resolve.ts`, `pikeDetection.ts`, `completion-scope.ts`,
     `xml-renderer-blocks.ts`, `xml-renderer-inline.ts`, `xml-renderer-types.ts`:
     further module boundary extractions.
+  - Golden-file diagnostics test infrastructure: `harness/src/diagnosticsGolden.ts`
+    runner produces LSP diagnostic snapshots from tree-sitter parse + lint rules.
+    93 tests across 87 corpus files in `harness/__tests__/diagnostics-golden.test.ts`
+    (Tier 3.1).
+  - `positionConverter.ts` utility: `utf8ToUtf16()` and `utf16ToUtf8()` functions
+    with 53 unit tests for UTF-8/UTF-16 position encoding conversion (P1.7).
+  - `typeHierarchy` LSP provider: `prepareTypeHierarchy`, `supertypes`, and
+    `subtypes` for Pike class hierarchies with 10 tests. Supports cross-file
+    inheritance resolution via WorkspaceIndex (Tier 3.5).
 
 ### Changed
 
@@ -77,9 +86,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     preventing watcher leaks across restarts.
   - Modernized README.md with complete feature inventory (23 LSP providers),
     architecture overview, and development section.
+  - Symbol table pipeline (`toLoc`/`toRange` → `toLocUtf16`/`toRangeUtf16`) and
+    19 feature files converted to use UTF-16 position encoding for correct
+    non-ASCII character handling (P1.7). Both tree-sitter→LSP and LSP→tree-sitter
+    directions covered.
 
 ### Fixed
 
+  - Tree-sitter UTF-8 byte offsets are no longer used directly as LSP character
+    positions. All position conversions now go through `positionConverter.ts`,
+    fixing latent incorrect column values for non-ASCII Pike source files.
   - Removed non-null assertion `targetDecl!` in `workspaceIndex.ts` — replaced
     with narrowed local after null check.
   - Fixed `export { FileEntry }` → `export type { FileEntry }` in

@@ -33,6 +33,7 @@ import {
   renderPredefSignature,
   type HoverContentContext,
 } from "./hoverContent";
+import { utf16ToUtf8 } from "../util/positionConverter";
 
 // Re-export for any external consumers
 export type { HoverInfo } from "./hoverContent";
@@ -93,10 +94,15 @@ function identifierAtPosition(
   line: number,
   character: number,
 ): string | null {
+  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
+  const source = tree.rootNode.text;
+  const lines = source.split('\n');
+  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
+
   // Get the deepest node at the position
   let node: Node | null = tree.rootNode.descendantForPosition({
     row: line,
-    column: character,
+    column: utf8Col,
   });
   // Walk up to find the identifier node at this position
   while (node) {

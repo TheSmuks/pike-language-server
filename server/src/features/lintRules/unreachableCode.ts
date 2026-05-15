@@ -13,6 +13,7 @@
 
 import { Tree } from "web-tree-sitter";
 import { Diagnostic, DiagnosticSeverity, Range } from "../diagnostics";
+import { utf8ToUtf16 } from "../../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Lint rule code (P3xxx range, per decision 0028)
@@ -52,7 +53,8 @@ const COMMENT_TYPES = new Set([
  */
 export function detectUnreachableCode(tree: Tree): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  walkBlocks(tree.rootNode, diagnostics);
+  const lines = tree.rootNode.text.split('\n');
+  walkBlocks(tree.rootNode, diagnostics, lines);
   return diagnostics;
 }
 
@@ -64,7 +66,7 @@ export function detectUnreachableCode(tree: Tree): Diagnostic[] {
  * Recursively walk the tree, finding block nodes and checking for
  * unreachable statements after terminators.
  */
-function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[]): void {
+function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[], lines: string[]): void {
   if (node.type === "block") {
     // Switch bodies contain case/default clauses as direct children in a
     // flat block. Each case is an independent control-flow entry point, so
@@ -72,15 +74,15 @@ function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnosti
     // Use segmented checking for switch blocks.
     const parent = node.parent;
     if (parent && parent.type === "switch_statement") {
-      checkSwitchBlock(node, diagnostics);
+      checkSwitchBlock(node, diagnostics, lines);
       return;
     }
-    checkBlock(node, diagnostics);
+    checkBlock(node, diagnostics, lines);
   }
 
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child) walkBlocks(child, diagnostics);
+    if (child) walkBlocks(child, diagnostics, lines);
   }
 }
 
@@ -93,6 +95,7 @@ function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnosti
 function checkBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
+  lines: string[],
 ): void {
   const children = namedChildren(block);
 
@@ -109,8 +112,8 @@ function checkBlock(
       diagnostics.push(
         Diagnostic.create(
           Range.create(
-            { line: child.startPosition.row, character: child.startPosition.column },
-            { line: child.endPosition.row, character: child.endPosition.column },
+            { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
+            { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
           ),
           "Unreachable code",
           DiagnosticSeverity.Warning,
@@ -154,6 +157,7 @@ const CASE_ENTRY_TYPES = new Set(["case_clause", "default_clause"]);
 function checkSwitchBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
+  lines: string[],
 ): void {
   const children = namedChildren(block);
 
@@ -186,8 +190,8 @@ function checkSwitchBlock(
           diagnostics.push(
             Diagnostic.create(
               Range.create(
-                { line: child.startPosition.row, character: child.startPosition.column },
-                { line: child.endPosition.row, character: child.endPosition.column },
+                { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
+                { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
               ),
               "Unreachable code",
               DiagnosticSeverity.Warning,

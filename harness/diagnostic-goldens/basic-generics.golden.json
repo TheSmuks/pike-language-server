@@ -1,0 +1,87 @@
+{
+  "file": "corpus/files/basic-generics.pike",
+  "parseCount": 0,
+  "lintCount": 5,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 41,
+          "character": 6
+        },
+        "end": {
+          "line": 41,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'total' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 44,
+          "character": 6
+        },
+        "end": {
+          "line": 44,
+          "character": 17
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'alice_score' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 47,
+          "character": 6
+        },
+        "end": {
+          "line": 47,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'is_ready' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 49,
+          "character": 6
+        },
+        "end": {
+          "line": 49,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 50,
+          "character": 6
+        },
+        "end": {
+          "line": 50,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'negated' is unused"
+    }
+  ]
+}

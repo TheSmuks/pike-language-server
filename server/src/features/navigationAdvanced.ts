@@ -16,6 +16,11 @@ import {
   getIncomingCalls,
   getOutgoingCalls,
 } from "./callHierarchy";
+import {
+  prepareTypeHierarchy,
+  getSupertypes,
+  getSubtypes,
+} from "./typeHierarchy";
 import { produceCodeLenses } from "./codeLens";
 import { registerDocumentLinkHandler } from "./documentLink";
 import { computeContentHash } from "./diagnosticManager";
@@ -71,6 +76,47 @@ export function registerAdvancedHandlers(
       const tree = parse(doc.getText(), uri);
       if (!ctx.index) return [];
       return getOutgoingCalls(item, tree, table, uri, ctx.index);
+    },
+  );
+
+  // -----------------------------------------------------------------------
+  // Type hierarchy — supertypes/subtypes for class inheritance (decision 0026)
+  // -----------------------------------------------------------------------
+
+  connection.onRequest(
+    "textDocument/prepareTypeHierarchy",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return null;
+      const table = await ctx.getSymbolTable(params.textDocument.uri);
+      if (!table) return null;
+      return prepareTypeHierarchy(
+        table,
+        params.textDocument.uri,
+        params.position.line,
+        params.position.character,
+      );
+    },
+  );
+
+  connection.onRequest(
+    "typeHierarchy/supertypes",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return [];
+      const item = params.item;
+      if (!ctx.index) return [];
+      const table = await ctx.getSymbolTable(item.uri);
+      if (!table) return [];
+      return getSupertypes(ctx.index, table, item.uri, item);
+    },
+  );
+
+  connection.onRequest(
+    "typeHierarchy/subtypes",
+    async (params, token: CancellationToken) => {
+      if (token.isCancellationRequested) return [];
+      const item = params.item;
+      if (!ctx.index) return [];
+      return getSubtypes(ctx.index, item.uri, item);
     },
   );
 

@@ -1,0 +1,71 @@
+{
+  "file": "corpus/files/lint-unreachable.pike",
+  "parseCount": 0,
+  "lintCount": 4,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 16
+        },
+        "end": {
+          "line": 17,
+          "character": 17
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 4
+        },
+        "end": {
+          "line": 10,
+          "character": 19
+        }
+      },
+      "severity": 2,
+      "code": "P3003",
+      "source": "pike-lsp-lint",
+      "message": "Unreachable code"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 12
+        },
+        "end": {
+          "line": 17,
+          "character": 23
+        }
+      },
+      "severity": 2,
+      "code": "P3003",
+      "source": "pike-lsp-lint",
+      "message": "Unreachable code"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 27,
+          "character": 12
+        },
+        "end": {
+          "line": 27,
+          "character": 36
+        }
+      },
+      "severity": 2,
+      "code": "P3003",
+      "source": "pike-lsp-lint",
+      "message": "Unreachable code"
+    }
+  ]
+}

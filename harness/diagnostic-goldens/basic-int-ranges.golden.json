@@ -1,0 +1,375 @@
+{
+  "file": "corpus/files/basic-int-ranges.pike",
+  "parseCount": 0,
+  "lintCount": 23,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 6
+        },
+        "end": {
+          "line": 8,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'positive' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 6
+        },
+        "end": {
+          "line": 9,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'negative' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 6
+        },
+        "end": {
+          "line": 10,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'zero' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 11,
+          "character": 6
+        },
+        "end": {
+          "line": 11,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'hex' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 6
+        },
+        "end": {
+          "line": 12,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'octal' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 6
+        },
+        "end": {
+          "line": 13,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'binary' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 6
+        },
+        "end": {
+          "line": 18,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'max_int' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 6
+        },
+        "end": {
+          "line": 19,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'min_int' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 20,
+          "character": 6
+        },
+        "end": {
+          "line": 20,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'typical' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 25,
+          "character": 6
+        },
+        "end": {
+          "line": 25,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'i' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 26,
+          "character": 6
+        },
+        "end": {
+          "line": 26,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'neg_zero' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 27,
+          "character": 8
+        },
+        "end": {
+          "line": 27,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'm' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 34,
+          "character": 6
+        },
+        "end": {
+          "line": 34,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sum' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 35,
+          "character": 6
+        },
+        "end": {
+          "line": 35,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'diff' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 36,
+          "character": 6
+        },
+        "end": {
+          "line": 36,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'prod' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 37,
+          "character": 6
+        },
+        "end": {
+          "line": 37,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'div' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 38,
+          "character": 6
+        },
+        "end": {
+          "line": 38,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'mod' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 39,
+          "character": 6
+        },
+        "end": {
+          "line": 39,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'neg' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 45,
+          "character": 6
+        },
+        "end": {
+          "line": 45,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'shifted' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 46,
+          "character": 6
+        },
+        "end": {
+          "line": 46,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'masked' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 47,
+          "character": 6
+        },
+        "end": {
+          "line": 47,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'ored' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 48,
+          "character": 6
+        },
+        "end": {
+          "line": 48,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'xored' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 64,
+          "character": 6
+        },
+        "end": {
+          "line": 64,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'big' is unused"
+    }
+  ]
+}

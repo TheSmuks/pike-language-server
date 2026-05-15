@@ -64,6 +64,7 @@ export function buildServerCapabilities(): InitializeResult {
       },
       selectionRangeProvider: true,
       callHierarchyProvider: true,
+      typeHierarchyProvider: true,
       codeLensProvider: { resolveProvider: false },
       implementationProvider: true,
       diagnosticProvider: {

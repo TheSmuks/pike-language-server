@@ -11,6 +11,7 @@ import type {
   Scope,
   ScopeKind,
 } from './symbolTable';
+import { utf8ToUtf16 } from '../util/positionConverter';
 
 // ---------------------------------------------------------------------------
 // Geometry helpers
@@ -25,6 +26,30 @@ export function toRange(node: Node): Range {
 }
 
 /**
+ * Convert a tree-sitter Point (UTF-8 byte column) to an LSP Location
+ * with UTF-16 character offset, using pre-split source lines.
+ */
+export function toLocUtf16(point: Point, lines: string[]): { line: number; character: number } {
+  const lineText = lines[point.row];
+  if (lineText === undefined) {
+    // Fallback: line index out of range — return raw column
+    return { line: point.row, character: point.column };
+  }
+  return { line: point.row, character: utf8ToUtf16(lineText, point.column) };
+}
+
+/**
+ * Convert a tree-sitter Node to an LSP Range with UTF-16 character offsets,
+ * using pre-split source lines.
+ */
+export function toRangeUtf16(node: Node, lines: string[]): Range {
+  return {
+    start: toLocUtf16(node.startPosition, lines),
+    end: toLocUtf16(node.endPosition, lines),
+  };
+}
+
+/**
  * Primitive type names that can never have members.
  * Shared with typeResolver.ts — kept as a set for O(1) lookup.
  */
@@ -34,12 +59,15 @@ export const PRIMITIVE_TYPES = new Set([
   'bool', 'auto', 'any',
 ]);
 
-export function containsPosition(range: Range, start: Point, end: Point): boolean {
+export function containsPosition(range: Range, start: Point, end: Point, lines?: string[]): boolean {
+  // Convert tree-sitter UTF-8 columns to UTF-16 for comparison with range (UTF-16)
+  const startCol = lines ? utf8ToUtf16(lines[start.row] ?? '', start.column) : start.column;
+  const endCol = lines ? utf8ToUtf16(lines[end.row] ?? '', end.column) : end.column;
   return (
     (range.start.line < start.row ||
-     (range.start.line === start.row && range.start.character <= start.column)) &&
+     (range.start.line === start.row && range.start.character <= startCol)) &&
     (range.end.line > end.row ||
-     (range.end.line === end.row && range.end.character >= end.column))
+     (range.end.line === end.row && range.end.character >= endCol))
   );
 }
 
@@ -290,7 +318,7 @@ export function findScopeForNode(node: Node, state: BuildState): number | null {
   let bestSize = Infinity;
 
   for (const scope of state.scopes) {
-    if (containsPosition(scope.range, nodeStart, nodeEnd)) {
+    if (containsPosition(scope.range, nodeStart, nodeEnd, state.lines)) {
       const size = rangeSize(scope.range);
       if (size < bestSize || (size === bestSize && scope.id > bestScopeId!)) {
         bestSize = size;

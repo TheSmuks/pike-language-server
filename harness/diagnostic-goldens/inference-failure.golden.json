@@ -1,0 +1,71 @@
+{
+  "file": "corpus/files/inference-failure.pike",
+  "parseCount": 1,
+  "lintCount": 3,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 15,
+          "character": 0
+        },
+        "end": {
+          "line": 17,
+          "character": 1
+        }
+      },
+      "severity": 1,
+      "code": "P1000",
+      "source": "pike-lsp",
+      "message": "Parse error: unexpected 'postfix_expr'"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 8
+        },
+        "end": {
+          "line": 32,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 38,
+          "character": 8
+        },
+        "end": {
+          "line": 38,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'y' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 45,
+          "character": 9
+        },
+        "end": {
+          "line": 45,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'v' is unused"
+    }
+  ]
+}

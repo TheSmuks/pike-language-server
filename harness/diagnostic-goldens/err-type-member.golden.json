@@ -1,0 +1,87 @@
+{
+  "file": "corpus/files/err-type-member.pike",
+  "parseCount": 0,
+  "lintCount": 5,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 21,
+          "character": 9
+        },
+        "end": {
+          "line": 21,
+          "character": 15
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 24,
+          "character": 9
+        },
+        "end": {
+          "line": 24,
+          "character": 16
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result2' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 30,
+          "character": 9
+        },
+        "end": {
+          "line": 30,
+          "character": 15
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 36,
+          "character": 6
+        },
+        "end": {
+          "line": 36,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'len' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 41,
+          "character": 20
+        },
+        "end": {
+          "line": 41,
+          "character": 21
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'x' is unused"
+    }
+  ]
+}

@@ -13,6 +13,7 @@
 
 import { Tree, Node } from "web-tree-sitter";
 import type { SelectionRange } from "vscode-languageserver/node";
+import { utf8ToUtf16, utf16ToUtf8 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Node types that produce meaningful selection ranges.
@@ -87,7 +88,10 @@ export function getSelectionRange(
   character: number,
 ): SelectionRange | null {
   const root = tree.rootNode;
-  const pos = { row: line, column: character };
+  const lines = root.text.split('\n');
+  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
+  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
+  const pos = { row: line, column: utf8Col };
 
   // Find the deepest node at this position
   let node: Node | null = root.descendantForPosition(pos);
@@ -102,11 +106,11 @@ export function getSelectionRange(
       const range = {
         start: {
           line: current.startPosition.row,
-          character: current.startPosition.column,
+          character: utf8ToUtf16(lines[current.startPosition.row] ?? '', current.startPosition.column),
         },
         end: {
           line: current.endPosition.row,
-          character: current.endPosition.column,
+          character: utf8ToUtf16(lines[current.endPosition.row] ?? '', current.endPosition.column),
         },
       };
 
@@ -127,8 +131,8 @@ export function getSelectionRange(
     // Fallback: return the root range
     return {
       range: {
-        start: { line: root.startPosition.row, character: root.startPosition.column },
-        end: { line: root.endPosition.row, character: root.endPosition.column },
+        start: { line: root.startPosition.row, character: utf8ToUtf16(lines[root.startPosition.row] ?? '', root.startPosition.column) },
+        end: { line: root.endPosition.row, character: utf8ToUtf16(lines[root.endPosition.row] ?? '', root.endPosition.column) },
       },
     };
   }

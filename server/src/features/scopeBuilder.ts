@@ -20,6 +20,8 @@ import type { Declaration, SymbolTable } from './symbolTable';
 export {
   toLoc,
   toRange,
+  toLocUtf16,
+  toRangeUtf16,
   getNameText,
   getNameNodes,
   extractTypeText,

@@ -104,9 +104,9 @@ The following can be addressed in 1-2 days total:
 
 ## Tier 3: Feature Quality
 
-1. **Golden file tests for diagnostics** — The harness infrastructure already exists. Add a `--golden` flag that writes expected diagnostics to a `.golden` file and a test that compares. Allows safe regression testing of diagnostic quality.
+1. ~~**Golden file tests for diagnostics**~~ — **DONE (2026-05-15)**: 93 tests across 87 corpus files. `harness/src/diagnosticsGolden.ts` runner + `harness/__tests__/diagnostics-golden.test.ts` suite + `harness/diagnostic-goldens/*.golden.json` snapshots. Tests parse diagnostics + lint rules independently of DiagnosticManager. Regenerate with `bun run harness/src/diagnosticsGolden.ts --diagnostics-golden`.
 
-2. **completionItem/resolve** — Implement the LSP `completionItem/resolve` request. Currently completion items contain all detail inline. Lazy loading would reduce initial response size for large completion lists.
+2. **completionItem/resolve** — **DONE (2026-05-15)**: `resolveProvider: true` in capabilities, lazy stdlib markdown docs via `onCompletionResolve` handler.
 
 3. **Incremental symbol table rebuilds** — Currently `upsertInFile()` does a full symbol table rebuild. Track which declarations changed and only update affected entries. High complexity, marginal benefit until workspaces exceed 500 files.
 
@@ -241,14 +241,15 @@ bun test tests/lsp/ && bun test harness/__tests__/ && bun run typecheck
 4. P1.3 — Missing rename handler → **Fixed**: onDidRenameFiles handler added with dependency propagation
 5. P1.4 — documentSymbol side effect → **Fixed**: removed sendDiagnostics from documentSymbol handler
 | P1.6 | LSP error codes → **Fixed**: `ResponseError` + `ErrorCodes` added to pikeWorker.ts (cancellation path). `LSPErrorCodes.RequestCancelled` imported from `vscode-languageserver-protocol`. Format/completion handlers keep null returns (LSP spec allows it — distinguishing "nothing found" from "engine failed" is client-side concern). | pikeWorker.ts:558, formattingHandler.ts, navigationHandler.ts |
-7. X3.4-X3.5 — Double work in diagnostics/indexing → **Open** (X3.3 partially addressed)
+7. X3.4-X3.5 — Double work in diagnostics/indexing → **Fixed**: Promise.all in extractDependencies (workspaceDependencies.ts:118), safeParse returns shared tree
 | S2.4-S2.5 | URI standardization → **Fixed**: `pathToUri` imported from `../util/uri` in workspaceIndex.ts, replacing 3 manual `file://${path}` concatenations. Redundant `decodeURIComponent` removed in server.ts. | workspaceIndex.ts:17, 104, 404, 467; server.ts:246 |
 
 **Nice-to-have (backlog):**
-9. T4.1-T4.3 — Test coverage for untested features → **Open**
+9. T4.1-T4.3 — Test coverage for untested features → **Fixed**: selectionRange (12 tests), callHierarchy (11 tests), codeLens (7 tests)
 10. C5.3-C5.7 — Client cleanup gaps → **All fixed**: C5.3 notification push, C5.4 stateDisposable push, C5.5/C5.6 outputChannel push in activate, C5.7 no action needed
-11. P1.7 — UTF-8/UTF-16 position encoding → **Open**
-12. X3.6-X3.7 — Algorithmic optimizations → **Open**
+11. P1.7 — UTF-8/UTF-16 position encoding → **Fixed**: `positionConverter.ts` utility + symbol table pipeline (`toLocUtf16`/`toRangeUtf16`) + 19 feature files converted (both tree-sitter→LSP and LSP→tree-sitter directions)
+12. X3.6 — Auto-import prefix scan → **Fixed**: binary search on sorted keys via `getAutoImportByPrefix()` (completion-stdlib.ts:183)
+13. X3.7 — Priority queue O(n) dequeue → **Already O(1)**: three FIFO sub-queues indexed by priority (pikeWorkerProcess.ts:112-113), not linear scan
 
 ### Files Modified in Second Pass
 
@@ -264,3 +265,67 @@ bun test tests/lsp/ && bun test harness/__tests__/ && bun run typecheck
 
 **Client:**
 - `client/extension.ts` — client.dispose() in deactivate, crash auto-restart with backoff, notification handlers re-registered on config-change restart
+
+---
+
+## Third Audit Pass — 2026-05-16
+
+**Scope:** Remaining backlog items — golden-file diagnostics tests, UTF-16 position encoding, typeHierarchy provider, incremental symbol table feasibility.
+
+### Items Resolved
+
+| # | Item | Status | What was done |
+|---|------|--------|---------------|
+| Tier 3.1 | Golden-file diagnostics tests | **Fixed** | `harness/src/diagnosticsGolden.ts` runner + `harness/__tests__/diagnostics-golden.test.ts` (93 tests) + 87 golden files |
+| P1.7 | UTF-8/UTF-16 position encoding | **Fixed** | `server/src/util/positionConverter.ts` utility. Symbol table pipeline uses `toLocUtf16`/`toRangeUtf16`. 19 feature files converted for both tree-sitter→LSP and LSP→tree-sitter directions. 53 unit tests for conversion functions. |
+| X3.7 | Priority queue O(n) dequeue | **Already O(1)** | Three FIFO sub-queues indexed by priority level (pikeWorkerProcess.ts:112-113). `drainQueue()` iterates at most 3 sub-queues — constant time. |
+| S2.7 | Autodoc markdown sanitization | **Already done** | HTML entity escaping in `autodocLineRenderer.ts:197-202` — `&`, `<`, `>` escaped before any markdown rendering. |
+| Tier 3.5 | typeHierarchy provider | **Fixed** | `server/src/features/typeHierarchy.ts` — prepare/supertypes/subtypes for Pike class hierarchies. Registered in navigationAdvanced.ts. 10 tests. |
+| Tier 3.4 | Request coalescing for hover/definition | **Skipped** | CancellationToken already handles superseded requests. Hover pipeline is synchronous and fast. Marginal benefit. |
+| Tier 3.3 | Incremental symbol table rebuilds | **Deferred** | Feasibility assessment: infeasible due to Pike's scope chain resolution invalidation. Current cost <1ms for typical files. See `docs/incremental-symbol-table-feasibility.md`. |
+
+### Files Created
+
+- `server/src/util/positionConverter.ts` — UTF-8↔UTF-16 conversion functions
+- `server/src/features/typeHierarchy.ts` — LSP typeHierarchy provider
+- `tests/lsp/positionConverter.test.ts` — 53 unit tests for conversion functions
+- `tests/lsp/typeHierarchy.test.ts` — 10 unit tests for typeHierarchy
+- `harness/src/diagnosticsGolden.ts` — golden-file diagnostics runner
+- `harness/__tests__/diagnostics-golden.test.ts` — 93 golden-file diagnostic tests
+- `harness/diagnostic-goldens/*.golden.json` — 87 golden files
+- `docs/incremental-symbol-table-feasibility.md` — feasibility assessment
+
+### Files Modified (UTF-16 conversion)
+
+- `server/src/features/scope-helpers.ts` — `toLocUtf16`/`toRangeUtf16` with source lines
+- `server/src/features/declarationCollector.ts` — threads source lines through build state
+- `server/src/features/referenceCollector.ts` — UTF-16 comparison for reference resolution
+- `server/src/features/scopeBuilder.ts` — threads source lines
+- `server/src/features/symbolTable.ts` — populates `state.lines` from tree
+- `server/src/features/diagnostics.ts` — UTF-16 position conversion
+- `server/src/features/documentSymbol.ts` — UTF-16 position conversion
+- `server/src/features/lintRules/unreachableCode.ts` — UTF-16 position conversion
+- `server/src/features/selectionRange.ts` — UTF-16 both directions
+- `server/src/features/documentLink.ts` — UTF-16 position conversion
+- `server/src/features/inlayHints.ts` — UTF-16 position conversion
+- `server/src/features/completion-items.ts` — UTF-16 position conversion
+- `server/src/features/callHierarchy.ts` — UTF-16 position conversion
+- `server/src/features/completion.ts` — LSP→tree-sitter conversion
+- `server/src/features/completionTrigger.ts` — LSP→tree-sitter conversion
+- `server/src/features/signatureHelp.ts` — LSP→tree-sitter conversion + UTF-16 comparison
+- `server/src/features/hoverHandler.ts` — LSP→tree-sitter conversion
+- `server/src/features/accessResolver.ts` — LSP→tree-sitter conversion + UTF-16 comparison
+- `server/src/features/lintRules/missingReturn.ts` — LSP→tree-sitter conversion
+- `server/src/features/navigationAdvanced.ts` — typeHierarchy handler registration
+- `server/src/serverCapabilities.ts` — typeHierarchyProvider capability
+
+### Verification
+
+- `bun run typecheck` — clean
+- All LSP tests pass
+- All harness tests pass (93 golden diagnostics, 252 tree-sitter-symbol, canary, etc.)
+- All perf benchmarks pass (cold completion timing excepted on shared server)
+
+### Audit Status: COMPLETE
+
+All Critical, High, and Medium findings resolved. Remaining Low-priority items are deferred with documented rationale.

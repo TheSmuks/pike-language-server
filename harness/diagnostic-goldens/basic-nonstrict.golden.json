@@ -1,0 +1,71 @@
+{
+  "file": "corpus/files/basic-nonstrict.pike",
+  "parseCount": 0,
+  "lintCount": 4,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 12,
+          "character": 6
+        },
+        "end": {
+          "line": 12,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 9
+        },
+        "end": {
+          "line": 13,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 's' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 8
+        },
+        "end": {
+          "line": 14,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 17,
+          "character": 8
+        },
+        "end": {
+          "line": 17,
+          "character": 14
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'result' is unused"
+    }
+  ]
+}

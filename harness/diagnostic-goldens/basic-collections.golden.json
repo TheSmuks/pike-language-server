@@ -1,0 +1,231 @@
+{
+  "file": "corpus/files/basic-collections.pike",
+  "parseCount": 0,
+  "lintCount": 14,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 16
+        },
+        "end": {
+          "line": 9,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'strs' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 10,
+          "character": 15
+        },
+        "end": {
+          "line": 10,
+          "character": 24
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'mixed_arr' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 13
+        },
+        "end": {
+          "line": 13,
+          "character": 23
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'empty_ints' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 8
+        },
+        "end": {
+          "line": 14,
+          "character": 16
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'zero_arr' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 22
+        },
+        "end": {
+          "line": 18,
+          "character": 28
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'lookup' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 10
+        },
+        "end": {
+          "line": 19,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'empty_map' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 22,
+          "character": 19
+        },
+        "end": {
+          "line": 22,
+          "character": 23
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'tags' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 23,
+          "character": 16
+        },
+        "end": {
+          "line": 23,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'ids' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 24,
+          "character": 11
+        },
+        "end": {
+          "line": 24,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'empty_ms' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 27,
+          "character": 20
+        },
+        "end": {
+          "line": 27,
+          "character": 26
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'matrix' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 28,
+          "character": 29
+        },
+        "end": {
+          "line": 28,
+          "character": 33
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'data' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 31,
+          "character": 6
+        },
+        "end": {
+          "line": 31,
+          "character": 8
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'sz' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 13
+        },
+        "end": {
+          "line": 32,
+          "character": 21
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'appended' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 33,
+          "character": 22
+        },
+        "end": {
+          "line": 33,
+          "character": 28
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'merged' is unused"
+    }
+  ]
+}

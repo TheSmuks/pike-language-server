@@ -1,0 +1,87 @@
+{
+  "file": "corpus/files/mod-access.pike",
+  "parseCount": 0,
+  "lintCount": 5,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 39,
+          "character": 11
+        },
+        "end": {
+          "line": 39,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'n' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 42,
+          "character": 11
+        },
+        "end": {
+          "line": 42,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'd' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 45,
+          "character": 11
+        },
+        "end": {
+          "line": 45,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 's' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 54,
+          "character": 9
+        },
+        "end": {
+          "line": 54,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'name' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 55,
+          "character": 9
+        },
+        "end": {
+          "line": 55,
+          "character": 15
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'secret' is unused"
+    }
+  ]
+}

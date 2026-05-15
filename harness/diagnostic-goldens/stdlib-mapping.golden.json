@@ -1,0 +1,183 @@
+{
+  "file": "corpus/files/stdlib-mapping.pike",
+  "parseCount": 1,
+  "lintCount": 10,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 60,
+          "character": 29
+        },
+        "end": {
+          "line": 60,
+          "character": 30
+        }
+      },
+      "severity": 1,
+      "code": "P1000",
+      "source": "pike-lsp",
+      "message": "Parse error: unexpected '+'"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 14,
+          "character": 6
+        },
+        "end": {
+          "line": 14,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'val' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 22,
+          "character": 6
+        },
+        "end": {
+          "line": 22,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'removed' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 32,
+          "character": 16
+        },
+        "end": {
+          "line": 32,
+          "character": 20
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'keys' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 39,
+          "character": 6
+        },
+        "end": {
+          "line": 39,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'val' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 40,
+          "character": 6
+        },
+        "end": {
+          "line": 40,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'missing' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 46,
+          "character": 6
+        },
+        "end": {
+          "line": 46,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'size' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 47,
+          "character": 6
+        },
+        "end": {
+          "line": 47,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'has_x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 48,
+          "character": 6
+        },
+        "end": {
+          "line": 48,
+          "character": 11
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'has_z' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 53,
+          "character": 25
+        },
+        "end": {
+          "line": 53,
+          "character": 35
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'string_map' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 54,
+          "character": 22
+        },
+        "end": {
+          "line": 54,
+          "character": 29
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'obj_map' is unused"
+    }
+  ]
+}

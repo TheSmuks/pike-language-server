@@ -1,0 +1,23 @@
+{
+  "file": "corpus/files/basic-type-conversions.pike",
+  "parseCount": 0,
+  "lintCount": 1,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 34,
+          "character": 6
+        },
+        "end": {
+          "line": 34,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'parsed' is unused"
+    }
+  ]
+}

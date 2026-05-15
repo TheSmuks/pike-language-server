@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/err-arity-many.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 16,
+          "character": 18
+        },
+        "end": {
+          "line": 16,
+          "character": 19
+        }
+      },
+      "severity": 4,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 28,
+          "character": 6
+        },
+        "end": {
+          "line": 28,
+          "character": 7
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'f' is unused"
+    }
+  ]
+}

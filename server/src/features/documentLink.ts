@@ -22,6 +22,7 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { uriToPath } from "../util/uri";
+import { utf8ToUtf16 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // DocumentLink handler
@@ -64,10 +65,12 @@ async function produceDocumentLinks(
 ): Promise<DocumentLink[]> {
   const links: DocumentLink[] = [];
 
-  const tree = parse(doc.getText(), uri);
+  const source = doc.getText();
+  const tree = parse(source, uri);
   if (!tree?.rootNode) return [];
 
-  walkForLinks(tree.rootNode, uri, links, resolver, workspaceRoot);
+  const lines = source.split('\n');
+  walkForLinks(tree.rootNode, uri, links, resolver, workspaceRoot, lines);
 
   return links;
 }
@@ -81,27 +84,28 @@ function walkForLinks(
   links: DocumentLink[],
   resolver: ModuleResolver,
   workspaceRoot: string,
+  lines: string[],
 ): void {
   if (node.isError || node.isMissing) return;
 
   switch (node.type) {
     case "import_decl": {
-      collectImportLink(node, currentUri, links, resolver);
+      collectImportLink(node, currentUri, links, resolver, lines);
       break;
     }
     case "inherit_decl": {
-      collectInheritLink(node, currentUri, links, resolver, workspaceRoot);
+      collectInheritLink(node, currentUri, links, resolver, workspaceRoot, lines);
       break;
     }
     case "preproc_include": {
-      collectIncludeLink(node, currentUri, links, resolver, workspaceRoot);
+      collectIncludeLink(node, currentUri, links, resolver, workspaceRoot, lines);
       break;
     }
   }
 
   // Recurse into children.
   for (const child of node.children) {
-    walkForLinks(child, currentUri, links, resolver, workspaceRoot);
+    walkForLinks(child, currentUri, links, resolver, workspaceRoot, lines);
   }
 }
 
@@ -117,12 +121,13 @@ function collectImportLink(
   currentUri: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
+  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const moduleName = pathNode.text;
-  const range = toLinkRange(pathNode);
+  const range = toLinkRange(pathNode, lines);
 
   const cached = resolver.getCachedModule(moduleName, currentUri);
   if (cached && cached.uri) {
@@ -144,12 +149,13 @@ function collectInheritLink(
   links: DocumentLink[],
   resolver: ModuleResolver,
   workspaceRoot: string,
+  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const pathText = pathNode.text;
-  const range = toLinkRange(pathNode);
+  const range = toLinkRange(pathNode, lines);
 
   const isStringLiteral = pathNode.type === "string";
 
@@ -182,6 +188,7 @@ function collectIncludeLink(
   links: DocumentLink[],
   resolver: ModuleResolver,
   workspaceRoot: string,
+  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
@@ -191,7 +198,7 @@ function collectIncludeLink(
     const pathText = pathNode.text.replace(/^<|>$/g, "");
     if (pathText.length === 0) return;
 
-    const range = toLinkRange(pathNode);
+    const range = toLinkRange(pathNode, lines);
     for (const dir of resolver.includePaths) {
       const candidate = join(dir, pathText);
       if (existsSync(candidate)) {
@@ -207,7 +214,7 @@ function collectIncludeLink(
   const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
   if (pathText.length === 0) return;
 
-  const range = toLinkRange(pathNode);
+  const range = toLinkRange(pathNode, lines);
   const resolved = resolveRelativePath(pathText, currentUri, workspaceRoot);
   if (resolved) {
     links.push({ range, target: resolved });
@@ -271,15 +278,15 @@ interface LspRange {
 /**
  * Convert tree-sitter positions to LSP range for DocumentLink.
  */
-function toLinkRange(node: Node): LspRange {
+function toLinkRange(node: Node, lines: string[]): LspRange {
   return {
     start: {
       line: node.startPosition.row,
-      character: node.startPosition.column,
+      character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
     },
     end: {
       line: node.endPosition.row,
-      character: node.endPosition.column,
+      character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column),
     },
   };
 }

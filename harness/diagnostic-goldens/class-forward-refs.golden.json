@@ -1,0 +1,6 @@
+{
+  "file": "corpus/files/class-forward-refs.pike",
+  "parseCount": 0,
+  "lintCount": 0,
+  "diagnostics": []
+}

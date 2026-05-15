@@ -1,0 +1,39 @@
+{
+  "file": "corpus/files/rename-main.pike",
+  "parseCount": 0,
+  "lintCount": 2,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 8,
+          "character": 8
+        },
+        "end": {
+          "line": 8,
+          "character": 26
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module '\"rename-base.pike\"' is never used"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 8
+        },
+        "end": {
+          "line": 9,
+          "character": 27
+        }
+      },
+      "severity": 4,
+      "code": "P3005",
+      "source": "pike-lint",
+      "message": "Inherited module '\"rename-child.pike\"' is never used"
+    }
+  ]
+}

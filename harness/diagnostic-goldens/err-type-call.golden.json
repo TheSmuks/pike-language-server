@@ -1,0 +1,71 @@
+{
+  "file": "corpus/files/err-type-call.pike",
+  "parseCount": 0,
+  "lintCount": 4,
+  "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 18,
+          "character": 9
+        },
+        "end": {
+          "line": 18,
+          "character": 12
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'msg' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 19,
+          "character": 6
+        },
+        "end": {
+          "line": 19,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'val' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 22,
+          "character": 6
+        },
+        "end": {
+          "line": 22,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'bad' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 25,
+          "character": 9
+        },
+        "end": {
+          "line": 25,
+          "character": 13
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'bad2' is unused"
+    }
+  ]
+}
