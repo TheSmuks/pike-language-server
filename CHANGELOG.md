@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     system treats `module.pmod` as the implicit parent of all files in the
     same directory module.
 
+## [0.6.5] — 2026-05-15
+
+### Fixed
+
+  - Unreachable code lint (P3003) no longer flags `break` after `return` or
+    `continue` in a switch case segment. Break-after-return is a common
+    defensive pattern (prevents accidental fallthrough if return is later
+    removed) and is harmless.
+  - Unreachable code lint (P3003) no longer flags comments after a terminator.
+    Comments are not executable code and were incorrectly included in the
+    named-children scan. Affects both regular blocks and switch case segments.
+
 ## [Unreleased]
 
 ## [0.6.3] — 2026-05-15
@@ -26,8 +38,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     clauses in a `switch` statement after a `return` or `break`. Each case
     is an independent control-flow entry point. Unreachable code within a
     single case segment is still correctly flagged.
-
-## [Unreleased]
 
 ## [0.6.2] — 2026-05-15
 

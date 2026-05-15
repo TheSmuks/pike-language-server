@@ -30,6 +30,13 @@ const TERMINATOR_TYPES = new Set([
   "continue_statement",
 ]);
 
+// Node types that are not executable code and should never be flagged.
+const COMMENT_TYPES = new Set([
+  "line_comment",
+  "block_comment",
+  "autodoc_comment",
+]);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -94,6 +101,9 @@ function checkBlock(
   let terminatorLine = -1;
 
   for (const child of children) {
+    // Comments are not executable code — never flag them.
+    if (COMMENT_TYPES.has(child.type)) continue;
+
     if (foundTerminator) {
       // This statement is unreachable.
       diagnostics.push(
@@ -164,11 +174,15 @@ function checkSwitchBlock(
   for (const segment of segments) {
     let foundTerminator = false;
     for (const child of segment) {
+      // Comments are not executable code — never flag them.
+      if (COMMENT_TYPES.has(child.type)) continue;
+
       if (foundTerminator) {
         // Still flag unreachable code within a single case segment.
         // E.g.: `case 1: return 1; foo();` — foo() is unreachable.
-        // But skip case/default entries themselves.
-        if (!CASE_ENTRY_TYPES.has(child.type)) {
+        // But skip case/default entries and break statements — break after
+        // return/continue is a common defensive pattern in switch cases.
+        if (!CASE_ENTRY_TYPES.has(child.type) && child.type !== "break_statement") {
           diagnostics.push(
             Diagnostic.create(
               Range.create(
