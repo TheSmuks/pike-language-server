@@ -34,6 +34,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - Selection range tests: 12 tests for `getSelectionRange()` covering basic
+    cases, nested constructs, deduplication, and edge cases (T4.1).
+  - Call hierarchy tests: 11 tests for prepare/incoming/outgoing call
+    hierarchy. Documents known bug: `collectCallExpressions` looks for
+    `call_expression` but tree-sitter-pike produces `postfix_expr` nodes (T4.2).
+
+### Changed
+
+  - Auto-import completion now uses prefix-indexed binary search
+    (`getAutoImportByPrefix`) instead of O(n) linear scan over all stdlib
+    entries. Per-keystroke filtering is O(log n + k) where k is the number
+    of matching symbols (X3.6).
+
 ## [0.6.4] — 2026-05-15
 
 ### Added
