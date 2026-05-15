@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.1] — 2026-05-15
 
+### Fixed
+
+  - Hover on cross-file inherited members (e.g. `d->speak()` where `speak`
+    comes from an inherited class in another file) now resolves correctly.
+    The reference position matcher was using exact character match instead
+    of range-based matching, so hovering anywhere other than the start of
+    the identifier would fail.
+  - Cross-file hover range now highlights the identifier in the requesting
+    document instead of pointing to the declaration in the target file.
+
 ### Added
 
   - Function/method completion now inserts argument snippets with tab stops.

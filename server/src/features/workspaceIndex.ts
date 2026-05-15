@@ -499,10 +499,14 @@ export class WorkspaceIndex {
       }
     }
 
-    // Check if a reference resolves to null (unresolved within file)
-    // This might be a cross-file reference through inheritance or import
+    // Check if a reference resolves to null (unresolved within file).
+    // This might be a cross-file reference through inheritance or import.
+    // Use range-based matching: the hover position may be anywhere within
+    // the identifier (ref.loc is the start, name.length gives the extent).
     for (const ref of table.references) {
-      if (ref.loc.line === line && ref.loc.character === character && ref.resolvesTo === null) {
+      if (ref.resolvesTo === null && ref.loc.line === line &&
+          character >= ref.loc.character &&
+          character < ref.loc.character + ref.name.length) {
         return this.resolveUnresolvedReference(ref, table, uri);
       }
     }
