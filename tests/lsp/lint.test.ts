@@ -266,6 +266,59 @@ void foo() {
     const { unreachable } = buildAndLint(src);
     expect(unreachable).toHaveLength(0);
   });
+
+  test("does NOT flag subsequent cases in switch after return", () => {
+    const src = `
+int classify(int x) {
+    switch (x) {
+        case 1:
+            return 1;
+        case 2:
+            return 2;
+        default:
+            return 0;
+    }
+}
+`;
+    const { unreachable } = buildAndLint(src);
+    expect(unreachable).toHaveLength(0);
+  });
+
+  test("does NOT flag subsequent cases in switch after break", () => {
+    const src = `
+void classify(int x) {
+    switch (x) {
+        case 1:
+            write(\"one\");
+            break;
+        case 2:
+            write(\"two\");
+            break;
+        default:
+            write(\"other\");
+    }
+}
+`;
+    const { unreachable } = buildAndLint(src);
+    expect(unreachable).toHaveLength(0);
+  });
+
+  test("flags unreachable code WITHIN a single case segment", () => {
+    const src = `
+int classify(int x) {
+    switch (x) {
+        case 1:
+            return 1;
+            write(\"unreachable\");
+        default:
+            return 0;
+    }
+}
+`;
+    const { unreachable } = buildAndLint(src);
+    expect(unreachable.length).toBeGreaterThanOrEqual(1);
+    expect(unreachable[0].code).toBe(CODE_UNREACHABLE);
+  });
 });
 
 // ===========================================================================
