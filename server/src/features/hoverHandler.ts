@@ -141,6 +141,8 @@ function getSource(uri: string, documents: TextDocuments<TextDocument>): string 
 function crossFileHover(
   crossFile: { uri: string; decl: Declaration },
   ctx: HoverContext,
+  /** Original hover request position — used for the response range. */
+  requestPosition?: { line: number; character: number },
 ): Hover | null {
   const decl = crossFile.decl;
 
@@ -151,7 +153,18 @@ function crossFileHover(
     return fileLevelHover(crossFile.uri, decl.name, ctx);
   }
 
-  return formatHover(declForHover(decl, crossFile.uri, ctx));
+  const info = declForHover(decl, crossFile.uri, ctx);
+  if (!info) return null;
+
+  // For cross-file hovers, the range should highlight the identifier in
+  // the requesting document (where the user hovered), not the target
+  // declaration's position in a different file.
+  if (requestPosition) {
+    info.line = requestPosition.line;
+    info.character = requestPosition.character;
+  }
+
+  return formatHover(info);
 }
 
 /**
@@ -468,7 +481,7 @@ export function registerHoverHandler(
         params.position.character,
       );
       if (crossFile) {
-        return crossFileHover(crossFile, ctx);
+        return crossFileHover(crossFile, ctx, params.position);
       }
 
       // Try arrow/dot access resolution for hover
@@ -540,7 +553,7 @@ export function registerHoverHandler(
         params.position.character,
       );
       if (crossFile) {
-        return crossFileHover(crossFile, ctx);
+        return crossFileHover(crossFile, ctx, params.position);
       }
     }
 
