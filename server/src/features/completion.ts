@@ -64,7 +64,7 @@ export async function getCompletions(
   }
 
   // Determine completion context
-  const triggerContext = detectTriggerContext(node, line, character, tree);
+  const triggerContext = detectTriggerContext(node, line, character, tree, ctx.source.split("\n")[line] ?? "");
 
   let items: CompletionItem[];
 

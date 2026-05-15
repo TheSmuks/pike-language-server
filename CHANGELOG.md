@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
 
+## [0.6.6] — 2026-05-15
+
+### Fixed
+
+  - Rename now returns a descriptive `ResponseError` instead of silent `null`
+    when no renamable symbol is at the given position or the new name matches
+    the old name.
+  - Autodoc renderer sanitizes HTML entities (`<`, `>`, `&`) and escapes
+    markdown metacharacters in inline content to prevent injection from
+    user-written Pike doc comments.
+
+### Changed
+
+  - `implementationProvider` and `diagnosticProvider` capabilities are now
+    declared in the server's initialize response, enabling clients to discover
+    these features correctly.
+  - `safeParse()` in `DiagnosticManager` now passes the document URI to the
+    parser cache, avoiding redundant re-parses on every diagnostic cycle.
+  - PikeWorker priority queue replaced with three FIFO sub-queues (interactive,
+    normal, background). Dequeue is now O(1) instead of O(n) linear scan.
+
+### Added
+
+  - CodeLens provider tests: 7 tests covering reference count lenses, self-
+    reference exclusion, singular/plural titles, and mixed declaration scenarios.
+
+## [Unreleased]
+
 ## [0.6.4] — 2026-05-15
 
 ### Added

@@ -150,6 +150,27 @@ export function clearTreeCache(): void {
   treeCache.clear();
 }
 
+/**
+ * Return cache statistics for memory monitoring.
+ */
+export function getTreeCacheStats(): { size: number; bytes: number } {
+  return { size: treeCache.size, bytes: treeCache.bytes };
+}
+
+/**
+ * Evict the oldest `count` entries from the tree cache.
+ * Returns the number of entries actually evicted.
+ */
+export function evictTreeCacheOldest(count: number): number {
+  let evicted = 0;
+  for (const [key] of treeCache.entries()) {
+    if (evicted >= count) break;
+    treeCache.delete(key);
+    evicted++;
+  }
+  return evicted;
+}
+
 export function getLanguage(): Language {
   if (!language) throw new Error('Language not loaded — call initParser() first');
   return language;

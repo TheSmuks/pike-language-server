@@ -61,8 +61,9 @@ export class ModuleResolver {
   private readonly workspaceRoot: string;
   private readonly pikePaths: PikePaths;
   private readonly pikeVersion: { major: number; minor: number } | null;
-  /** Cache: module path → resolved URI. */
+  /** Cache: module path → resolved URI. Bounded to prevent unbounded growth on large workspaces. */
   private readonly cache = new Map<string, ResolveResult | null>();
+  private static readonly CACHE_MAX_ENTRIES = 2000;
 
   constructor(options: ModuleResolverOptions) {
     this.workspaceRoot = fileURLToPath(options.workspaceRoot);
@@ -76,6 +77,28 @@ export class ModuleResolver {
   /** Clear the resolution cache. */
   clearCache(): void {
     this.cache.clear();
+  }
+
+  /**
+   * Security boundary check: reject paths outside the workspace and Pike system paths.
+   * Prevents path traversal via `inherit "/etc/passwd"` or `inherit "../../../etc/shadow"`.
+   * Returns the normalized path if allowed, null if outside boundaries.
+   */
+  private normalizeAndCheck(resolvedPath: string): string | null {
+    const normalized = resolve(resolvedPath);
+    if (normalized.startsWith(this.workspaceRoot)) return normalized;
+    if (this.pikePaths.pikeHome && normalized.startsWith(this.pikePaths.pikeHome)) return normalized;
+    // Also allow any declared module/include/program paths
+    for (const allowed of this.pikePaths.modulePaths) {
+      if (normalized.startsWith(allowed)) return normalized;
+    }
+    for (const allowed of this.pikePaths.includePaths) {
+      if (normalized.startsWith(allowed)) return normalized;
+    }
+    for (const allowed of this.pikePaths.programPaths) {
+      if (normalized.startsWith(allowed)) return normalized;
+    }
+    return null;
   }
 
   /**
@@ -106,6 +129,7 @@ export class ModuleResolver {
 
     const result = await this.doResolveModule(modulePath, currentFile);
     this.cache.set(cacheKey, result);
+    this.evictIfNeeded();
     return result;
   }
 
@@ -137,6 +161,7 @@ export class ModuleResolver {
     }
 
     this.cache.set(cacheKey, result);
+    this.evictIfNeeded();
     return result;
   }
 
@@ -211,32 +236,45 @@ export class ModuleResolver {
 
     let candidate: string;
     if (rawPath.startsWith("/")) {
-      // Absolute path
-      candidate = rawPath;
+      // Absolute path — normalize and check boundary
+      const checked = this.normalizeAndCheck(rawPath);
+      if (!checked) return null;
+      candidate = checked;
     } else if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
-      // Relative to current file
-      candidate = resolve(currentDir, rawPath);
+      // Relative to current file — normalize and check boundary
+      const resolved = resolve(currentDir, rawPath);
+      const checked = this.normalizeAndCheck(resolved);
+      if (!checked) return null;
+      candidate = checked;
     } else {
       // Pike's cast_to_program: search current dir first, then program paths
       const relativeToDir = resolve(currentDir, rawPath);
-      if (await pathExists(relativeToDir)) {
-        return { uri: pathToFileURL(relativeToDir).href, source: "relative" };
-      }
-      const withExtDir = await this.findWithExtension(relativeToDir);
-      if (withExtDir) {
-        return { uri: pathToFileURL(withExtDir).href, source: "relative" };
+      const checkedRelative = this.normalizeAndCheck(relativeToDir);
+      if (checkedRelative) {
+        if (await pathExists(checkedRelative)) {
+          return { uri: pathToFileURL(checkedRelative).href, source: "relative" };
+        }
+        const withExtDir = await this.findWithExtension(checkedRelative);
+        if (withExtDir) {
+          return { uri: pathToFileURL(withExtDir).href, source: "relative" };
+        }
       }
 
       // Then search program paths
       for (const progPath of this.pikePaths.programPaths) {
         const full = resolve(progPath, rawPath);
-        if (await pathExists(full)) {
-          return { uri: pathToFileURL(full).href, source: "workspace_program" };
+        const checked = this.normalizeAndCheck(full);
+        if (!checked) continue;
+        if (await pathExists(checked)) {
+          return { uri: pathToFileURL(checked).href, source: "workspace_program" };
         }
       }
       // Try with extensions
       for (const progPath of this.pikePaths.programPaths) {
-        const found = await this.findWithExtension(resolve(progPath, rawPath));
+        const full = resolve(progPath, rawPath);
+        const checked = this.normalizeAndCheck(full);
+        if (!checked) continue;
+        const found = await this.findWithExtension(checked);
         if (found) {
           return { uri: pathToFileURL(found).href, source: "workspace_program" };
         }
@@ -304,6 +342,9 @@ export class ModuleResolver {
    * Priority: .pmod > .pike (same as Pike, minus .so).
    */
   private async findModuleInPath(name: string, searchPath: string): Promise<string | null> {
+    // Validate the module name doesn't contain path separators or traversal.
+    if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+
     // 1. Directory module: name.pmod/module.pmod
     const dirPath = join(searchPath, `${name}.pmod`);
     if (await isDir(dirPath)) {
@@ -393,6 +434,23 @@ export class ModuleResolver {
     }
 
     return null;
+  }
+
+  /**
+   * Evict oldest cache entries when the cache exceeds the maximum size.
+   * Evicts 25% of entries to amortize the cost across multiple insertions.
+   */
+  private evictIfNeeded(): void {
+    if (this.cache.size <= ModuleResolver.CACHE_MAX_ENTRIES) return;
+
+    const evictCount = Math.ceil(ModuleResolver.CACHE_MAX_ENTRIES * 0.25);
+    // Map iteration order is insertion order — oldest entries come first.
+    let evicted = 0;
+    for (const key of this.cache.keys()) {
+      if (evicted >= evictCount) break;
+      this.cache.delete(key);
+      evicted++;
+    }
   }
 }
 
