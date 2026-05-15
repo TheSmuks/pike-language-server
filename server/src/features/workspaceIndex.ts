@@ -808,6 +808,21 @@ export class WorkspaceIndex {
     const root = tree.rootNode;
     if (!root) return null;
     const text = root.text;
+
+    // #pike __REAL_VERSION__ — resolve to the running Pike version derived
+    // from pikeHome (e.g. /usr/local/pike/8.0.1116 → major=8, minor=0).
+    // __REAL_VERSION__ is a Pike preprocessor macro that expands to the
+    // running Pike version; the regex below only matches numeric versions.
+    if (text.match(/#pike\s+__REAL_VERSION__/)) {
+      const homeVersion = this.pikePaths.pikeHome.match(/(\d+)\.(\d+)/);
+      if (homeVersion) {
+        return {
+          major: parseInt(homeVersion[1], 10),
+          minor: parseInt(homeVersion[2], 10),
+        };
+      }
+    }
+
     const match = text.match(/#pike\s+(\d+)(?:\.(\d+))?/);
     if (!match) return null;
 

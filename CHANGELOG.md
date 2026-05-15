@@ -3,8 +3,43 @@
 All notable changes to the Pike Language Server project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+
+## [0.6.1] — 2026-05-15
+
+### Added
+
+  - Function/method completion now inserts argument snippets with tab stops.
+    Selecting a completion item fills in `(arg1, arg2)` placeholders for
+    local functions, predef builtins, stdlib members, and cross-file imports.
+
+  - Constructor completion inserts `create()` parameter snippets when
+    selecting a class name from the completion list.
+
+  - Typing `(` after a function name triggers argument-placeholder completion.
+    Resolves the callee against local scope, predef builtins, cross-file
+    imports, and stdlib index, then inserts a snippet with the matching
+    signature. Preselected for immediate TAB acceptance.
+
+  - `(` added as completion trigger character.
+
+### Fixed
+
+  - Completion crash when editing stdlib files — tree-sitter parse cache
+    evicted during async gap caused null dereference in `findIdentifierPrefixRange`.
+    Fix: extract prefix range synchronously before the first await.
+
+  - `#pike __REAL_VERSION__` not recognized — `parsePikeVersion` regex only
+    matched numeric version directives. Now substitutes `__REAL_VERSION__` with
+    the detected Pike binary version at runtime.
+
+  - Signature help not working for constructors and during active typing —
+    `findEnclosingCall` required a closing `)`, so incomplete calls were never
+    matched. Improved callee extraction to handle ERROR nodes and arrow/dot
+    operators.
+
+## [Unreleased]
 
 ## [0.6.0] — 2026-05-14
 
