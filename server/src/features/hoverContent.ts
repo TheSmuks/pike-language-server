@@ -103,6 +103,7 @@ export function getSource(uri: string, documents: TextDocuments<TextDocument>): 
     try {
       return readFileSync(uriToPath(uri), "utf8");
     } catch {
+      // Disk/permission errors — fall through to return null.
       return null;
     }
   }

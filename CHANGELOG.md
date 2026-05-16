@@ -6,31 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
 
-## [0.6.6] — 2026-05-15
-
-### Added
-
-  - CodeLens provider tests: 7 tests covering reference count lenses, self-
-    reference exclusion, singular/plural titles, and mixed declaration scenarios.
-
-### Changed
-
-  - `implementationProvider` and `diagnosticProvider` capabilities are now
-    declared in the server's initialize response, enabling clients to discover
-    these features correctly.
-  - `safeParse()` in `DiagnosticManager` now passes the document URI to the
-    parser cache, avoiding redundant re-parses on every diagnostic cycle.
-  - PikeWorker priority queue replaced with three FIFO sub-queues (interactive,
-    normal, background). Dequeue is now O(1) instead of O(n) linear scan.
+## [Unreleased]
 
 ### Fixed
 
-  - Rename now returns a descriptive `ResponseError` instead of silent `null`
-    when no renamable symbol is at the given position or the new name matches
-    the old name.
-  - Autodoc renderer sanitizes HTML entities (`<`, `>`, `&`) and escapes
-    markdown metacharacters in inline content to prevent injection from
-    user-written Pike doc comments.
+  - Architecture audit iteration 2 remediation: 3 Critical, 9 High, 18 Medium,
+    10 Low findings resolved across server, client, and CI.
+  - **C1**: `createPikeServer` split from 417-line monolith into 5 focused
+    modules (`serverContext`, `serverInitHandler`, `serverFileWatchHandler`,
+    `serverShutdownHandler`, `serverDocumentHandler`).
+  - **C2**: Silent cache-save catch now logs via `logWarn()`.
+  - **C3**: Client restart notification name fixed from `pike/serverLog` to
+    `pike/log`; param shape aligned with server (`{ level, lines }`).
+  - **H1–H2**: Non-null `child(0)!` assertions replaced with null guards in
+    diagnostics and reference collector.
+  - **H3**: `rootNode.text` eliminated from 8 of 10 hot paths (remaining 2 are
+    test-only fallbacks with explicit `source` override).
+  - **H4**: `require()` calls replaced with static ES imports in code actions.
+  - **H5–H8, M17**: 15+ function-length violations split across 7 files.
+    New `completionTriggerResolve.ts` extracted from `completionTrigger.ts`.
+  - **H9**: CHANGELOG version ordering fixed to follow Keep a Changelog.
+  - **M4–M6**: Bare `as` casts replaced with runtime validation
+    (`staticDataValidation.ts`, `codeActionKinds.ts`).
+  - **M7–M8**: `q.shift()!` / `queue.shift()!` replaced with null guards.
+  - **M9–M10**: Silent catch blocks improved with descriptive comments.
+  - **M11**: Client restart handler param shape fixed to match server output.
+  - **M12–M16**: CI/build fixes — pike-fmt job added, esbuild path corrected,
+    VSIX filename format fixed, bash prefix added.
+  - **L2, L4, L6–L8**: `as never` casts replaced, zero-byte `=` file deleted,
+    fetch-depth fixed, @types/node aligned, CHANGELOG ordering corrected.
+  - **L9**: `known-limitations.md` restructured into Current/Resolved sections.
+
+### Changed
+
+  - Audit documentation restructured into `docs/audits/` with per-iteration
+    files (`iteration-1.md`, `iteration-2.md`) replacing monolithic
+    `architecture-audit.md`.
 
 ## [0.7.0] — 2026-05-16
 
@@ -102,7 +113,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `workspaceIndex.ts` re-export — bun's ESM loader crashes on runtime
     re-export of type-only symbols.
 
-## [Unreleased]
+## [0.6.6] — 2026-05-15
+
+### Added
+
+  - CodeLens provider tests: 7 tests covering reference count lenses, self-
+    reference exclusion, singular/plural titles, and mixed declaration scenarios.
+
+### Changed
+
+  - `implementationProvider` and `diagnosticProvider` capabilities are now
+    declared in the server's initialize response, enabling clients to discover
+    these features correctly.
+  - `safeParse()` in `DiagnosticManager` now passes the document URI to the
+    parser cache, avoiding redundant re-parses on every diagnostic cycle.
+  - PikeWorker priority queue replaced with three FIFO sub-queues (interactive,
+    normal, background). Dequeue is now O(1) instead of O(n) linear scan.
+
+### Fixed
+
+  - Rename now returns a descriptive `ResponseError` instead of silent `null`
+    when no renamable symbol is at the given position or the new name matches
+    the old name.
+  - Autodoc renderer sanitizes HTML entities (`<`, `>`, `&`) and escapes
+    markdown metacharacters in inline content to prevent injection from
+    user-written Pike doc comments.
 
 ## [0.6.4] — 2026-05-15
 

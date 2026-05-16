@@ -51,13 +51,15 @@ function narrowErrorRange(node: Node, lines: string[]): Range {
 
   // Single child: use just that child's range.
   if (childCount === 1) {
-    const child = node.child(0)!;
+    const child = node.child(0);
+    if (!child) return Range.create(toPosition(node.startPosition, lines), toPosition(node.endPosition, lines));
     return Range.create(toPosition(child.startPosition, lines), toPosition(child.endPosition, lines));
   }
 
   // Multiple children: find the first non-padding token.
   for (let i = 0; i < childCount; i++) {
-    const child = node.child(i)!;
+    const child = node.child(i);
+    if (!child) continue;
     const type = child.type;
     // Skip whitespace-only and padding nodes.
     if (type === 'ERROR') continue; // Don't nest.
@@ -150,8 +152,7 @@ function describeError(node: Node, unexpected: string): string {
   }
 }
 
-export function getParseDiagnostics(tree: Tree): Diagnostic[] {
-  const lines = tree.rootNode.text.split('\n');
+export function getParseDiagnostics(tree: Tree, lines: string[]): Diagnostic[] {
   const errorNodes = findErrorNodes(tree.rootNode);
   return errorNodes.map((node, index) => {
     const child = node.lastChild;

@@ -34,242 +34,231 @@ export function registerDocumentFeatureHandlers(
   connection: Connection,
   ctx: NavigationContext,
 ): void {
-  // -----------------------------------------------------------------------
-  // documentSymbol
-  // -----------------------------------------------------------------------
+  connection.onDocumentSymbol((params, token) =>
+    handleDocumentSymbol(connection, ctx, params, token));
 
-  connection.onDocumentSymbol(async (params, token: CancellationToken) => {
-    if (token.isCancellationRequested) return [];
-    const doc = ctx.documents.get(params.textDocument.uri);
-    if (!doc) return [];
+  connection.onRequest("textDocument/selectionRange", (params, token) =>
+    handleSelectionRange(ctx, params, token));
 
-    try {
-      const tree = parse(doc.getText(), doc.uri);
+  connection.onRequest("textDocument/semanticTokens/full", (params, token) =>
+    handleSemanticTokens(ctx, params, token));
 
-      // Return partial symbols — never crash on parse errors.
-      // Note: parse diagnostics are handled by the diagnostic manager on didChange.
-      return getDocumentSymbols(tree);
-    } catch (err) {
-      logError(connection, ErrorCategory.Parse, "navigationHandler.handleDocumentSymbol", err);
-      return [];
-    }
-  });
+  connection.onRequest("textDocument/diagnostic", (params, token) =>
+    handleDiagnostic(connection, ctx, params, token));
 
-  // -----------------------------------------------------------------------
-  // textDocument/selectionRange — shrink/expand selection
-  // -----------------------------------------------------------------------
+  connection.onDocumentHighlight((params, token) =>
+    handleDocumentHighlight(ctx, params, token));
 
-  connection.onRequest(
-    "textDocument/selectionRange",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return null;
-      const doc = ctx.documents.get(params.textDocument.uri);
-      if (!doc) return null;
+  connection.onRequest("textDocument/foldingRange", (params, token) =>
+    handleFoldingRange(ctx, params, token));
 
-      // selectionRange supports multiple positions; handle each
-      const results = [];
-      for (const pos of params.positions) {
-        if (token.isCancellationRequested) return results;
-        const tree = parse(doc.getText(), doc.uri);
-        const range = getSelectionRange(tree, pos.line, pos.character);
-        results.push(range);
-      }
-      return results;
-    },
-  );
+  connection.onRequest("textDocument/signatureHelp", (params, token) =>
+    handleSignatureHelp(ctx, params, token));
 
-  // -----------------------------------------------------------------------
-  // textDocument/semanticTokens/full
-  // -----------------------------------------------------------------------
+  connection.onRequest("textDocument/inlayHint", (params, token) =>
+    handleInlayHint(ctx, params, token));
+}
 
-  connection.onRequest(
-    "textDocument/semanticTokens/full",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return { data: [] };
-      const doc = ctx.documents.get(params.textDocument.uri);
-      if (!doc) return { data: [] };
+/** Handle textDocument/documentSymbol requests. */
+async function handleDocumentSymbol(
+  connection: Connection,
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return [];
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return [];
 
-      const table = await ctx.getSymbolTable(params.textDocument.uri);
-      if (!table) return { data: [] };
+  try {
+    const source = doc.getText();
+    const tree = parse(source, doc.uri);
+    const lines = source.split('\n');
+    return getDocumentSymbols(tree, lines);
+  } catch (err) {
+    logError(connection, ErrorCategory.Parse, "navigationHandler.handleDocumentSymbol", err);
+    return [];
+  }
+}
 
-      const tokens = produceSemanticTokens(table);
-      const data = deltaEncodeTokens(tokens);
+/** Handle textDocument/selectionRange requests. */
+async function handleSelectionRange(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; positions: Array<{ line: number; character: number }> },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return null;
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return null;
 
-      return { data };
-    },
-  );
-
-  // -----------------------------------------------------------------------
-  // textDocument/diagnostic (pull diagnostics — diagnosticProvider capability)
-  // -----------------------------------------------------------------------
-
-  connection.onRequest(
-    "textDocument/diagnostic",
-    async (params: { textDocument: { uri: string } }, token: CancellationToken) => {
-      if (token.isCancellationRequested) return { kind: "full", items: [] };
-      const doc = ctx.documents.get(params.textDocument.uri);
-      if (!doc) return { kind: "full", items: [] };
-
-      try {
-        const tree = parse(doc.getText(), params.textDocument.uri);
-        const diagnostics = getParseDiagnostics(tree);
-        return { kind: "full", items: diagnostics };
-      } catch (err) {
-        logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleDiagnostics", err);
-        return { kind: "full", items: [] };
-      }
-    },
-  );
-
-  // -----------------------------------------------------------------------
-  // textDocument/documentHighlight (US-015)
-  // -----------------------------------------------------------------------
-
-  connection.onDocumentHighlight(async (params, token: CancellationToken) => {
-    if (token.isCancellationRequested) return null;
-    const table = await ctx.getSymbolTable(params.textDocument.uri);
-    if (!table || token.isCancellationRequested) return null;
-
-    const refs = getReferencesTo(
-      table,
-      params.position.line,
-      params.position.character,
-    );
-
-    if (refs.length === 0) return null;
-
-    // Map references to DocumentHighlight
-    // Declaration sites → Write, reference sites → Read
-    // Find the target declaration to distinguish
-    const targetDecl = getDefinitionAt(
-      table,
-      params.position.line,
-      params.position.character,
-    );
-
-    const highlights: DocumentHighlight[] = [];
-
-    // Add the declaration itself as a Write highlight
-    if (targetDecl) {
-      highlights.push({
-        range: {
-          start: {
-            line: targetDecl.nameRange.start.line,
-            character: targetDecl.nameRange.start.character,
-          },
-          end: {
-            line: targetDecl.nameRange.end.line,
-            character: targetDecl.nameRange.end.character,
-          },
-        },
-        kind: DocumentHighlightKind.Write,
-      });
-    }
-
-    // Add all references as Read highlights
-    for (const ref of refs) {
-      // Skip if same position as declaration (already added as Write)
-      if (
-        targetDecl &&
-        ref.loc.line === targetDecl.nameRange.start.line &&
-        ref.loc.character === targetDecl.nameRange.start.character
-      ) {
-        continue;
-      }
-
-      highlights.push({
-        range: {
-          start: { line: ref.loc.line, character: ref.loc.character },
-          end: {
-            line: ref.loc.line,
-            character: ref.loc.character + ref.name.length,
-          },
-        },
-        kind: DocumentHighlightKind.Read,
-      });
-    }
-
-    return highlights.length > 0 ? highlights : null;
-  });
-
-  // -----------------------------------------------------------------------
-  // textDocument/foldingRange (US-016)
-  // -----------------------------------------------------------------------
-
-  connection.onRequest("textDocument/foldingRange", async (params, token: CancellationToken) => {
-    if (token.isCancellationRequested) return [];
-    const doc = ctx.documents.get(params.textDocument.uri);
-    if (!doc) return [];
-
+  const results = [];
+  for (const pos of params.positions) {
+    if (token.isCancellationRequested) return results;
     const tree = parse(doc.getText(), doc.uri);
-    if (!tree) return [];
+    const range = getSelectionRange(tree, pos.line, pos.character);
+    results.push(range);
+  }
+  return results;
+}
 
-    return produceFoldingRanges(tree);
-  });
+/** Handle textDocument/semanticTokens/full requests. */
+async function handleSemanticTokens(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return { data: [] };
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return { data: [] };
 
-  // -----------------------------------------------------------------------
-  // textDocument/signatureHelp (US-017)
-  // -----------------------------------------------------------------------
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table) return { data: [] };
 
-  connection.onRequest("textDocument/signatureHelp", async (params, token: CancellationToken) => {
-    if (token.isCancellationRequested) return null;
-    const doc = ctx.documents.get(params.textDocument.uri);
-    if (!doc) return null;
+  const tokens = produceSemanticTokens(table);
+  const data = deltaEncodeTokens(tokens);
+  return { data };
+}
 
-    const table = await ctx.getSymbolTable(params.textDocument.uri);
-    if (!table || token.isCancellationRequested) return null;
+/** Handle textDocument/diagnostic (pull diagnostics) requests. */
+async function handleDiagnostic(
+  connection: Connection,
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return { kind: "full", items: [] };
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return { kind: "full", items: [] };
 
-    const tree = parse(doc.getText(), doc.uri);
-    if (!tree) return null;
+  try {
+    const source = doc.getText();
+    const tree = parse(source, params.textDocument.uri);
+    const diagnostics = getParseDiagnostics(tree, source.split('\n'));
+    return { kind: "full", items: diagnostics };
+  } catch (err) {
+    logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleDiagnostics", err);
+    return { kind: "full", items: [] };
+  }
+}
 
-    return produceSignatureHelp(
-      tree,
-      table,
-      params.position.line,
-      params.position.character,
-      ctx.stdlibIndex,
-      {
-        table,
-        uri: params.textDocument.uri,
-        index: ctx.index,
-        stdlibIndex: ctx.stdlibIndex,
-        typeInferrer: ctx.worker
-          ? async (varName: string) => {
-              try {
-                const result = await ctx.worker.typeof_(doc.uri, varName);
-                return result.type ?? null;
-              } catch {
-                return null;
-              }
-            }
-          : undefined,
+/** Handle textDocument/documentHighlight requests. */
+async function handleDocumentHighlight(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return null;
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table || token.isCancellationRequested) return null;
+
+  const refs = getReferencesTo(table, params.position.line, params.position.character);
+  if (refs.length === 0) return null;
+
+  const targetDecl = getDefinitionAt(table, params.position.line, params.position.character);
+  return buildDocumentHighlights(targetDecl, refs);
+}
+
+/** Build DocumentHighlight[] from references and optional declaration. */
+function buildDocumentHighlights(
+  targetDecl: import("./symbolTable").Declaration | null,
+  refs: Array<{ loc: { line: number; character: number }; name: string }>,
+): DocumentHighlight[] | null {
+  const highlights: DocumentHighlight[] = [];
+
+  if (targetDecl) {
+    highlights.push({
+      range: {
+        start: { line: targetDecl.nameRange.start.line, character: targetDecl.nameRange.start.character },
+        end: { line: targetDecl.nameRange.end.line, character: targetDecl.nameRange.end.character },
       },
-    );
-  });
+      kind: DocumentHighlightKind.Write,
+    });
+  }
 
-  // -----------------------------------------------------------------------
-  // textDocument/inlayHint (G1)
-  // -----------------------------------------------------------------------
+  for (const ref of refs) {
+    if (targetDecl && ref.loc.line === targetDecl.nameRange.start.line &&
+        ref.loc.character === targetDecl.nameRange.start.character) {
+      continue;
+    }
+    highlights.push({
+      range: {
+        start: { line: ref.loc.line, character: ref.loc.character },
+        end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+      },
+      kind: DocumentHighlightKind.Read,
+    });
+  }
 
-  connection.onRequest(
-    "textDocument/inlayHint",
-    async (params: { textDocument: { uri: string }; range: { start: Position; end: Position } }, token: CancellationToken) => {
-      if (token.isCancellationRequested) return [];
+  return highlights.length > 0 ? highlights : null;
+}
 
-      const doc = ctx.documents.get(params.textDocument.uri);
-      if (!doc) return [];
+/** Handle textDocument/foldingRange requests. */
+async function handleFoldingRange(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return [];
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return [];
 
-      const table = await ctx.getSymbolTable(params.textDocument.uri);
-      if (!table || token.isCancellationRequested) return [];
+  const tree = parse(doc.getText(), doc.uri);
+  if (!tree) return [];
+  return produceFoldingRanges(tree);
+}
 
-      const tree = parse(doc.getText(), doc.uri);
-      if (!tree) return [];
+/** Handle textDocument/signatureHelp requests. */
+async function handleSignatureHelp(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return null;
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return null;
 
-      return produceInlayHints({
-        tree,
-        table,
-        range: params.range,
-      });
-    },
-  );
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table || token.isCancellationRequested) return null;
+
+  const source = doc.getText();
+  const tree = parse(source, doc.uri);
+  if (!tree) return null;
+
+  return produceSignatureHelp(tree, table, params.position.line, params.position.character, ctx.stdlibIndex, {
+    table, uri: params.textDocument.uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex,
+    typeInferrer: buildTypeInferrer(ctx, doc.uri),
+  }, source);
+}
+
+/** Build a type inferrer callback for the PikeWorker. */
+function buildTypeInferrer(ctx: NavigationContext, docUri: string): ((varName: string) => Promise<string | null>) | undefined {
+  if (!ctx.worker) return undefined;
+  return async (varName: string) => {
+    try {
+      const result = await ctx.worker.typeof_(docUri, varName);
+      return result.type ?? null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+/** Handle textDocument/inlayHint requests. */
+async function handleInlayHint(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; range: { start: Position; end: Position } },
+  token: CancellationToken,
+) {
+  if (token.isCancellationRequested) return [];
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return [];
+
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table || token.isCancellationRequested) return [];
+
+  const source = doc.getText();
+  const tree = parse(source, doc.uri);
+  if (!tree) return [];
+
+  return produceInlayHints({ tree, table, range: params.range, lines: source.split('\n') });
 }

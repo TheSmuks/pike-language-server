@@ -67,10 +67,11 @@ export function produceSignatureHelp(
   character: number,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
   ctx?: SignatureContext,
+  source?: string,
 ): SignatureHelpResult | null {
   // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const source = tree.rootNode.text;
-  const lines = source.split('\n');
+  const src = source ?? tree.rootNode.text;
+  const lines = src.split('\n');
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
 
   // Find the node at the cursor
@@ -348,9 +349,9 @@ function countCommasInNode(node: Node, line: number, character: number, lines?: 
  *
  * Exported for direct unit testing.
  */
-export function findEnclosingCallExport(tree: Tree, line: number, character: number): Node | null {
-  const source = tree.rootNode.text;
-  const lines = source.split('\n');
+export function findEnclosingCallExport(tree: Tree, line: number, character: number, source?: string): Node | null {
+  const src = source ?? tree.rootNode.text;
+  const lines = src.split('\n');
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
   const node = tree.rootNode.descendantForPosition({ row: line, column: utf8Col });
   if (!node) return null;

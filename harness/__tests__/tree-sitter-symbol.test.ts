@@ -122,7 +122,7 @@ describe("symbol comparison: tree-sitter vs Pike snapshots", () => {
     (filename: string) => {
       const source = corpusSource(filename);
       const tree = parse(source);
-      const tsSymbols = getDocumentSymbols(tree);
+      const tsSymbols = getDocumentSymbols(tree, source.split('\n'));
 
       const snap = snapshotFor(filename)!;
       const pikeNames = new Set(snap.symbols.map((s) => s.name));
@@ -159,7 +159,7 @@ describe("symbol comparison: tree-sitter vs Pike snapshots", () => {
     (filename: string) => {
       const source = corpusSource(filename);
       const tree = parse(source);
-      const tsSymbols = getDocumentSymbols(tree);
+      const tsSymbols = getDocumentSymbols(tree, source.split('\n'));
       const tsNames = new Set(tsSymbols.map((s) => s.name));
 
       const snap = snapshotFor(filename)!;
@@ -180,7 +180,7 @@ describe("symbol comparison: tree-sitter vs Pike snapshots", () => {
     (filename: string) => {
       const source = corpusSource(filename);
       const tree = parse(source);
-      const tsSymbols = getDocumentSymbols(tree);
+      const tsSymbols = getDocumentSymbols(tree, source.split('\n'));
 
       const names = tsSymbols.map((s) => s.name);
       const unique = new Set(names);
@@ -204,7 +204,7 @@ describe("symbol comparison: tree-sitter vs Pike snapshots", () => {
       const lines = source.split("\n");
       const maxLine = lines.length - 1; // 0-based
       const tree = parse(source);
-      const tsSymbols = getDocumentSymbols(tree);
+      const tsSymbols = getDocumentSymbols(tree, source.split('\n'));
 
       function checkRange(sym: typeof tsSymbols[0]) {
         expect(sym.range.start.line).toBeGreaterThanOrEqual(0);
@@ -235,7 +235,7 @@ describe("symbol comparison: tree-sitter vs Pike snapshots", () => {
   test("class symbols have children (methods/variables)", () => {
     const source = corpusSource("class-create.pike");
     const tree = parse(source);
-    const tsSymbols = getDocumentSymbols(tree);
+    const tsSymbols = getDocumentSymbols(tree, source.split('\n'));
 
     const classes = tsSymbols.filter((s) => s.kind === SymbolKind.Class);
     // class-create has 4 classes, at least some should have children
@@ -304,8 +304,8 @@ describe("parse error handling (KL-007)", () => {
     "%s — partial symbols returned despite errors",
     (name: string, source: string) => {
       const tree = parse(source);
-      const symbols = getDocumentSymbols(tree);
-      const diagnostics = getParseDiagnostics(tree);
+      const symbols = getDocumentSymbols(tree, source.split('\n'));
+      const diagnostics = getParseDiagnostics(tree, source.split('\n'));
 
       // Must get at least one diagnostic
       expect(diagnostics.length).toBeGreaterThan(0);
@@ -326,7 +326,7 @@ describe("parse error handling (KL-007)", () => {
   test("partial-error returns symbols from valid portion", () => {
     const source = synthetics[0].source;
     const tree = parse(source);
-    const symbols = getDocumentSymbols(tree);
+    const symbols = getDocumentSymbols(tree, source.split('\n'));
 
     // The valid declarations at the top (x, y) should appear as symbols
     const names = symbols.map((s) => s.name);
@@ -339,7 +339,7 @@ describe("parse error handling (KL-007)", () => {
   test("trailing-error preserves leading valid symbols", () => {
     const source = synthetics[2].source;
     const tree = parse(source);
-    const symbols = getDocumentSymbols(tree);
+    const symbols = getDocumentSymbols(tree, source.split('\n'));
     const names = new Set(symbols.map((s) => s.name));
 
     // The valid declarations should be recovered
@@ -406,7 +406,7 @@ describe("canary: class-create.pike produces deep symbol tree", () => {
 
   beforeAll(() => {
     const tree = parse(source);
-    symbols = getDocumentSymbols(tree);
+    symbols = getDocumentSymbols(tree, source.split('\n'));
     tree.delete();
   });
 
@@ -499,7 +499,7 @@ describe("determinism: identical output on repeated parses", () => {
       const runs: string[] = [];
       for (let i = 0; i < 10; i++) {
         const tree = parse(source);
-        const symbols = getDocumentSymbols(tree);
+        const symbols = getDocumentSymbols(tree, source.split('\n'));
         runs.push(JSON.stringify(symbols));
         tree.delete();
       }
