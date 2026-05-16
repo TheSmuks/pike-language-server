@@ -38,6 +38,8 @@ export class WorkspaceIndex {
   private readonly dependents = new Map<string, Set<string>>();
   private readonly moduleMap = new Map<string, string>();
   private generation = 0;
+  /** Cache of version-scoped resolvers to avoid creating a new ModuleResolver per call. */
+  private readonly versionResolvers = new Map<string, ModuleResolver>();
 
   readonly resolver: ModuleResolver;
   readonly workspaceRoot: string;
@@ -104,7 +106,7 @@ export class WorkspaceIndex {
     const warmCacheResult = await warmResolverCache(this.depCtx(), tree, uri);
 
     const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
-    const pikeVersion = this.parsePikeVersion(tree);
+    const pikeVersion = this.parsePikeVersion(tree, content);
     const contentHash = this.hashContent(content);
     const dependencies = await extractDependencies(this.depCtx(), symbolTable, uri, warmCacheResult);
 
@@ -167,7 +169,7 @@ export class WorkspaceIndex {
       try {
         const indexed = await this.onDemandIndex(uri);
         if (indexed?.symbolTable && !indexed.stale) return indexed.symbolTable;
-      } catch { /* on-demand indexing failed */ }
+      } catch (err) { /* on-demand indexing failed */ console.debug(`[workspaceIndex] on-demand indexing failed for ${uri}:`, err); }
     }
     return null;
   }
@@ -330,29 +332,33 @@ export class WorkspaceIndex {
   /** Create a resolver scoped to the file's #pike version, or the default resolver. */
   private scopedResolver(entry: FileEntry | undefined): ModuleResolver {
     if (entry?.pikeVersion && entry.pikeVersion !== this.resolver["pikeVersion"]) {
-      return new ModuleResolver({
+      const versionKey = `${entry.pikeVersion.major}.${entry.pikeVersion.minor}`;
+      const cached = this.versionResolvers.get(versionKey);
+      if (cached) return cached;
+      const scoped = new ModuleResolver({
         workspaceRoot: pathToUri(this.workspaceRoot),
         pikePaths: this.pikePaths,
         pikeVersion: entry.pikeVersion,
       });
+      this.versionResolvers.set(versionKey, scoped);
+      return scoped;
     }
     return this.resolver;
   }
 
   /** Parse #pike version directive. Format: #pike <major>[.<minor>] */
-  private parsePikeVersion(tree: Tree): PikeVersionDirective | null {
+  private parsePikeVersion(tree: Tree, content: string): PikeVersionDirective | null {
     const root = tree.rootNode;
     if (!root) return null;
-    const text = root.text;
 
-    if (text.match(/#pike\s+__REAL_VERSION__/)) {
+    if (content.match(/#pike\s+__REAL_VERSION__/)) {
       const homeVersion = this.pikePaths.pikeHome.match(/(\d+)\.(\d+)/);
       if (homeVersion) {
         return { major: parseInt(homeVersion[1], 10), minor: parseInt(homeVersion[2], 10) };
       }
     }
 
-    const match = text.match(/#pike\s+(\d+)(?:\.(\d+))?/);
+    const match = content.match(/#pike\s+(\d+)(?:\.(\d+))?/);
     if (!match) return null;
     return { major: parseInt(match[1], 10), minor: match[2] ? parseInt(match[2], 10) : 0 };
   }

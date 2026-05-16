@@ -23,11 +23,11 @@
       "range": {
         "start": {
           "line": 11,
-          "character": 11
+          "character": 9
         },
         "end": {
           "line": 11,
-          "character": 23
+          "character": 21
         }
       },
       "severity": 4,
@@ -39,11 +39,11 @@
       "range": {
         "start": {
           "line": 20,
-          "character": 8
+          "character": 6
         },
         "end": {
           "line": 20,
-          "character": 20
+          "character": 18
         }
       },
       "severity": 4,

@@ -77,7 +77,7 @@ replace() {
     fi
   else
     if grep -q "$old_pat" "$file" 2>/dev/null; then
-      sed -i "s/$old_pat/$new_text/g" "$file"
+      sed -i "s|$old_pat|$new_text|g" "$file"
       pass "Updated $file"
     else
       fail "Pattern '$old_pat' not found in $file"
@@ -155,9 +155,11 @@ fi
 info "Updating version: $OLD_VERSION → $NEW_VERSION"
 echo ""
 
-# Escape old version for sed (handle regex special chars like + in 0.3.2-beta)
-OLD_ESCAPED="$(printf '%s' "$OLD_VERSION" | sed 's/[][\.*^$/+?&]/\\&/g')"
-NEW_ESCAPED="$(printf '%s' "$NEW_VERSION" | sed 's/[][\.*^$/+?&]/\\&/g')"
+# Escape old version for sed (handle regex special chars like + in 0.3.2-beta).
+# Use | as delimiter to avoid collision with / in paths. Escape &, \, and |
+# which are special in sed replacement context.
+OLD_ESCAPED="$(printf '%s' "$OLD_VERSION" | sed 's/[&\\|]/\\&/g')"
+NEW_ESCAPED="$(printf '%s' "$NEW_VERSION" | sed 's/[&\\|]/\\&/g')"
 
 # 1/9 .template-version — whole file
 write_whole "$ROOT/.template-version" "$NEW_VERSION"

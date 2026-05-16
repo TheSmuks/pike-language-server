@@ -463,7 +463,8 @@ export class DiagnosticManager {
       const lines = source.split('\n');
       const tree = parse(source, uri);
       return { tree, diagnostics: getParseDiagnostics(tree, lines), lines };
-    } catch {
+    } catch (err) {
+      logError(this.connection, ErrorCategory.Parse, `safeParse(${uri ?? "unknown"})`, err);
       return { tree: null, diagnostics: [], lines: [] };
     }
   }
@@ -474,7 +475,8 @@ export class DiagnosticManager {
     try {
       const table = buildSymbolTable(tree, uri, version);
       return runLintRules(tree, table, source);
-    } catch {
+    } catch (err) {
+      logError(this.connection, ErrorCategory.Diagnostics, `safeLintDiagnostics(${uri})`, err);
       return [];
     }
   }
