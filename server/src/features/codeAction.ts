@@ -19,8 +19,10 @@ import type {
   WorkspaceEdit,
 } from "vscode-languageserver/node";
 
+import { organizeImports, extractVariable } from "./codeActionSourceActions";
+
 // Re-export source actions for backward compatibility
-export { organizeImports, extractVariable } from "./codeActionSourceActions";
+export { organizeImports, extractVariable };
 
 // ---------------------------------------------------------------------------
 // Types
@@ -348,7 +350,6 @@ export function produceCodeActions(
   params: CodeActionParams,
   text: string,
   ctx: CodeActionContext,
-
 ): CodeAction[] {
   const actions: CodeAction[] = [];
 
@@ -364,82 +365,132 @@ export function produceCodeActions(
 
   // --- Quick fixes (individual) ---
   if (wantsQuickFix) {
-    for (const diag of diagnostics) {
-      for (const fix of QUICK_FIXES) {
-        if (fix.match(diag)) {
-          const edits = fix.produceEdits(diag, text, ctx);
-          if (edits.length > 0) {
-            const changes: Record<string, TextEdit[]> = {};
-            changes[uri] = edits;
-
-            const workspaceEdit: WorkspaceEdit = { changes };
-            const title = typeof fix.title === "function"
-              ? fix.title(diag, ctx)
-              : fix.title;
-
-            actions.push({
-              title,
-              kind: fix.kind,
-              diagnostics: [diag],
-              edit: workspaceEdit,
-            });
-          }
-        }
-      }
-    }
+    collectQuickFixActions(diagnostics, text, ctx, uri, actions);
   }
 
   // --- source.fixAll: apply all matching quick-fixes at once ---
   if (wantsFixAll) {
-    const allEdits: TextEdit[] = [];
-    for (const diag of diagnostics) {
-      for (const fix of QUICK_FIXES) {
-        if (fix.match(diag)) {
-          const edits = fix.produceEdits(diag, text, ctx);
-          allEdits.push(...edits);
-        }
-      }
-    }
-    if (allEdits.length > 0) {
-      const changes: Record<string, TextEdit[]> = {};
-      changes[uri] = allEdits;
-      actions.push({
-        title: "Fix all auto-fixable issues",
-        kind: "source.fixAll",
-        edit: { changes },
-      });
-    }
+    collectFixAllActions(diagnostics, text, ctx, uri, actions);
   }
 
   // --- source.organizeImports: sort and deduplicate imports ---
   if (wantsOrganizeImports) {
-    const { organizeImports } = require("./codeActionSourceActions");
-    const edits = organizeImports(text);
-    if (edits.length > 0) {
-      const changes: Record<string, TextEdit[]> = {};
-      changes[uri] = edits;
-      actions.push({
-        title: "Organize imports",
-        kind: "source.organizeImports",
-        edit: { changes },
-      });
-    }
+    collectOrganizeImportsAction(text, uri, actions);
   }
 
   // --- refactor.extract: extract variable ---
   if (wantsRefactor) {
-    const { extractVariable } = require("./codeActionSourceActions");
-    const extractEdits = extractVariable(params, text);
-    if (extractEdits) {
-      const changes: Record<string, TextEdit[]> = {};
-      changes[uri] = extractEdits.edits;
-      actions.push({
-        title: `Extract to variable`,
-        kind: "refactor.extract.variable",
-        edit: { changes },
-      });
-    }
+    collectExtractVariableAction(params, text, uri, actions);
   }
 
   return actions;
+}
+
+/** Collect individual quick-fix actions for each matching diagnostic. */
+function collectQuickFixActions(
+  diagnostics: Diagnostic[],
+  text: string,
+  ctx: CodeActionContext,
+  uri: string,
+  actions: CodeAction[],
+): void {
+  for (const diag of diagnostics) {
+    for (const fix of QUICK_FIXES) {
+      if (fix.match(diag)) {
+        const edits = fix.produceEdits(diag, text, ctx);
+        if (edits.length > 0) {
+          actions.push(buildQuickFixAction(fix, diag, edits, uri, ctx));
+        }
+      }
+    }
+  }
+}
+
+/** Build a single CodeAction for a quick-fix match. */
+function buildQuickFixAction(
+  fix: QuickFix,
+  diag: Diagnostic,
+  edits: TextEdit[],
+  uri: string,
+  ctx: CodeActionContext,
+): CodeAction {
+  const changes: Record<string, TextEdit[]> = {};
+  changes[uri] = edits;
+
+  const workspaceEdit: WorkspaceEdit = { changes };
+  const title = typeof fix.title === "function"
+    ? fix.title(diag, ctx)
+    : fix.title;
+
+  return {
+    title,
+    kind: fix.kind,
+    diagnostics: [diag],
+    edit: workspaceEdit,
+  };
+}
+
+/** Collect a single fix-all action combining all matching quick-fixes. */
+function collectFixAllActions(
+  diagnostics: Diagnostic[],
+  text: string,
+  ctx: CodeActionContext,
+  uri: string,
+  actions: CodeAction[],
+): void {
+  const allEdits: TextEdit[] = [];
+  for (const diag of diagnostics) {
+    for (const fix of QUICK_FIXES) {
+      if (fix.match(diag)) {
+        const edits = fix.produceEdits(diag, text, ctx);
+        allEdits.push(...edits);
+      }
+    }
+  }
+  if (allEdits.length > 0) {
+    const changes: Record<string, TextEdit[]> = {};
+    changes[uri] = allEdits;
+    actions.push({
+      title: "Fix all auto-fixable issues",
+      kind: "source.fixAll",
+      edit: { changes },
+    });
+  }
+}
+
+/** Collect an organize-imports action if there are edits. */
+function collectOrganizeImportsAction(
+  text: string,
+  uri: string,
+  actions: CodeAction[],
+): void {
+  const edits = organizeImports(text);
+  if (edits.length > 0) {
+    const changes: Record<string, TextEdit[]> = {};
+    changes[uri] = edits;
+    actions.push({
+      title: "Organize imports",
+      kind: "source.organizeImports",
+      edit: { changes },
+    });
+  }
+}
+
+/** Collect an extract-variable action if applicable. */
+function collectExtractVariableAction(
+  params: CodeActionParams,
+  text: string,
+  uri: string,
+  actions: CodeAction[],
+): void {
+  const extractEdits = extractVariable(params, text);
+  if (extractEdits) {
+    const changes: Record<string, TextEdit[]> = {};
+    changes[uri] = extractEdits.edits;
+    actions.push({
+      title: `Extract to variable`,
+      kind: "refactor.extract.variable",
+      edit: { changes },
+    });
+  }
 }

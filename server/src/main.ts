@@ -22,12 +22,15 @@ function shouldListen(): boolean {
 //
 // Note: logError needs a Connection to write to the LSP console. During early
 // startup the connection may not exist yet, so we fall back to process.stderr.
+// The cast through `unknown` is intentional — we provide only the subset of
+// Connection needed by logError (console.error) before the real connection
+// exists.
 
 if (shouldListen()) {
   // Install handlers before anything else so we catch startup errors.
   process.on("uncaughtException", (err: Error) => {
     logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as never,
+      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
       ErrorCategory.System,
       "uncaughtException",
       err,
@@ -36,7 +39,7 @@ if (shouldListen()) {
 
   process.on("unhandledRejection", (reason: unknown) => {
     logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as never,
+      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
       ErrorCategory.System,
       "unhandledRejection",
       reason,

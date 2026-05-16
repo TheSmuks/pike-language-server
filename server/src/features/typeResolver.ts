@@ -122,25 +122,37 @@ export async function resolveMemberAccess(
 ): Promise<Declaration | null> {
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
-  // Use assignedType when declaredType is absent or a primitive like 'mixed'
+  const typeName = await resolveLhsTypeName(lhsName, lhsDecl, context);
+  if (typeName) {
+    const member = await findMemberViaType(memberName, typeName, context, depth);
+    if (member) return member;
+  }
+
+  // If lhs is itself a class, look for members including inherited
+  if (lhsDecl?.kind === 'class') {
+    return findMemberInClassOrInherited(memberName, lhsDecl, context.table);
+  }
+  return null;
+}
+
+/** Resolve the type name of an LHS expression (declared, inferred, or function return). */
+async function resolveLhsTypeName(
+  lhsName: string,
+  lhsDecl: Declaration | null,
+  context: TypeResolutionContext,
+): Promise<string | null> {
   let typeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
 
-  // If static type resolution yields nothing and a runtime inferrer is
-  // available, ask Pike for the inferred type. This covers variables
-  // declared `mixed` with no initializer pattern that extractInitializerType
-  // can handle — e.g., function parameters or assignment-target variables.
-  if (!typeName && lhsDecl && lhsDecl.name && context.typeInferrer) {
+  // Runtime type inferrer fallback
+  if (!typeName && lhsDecl?.name && context.typeInferrer) {
     if (lhsDecl.kind === 'variable' || lhsDecl.kind === 'parameter') {
       try {
         typeName = await context.typeInferrer(lhsDecl.name);
-      } catch {
-        // Worker unavailable or timed out — proceed without inferred type
-      }
+      } catch { /* Worker unavailable — proceed without */ }
     }
   }
 
-  // If typeName is still null, the LHS might be a function call expression.
-  // Look up the function's declared return type for member resolution.
+  // Function return type fallback
   if (!typeName && lhsName) {
     const fnDecl = context.table.declarations.find(
       d => d.name === lhsName && d.kind === 'function',
@@ -149,32 +161,31 @@ export async function resolveMemberAccess(
       typeName = fnDecl.declaredType;
     }
   }
+  return typeName;
+}
 
-  if (typeName) {
-    const result = await resolveType(typeName, context, depth + 1);
-    if (result?.decl.kind === "class") {
-      const member = findMemberInClass(memberName, result.decl, result.table);
-      if (member) return member;
+/** Resolve a type name and look up the member in the resulting class (direct + inherited). */
+async function findMemberViaType(
+  memberName: string,
+  typeName: string,
+  context: TypeResolutionContext,
+  depth: number,
+): Promise<Declaration | null> {
+  const result = await resolveType(typeName, context, depth + 1);
+  if (result?.decl.kind !== "class") return null;
 
-      // Check inherited scopes (already wired by wireInheritance)
-      const memberInInherited = findMemberInInheritedScopes(
-        memberName, result.decl, result.table,
-      );
-      if (memberInInherited) return memberInInherited;
-    }
-  }
+  const member = findMemberInClassOrInherited(memberName, result.decl, result.table);
+  return member;
+}
 
-  // If lhs is itself a class, look for members including inherited
-  if (lhsDecl?.kind === 'class') {
-    const member = findMemberInClass(memberName, lhsDecl, context.table);
-    if (member) return member;
-
-    // Check inherited scopes
-    const inheritedMember = findMemberInInheritedScopes(memberName, lhsDecl, context.table);
-    if (inheritedMember) return inheritedMember;
-  }
-
-  return null;
+/** Find a member in a class declaration and its inherited scopes. */
+function findMemberInClassOrInherited(
+  memberName: string,
+  classDecl: Declaration,
+  table: SymbolTable,
+): Declaration | null {
+  return findMemberInClass(memberName, classDecl, table)
+    ?? findMemberInInheritedScopes(memberName, classDecl, table);
 }
 
 /**

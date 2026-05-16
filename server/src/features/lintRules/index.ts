@@ -52,24 +52,26 @@ export interface AllLintOptions extends LintOptions {
 export function runLintRules(
   tree: Tree,
   table: SymbolTable,
+  source: string,
   options?: AllLintOptions,
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
+  const lines = source.split('\n');
 
   if (options?.unusedSymbols !== false) {
     diagnostics.push(...detectUnusedSymbols(table, options));
   }
 
   if (options?.unreachableCode !== false) {
-    diagnostics.push(...detectUnreachableCode(tree));
+    diagnostics.push(...detectUnreachableCode(tree, lines));
   }
 
   if (options?.missingReturn !== false) {
-    diagnostics.push(...detectMissingReturn(tree, table));
+    diagnostics.push(...detectMissingReturn(tree, table, source));
   }
 
   if (options?.unusedImports !== false) {
-    diagnostics.push(...detectUnusedImports(tree, table));
+    diagnostics.push(...detectUnusedImports(tree, table, source));
   }
 
   return diagnostics;

@@ -15,7 +15,7 @@
   },
   "scripts": {
     "build:extension": "bash scripts/build-server.sh && bash scripts/build-client.sh",
-    "build:standalone": "scripts/build-standalone.sh",
+    "build:standalone": "bash scripts/build-standalone.sh",
     "test": "bun test tests/ harness/",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",

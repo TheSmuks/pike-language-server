@@ -307,4 +307,4 @@ echo "  8. Create release:    gh release create v$NEW_VERSION --title \"v$NEW_VE
 echo "                         --notes-file CHANGELOG.md"
 echo ""
 BUILD_NUM=$(date +%s | tail -c 7)
-echo "VSIX: pike-language-server-$NEW_VERSION+${BUILD_NUM}.vsix"
+echo "VSIX: pike-language-server-$NEW_VERSION-${BUILD_NUM}.vsix"

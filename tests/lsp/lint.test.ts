@@ -28,14 +28,14 @@ function buildAndLint(src: string) {
   const tree = parse(src);
   const table = buildSymbolTable(tree, "file:///test.pike", 1);
   const unused = detectUnusedSymbols(table);
-  const unreachable = detectUnreachableCode(tree);
+  const unreachable = detectUnreachableCode(tree, src.split('\n'));
   return { tree, table, unused, unreachable };
 }
 
 function lintAll(src: string) {
   const tree = parse(src);
   const table = buildSymbolTable(tree, "file:///test.pike", 1);
-  return runLintRules(tree, table);
+  return runLintRules(tree, table, src);
 }
 
 // ---------------------------------------------------------------------------
@@ -352,7 +352,7 @@ int foo() {
 `;
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test.pike", 1);
-    const diags = runLintRules(tree, table, { unusedSymbols: false });
+    const diags = runLintRules(tree, table, src, { unusedSymbols: false });
     const hasUnused = diags.some((d) => d.code === CODE_UNUSED_VARIABLE);
     expect(hasUnused).toBe(false);
   });
@@ -369,7 +369,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(1);
     expect(diags[0].code).toBe(CODE_MISSING_RETURN);
     expect(diags[0].message).toContain("getAge");
@@ -381,7 +381,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
 
@@ -391,7 +391,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
 
@@ -401,7 +401,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
 
@@ -411,7 +411,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
 
@@ -421,7 +421,7 @@ describe("Missing return lint rule (E3)", () => {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectMissingReturn(tree, table);
+    const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
 });
@@ -439,7 +439,7 @@ int main() {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectUnusedImports(tree, table);
+    const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(1);
     expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
     expect(diags[0].message).toContain("Animal");
@@ -454,7 +454,7 @@ int main() {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectUnusedImports(tree, table);
+    const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(0);
   });
 
@@ -466,7 +466,7 @@ int main() {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectUnusedImports(tree, table);
+    const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(1);
     expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
   });
@@ -480,7 +480,7 @@ int main() {
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
-    const diags = detectUnusedImports(tree, table);
+    const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(0);
   });
 });

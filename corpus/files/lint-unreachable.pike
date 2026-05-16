@@ -7,34 +7,34 @@
 // - NO warning for code after if-return (the if may not execute)
 
 int test_return() {
-    return 42;
-    write("never");  // unreachable
+  return 42;
+  write("never"); // unreachable
 }
 
 int test_break() {
-    for (int i = 0; i < 10; i++) {
-        if (i == 5) {
-            break;
-            int x = 99;  // unreachable
-        }
+  for (int i = 0; i < 10; i++) {
+    if (i == 5) {
+      break;
+      int x = 99; // unreachable
     }
-    return 0;
+  }
+  return 0;
 }
 
 void test_continue() {
-    for (int i = 0; i < 10; i++) {
-        if (i == 3) {
-            continue;
-            write("after continue");  // unreachable
-        }
-        write("ok");
+  for (int i = 0; i < 10; i++) {
+    if (i == 3) {
+      continue;
+      write("after continue"); // unreachable
     }
+    write("ok");
+  }
 }
 
 // Guard clause — NOT unreachable (the return is conditional)
 string test_guard(int x) {
-    if (x < 0) {
-        return "negative";
-    }
-    return "non-negative";
+  if (x < 0) {
+    return "negative";
+  }
+  return "non-negative";
 }

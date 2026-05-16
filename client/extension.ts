@@ -388,9 +388,15 @@ export function activate(context: vscode.ExtensionContext): void {
           );
           context.subscriptions.push(
             client.onNotification(
-              "pike/serverLog",
-              (params: { level: string; message: string }) => {
-                log("info", "SERVER", params.message);
+              "pike/log",
+              (params: { level: string; lines: string[] }) => {
+                const level = params.level === "WARN" ? "warn"
+                  : params.level === "ERROR" ? "error"
+                  : params.level === "DEBUG" ? "debug"
+                  : "info";
+                for (const line of params.lines) {
+                  log(level, "SERVER", line);
+                }
               },
             ),
           );

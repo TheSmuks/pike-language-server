@@ -51,9 +51,8 @@ const COMMENT_TYPES = new Set([
  *
  * Returns diagnostics with severity Warning.
  */
-export function detectUnreachableCode(tree: Tree): Diagnostic[] {
+export function detectUnreachableCode(tree: Tree, lines: string[]): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  const lines = tree.rootNode.text.split('\n');
   walkBlocks(tree.rootNode, diagnostics, lines);
   return diagnostics;
 }

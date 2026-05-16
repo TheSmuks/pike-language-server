@@ -145,22 +145,40 @@ async function completeUnqualified(
   const items: CompletionItem[] = [];
   const seenNames = new Set<string>();
 
-  // 1. Local scope symbols
+  collectLocalScopeItems(table, line, character, items, seenNames);
+  await collectImportedItems(table, ctx, items, seenNames);
+  await collectDirectoryModuleItems(ctx, items, seenNames);
+  collectPredefBuiltinItems(ctx, items, seenNames);
+  collectStdlibTopLevelItems(ctx, items, seenNames);
+  await collectAutoImportItems(table, tree, ctx, node, items, seenNames);
+
+  return items;
+}
+
+/** Add local scope symbols to the completion list. */
+function collectLocalScopeItems(
+  table: SymbolTable, line: number, character: number,
+  items: CompletionItem[], seenNames: Set<string>,
+): void {
   const localSymbols = getSymbolsInScope(table, line, character);
   for (const decl of localSymbols) {
     if (seenNames.has(decl.name)) continue;
     seenNames.add(decl.name);
     items.push(declToCompletionItem(decl, 0, table));
   }
+}
 
-  // 2. Imported symbols (cross-file)
+/** Add symbols from inherited/imported files (cross-file). */
+async function collectImportedItems(
+  table: SymbolTable, ctx: CompletionContext,
+  items: CompletionItem[], seenNames: Set<string>,
+): Promise<void> {
   const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
   for (const importDecl of importDecls) {
     const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
     if (!targetUri) continue;
     const targetTable = ctx.index.getSymbolTable(targetUri);
     if (!targetTable) continue;
-    // Get top-level declarations from the imported file
     const fileScope = targetTable.scopes.find(s => s.kind === "file");
     if (!fileScope) continue;
     const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
@@ -170,29 +188,34 @@ async function completeUnqualified(
       items.push(declToCompletionItem(decl, 20, targetTable));
     }
   }
+}
 
-  // 2b. Implicit directory module.pmod — files inside Foo.pmod/ see symbols
-  // from Foo.pmod/module.pmod without explicit inherit/import.
+/** Add symbols from implicit directory module.pmod. */
+async function collectDirectoryModuleItems(
+  ctx: CompletionContext,
+  items: CompletionItem[], seenNames: Set<string>,
+): Promise<void> {
   const directoryModule = await ctx.index.resolver.findDirectoryModulePmod(ctx.uri);
-  if (directoryModule) {
-    const moduleTable = ctx.index.getSymbolTable(directoryModule);
-    if (moduleTable) {
-      const fileScope = moduleTable.scopes.find(s => s.kind === "file");
-      if (fileScope) {
-        const moduleDecls = getDeclarationsInScope(moduleTable, fileScope.id);
-        for (const decl of moduleDecls) {
-          if (seenNames.has(decl.name)) continue;
-          seenNames.add(decl.name);
-          items.push(declToCompletionItem(decl, 15, moduleTable));
-        }
-      }
-    }
+  if (!directoryModule) return;
+  const moduleTable = ctx.index.getSymbolTable(directoryModule);
+  if (!moduleTable) return;
+  const fileScope = moduleTable.scopes.find(s => s.kind === "file");
+  if (!fileScope) return;
+  const moduleDecls = getDeclarationsInScope(moduleTable, fileScope.id);
+  for (const decl of moduleDecls) {
+    if (seenNames.has(decl.name)) continue;
+    seenNames.add(decl.name);
+    items.push(declToCompletionItem(decl, 15, moduleTable));
   }
+}
 
-  // 3. Predef builtins (skip operator-like backtick identifiers)
+/** Add predef builtin functions to the completion list. */
+function collectPredefBuiltinItems(
+  ctx: CompletionContext,
+  items: CompletionItem[], seenNames: Set<string>,
+): void {
   for (const name of Object.keys(ctx.predefBuiltins)) {
     if (seenNames.has(name)) continue;
-    // Skip Pike operator identifiers (backtick-prefixed, operators, brackets)
     if (!isCompletableIdentifier(name)) continue;
     seenNames.add(name);
     const builtinItem: CompletionItem = {
@@ -200,11 +223,8 @@ async function completeUnqualified(
       kind: CompletionItemKind.Function,
       detail: cleanPredefSignature(ctx.predefBuiltins[name]),
       sortText: padSortKey(30) + name,
-      // filterText: plain identifier so VSCode fuzzy-matches correctly
-      // even though detail contains a full signature.
       filterText: name,
     };
-    // Add argument snippet for predef builtins
     const predefParams = extractParamsFromPredefType(ctx.predefBuiltins[name]);
     if (predefParams !== null) {
       builtinItem.insertTextFormat = InsertTextFormat.Snippet;
@@ -212,8 +232,13 @@ async function completeUnqualified(
     }
     items.push(builtinItem);
   }
+}
 
-  // 4. Top-level stdlib modules/classes
+/** Add top-level stdlib modules/classes to the completion list. */
+function collectStdlibTopLevelItems(
+  ctx: CompletionContext,
+  items: CompletionItem[], seenNames: Set<string>,
+): void {
   const stdlibTopLevel = getStdlibTopLevel(ctx.stdlibIndex);
   for (const { name, kind } of stdlibTopLevel) {
     if (seenNames.has(name)) continue;
@@ -225,62 +250,54 @@ async function completeUnqualified(
       filterText: name,
     });
   }
+}
 
-  // 5. Auto-import suggestions (F5)
-  // When the user types an identifier that exists in a stdlib module but is
-  // not yet imported, offer it with an additionalTextEdits that inserts
-  // `inherit Module;` at the top of the file.
+/** Add auto-import suggestions for identifiers that exist in stdlib modules. */
+async function collectAutoImportItems(
+  table: SymbolTable, tree: Tree, ctx: CompletionContext, node: Node,
+  items: CompletionItem[], seenNames: Set<string>,
+): Promise<void> {
   const existingInherits = new Set(
-    table.declarations
-      .filter(d => d.kind === "inherit")
-      .map(d => d.name),
+    table.declarations.filter(d => d.kind === "inherit").map(d => d.name),
   );
-
-  // The node at cursor is the partial identifier being typed.
   const typedPrefix = node.type === "identifier" ? node.text : "";
   const prefixLower = typedPrefix.toLowerCase();
+  if (prefixLower.length < 2) return;
 
-  if (prefixLower.length >= 2) {
-    const matchingEntries = getAutoImportByPrefix(ctx.stdlibIndex, prefixLower);
-    // Cap auto-import results to avoid flooding the completion list.
-    let autoImportCount = 0;
-    const AUTO_IMPORT_CAP = 10;
+  const matchingEntries = getAutoImportByPrefix(ctx.stdlibIndex, prefixLower);
+  let autoImportCount = 0;
+  const AUTO_IMPORT_CAP = 10;
 
-    for (const [symbolName, candidates] of matchingEntries) {
+  for (const [symbolName, candidates] of matchingEntries) {
+    if (autoImportCount >= AUTO_IMPORT_CAP) break;
+    if (seenNames.has(symbolName)) continue;
+
+    for (const candidate of candidates) {
       if (autoImportCount >= AUTO_IMPORT_CAP) break;
-      // Skip symbols already available in the completion list
-      if (seenNames.has(symbolName)) continue;
-
-      for (const candidate of candidates) {
-        if (autoImportCount >= AUTO_IMPORT_CAP) break;
-        // Skip if module is already inherited
-        if (existingInherits.has(candidate.module)) continue;
-
-        const insertLine = findInheritInsertLine(tree);
-
-        items.push({
-          label: candidate.name,
-          kind: candidate.kind,
-          detail: `Auto-import from ${candidate.module}`,
-          sortText: padSortKey(50) + candidate.name,
-          filterText: candidate.name,
-          data: { source: "autoimport", fqn: "predef." + candidate.module + "." + candidate.name, module: candidate.module, symbolName: candidate.name },
-          additionalTextEdits: [
-            {
-              range: {
-                start: { line: insertLine, character: 0 },
-                end: { line: insertLine, character: 0 },
-              },
-              newText: `inherit ${candidate.module};\n`,
-            },
-          ],
-        });
-        autoImportCount++;
-      }
+      if (existingInherits.has(candidate.module)) continue;
+      const insertLine = findInheritInsertLine(tree);
+      items.push(buildAutoImportItem(candidate, insertLine));
+      autoImportCount++;
     }
   }
+}
 
-  return items;
+/** Build a single auto-import completion item. */
+function buildAutoImportItem(candidate: { name: string; kind: CompletionItemKind; module: string }, insertLine: number): CompletionItem {
+  return {
+    label: candidate.name,
+    kind: candidate.kind,
+    detail: `Auto-import from ${candidate.module}`,
+    sortText: padSortKey(50) + candidate.name,
+    filterText: candidate.name,
+    data: { source: "autoimport", fqn: "predef." + candidate.module + "." + candidate.name, module: candidate.module, symbolName: candidate.name },
+    additionalTextEdits: [
+      {
+        range: { start: { line: insertLine, character: 0 }, end: { line: insertLine, character: 0 } },
+        newText: `inherit ${candidate.module};\n`,
+      },
+    ],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -312,9 +329,9 @@ async function completeArrowAccess(
  * Complete member access after '.' or '->'.
  *
  * Strategies:
- * 1. If lhs is a known module path (e.g., Stdio.File) → resolve via WorkspaceIndex + stdlib
- * 2. If lhs is a declared variable with known type → resolve type to class scope
- * 3. If lhs is a class name → enumerate class members
+ * 1. If lhs is a known module path → resolve via WorkspaceIndex
+ * 2. If lhs is a known stdlib path → resolve via stdlib index
+ * 3. If lhs is a declared variable with known type → resolve type to class scope
  */
 async function completeMemberAccess(
   table: SymbolTable,
@@ -327,78 +344,10 @@ async function completeMemberAccess(
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
   const seenNames = new Set<string>();
-  const lhsText = lhsNode.text;
 
-  // Strategy 1: lhs is a module/class name — check workspace index then stdlib
-  const wsTarget = await ctx.index.resolveModule(lhsText, ctx.uri);
-  if (wsTarget) {
-    const targetTable = ctx.index.getSymbolTable(wsTarget);
-    if (targetTable) {
-      const fileScope = targetTable.scopes.find(s => s.kind === "file");
-      if (fileScope) {
-        const decls = getDeclarationsInScope(targetTable, fileScope.id);
-        for (const decl of decls) {
-          if (seenNames.has(decl.name)) continue;
-          seenNames.add(decl.name);
-          items.push(declToCompletionItem(decl, 0, targetTable));
-        }
-      }
-    }
-  }
-
-  // Strategy 2: Check stdlib index for this prefix
-  const stdlibPrefix = "predef." + lhsText;
-  const childrenMap = getStdlibChildrenMap(ctx.stdlibIndex);
-  const stdlibMembers = childrenMap.get(stdlibPrefix);
-  if (stdlibMembers) {
-    for (const member of stdlibMembers) {
-      if (seenNames.has(member.name)) continue;
-      seenNames.add(member.name);
-      const memberItem: CompletionItem = {
-        label: member.name,
-        kind: member.kind,
-        detail: member.signature || undefined,
-        sortText: padSortKey(10) + member.name,
-        filterText: member.name,
-        data: { source: "stdlib", fqn: member.fqn },
-      };
-      // Add argument snippet for stdlib methods/functions
-      if (member.signature && (member.kind === CompletionItemKind.Method || member.kind === CompletionItemKind.Function)) {
-        const stdlibParams = extractParamsFromStdlibSignature(member.signature);
-        if (stdlibParams !== null) {
-          memberItem.insertTextFormat = InsertTextFormat.Snippet;
-          memberItem.insertText = member.name + "(" + stdlibParams + ")";
-        }
-      }
-      items.push(memberItem);
-    }
-  }
-
-  // Strategy 3: Resolve the type of the LHS expression.
-  //
-  // For simple identifiers (variable, parameter, function), look up the
-  // declaration and resolve its declared/assigned type.
-  // For chained calls (getContainer()->getItem()->), walk the postfix_expr
-  // chain left-to-right, resolving the return type at each step.
-  //
-  // postfix_expr chain structure:
-  //   postfix_expr
-  //     postfix_expr
-  //       postfix_expr
-  //         primary_expr "getContainer"
-  //       -> "getItem"
-  //     ( argument_list )
-  //
-  // The rightmost call's return type is what we need.
-  const resolvedDecl = await resolveChainedType(lhsNode, table, line, character, ctx);
-  if (resolvedDecl && resolvedDecl.kind !== "inherit") {
-    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
-    for (const item of typeMembers) {
-      if (seenNames.has(item.label)) continue;
-      seenNames.add(item.label);
-      items.push(item);
-    }
-  }
+  await addWorkspaceModuleMembers(lhsNode.text, ctx, items, seenNames);
+  addStdlibMembers(lhsNode.text, ctx, items, seenNames);
+  await addResolvedTypeMembers(lhsNode, table, line, character, ctx, items, seenNames);
 
   // Dot access hides private members (Pike convention: __ prefix).
   // Arrow access (->) shows all members, including private.
@@ -406,4 +355,90 @@ async function completeMemberAccess(
     return items.filter(item => !item.label.startsWith("__"));
   }
   return items;
+}
+
+/** Strategy 1: Resolve lhs as a workspace module and collect its members. */
+async function addWorkspaceModuleMembers(
+  lhsText: string,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): Promise<void> {
+  const wsTarget = await ctx.index.resolveModule(lhsText, ctx.uri);
+  if (!wsTarget) return;
+
+  const targetTable = ctx.index.getSymbolTable(wsTarget);
+  if (!targetTable) return;
+
+  const fileScope = targetTable.scopes.find(s => s.kind === "file");
+  if (!fileScope) return;
+
+  const decls = getDeclarationsInScope(targetTable, fileScope.id);
+  for (const decl of decls) {
+    if (seenNames.has(decl.name)) continue;
+    seenNames.add(decl.name);
+    items.push(declToCompletionItem(decl, 0, targetTable));
+  }
+}
+
+/** Strategy 2: Resolve lhs as a stdlib module/class and collect its members. */
+function addStdlibMembers(
+  lhsText: string,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): void {
+  const stdlibPrefix = "predef." + lhsText;
+  const childrenMap = getStdlibChildrenMap(ctx.stdlibIndex);
+  const stdlibMembers = childrenMap.get(stdlibPrefix);
+  if (!stdlibMembers) return;
+
+  for (const member of stdlibMembers) {
+    if (seenNames.has(member.name)) continue;
+    seenNames.add(member.name);
+    items.push(buildStdlibMemberItem(member));
+  }
+}
+
+/** Build a completion item for a stdlib member with optional snippet. */
+function buildStdlibMemberItem(
+  member: { name: string; kind: CompletionItemKind; signature?: string; fqn: string },
+): CompletionItem {
+  const item: CompletionItem = {
+    label: member.name,
+    kind: member.kind,
+    detail: member.signature || undefined,
+    sortText: padSortKey(10) + member.name,
+    filterText: member.name,
+    data: { source: "stdlib", fqn: member.fqn },
+  };
+  if (member.signature && (member.kind === CompletionItemKind.Method || member.kind === CompletionItemKind.Function)) {
+    const params = extractParamsFromStdlibSignature(member.signature);
+    if (params !== null) {
+      item.insertTextFormat = InsertTextFormat.Snippet;
+      item.insertText = member.name + "(" + params + ")";
+    }
+  }
+  return item;
+}
+
+/** Strategy 3: Resolve LHS expression type and collect type members. */
+async function addResolvedTypeMembers(
+  lhsNode: Node,
+  table: SymbolTable,
+  line: number,
+  character: number,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): Promise<void> {
+  const resolvedDecl = await resolveChainedType(lhsNode, table, line, character, ctx);
+  if (!resolvedDecl || resolvedDecl.kind === "inherit") return;
+
+  const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
+  for (const item of typeMembers) {
+    if (seenNames.has(item.label)) continue;
+    seenNames.add(item.label);
+    items.push(item);
+  }
 }

@@ -8,26 +8,26 @@
 // - No warning for 'msg' parameter (it IS used)
 
 string test_function(string msg, int unused_param, int _intentionally_unused) {
-    string used_var = "hello";
-    string unused_local = "world";
+  string used_var = "hello";
+  string unused_local = "world";
 
-    write(msg + used_var);
-    return used_var;
+  write(msg + used_var);
+  return used_var;
 }
 
 // Local function that's unused — should NOT trigger (file scope)
 void helper_fn() {
-    // But variables inside it should still be checked
-    int inner_unused = 42;
+  // But variables inside it should still be checked
+  int inner_unused = 42;
 }
 
 // Class with unused members — should NOT trigger (may be external)
 class Animal {
-    string name;
-    int age;
+  string name;
+  int age;
 
-    void create(string n, int a) {
-        name = n;
-        age = a;
-    }
+  void create(string n, int a) {
+    name = n;
+    age = a;
+  }
 }

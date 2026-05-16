@@ -49,7 +49,7 @@ function resolveDir(...candidates: string[]): string | undefined {
         return candidate;
       }
     } catch {
-      // ignore
+      // Permission or access errors — treat as non-existent.
     }
   }
   return undefined;
@@ -66,7 +66,7 @@ function resolveFile(...candidates: string[]): string | undefined {
         return candidate;
       }
     } catch {
-      // ignore
+      // Permission or access errors — treat as non-existent.
     }
   }
   return undefined;
@@ -336,7 +336,8 @@ export abstract class PikeWorkerProcess {
     for (const q of this.queues) {
       if (q.length === 0) continue;
 
-      const item = q.shift()!;
+      const item = q.shift();
+      if (!item) continue;
 
       // Check cancellation before writing to subprocess
       if (item.token?.isCancellationRequested) {
@@ -473,16 +474,18 @@ export abstract class PikeWorkerProcess {
           this.pending.delete(response.id);
           pending.resolve(response);
         } else {
-          // Response arrived after timeout — log and discard
+          // Response arrived after timeout — log and discard. Uses console.debug
+          // because this class doesn't hold a connection reference; the message
+          // appears in the server's stderr output.
           console.debug(`[pike-worker] Discarding response for timed-out request id=${response.id}`);
         }
-      } catch {
+      } catch (err) {
         // Malformed response — could be debug output or protocol corruption.
         // Count consecutive failures and restart if threshold exceeded.
         this.consecutiveMalformed++;
         this.onCriticalError?.(
           "worker.malformedResponse",
-          new Error(`Malformed response (${this.consecutiveMalformed}/${PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD}): ${line.slice(0, 200)}`),
+          new Error(`Malformed response (${this.consecutiveMalformed}/${PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD}): ${String(err).slice(0, 200)} | line=${line.slice(0, 200)}`),
         );
         if (this.consecutiveMalformed >= PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD) {
           this.onCriticalError?.("worker.malformedThreshold", new Error("Too many malformed responses"));

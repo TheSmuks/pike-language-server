@@ -1,16 +1,14 @@
 # Known Limitations
 
-## Formatting Limitations
+## Current Limitations
 
-### Phase 1 Scope: Indentation-only
+### Formatting (Phase 1)
 
 The `textDocument/formatting` feature uses a three-layer architecture:
 
 1. **`client/language-configuration.json`** — Client-side indentation rules (Enter, Tab, auto-indent). No LSP traffic.
 2. **`pike-fmt`** — Standalone formatter tool (separate repository). Uses tree-sitter-pike.
 3. **`server/src/features/formattingHandler.ts`** — LSP thin wrapper that shells out to `pike-fmt`.
-
-**Current phase 1 limitations:**
 
 | # | Limitation | Impact | Mitigation |
 |---|------------|--------|------------|
@@ -21,12 +19,131 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 | 5 | **Range formatting not implemented** | Formatter operates on whole files | Full-document formatting only |
 | 6 | **Requires pike-fmt installed** | LSP handler shells out to `pike-fmt` | Error response if binary not found |
 
+### Cross-File Resolution (Phase 4)
 
-| ~~`.pmod` files not discovered~~ | `pike-fmt` only matches `.pike` and `.lpc` | RESOLVED in pike-fmt v0.1.5 ([#17](https://github.com/TheSmuks/pike-fmt/issues/17)) |
+#### No .so binary module resolution — PERMANENT
 
-## Resolved Upstream Issues
+The ModuleResolver skips `.so` (compiled C module) files. System modules that are pure C (e.g., `_Stdio`, `__builtin`) cannot be resolved by path lookup. This affects completion and go-to-definition for low-level system types.
 
-### ~~Cross-file inherited member completion~~ — RESOLVED
+**Mitigation**: Most commonly used stdlib modules (Stdio, Array, Mapping, etc.) are implemented in Pike (.pmod files) and resolve correctly. Pure C modules could be handled in a future phase via pike-ai-kb or a pre-built system module map.
+
+**Rationale**: Resolving C modules requires parsing C header files or using libdwarf debugging info — neither is practical for an LSP that needs to stay fast. The mitigation covers 95% of use cases.
+
+#### No joinnode multi-path merge — PERMANENT
+
+Pike's `joinnode` class merges symbols from multiple search paths when the same module name exists in multiple locations. The LSP uses first-match-wins instead. If a workspace contains a module with the same name as a system module, the workspace version takes precedence.
+
+**Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
+
+#### Import resolution is scoped to file-system paths — PERMANENT
+
+Import resolution searches workspace and system module paths. It does not query Pike at runtime. Dynamic module behavior (modules that register symbols at compile time) is not captured.
+
+**Impact**: Low for standard Pike code. Dynamic modules are rare in user workspaces.
+
+**Rationale**: Dynamic compilation-time module registration requires running Pike at LSP startup time for every file, which is too slow. File-system path resolution is the practical trade-off.
+
+### Diagnostics and Hover (Phase 5/6)
+
+#### Diagnostics are real-time with debouncing (Phase 6 P2)
+
+Diagnostics from the Pike compiler are triggered on `textDocument/didChange` (debounced at 500ms) and `textDocument/didSave` (immediate). Three modes: realtime, saveOnly, off. Decision 0013.
+
+**Configuration**: `initializationOptions.diagnosticMode` in the `initialize` request. Default: `realtime`.
+
+**Verified**: 50 rapid didChange events produce ≤ 3 diagnose invocations. Hover latency unaffected during in-flight diagnose. See `decisions/0013-verification.md`.
+
+#### Diagnostic column positions are approximate
+
+Pike's `compile_error` handler reports line numbers but not column positions. When Pike emits a diagnostic, the `character` field was always 0, making underlines span the entire line.
+
+**Resolution (Phase 20b)**: Added `lineToColumn()` helper that locates the first meaningful token on the diagnostic's line using tree-sitter and returns its column offset. Both `mergeDiagnostics` call sites now pass the parsed tree.
+
+**Remaining gap**: The column is approximate — it points to the first meaningful token on the line, not to the specific error token. For Pike compiler diagnostics, this is the best available signal. Parse diagnostics (tree-sitter errors) already have precise column positions.
+
+#### Stdlib hover: C-level builtins not indexed
+
+The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
+
+**Fallback path**: pike-ai-kb `pike-signature` tool — blocked on [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) (C-level predef resolution gap). The LSP's predef builtin index (283 symbols from runtime introspection) covers the gap for now.
+
+**Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
+
+**Current state**: `predef-builtin-index.json` (283 symbols) is a temporary workaround. When [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) ships its `all_constants()` fallback, evaluate removing the predef index in favor of kb queries.
+
+#### AutoDoc hover coverage depends on codebase conventions — BY DESIGN
+
+AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
+
+**Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.
+
+**Rationale**: AutoDoc is opt-in documentation. The fallback to tree-sitter declared types ensures hover always works, even for undocumented symbols.
+
+### Type Resolution (Phase 7)
+
+#### Type resolution requires explicit type annotations — PARTIALLY RESOLVED (US-008)
+
+**US-008 update**: The symbol table now captures `assignedType` from simple initializer expressions. When a variable is declared as `mixed x = Dog()`, `assignedType` is set to `Dog`, enabling type resolution through the existing `resolveType()` pipeline.
+
+**Remaining gap**: Variables initialized by assignment (not declaration) are
+not covered by `assignedType`. Complex expressions that don't reduce to a
+simple constructor or ternary call still require explicit type annotations.
+
+**Impact**: Arrow/dot member completion and go-to-definition now work for
+variables initialized with simple constructors or ternary expressions, even when
+declared as `mixed`. Other complex initializers still require explicit annotations.
+
+### Severity Classification
+
+#### Critical (Blocks core functionality)
+
+*None currently.*
+
+#### High (Major features impaired)
+
+*None currently — cross-file inherited member completion was resolved (tests US-001, CB-2, US-002 now pass).*
+
+#### Medium (Known workarounds, tracked for resolution)
+
+|| Limitation | Severity | Workaround ||
+|------------|----------|------------||
+| Complex initializer type inference | Medium | `extractInitializerType` handles constructors and ternary. Complex expressions need explicit annotations. |
+| pike-fmt formatting | Medium | Phase 1: indentation normalization only. Operator spacing future work. |
+
+#### Low (Minor impact, rare occurrence)
+
+| Limitation | Severity | Workaround |
+|------------|----------|------------|
+| pike-introspect availability | Low | CI installs it. Worker starts without it. Only `resolve` calls fail. |
+| pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
+
+### pike-introspect Availability Dependency
+
+The `PikeWorker.resolve()` method depends on pike-introspect v0.2.0 being installed via `pmp install`.
+The worker spawns with `-M modules/Introspect/src/` to find the module. If pike-introspect is not
+installed, `resolve` calls will fail with an error message.
+
+**Mitigation**: The worker starts successfully without pike-introspect — only `resolve` calls fail.
+CI installs pike-introspect via `pmp install` after the pmp step in `.github/workflows/ci.yml`.
+
+**pmp module path limitation**: pmp symlinks `modules/Introspect -> store-root` but Pike needs
+`-M modules/Introspect/src/`. Filed as TheSmuks/pmp#42. Workaround: explicit `-M` path in spawn args.
+
+### Current Upstream Issues
+
+#### pike-ai-kb: pike-signature cannot resolve C-level predef builtins
+
+**Upstream issue**: [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11)
+
+The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which does not find C-level predef builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.). The fix requires adding an `all_constants()` fallback to `pikeResolvePreamble()` in `src/pike-helpers.ts`.
+
+**LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
+
+---
+
+## Resolved Limitations
+
+### Cross-file inherited member completion — RESOLVED
 
 **Problem**: When class `Dog` inherits from class `Animal` defined in a different file, typing `Dog d; d->` only returned `Dog`'s own members. Inherited members from `Animal` (e.g., `speak`, `get_name`) were missing from completions.
 
@@ -43,7 +160,7 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 - US-007: Function return type completion (makeDog()-> shows Dog members)
 - US-008: Assignment inference (Dog d = makeDog(); d-> shows Dog members)
 
-### ~~Unicode identifiers not parsed correctly~~ — RESOLVED
+### Unicode identifiers not parsed correctly — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#1](https://github.com/TheSmuks/tree-sitter-pike/issues/1)
 
@@ -51,9 +168,7 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 
 **LSP update**: WASM binary updated, test updated from "expects truncation" to "expects full Unicode identifier." No workaround code was needed — the LSP already handled partial results gracefully.
 
-## Current Upstream Limitations
-
-### ~~catch expression in assignment context~~ — RESOLVED
+### catch expression in assignment context — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#3](https://github.com/TheSmuks/tree-sitter-pike/issues/3)
 
@@ -69,15 +184,7 @@ go-to-definition work for catch-block variables.
 scope for the block. References inside catch blocks are resolved correctly via the
 scope stack.
 
-### pike-ai-kb: pike-signature cannot resolve C-level predef builtins
-
-**Upstream issue**: [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11)
-
-The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which does not find C-level predef builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.). The fix requires adding an `all_constants()` fallback to `pikeResolvePreamble()` in `src/pike-helpers.ts`.
-
-**LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
-
-### ~~Missing field names on for_statement children~~ — RESOLVED
+### Missing field names on for_statement children — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#2](https://github.com/TheSmuks/tree-sitter-pike/issues/2)
 
@@ -86,7 +193,7 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 `childForFieldName('condition')`, and `childForFieldName('body')` directly. No positional
 scans remain.
 
-### ~~No scope-introducing nodes for while/switch/plain blocks~~ — RESOLVED
+### No scope-introducing nodes for while/switch/plain blocks — RESOLVED
 
 **Upstream issue**: [TheSmuks/tree-sitter-pike#4](https://github.com/TheSmuks/tree-sitter-pike/issues/4)
 
@@ -95,7 +202,7 @@ scans remain.
 `collectWhileStatement()`, `collectDoWhileStatement()`, and `collectSwitchStatement()`
 all use `childForFieldName('body')` directly. No positional scans remain for any of these.
 
-### ~~Cross-file class-body identifier inherit not resolved~~ — RESOLVED
+### Cross-file class-body identifier inherit not resolved — RESOLVED
 
 **Problem**: wireCrossFileInheritance() only searched file-level inherit/import declarations to find the target file for a class-body inherit Animal statement. Bare identifier inherits resolved to resolve_error NOT FOUND in oracle tests.
 
@@ -103,7 +210,7 @@ all use `childForFieldName('body')` directly. No positional scans remain for any
 
 **Verification**: bun test tests/lsp/crossFileOracle.test.ts — all 5 tests pass. Identifier inherits to cross-file classes now resolve correctly.
 
-### ~~`.pmod` file discovery~~ — RESOLVED
+### `.pmod` file discovery — RESOLVED
 
 **Upstream issue**: [TheSmuks/pike-fmt#17](https://github.com/TheSmuks/pike-fmt/issues/17)
 
@@ -112,8 +219,7 @@ all use `childForFieldName('body')` directly. No positional scans remain for any
 **LSP update**: `scripts/fmt.sh` no longer needs workarounds for `.pmod` discovery.
 Row 7 in the formatting table above is now marked RESOLVED.
 
-
-### ~~Configurable WASM path~~ — RESOLVED
+### Configurable WASM path — RESOLVED
 
 **Upstream issue**: [TheSmuks/pike-fmt#16](https://github.com/TheSmuks/pike-fmt/issues/16)
 
@@ -125,57 +231,7 @@ pointing to the build machine's source path, so auto-detection fails. The env va
 bypasses the broken search paths. A `postinstall` script (`scripts/postinstall-pike-fmt.js`)
 also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter runtime can find it.
 
-
-## Severity Classification
-
-### Critical (Blocks core functionality)
-
-*None currently.*
-
-
-### High (Major features impaired)
-
-*None currently — cross-file inherited member completion was resolved (tests US-001, CB-2, US-002 now pass).*
-
-### Medium (Known workarounds, tracked for resolution)
-
-|| Limitation | Severity | Workaround ||
-|------------|----------|------------||
-| Complex initializer type inference | Medium | `extractInitializerType` handles constructors and ternary. Complex expressions need explicit annotations. |
-| pike-fmt formatting | Medium | Phase 1: indentation normalization only. Operator spacing future work. |
-
-### Low (Minor impact, rare occurrence)
-
-| Limitation | Severity | Workaround |
-|------------|----------|------------|
-| pike-introspect availability | Low | CI installs it. Worker starts without it. Only `resolve` calls fail. |
-| pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
-
-## Cross-File Resolution Limitations (Phase 4)
-
-### No .so binary module resolution — PERMANENT
-
-The ModuleResolver skips `.so` (compiled C module) files. System modules that are pure C (e.g., `_Stdio`, `__builtin`) cannot be resolved by path lookup. This affects completion and go-to-definition for low-level system types.
-
-**Mitigation**: Most commonly used stdlib modules (Stdio, Array, Mapping, etc.) are implemented in Pike (.pmod files) and resolve correctly. Pure C modules could be handled in a future phase via pike-ai-kb or a pre-built system module map.
-
-**Rationale**: Resolving C modules requires parsing C header files or using libdwarf debugging info — neither is practical for an LSP that needs to stay fast. The mitigation covers 95% of use cases.
-
-### No joinnode multi-path merge — PERMANENT
-
-Pike's `joinnode` class merges symbols from multiple search paths when the same module name exists in multiple locations. The LSP uses first-match-wins instead. If a workspace contains a module with the same name as a system module, the workspace version takes precedence.
-
-**Impact**: Rare in practice. Workspace modules overriding system modules matches user expectation.
-
-### Import resolution is scoped to file-system paths — PERMANENT
-
-Import resolution searches workspace and system module paths. It does not query Pike at runtime. Dynamic module behavior (modules that register symbols at compile time) is not captured.
-
-**Impact**: Low for standard Pike code. Dynamic modules are rare in user workspaces.
-
-**Rationale**: Dynamic compilation-time module registration requires running Pike at LSP startup time for every file, which is too slow. File-system path resolution is the practical trade-off.
-
-### ~~.pmod directory contents not individually introspected by harness~~ — RESOLVED
+### .pmod directory contents not individually introspected by harness — RESOLVED
 
 The harness now recurses into directory-based `.pmod` modules via `listCorpusFiles()`.
 Snapshot names use `--` to flatten directory separators (e.g., `cross_pmod_dir.pmod/module.pmod`
@@ -186,25 +242,20 @@ snapshots: `cross_pmod_dir.pmod--module.json` and `cross_pmod_dir.pmod--helpers.
 and recurses if the path is a directory. `snapshotNameForFile()` flattens `/` to `--`.
 
 **Verified by**: `bun test harness/__tests__/` — all snapshot tests pass for the new entries.
-## Phase 5: Diagnostics and Hover Limitations
 
-### Diagnostics are real-time with debouncing (Phase 6 P2)
+### Tree-sitter WASM unavailability in VSCode extension host — RESOLVED
 
-Diagnostics from the Pike compiler are triggered on `textDocument/didChange` (debounced at 500ms) and `textDocument/didSave` (immediate). Three modes: realtime, saveOnly, off. Decision 0013.
+The client-side `TreeSitterSyntacticProvider` was removed entirely. The LSP server
+provides semantic tokens via the standard `textDocument/semanticTokens` protocol,
+and VSCode's TextMate grammar (`pike.tmLanguage.json`) handles syntactic highlighting.
+Neither requires WASM in the extension host.
 
-**Configuration**: `initializationOptions.diagnosticMode` in the `initialize` request. Default: `realtime`.
+**Deleted**: `client/treeSitterProvider.ts` (no longer imported by `extension.ts`).
 
-**Verified**: 50 rapid didChange events produce ≤ 3 diagnose invocations. Hover latency unaffected during in-flight diagnose. See `decisions/0013-verification.md`.
+**Impact**: No change to user-visible highlighting. Server-side semantic tokens and
+TextMate grammar already covered all cases.
 
-### Diagnostic column positions are approximate
-
-Pike's `compile_error` handler reports line numbers but not column positions. When Pike emits a diagnostic, the `character` field was always 0, making underlines span the entire line.
-
-**Resolution (Phase 20b)**: Added `lineToColumn()` helper that locates the first meaningful token on the diagnostic's line using tree-sitter and returns its column offset. Both `mergeDiagnostics` call sites now pass the parsed tree.
-
-**Remaining gap**: The column is approximate — it points to the first meaningful token on the line, not to the specific error token. For Pike compiler diagnostics, this is the best available signal. Parse diagnostics (tree-sitter errors) already have precise column positions.
-
-### ~~Hover does not use Pike runtime for type inference~~ — RESOLVED
+### Hover does not use Pike runtime for type inference — RESOLVED
 
 **US-009 update**: The `typeof_()` method is wired into the hover provider
 (`server.ts`), completion provider (`navigationHandler.ts`), and definition
@@ -214,17 +265,7 @@ now resolves through runtime inference.
 **Impact**: Hover, completion, and definition are type-aware for `mixed`
 variables when a runtime inferrer is available.
 
-### Stdlib hover: C-level builtins not indexed
-
-The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
-
-**Fallback path**: pike-ai-kb `pike-signature` tool — blocked on [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) (C-level predef resolution gap). The LSP's predef builtin index (283 symbols from runtime introspection) covers the gap for now.
-
-**Resolution**: Build a supplementary index from Pike's C source or Pike reference documentation.
-
-**Current state**: `predef-builtin-index.json` (283 symbols) is a temporary workaround. When [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) ships its `all_constants()` fallback, evaluate removing the predef index in favor of kb queries.
-
-### ~~AutoDoc hover requires save for cache population~~ — RESOLVED
+### AutoDoc hover requires save for cache population — RESOLVED
 
 AutoDoc XML is now extracted on `textDocument/didOpen` with content-hash dedup,
 not just on `textDocument/didSave`. Hover shows AutoDoc content immediately when
@@ -233,29 +274,7 @@ a file is opened, without requiring a save.
 **Implementation**: `ctx.documents.onDidOpen()` handler in `navigationHandler.ts`
 extracts AutoDoc on open using the same fire-and-forget pattern as didSave.
 
-### AutoDoc hover coverage depends on codebase conventions — BY DESIGN
-
-AutoDoc hover only works for symbols documented with `//!` comments. PikeExtractor produces XML only for documented symbols. In codebases without documentation conventions, hover falls through to tree-sitter declared types.
-
-**Corpus coverage**: 5 docgroups across 2 files — only `autodoc-documented.pike` and `compat-pike78.pike` have `//!` comments.
-
-**Rationale**: AutoDoc is opt-in documentation. The fallback to tree-sitter declared types ensures hover always works, even for undocumented symbols.
-
-## Phase 7: Type Resolution Limitations
-
-### ~~Type resolution requires explicit type annotations~~ — PARTIALLY RESOLVED (US-008)
-
-**US-008 update**: The symbol table now captures `assignedType` from simple initializer expressions. When a variable is declared as `mixed x = Dog()`, `assignedType` is set to `Dog`, enabling type resolution through the existing `resolveType()` pipeline.
-
-**Remaining gap**: Variables initialized by assignment (not declaration) are
-not covered by `assignedType`. Complex expressions that don't reduce to a
-simple constructor or ternary call still require explicit type annotations.
-
-**Impact**: Arrow/dot member completion and go-to-definition now work for
-variables initialized with simple constructors or ternary expressions, even when
-declared as `mixed`. Other complex initializers still require explicit annotations.
-
-### ~~Type resolution is same-file only for direct class lookup~~ — RESOLVED
+### Type resolution is same-file-only for direct class lookup — RESOLVED
 
 `resolveCrossFileType()` in `typeResolver.ts` now uses `getOrIndexSymbolTable()`
 instead of the sync `getSymbolTable()`. When the target file is not yet indexed,
@@ -264,16 +283,14 @@ so that cross-file type resolution works even for files not yet opened in the
 editor. Combined with background indexing at startup and `onDidChangeWatchedFiles`
 re-indexing, the staleness window is effectively eliminated.
 
-### ~~No inference through function return types~~ — RESOLVED
+### No inference through function return types — RESOLVED
 
 When `resolveMemberAccess()` encounters a call expression where the callee
 resolves to a function with a `declaredType` (return type annotation), it uses
 that as the type for member access. `f()->speak()` now resolves correctly when
 `f()` is declared to return `Dog`.
 
-## Phase 8: Rename Limitations
-
-### ~~Arrow/dot access rename uses name-based matching for unresolved references~~ — RESOLVED
+### Arrow/dot access rename uses name-based matching for unresolved references — RESOLVED
 
 When renaming `Dog.bark()`, cross-file `->bark` call sites are now type-filtered
 via `isReceiverTypeMatch()`. References where the LHS resolves to a different
@@ -283,7 +300,7 @@ class are excluded.
 `isReceiverTypeMatch()` check for same-file refs and cross-file refs (when
 `lhsName` is present in the reference).
 
-### ~~Rename does not rename through function return types~~ — RESOLVED
+### Rename does not rename through function return types — RESOLVED
 
 The reference collector already produces `type_ref` references for function return
 types, variable type annotations, and parameter types. `getRenameLocations()` picks
@@ -301,61 +318,33 @@ collector to parity with `collectReturnTypeIdRecursive()`. This means renaming
 - Renames a class inside mapping(Dog:int) variable type
 - Renames a class and updates parameter type annotation
 
-## Resolved: Type Inference (US-008/009/010)
+### Type Inference (US-008/009/010) — RESOLVED
 
 `extractInitializerType()` in `scope-helpers.ts` now handles `cond_expr` (ternary
 operator). When a ternary is encountered, both branches are examined and the
 first non-primitive identifier is returned. Variables like `mixed x = condition ? Dog() : Cat();`
 now get `assignedType = Dog`.
 
-### ~~typeof_() is only called for hover, not completion or definition~~ — RESOLVED
+### typeof_() is only called for hover, not completion or definition — RESOLVED
 
 `typeof_()` is wired into the hover provider (`server.ts`), completion provider
 (`navigationHandler.ts`), and definition provider (`navigationHandler.ts`).
 Member access on `mixed`-typed variables now resolves through runtime inference.
 
-### ~~PRIMITIVE_TYPES centralization is incomplete~~ — RESOLVED
+### PRIMITIVE_TYPES centralization is incomplete — RESOLVED
 
 `PRIMITIVE_TYPES` is defined once in `scope-helpers.ts` and re-exported through
 `symbolTable.ts`. All consumers import from the single canonical source. The
 pattern duplication issue is resolved.
 
-### ~~Chained inference requires multiple resolveType hops with no caching~~ — RESOLVED
+### Chained inference requires multiple resolveType hops with no caching — RESOLVED
 
 `resolveType()` now uses an optional `ResolutionCache` to memoize type resolution
 results within a single resolution chain. Each resolution hop checks the cache
 before doing work and stores results after. Caches are created per-request
 (completion/definition) and are not persisted.
 
-## pike-introspect Availability Dependency
-
-The `PikeWorker.resolve()` method depends on pike-introspect v0.2.0 being installed via `pmp install`.
-The worker spawns with `-M modules/Introspect/src/` to find the module. If pike-introspect is not
-installed, `resolve` calls will fail with an error message.
-
-**Mitigation**: The worker starts successfully without pike-introspect — only `resolve` calls fail.
-CI installs pike-introspect via `pmp install` after the pmp step in `.github/workflows/ci.yml`.
-
-**pmp module path limitation**: pmp symlinks `modules/Introspect -> store-root` but Pike needs
-`-M modules/Introspect/src/`. Filed as TheSmuks/pmp#42. Workaround: explicit `-M` path in spawn args.
- 
- ## VSCode Extension Host Environment Limitations
- 
- ### ~~Tree-sitter WASM unavailability in VSCode extension host~~ — RESOLVED
-
-The client-side `TreeSitterSyntacticProvider` was removed entirely. The LSP server
-provides semantic tokens via the standard `textDocument/semanticTokens` protocol,
-and VSCode's TextMate grammar (`pike.tmLanguage.json`) handles syntactic highlighting.
-Neither requires WASM in the extension host.
-
-**Deleted**: `client/treeSitterProvider.ts` (no longer imported by `extension.ts`).
-
-**Impact**: No change to user-visible highlighting. Server-side semantic tokens and
-TextMate grammar already covered all cases.
-
-## Inlay Hints Limitations
-
-### ~~Parameter name hints blocked — tree-sitter-pike AST structure~~ — UNBLOCKED
+### Parameter name hints blocked — tree-sitter-pike AST structure — UNBLOCKED
 
 G2 (parameter name inlay hints at call sites) was blocked because tree-sitter-pike
 did not produce dedicated AST nodes for function call arguments at statement level.

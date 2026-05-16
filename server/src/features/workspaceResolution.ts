@@ -168,9 +168,11 @@ async function resolveInheritTarget(
       if (indexed) {
         targetEntry = indexed;
       }
-    } catch {
+    } catch (err) {
       // On-demand indexing failure is non-fatal; fall through to the
-      // null-return below.
+      // null-return below. Error is not logged because ResolutionContext
+      // doesn't expose a logging interface.
+      void err;
     }
   }
 

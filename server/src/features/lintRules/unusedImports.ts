@@ -34,6 +34,7 @@ export const CODE_UNUSED_IMPORT = "P3005";
 export function detectUnusedImports(
   tree: Tree,
   table: SymbolTable,
+  source: string,
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
@@ -44,8 +45,7 @@ export function detectUnusedImports(
 
   if (imports.length === 0) return diagnostics;
 
-  // Get the full source text for fast string scanning
-  const source = tree.rootNode.text;
+  // Use the provided source text for fast string scanning
 
   for (const decl of imports) {
     // The name of the imported module (e.g., "Stdio", "Animal")

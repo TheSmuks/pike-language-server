@@ -12,6 +12,7 @@
 import type { CodeAction, CodeActionParams, TextEdit } from "vscode-languageserver/node";
 import { parse, isParserReady } from "../parser";
 import { buildSymbolTable, type Declaration, type SymbolTable } from "./symbolTable";
+import { CodeActionKindRefactorRewrite } from "../util/codeActionKinds.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -70,7 +71,7 @@ export function produceAutodocTemplateActions(
 
     actions.push({
       title: `Generate autodoc for ${decl.kind} "${decl.name}"`,
-      kind: "refactor.rewrite" as any,
+      kind: CodeActionKindRefactorRewrite,
       edit: {
         changes: {
           [uri]: [edit],

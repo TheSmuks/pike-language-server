@@ -93,10 +93,9 @@ function identifierAtPosition(
   tree: Tree,
   line: number,
   character: number,
+  lines: string[],
 ): string | null {
   // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const source = tree.rootNode.text;
-  const lines = source.split('\n');
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
 
   // Get the deepest node at the position
@@ -125,123 +124,123 @@ export function registerHoverHandler(
   connection: Connection,
   ctx: HoverContext,
 ): void {
-  /** Build a source-aware type inferrer using PikeWorker.typeof_(). */
-  const makeTypeInferrer = (source: string): ((varName: string) => Promise<string | null>) => {
-    return async (varName: string) => {
-      try {
-        const result = await ctx.worker.typeof_(source, varName);
-        if (result.type && !result.error) return result.type;
-      } catch {
-        // Worker unavailable — fall through
-      }
-      return null;
-    };
-  };
-
+  const makeTypeInferrer = buildHoverTypeInferrer(ctx);
   const baseResolutionCtx: ResolutionContext = {
     documents: ctx.documents,
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
   };
-  connection.onHover(async (params, token: CancellationToken) => {
-    if (token.isCancellationRequested) return null;
-    const doc = ctx.documents.get(params.textDocument.uri);
-    if (!doc) return null;
+  connection.onHover((params, token) =>
+    handleHover(ctx, baseResolutionCtx, makeTypeInferrer, params, token));
+}
 
-    const table = await ctx.getSymbolTable(params.textDocument.uri);
-    if (!table) return null;
+/** Build a type inferrer factory for hover. */
+function buildHoverTypeInferrer(
+  ctx: HoverContext,
+): (source: string) => (varName: string) => Promise<string | null> {
+  return (source: string) => async (varName: string) => {
+    try {
+      const result = await ctx.worker.typeof_(source, varName);
+      if (result.type && !result.error) return result.type;
+    } catch {
+      // Worker unavailable — fall through
+    }
+    return null;
+  };
+}
 
-    // Find the declaration at or containing this position
-    const decl = getDefinitionAt(
-      table,
-      params.position.line,
-      params.position.character,
+/** Handle a hover request. */
+async function handleHover(
+  ctx: HoverContext,
+  baseResolutionCtx: ResolutionContext,
+  makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  token: CancellationToken,
+): Promise<Hover | null> {
+  if (token.isCancellationRequested) return null;
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return null;
+
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table) return null;
+
+  const decl = getDefinitionAt(table, params.position.line, params.position.character);
+  if (decl) return resolveHoverForDecl(decl, ctx, params);
+
+  return resolveHoverFallback(ctx, baseResolutionCtx, makeTypeInferrer, table, doc, params);
+}
+
+/** Resolve hover when a local declaration is found. */
+async function resolveHoverForDecl(
+  decl: Declaration,
+  ctx: HoverContext,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Promise<Hover | null> {
+  // For inherit/import, resolve to target file autodoc.
+  if (decl.kind === "inherit" || decl.kind === "import") {
+    const crossFile = await ctx.index.resolveCrossFileDefinition(
+      params.textDocument.uri, params.position.line, params.position.character,
     );
+    if (crossFile) return crossFileHover(crossFile, ctx, params.position);
+  }
+  return formatHover(declForHover(decl, params.textDocument.uri, ctx));
+}
 
-    if (!decl) {
-      // Try cross-file resolution for hover
-      const crossFile = await ctx.index.resolveCrossFileDefinition(
-        params.textDocument.uri,
-        params.position.line,
-        params.position.character,
-      );
-      if (crossFile) {
-        return crossFileHover(crossFile, ctx, params.position);
-      }
+/** Resolve hover when no local declaration is found (cross-file, access, predef). */
+async function resolveHoverFallback(
+  ctx: HoverContext,
+  baseResolutionCtx: ResolutionContext,
+  makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
+  table: SymbolTable,
+  doc: { getText(): string; uri: string },
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Promise<Hover | null> {
+  const crossFile = await ctx.index.resolveCrossFileDefinition(
+    params.textDocument.uri, params.position.line, params.position.character,
+  );
+  if (crossFile) return crossFileHover(crossFile, ctx, params.position);
 
-      // Try arrow/dot access resolution for hover
-      const hoverTree = parse(doc.getText(), params.textDocument.uri);
-      const hoverResolutionCtx: ResolutionContext = {
-        ...baseResolutionCtx,
-        typeInferrer: makeTypeInferrer(doc.getText()),
-      };
-      const accessDecl = await resolveAccessDeclaration(
-        hoverResolutionCtx,
-        table,
-        params.textDocument.uri,
-        params.position.line,
-        params.position.character,
-        hoverTree,
-      );
-      if (accessDecl) {
-        return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
-      }
+  const hoverTree = parse(doc.getText(), params.textDocument.uri);
+  const hoverResolutionCtx: ResolutionContext = {
+    ...baseResolutionCtx, typeInferrer: makeTypeInferrer(doc.getText()),
+  };
+  const accessDecl = await resolveAccessDeclaration(
+    hoverResolutionCtx, table, params.textDocument.uri,
+    params.position.line, params.position.character, hoverTree,
+  );
+  if (accessDecl) return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
 
-      // Fallback: check if the identifier at cursor is a predef builtin or stdlib symbol.
-      // This handles bare predef calls (e.g. write("hi")) where there is no local
-      // declaration or access path to resolve.
-      const identName = identifierAtPosition(
-        hoverTree,
-        params.position.line,
-        params.position.character,
-      );
-      if (identName) {
-        const line = params.position.line;
-        const char = params.position.character;
+  return resolveHoverBuiltin(ctx, hoverTree, doc, params);
+}
 
-        // Check predef builtins first
-        const builtinSig = ctx.predefBuiltins[identName];
-        if (builtinSig) {
-          return formatHover({
-            name: identName,
-            signature: renderPredefSignature(identName, builtinSig),
-            documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
-            line,
-            character: char,
-            isAutodoc: true,
-          });
-        }
+/** Try to resolve hover from predef builtins or stdlib index. */
+function resolveHoverBuiltin(
+  ctx: HoverContext,
+  hoverTree: Tree,
+  doc: { getText(): string },
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Hover | null {
+  const identName = identifierAtPosition(
+    hoverTree, params.position.line, params.position.character, doc.getText().split('\n'),
+  );
+  if (!identName) return null;
 
-        // Check stdlib index
-        const stdlibEntry = ctx.stdlibIndex[`predef.${identName}`];
-        if (stdlibEntry) {
-          return formatHover({
-            name: identName,
-            signature: stdlibEntry.signature,
-            documentation: stdlibEntry.markdown,
-            line,
-            character: char,
-            isAutodoc: true,
-          });
-        }
-      }
+  const builtinSig = ctx.predefBuiltins[identName];
+  if (builtinSig) {
+    return formatHover({
+      name: identName, signature: renderPredefSignature(identName, builtinSig),
+      documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+      line: params.position.line, character: params.position.character, isAutodoc: true,
+    });
+  }
 
-      return null;
-    }
+  const stdlibEntry = ctx.stdlibIndex[`predef.${identName}`];
+  if (stdlibEntry) {
+    return formatHover({
+      name: identName, signature: stdlibEntry.signature, documentation: stdlibEntry.markdown,
+      line: params.position.line, character: params.position.character, isAutodoc: true,
+    });
+  }
 
-    // For inherit/import declarations, resolve to the target file and show
-    // its autodoc (the local declaration has no documentation of its own).
-    if (decl.kind === "inherit" || decl.kind === "import") {
-      const crossFile = await ctx.index.resolveCrossFileDefinition(
-        params.textDocument.uri,
-        params.position.line,
-        params.position.character,
-      );
-      if (crossFile) {
-        return crossFileHover(crossFile, ctx, params.position);
-      }
-    }
-
-    return formatHover(declForHover(decl, params.textDocument.uri, ctx));
-  });
+  return null;
 }

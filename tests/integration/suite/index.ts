@@ -190,6 +190,8 @@ describe("Client-side bug fix regressions", function () {
 
   // Skipped: requires VSCode extension host runtime to inspect output channels.
   // Tracked as manual smoke test — see MANUAL_SMOKE_TESTS.md.
+  // TODO: Create a tracking issue for automated output channel verification.
+  //   See: https://github.com/TheSmuks/pike-language-server/issues/XXX
   it.skip("only one 'Pike Language Server' output channel appears", async function () {
     // Bug fix: extension.ts passed the output channel to LanguageClient so that
     // duplicate log messages from the underlying transport are suppressed.

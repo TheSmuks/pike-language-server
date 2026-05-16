@@ -98,8 +98,9 @@ export async function produceDiagnostics(
   await initParser();
 
   const tree = parse(source);
-  const parseDiags = tree ? getParseDiagnostics(tree) : [];
-  const lintDiags = tree ? runLintRules(tree, buildSymbolTable(tree, uri, 1)) : [];
+  const lines = source.split('\n');
+  const parseDiags = tree ? getParseDiagnostics(tree, lines) : [];
+  const lintDiags = tree ? runLintRules(tree, buildSymbolTable(tree, uri, 1), source) : [];
 
   return {
     file: uri,
