@@ -98,14 +98,16 @@ echo "────────────────────────�
 (printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"processId":null,"rootUri":null,"capabilities":{}}}\n' | PIKE_LSP_STDIO=1 script -qfc "node '$SERVER_DIST' --stdio" /dev/null 2>/dev/null || true) &
 SERVER_PID=$!
 sleep 2
+SERVER_EXIT=0
 if kill -0 "$SERVER_PID" 2>/dev/null; then
   kill "$SERVER_PID" 2>/dev/null
   wait "$SERVER_PID" 2>/dev/null
+  SERVER_EXIT=$?
 fi
-# The exit code from server is non-zero in headless, but we only care it didn't segfault
-# Check via dmesg that there were no segfaults (crashes)
-if dmesg | tail -20 | grep -q "segfault\|Segmentation fault"; then
-  FAIL "server segfaulted"
+# The exit code from server is non-zero in headless, but we only care it didn't segfault.
+# Signal 11 (SIGSEGV) or 139 (128+11) indicates a segfault.
+if [ "$SERVER_EXIT" -eq 139 ] || [ "$SERVER_EXIT" -eq 11 ]; then
+  FAIL "server segfaulted (exit $SERVER_EXIT)"
   exit 1
 fi
 PASS "server starts without crash"

@@ -19,128 +19,131 @@ export interface XmlNode {
 }
 
 // ---------------------------------------------------------------------------
-// XML parser
+// Mutable parse state (avoids closure capture in extracted helpers)
+// ---------------------------------------------------------------------------
+
+interface XmlParseState {
+  xml: string;
+  pos: number;
+}
+
+function skipWhitespace(s: XmlParseState): void {
+  while (s.pos < s.xml.length && /\s/.test(s.xml[s.pos])) s.pos++;
+}
+
+function decodeEntities(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function parseName(s: XmlParseState): string {
+  const start = s.pos;
+  while (s.pos < s.xml.length && /[\w:.\-]/.test(s.xml[s.pos])) s.pos++;
+  return s.xml.slice(start, s.pos);
+}
+
+function parseQuotedValue(s: XmlParseState): string {
+  if (s.xml[s.pos] !== '"' && s.xml[s.pos] !== "'") return "";
+  const quote = s.xml[s.pos++];
+  const start = s.pos;
+  while (s.pos < s.xml.length && s.xml[s.pos] !== quote) s.pos++;
+  const value = s.xml.slice(start, s.pos);
+  s.pos++; // skip closing quote
+  return decodeEntities(value);
+}
+
+function parseAttrs(s: XmlParseState): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  while (s.pos < s.xml.length) {
+    skipWhitespace(s);
+    if (s.pos >= s.xml.length || s.xml[s.pos] === ">" || s.xml[s.pos] === "/") break;
+    const name = parseName(s);
+    if (!name) break;
+    skipWhitespace(s);
+    if (s.xml[s.pos] === "=") {
+      s.pos++;
+      skipWhitespace(s);
+      attrs[name] = parseQuotedValue(s);
+    } else {
+      attrs[name] = "";
+    }
+  }
+  return attrs;
+}
+
+function parseNodes(s: XmlParseState): XmlNode[] {
+  const nodes: XmlNode[] = [];
+  while (s.pos < s.xml.length) {
+    if (s.xml[s.pos] === "<") {
+      if (s.xml[s.pos + 1] === "?") {
+        const end = s.xml.indexOf("?>", s.pos + 2);
+        s.pos = end >= 0 ? end + 2 : s.xml.length;
+        continue;
+      }
+      if (s.xml[s.pos + 1] === "!" && s.xml.slice(s.pos, s.pos + 4) === "<!--") {
+        const end = s.xml.indexOf("-->", s.pos + 4);
+        s.pos = end >= 0 ? end + 3 : s.xml.length;
+        continue;
+      }
+      if (s.xml[s.pos + 1] === "/") break; // closing tag — return to parent
+      nodes.push(parseElement(s));
+    } else {
+      nodes.push(parseText(s));
+    }
+  }
+  return nodes;
+}
+
+function parseElement(s: XmlParseState): XmlNode {
+  s.pos++; // skip <
+  const tag = parseName(s);
+  const attrs = parseAttrs(s);
+  skipWhitespace(s);
+
+  // Self-closing?
+  if (s.xml[s.pos] === "/" && s.xml[s.pos + 1] === ">") {
+    s.pos += 2;
+    return { type: "element", tag, attrs, children: [] };
+  }
+
+  s.pos++; // skip >
+  const children = parseNodes(s);
+
+  // Consume closing tag
+  if (s.xml[s.pos] === "<" && s.xml[s.pos + 1] === "/") {
+    const closeEnd = s.xml.indexOf(">", s.pos + 2);
+    s.pos = closeEnd >= 0 ? closeEnd + 1 : s.xml.length;
+  }
+
+  return { type: "element", tag, attrs, children };
+}
+
+function parseText(s: XmlParseState): XmlNode {
+  const start = s.pos;
+  while (s.pos < s.xml.length && s.xml[s.pos] !== "<") s.pos++;
+  return { type: "text", text: decodeEntities(s.xml.slice(start, s.pos)) };
+}
+
+// ---------------------------------------------------------------------------
+// XML parser entry point
 // ---------------------------------------------------------------------------
 
 /**
  * Parse a well-formed XML string into a tree of XmlNodes.
  *
  * Handles: elements, attributes, self-closing tags, text content, CDATA,
- * XML entities (&amp; &lt; &gt; &quot; &apos; &#NNN;).
+ * XML entities (&amp; &lt; &gt; &quot; &apos;).
  * Skips: processing instructions (<?...?>), comments (<!--...-->).
  */
 export function parseXml(xml: string): XmlNode {
-  let pos = 0;
-
-  function skipWhitespace(): void {
-    while (pos < xml.length && /\s/.test(xml[pos])) pos++;
-  }
-
-  function decodeEntities(s: string): string {
-    return s
-      .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
-      .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
-      .replace(/&amp;/g, "&")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&quot;/g, '"')
-      .replace(/&apos;/g, "'");
-  }
-
-  function parseName(): string {
-    const start = pos;
-    while (pos < xml.length && /[\w:.\-]/.test(xml[pos])) pos++;
-    return xml.slice(start, pos);
-  }
-
-  function parseQuotedValue(): string {
-    if (xml[pos] !== '"' && xml[pos] !== "'") return "";
-    const quote = xml[pos++];
-    const start = pos;
-    while (pos < xml.length && xml[pos] !== quote) pos++;
-    const value = xml.slice(start, pos);
-    pos++; // skip closing quote
-    return decodeEntities(value);
-  }
-
-  function parseAttrs(): Record<string, string> {
-    const attrs: Record<string, string> = {};
-    while (pos < xml.length) {
-      skipWhitespace();
-      if (pos >= xml.length || xml[pos] === ">" || xml[pos] === "/") break;
-      const name = parseName();
-      if (!name) break;
-      skipWhitespace();
-      if (xml[pos] === "=") {
-        pos++;
-        skipWhitespace();
-        attrs[name] = parseQuotedValue();
-      } else {
-        attrs[name] = "";
-      }
-    }
-    return attrs;
-  }
-
-  function parseNodes(): XmlNode[] {
-    const nodes: XmlNode[] = [];
-    while (pos < xml.length) {
-      if (xml[pos] === "<") {
-        // Skip processing instructions and comments
-        if (xml[pos + 1] === "?") {
-          const end = xml.indexOf("?>", pos + 2);
-          pos = end >= 0 ? end + 2 : xml.length;
-          continue;
-        }
-        if (xml[pos + 1] === "!" && xml.slice(pos, pos + 4) === "<!--") {
-          const end = xml.indexOf("-->", pos + 4);
-          pos = end >= 0 ? end + 3 : xml.length;
-          continue;
-        }
-        if (xml[pos + 1] === "/") break; // closing tag — return to parent
-        nodes.push(parseElement());
-      } else {
-        nodes.push(parseText());
-      }
-    }
-    return nodes;
-  }
-
-  function parseElement(): XmlNode {
-    pos++; // skip <
-    const tag = parseName();
-    const attrs = parseAttrs();
-    skipWhitespace();
-
-    // Self-closing?
-    if (xml[pos] === "/" && xml[pos + 1] === ">") {
-      pos += 2;
-      return { type: "element", tag, attrs, children: [] };
-    }
-
-    pos++; // skip >
-
-    const children = parseNodes();
-
-    // Consume closing tag
-    if (xml[pos] === "<" && xml[pos + 1] === "/") {
-      const closeEnd = xml.indexOf(">", pos + 2);
-      pos = closeEnd >= 0 ? closeEnd + 1 : xml.length;
-    }
-
-    return { type: "element", tag, attrs, children };
-  }
-
-  function parseText(): XmlNode {
-    const start = pos;
-    while (pos < xml.length && xml[pos] !== "<") pos++;
-    const text = decodeEntities(xml.slice(start, pos));
-    return { type: "text", text };
-  }
-
-  const nodes = parseNodes();
-
-  // Return the root element (skip any text nodes before it)
+  const state: XmlParseState = { xml, pos: 0 };
+  const nodes = parseNodes(state);
   const root = nodes.find((n) => n.type === "element");
   return root ?? { type: "text", text: "" };
 }

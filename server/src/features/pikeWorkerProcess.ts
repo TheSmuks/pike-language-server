@@ -25,6 +25,7 @@ import {
   PikeUnavailableError,
   clampPriority,
 } from "./pikeWorkerTypes.js";
+import { shouldEvictIdle, shouldForceRestart as checkForceRestart } from "./pikeWorkerLifecycle.js";
 
 // ---------------------------------------------------------------------------
 // Path resolution helpers
@@ -407,17 +408,11 @@ export abstract class PikeWorkerProcess {
   protected resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
-      if (this.proc && !this.proc.killed && this.pending.size === 0 && this.queues.every(q => q.length === 0)) {
-        // Delegate to stop() for SIGTERM→SIGKILL escalation and full cleanup.
-        // Direct kill+null would bypass escalation, risking zombie processes
-        // on shared servers when Pike ignores SIGTERM.
+      if (shouldEvictIdle(this.proc, this.pending.size, this.queues.map(q => q.length))) {
         this.stop();
       }
     }, this.config.idleTimeoutMs);
-    // Don't prevent process exit
-    if (this.idleTimer.unref) {
-      this.idleTimer.unref();
-    }
+    if (this.idleTimer?.unref) this.idleTimer.unref();
   }
 
   protected clearIdleTimer(): void {
@@ -432,22 +427,11 @@ export abstract class PikeWorkerProcess {
   // ---------------------------------------------------------------------------
 
   protected shouldForceRestart(): boolean {
-    if (!this.proc || this.proc.killed) return false;
-
-    // Request count ceiling
-    if (this.requestCount >= this.config.maxRequestsBeforeRestart) {
-      return true;
-    }
-
-    // Active time ceiling
-    if (this.startTime > 0) {
-      const activeMinutes = (Date.now() - this.startTime) / 60_000;
-      if (activeMinutes >= this.config.maxActiveMinutes) {
-        return true;
-      }
-    }
-
-    return false;
+    return checkForceRestart(
+      this.proc, this.requestCount,
+      this.config.maxRequestsBeforeRestart,
+      this.startTime, this.config.maxActiveMinutes,
+    );
   }
 
   // ---------------------------------------------------------------------------

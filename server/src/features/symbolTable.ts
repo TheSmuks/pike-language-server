@@ -467,7 +467,8 @@ function collectUnresolvedArrowDotRefs(
 
 /** Check whether the LHS variable's declared type contains the target declaration. */
 function lhsTypeContainsDecl(table: SymbolTable, targetDeclId: number, ref: Reference): boolean {
-  const lhsDecl = findDeclInScopeAt(table, ref.lhsName!, ref.loc.line);
+  if (!ref.lhsName) return true; // no LHS name — include by default
+  const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
   const lhsTypeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
   if (!lhsTypeName) return true; // no type info — include by default
   const typeClass = table.declarations.find(

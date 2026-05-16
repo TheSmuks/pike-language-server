@@ -212,20 +212,60 @@ function wireCrossFileInheritance(
   return null;
 }
 
-function createSyntheticScope(
+/**
+ * Clone declarations from a remote scope into the local table.
+ * Handles both direct declarations and declarations from inherited scopes.
+ * Returns the array of cloned declaration IDs and the next available ID.
+ */
+function cloneRemoteDeclarations(
   table: SymbolTable,
-  scope: { id: number },
-  targetClass: Declaration,
-  targetClassScope: { declarations: number[]; inheritedScopes: number[]; range: { start: { line: number; character: number }; end: { line: number; character: number } } },
+  targetClassScope: { declarations: number[]; inheritedScopes: number[] },
   targetTable: SymbolTable,
   targetUri: string,
+  syntheticScopeId: number,
   startId: number,
-): { scopeId: number; nextId: number } {
-  const syntheticScopeId = startId;
-  const syntheticDeclIds: number[] = [];
-  let nextId = startId + 1;
+): { declIds: number[]; nextId: number } {
+  const declIds: number[] = [];
+  let nextId = startId;
 
-  for (const remoteDeclId of targetClassScope.declarations) {
+  // Clone direct declarations
+  const directResult = cloneDeclarationList(
+    table, targetClassScope.declarations, targetTable,
+    targetUri, syntheticScopeId, nextId,
+  );
+  declIds.push(...directResult.declIds);
+  nextId = directResult.nextId;
+
+  // Clone declarations from inherited scopes
+  for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+    const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+    if (!remoteInheritedScope) continue;
+    const inheritedResult = cloneDeclarationList(
+      table, remoteInheritedScope.declarations, targetTable,
+      targetUri, syntheticScopeId, nextId,
+    );
+    declIds.push(...inheritedResult.declIds);
+    nextId = inheritedResult.nextId;
+  }
+
+  return { declIds, nextId };
+}
+
+/**
+ * Clone a list of remote declaration IDs into the local symbol table.
+ */
+function cloneDeclarationList(
+  table: SymbolTable,
+  remoteDeclIds: number[],
+  targetTable: SymbolTable,
+  targetUri: string,
+  syntheticScopeId: number,
+  startId: number,
+): { declIds: number[]; nextId: number } {
+  const declIds: number[] = [];
+  let nextId = startId;
+
+  for (const remoteDeclId of remoteDeclIds) {
     const remoteDecl = targetTable.declById.get(remoteDeclId);
     if (!remoteDecl) continue;
     const d: Declaration = {
@@ -241,61 +281,34 @@ function createSyntheticScope(
     };
     table.declarations.push(d);
     table.declById.set(nextId, d);
-    syntheticDeclIds.push(nextId);
+    declIds.push(nextId);
     nextId++;
   }
 
-  for (const remoteInheritedId of targetClassScope.inheritedScopes) {
-    const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
-    if (!remoteInheritedScope) continue;
-    for (const remoteDeclId of remoteInheritedScope.declarations) {
-      const remoteDecl = targetTable.declById.get(remoteDeclId);
-      if (!remoteDecl) continue;
-      const d: Declaration = {
-        id: nextId,
-        name: remoteDecl.name,
-        kind: remoteDecl.kind,
-        nameRange: remoteDecl.nameRange,
-        range: remoteDecl.range,
-        scopeId: syntheticScopeId,
-        declaredType: remoteDecl.declaredType,
-        alias: remoteDecl.alias,
-        sourceUri: targetUri,
-      };
-      table.declarations.push(d);
-      table.declById.set(nextId, d);
-      syntheticDeclIds.push(nextId);
-      nextId++;
-    }
-  }
+  return { declIds, nextId };
+}
 
-  // Recursively create nested synthetic scopes for inherited scopes, preserving
-  // the full inheritance chain depth (critical for 3+ level chains like End→Middle→Base).
-  const nestedScopeIds: number[] = [];
-  for (const remoteInheritedId of targetClassScope.inheritedScopes) {
-    const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
-    if (!remoteInheritedScope) continue;
-    // Find the class declaration for this inherited scope so we can recursively
-    // create its synthetic scope.
-    const remoteInheritedClass = targetTable.declarations.find(
-      d => d.kind === 'class' &&
-        d.scopeId === remoteInheritedScope.parentId &&
-        remoteInheritedScope.range.start.line >= d.range.start.line &&
-        remoteInheritedScope.range.start.line <= d.range.end.line,
-    );
-    if (!remoteInheritedClass) continue;
-    const nestedResult = createSyntheticScope(
-      table,
-      { id: syntheticScopeId },
-      remoteInheritedClass,
-      remoteInheritedScope,
-      targetTable,
-      targetUri,
-      nextId,
-    );
-    nestedScopeIds.push(nestedResult.scopeId);
-    nextId = nestedResult.nextId;
-  }
+function createSyntheticScope(
+  table: SymbolTable,
+  scope: { id: number },
+  targetClass: Declaration,
+  targetClassScope: { declarations: number[]; inheritedScopes: number[]; range: { start: { line: number; character: number }; end: { line: number; character: number } } },
+  targetTable: SymbolTable,
+  targetUri: string,
+  startId: number,
+): { scopeId: number; nextId: number } {
+  const syntheticScopeId = startId;
+
+  // Clone all declarations (direct + inherited) from the remote scope
+  const { declIds: syntheticDeclIds, nextId: afterClone } = cloneRemoteDeclarations(
+    table, targetClassScope, targetTable, targetUri, syntheticScopeId, startId + 1,
+  );
+
+  // Recursively create nested synthetic scopes for inherited scopes,
+  // preserving the full inheritance chain (e.g., End→Middle→Base).
+  const { nestedScopeIds, nextId } = createNestedScopes(
+    table, syntheticScopeId, targetClassScope, targetTable, targetUri, afterClone,
+  );
 
   const syntheticScope = {
     id: syntheticScopeId,
@@ -309,4 +322,47 @@ function createSyntheticScope(
   table.scopeById.set(syntheticScopeId, syntheticScope);
 
   return { scopeId: syntheticScopeId, nextId };
+}
+
+/**
+ * Recursively create nested synthetic scopes for inherited scopes,
+ * preserving the full inheritance chain depth.
+ */
+function createNestedScopes(
+  table: SymbolTable,
+  syntheticScopeId: number,
+  targetClassScope: { inheritedScopes: number[] },
+  targetTable: SymbolTable,
+  targetUri: string,
+  startId: number,
+): { nestedScopeIds: number[]; nextId: number } {
+  const nestedScopeIds: number[] = [];
+  let nextId = startId;
+
+  for (const remoteInheritedId of targetClassScope.inheritedScopes) {
+    const remoteInheritedScope = targetTable.scopeById.get(remoteInheritedId);
+    if (!remoteInheritedScope) continue;
+
+    const remoteInheritedClass = targetTable.declarations.find(
+      d => d.kind === 'class' &&
+        d.scopeId === remoteInheritedScope.parentId &&
+        remoteInheritedScope.range.start.line >= d.range.start.line &&
+        remoteInheritedScope.range.start.line <= d.range.end.line,
+    );
+    if (!remoteInheritedClass) continue;
+
+    const nestedResult = createSyntheticScope(
+      table,
+      { id: syntheticScopeId },
+      remoteInheritedClass,
+      remoteInheritedScope,
+      targetTable,
+      targetUri,
+      nextId,
+    );
+    nestedScopeIds.push(nestedResult.scopeId);
+    nextId = nestedResult.nextId;
+  }
+
+  return { nestedScopeIds, nextId };
 }

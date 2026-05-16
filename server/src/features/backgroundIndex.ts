@@ -65,6 +65,170 @@ interface ParsedFile {
 const BATCH_SIZE = 8;
 
 // ---------------------------------------------------------------------------
+// Progress helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a work-done-progress token and send the "begin" notification.
+ * Returns `undefined` if the client doesn't support progress reporting.
+ */
+async function createProgressReporter(
+  connection: Connection,
+  totalFiles: number,
+): Promise<string | number | undefined> {
+  let token: string | number | undefined;
+  try {
+    token = `pike-index-${Date.now()}`;
+    await connection.sendRequest("window/workDoneProgress/create", { token });
+  } catch {
+    // Client doesn't support workDoneProgress — that's fine
+  }
+
+  if (token) {
+    try {
+      connection.sendProgress(workDoneProgress, token, {
+        kind: "begin",
+        title: "Indexing workspace",
+        message: `Found ${totalFiles} files`,
+      });
+    } catch {
+      // Ignore progress errors
+    }
+  }
+  return token;
+}
+
+/** Send a progress "report" tick (percentage complete). */
+function reportProgress(
+  connection: Connection,
+  token: string | number | undefined,
+  indexed: number,
+  totalFiles: number,
+): void {
+  if (!token || indexed <= 0) return;
+  try {
+    connection.sendProgress(workDoneProgress, token, {
+      kind: "report",
+      message: `Indexed ${indexed}/${totalFiles} files`,
+      percentage: Math.round((indexed / totalFiles) * 100),
+    });
+  } catch {
+    // Ignore progress errors
+  }
+}
+
+/** Send a progress "end" notification. */
+function reportProgressDone(
+  connection: Connection,
+  token: string | number | undefined,
+  indexed: number,
+  errors: number,
+): void {
+  if (!token) return;
+  try {
+    connection.sendProgress(workDoneProgress, token, {
+      kind: "end",
+      message: `Indexed ${indexed} files (${errors} errors)`,
+    });
+  } catch {
+    // Ignore progress errors
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Batch processing
+// ---------------------------------------------------------------------------
+
+/** Read + parse a single file; returns null on failure. */
+async function parseFile(
+  filepath: string,
+  connection: Connection,
+): Promise<ParsedFile | null> {
+  const uri = pathToFileURL(filepath).href;
+  try {
+    const content = await readFile(filepath, "utf-8");
+    const tree = parse(content);
+    return { filepath, uri, content, tree };
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "EACCES" || code === "EPERM" || code === "ENOENT") {
+      logWarn(connection, `skipping ${filepath}: ${code}`);
+    } else {
+      logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:readFile(${filepath})`, err);
+    }
+    return null;
+  }
+}
+
+/** Upsert parsed files sequentially into the index. */
+async function upsertParsedBatch(
+  parsed: (ParsedFile | null)[],
+  index: WorkspaceIndex,
+  connection: Connection,
+): Promise<{ indexed: number; errors: number }> {
+  let indexed = 0;
+  let errors = 0;
+
+  for (const file of parsed) {
+    if (!file || !file.tree) continue;
+
+    try {
+      await index.upsertFile(
+        file.uri,
+        0,
+        file.tree,
+        file.content,
+        ModificationSource.BackgroundIndex,
+      );
+    } catch (err) {
+      errors++;
+      logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:upsertFile(${file.filepath})`, err);
+    }
+
+    // Release tree memory — these are not cached (parsed without URI).
+    file.tree.delete();
+    indexed++;
+  }
+  return { indexed, errors };
+}
+
+/**
+ * Process all pending files in batches.
+ * Reads + parses concurrently per batch, upserts sequentially.
+ */
+async function processBatches(
+  connection: Connection,
+  index: WorkspaceIndex,
+  pending: string[],
+  batchSize: number,
+  progressToken: string | number | undefined,
+  totalFiles: number,
+): Promise<{ indexed: number; errors: number }> {
+  let indexed = 0;
+  let errors = 0;
+
+  for (let start = 0; start < pending.length; start += batchSize) {
+    const batch = pending.slice(start, start + batchSize);
+
+    // Phase 1: Read and parse concurrently (no URI to avoid cache eviction)
+    const parsed: (ParsedFile | null)[] = await Promise.all(
+      batch.map(fp => parseFile(fp, connection)),
+    );
+
+    // Phase 2: Upsert sequentially (shared mutable state)
+    const result = await upsertParsedBatch(parsed, index, connection);
+    indexed += result.indexed;
+    errors += result.errors;
+
+    reportProgress(connection, progressToken, indexed, totalFiles);
+
+    // Yield to the event loop between batches
+    await new Promise(resolve => setTimeout(resolve, 0));
+  }
+  return { indexed, errors };
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -86,8 +250,6 @@ export async function indexWorkspaceFiles(
     return;
   }
 
-  // Skip type-aware indexing if Pike is unavailable.
-  // Tree-sitter parsing still runs below for symbol table building.
   if (worker && !worker.isAvailable) {
     logInfo(connection, "Pike binary not found — skipping background indexing");
     return;
@@ -95,7 +257,6 @@ export async function indexWorkspaceFiles(
 
   // Discover files via recursive directory walk
   const files: string[] = [];
-
   try {
     await discoverFiles(workspaceRoot, files);
   } catch (err) {
@@ -110,122 +271,16 @@ export async function indexWorkspaceFiles(
 
   logInfo(connection, `indexing ${files.length} workspace files (batch size ${batchSize})`);
 
-  // Report progress start
-  let progressToken: string | number | undefined;
-  try {
-    const token = `pike-index-${Date.now()}`;
-    await connection.sendRequest("window/workDoneProgress/create", {
-      token,
-    });
-    progressToken = token;
-  } catch {
-    // Client doesn't support workDoneProgress — that's fine
-  }
+  const progressToken = await createProgressReporter(connection, files.length);
 
-  if (progressToken) {
-    try {
-      connection.sendProgress(workDoneProgress, progressToken, {
-        kind: "begin",
-        title: "Indexing workspace",
-        message: `Found ${files.length} files`,
-      });
-    } catch {
-      // Ignore progress errors
-    }
-  }
+  // Filter out already-indexed files (open documents) before batching
+  const pending = files.filter(fp => !index.getFile(pathToFileURL(fp).href));
 
-  let indexed = 0;
-  let errors = 0;
+  const { indexed, errors } = await processBatches(
+    connection, index, pending, batchSize, progressToken, files.length,
+  );
 
-  // Filter out already-indexed files (open documents) before batching.
-  const pending = files.filter(filepath => {
-    const uri = pathToFileURL(filepath).href;
-    return !index.getFile(uri);
-  });
-
-  // Process files in parallel batches: read + parse concurrently,
-  // then upsert sequentially to keep the index consistent.
-  for (let batchStart = 0; batchStart < pending.length; batchStart += batchSize) {
-    const batch = pending.slice(batchStart, batchStart + batchSize);
-
-    // Phase 1: Read and parse all files in the batch concurrently.
-    // Parse without URI to avoid caching — these trees are immediately
-    // consumed by Phase 2. With caching, concurrent parses can evict
-    // each other's trees from the LRU cache, causing tree.delete() to
-    // null out rootNode before Phase 2 reads it.
-    const parsed: (ParsedFile | null)[] = await Promise.all(
-      batch.map(async (filepath) => {
-        const uri = pathToFileURL(filepath).href;
-        try {
-          const content = await readFile(filepath, "utf-8");
-          const tree = parse(content);
-          return { filepath, uri, content, tree };
-        } catch (err) {
-          const code = (err as NodeJS.ErrnoException).code;
-          // Permission and not-found errors are expected on shared servers.
-          // Log as warnings, not errors — they don't indicate a bug.
-          if (code === "EACCES" || code === "EPERM" || code === "ENOENT") {
-            logWarn(connection, `skipping ${filepath}: ${code}`);
-          } else {
-            errors++;
-            logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:readFile(${filepath})`, err);
-          }
-          return null;
-        }
-      }),
-    );
-
-    // Phase 2: Upsert parsed files sequentially (shared mutable state).
-    for (const file of parsed) {
-      if (!file || !file.tree) continue;
-
-      try {
-        await index.upsertFile(
-          file.uri,
-          0,
-          file.tree,
-          file.content,
-          ModificationSource.BackgroundIndex,
-        );
-      } catch (err) {
-        errors++;
-        logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:upsertFile(${file.filepath})`, err);
-      }
-
-      // Release tree memory — these are not cached (parsed without URI).
-      file.tree.delete();
-
-      indexed++;
-    }
-
-    // Report progress periodically (every batch)
-    if (progressToken && indexed > 0) {
-      try {
-        connection.sendProgress(workDoneProgress, progressToken, {
-          kind: "report",
-          message: `Indexed ${indexed}/${files.length} files`,
-          percentage: Math.round((indexed / files.length) * 100),
-        });
-      } catch {
-        // Ignore progress errors
-      }
-    }
-
-    // Yield to the event loop between batches
-    await new Promise(resolve => setTimeout(resolve, 0));
-  }
-
-  // Report completion
-  if (progressToken) {
-    try {
-      connection.sendProgress(workDoneProgress, progressToken, {
-        kind: "end",
-        message: `Indexed ${indexed} files (${errors} errors)`,
-      });
-    } catch {
-      // Ignore progress errors
-    }
-  }
+  reportProgressDone(connection, progressToken, indexed, errors);
 
   logInfo(
     connection,

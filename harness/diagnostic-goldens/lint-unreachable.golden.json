@@ -7,11 +7,11 @@
       "range": {
         "start": {
           "line": 17,
-          "character": 16
+          "character": 10
         },
         "end": {
           "line": 17,
-          "character": 17
+          "character": 11
         }
       },
       "severity": 4,
@@ -23,11 +23,11 @@
       "range": {
         "start": {
           "line": 10,
-          "character": 4
+          "character": 2
         },
         "end": {
           "line": 10,
-          "character": 19
+          "character": 17
         }
       },
       "severity": 2,
@@ -39,11 +39,11 @@
       "range": {
         "start": {
           "line": 17,
-          "character": 12
+          "character": 6
         },
         "end": {
           "line": 17,
-          "character": 23
+          "character": 17
         }
       },
       "severity": 2,
@@ -55,11 +55,11 @@
       "range": {
         "start": {
           "line": 27,
-          "character": 12
+          "character": 6
         },
         "end": {
           "line": 27,
-          "character": 36
+          "character": 30
         }
       },
       "severity": 2,

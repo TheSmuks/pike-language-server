@@ -71,7 +71,8 @@ function narrowErrorRange(node: Node, lines: string[]): Range {
 
   // Fallback: look at the first token that has content.
   for (let i = 0; i < childCount; i++) {
-    const child = node.child(i)!;
+    const child = node.child(i);
+    if (!child) continue;
     if (child.type !== 'ERROR' && child.type !== 'missing') {
       return Range.create(toPosition(child.startPosition, lines), toPosition(child.endPosition, lines));
     }

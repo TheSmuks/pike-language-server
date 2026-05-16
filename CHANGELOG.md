@@ -6,7 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
 
+## [Unreleased]
+
+### Fixed
+
+  - Architecture audit iteration 3 remediation: 1 Critical, 5 High, 13 Medium,
+    13 Low findings resolved across server, scripts, and test infrastructure.
+  - **C1**: Stale `package-lock.json` regenerated via `bun install`.
+  - **H1**: `resolveCrossFileDefinition` now has `maxRetries` depth limit to
+    prevent unbounded recursion on concurrent indexer updates.
+  - **H3**: `indexWorkspaceFiles` split from 162 to 49 lines (6 helpers).
+  - **H4**: `registerAdvancedHandlers` split from 179 to 17 lines (6 handlers).
+  - **H5**: `declForHover` split from 160 to 34 lines (7 helpers).
+  - **M1**: Idle-eviction and memory-ceiling extracted to `pikeWorkerLifecycle.ts`.
+  - **M2**: `detectPikePaths` split into 5 phase-based functions.
+  - **M3**: `formattingHandler` extracted into named handler functions.
+  - **M4**: `parseXml` split into 9 module-level parsing functions.
+  - **M5**: `extractInitializerType` split into 4 focused helpers.
+  - **M6**: `produceGetterSetterActions` split into 3 helpers.
+  - **M7**: Extracted `synthesizeFileClassDecl()` — eliminated 4 duplicated blocks.
+  - **M8**: `registerCompletionHandlers` split from 117 to 21 lines.
+  - **M9**: `createSyntheticScope` split from 97 to 30 lines.
+  - **M10-M12**: Non-null assertions on tree-sitter nodes replaced with null guards.
+  - **M13**: `scopedResolver` cached by version string to bound memory.
+  - **L1-L4**: Logging added to 4 silent catch blocks.
+  - **L5**: `root.text` replaced with `content` parameter in `parsePikeVersion`.
+  - **L7**: `import.meta.dirname!` replaced with nullish coalescing fallback.
+  - **L8**: Segfault detection in `smoke-test.sh` uses process exit code.
+  - **L9**: Shell quoting bug fixed in `test-vscode.sh`.
+  - **L10**: CHANGELOG `[Unreleased]` moved to correct position.
+  - **L11**: Sed escape in `release.sh` switched to `|` delimiter.
+  - **L12**: 87 golden snapshot files regenerated.
+  - Performance benchmark `completion_cold` baseline raised to 200ms (shared
+    server reality), eliminating flaky CI failures.
+
+### Changed
+
+  - Audit documentation updated: `docs/audits/iteration-3.md` with full
+    remediation status table, `docs/audits/README.md` updated.
+
 ## [0.7.1] — 2026-05-16
+
+### Changed
+
+  - Audit documentation restructured into `docs/audits/` with per-iteration
+    files (`iteration-1.md`, `iteration-2.md`) replacing monolithic
+    `architecture-audit.md`.
 
 ### Fixed
 
@@ -36,14 +81,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **L2, L4, L6–L8**: `as never` casts replaced, zero-byte `=` file deleted,
     fetch-depth fixed, @types/node aligned, CHANGELOG ordering corrected.
   - **L9**: `known-limitations.md` restructured into Current/Resolved sections.
-
-### Changed
-
-  - Audit documentation restructured into `docs/audits/` with per-iteration
-    files (`iteration-1.md`, `iteration-2.md`) replacing monolithic
-    `architecture-audit.md`.
-
-## [Unreleased]
 
 ## [0.7.0] — 2026-05-16
 

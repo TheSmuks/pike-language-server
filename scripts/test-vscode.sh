@@ -29,7 +29,7 @@ if ! npx tsc 2>&1; then
 fi
 
 # Rename .js to .cjs for CommonJS explicit format
-find dist -name "*.js" -exec sh -c 'mv "$0" "${0%.js}.cjs"' {} \; 2>/dev/null || true
+find dist -name "*.js" -exec sh -c 'f="$1"; mv "$f" "${f%.js}.cjs"' _ {} \; 2>/dev/null || true
 echo "✓ Tests compiled to CommonJS format"
 echo ""
 

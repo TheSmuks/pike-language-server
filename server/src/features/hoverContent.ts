@@ -110,27 +110,17 @@ export function getSource(uri: string, documents: TextDocuments<TextDocument>): 
   return null;
 }
 
-/**
- * Build hover info for a declaration from any source.
- * Implements the three-tier hover resolution:
- *   Tier 1: Workspace AutoDoc — XML from PikeExtractor (cached)
- *   Tier 2: Stdlib — pre-computed index (hash lookup)
- *   Tier 3: Tree-sitter — bare declared type
- */
-export function declForHover(
+// ---------------------------------------------------------------------------
+// Signature extraction
+// ---------------------------------------------------------------------------
+
+/** Extract and clean the declaration signature from source lines. */
+function extractSignature(
   decl: {
-    name: string;
-    kind: string;
-    nameRange: { start: { line: number; character: number } };
     range: { start: { line: number; character: number }; end: { line: number; character: number } };
   },
-  uri: string,
-  ctx: HoverContentContext,
-): HoverInfo | null {
-  const source = getSource(uri, ctx.documents) ?? ctx.documents.get(uri)?.getText() ?? "";
-  const lines = source.split("\n");
-
-  // Extract declaration text from the tree-sitter node's actual range
+  lines: string[],
+): string {
   const startLine = decl.range.start.line;
   const endLine = decl.range.end.line;
   const startChar = decl.range.start.character;
@@ -152,130 +142,180 @@ export function declForHover(
     }
     raw = parts.join("\n");
   }
-  // Trim trailing semicolons, opening braces, and inline comments.
-  // For function/method declarations, strip the body: everything from
-  // the first '{' onward (handles both single-line and multi-line bodies).
-  const signature = raw
+  return raw
     .trim()
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .replace(/\/\/.*$/m, "")
     .replace(/\s*\{[\s\S]*$/, "")
     .replace(/\s*;\s*$/, "")
     .trim();
+}
 
-  // Tier 1: Workspace AutoDoc — check XML cache, render from XML
+// ---------------------------------------------------------------------------
+// Tier resolution helpers
+// ---------------------------------------------------------------------------
+
+/** Make a HoverInfo object with common fields filled. */
+function makeHoverInfo(
+  decl: { name: string; nameRange: { start: { line: number; character: number } } },
+  signature: string,
+  documentation: string,
+  isAutodoc = false,
+): HoverInfo {
+  return {
+    name: decl.name,
+    signature,
+    documentation,
+    line: decl.nameRange.start.line,
+    character: decl.nameRange.start.character,
+    isAutodoc,
+  };
+}
+
+/** Tier 1: Workspace AutoDoc — render from cached XML. */
+function hoverFromAutodoc(
+  uri: string,
+  decl: { name: string; nameRange: { start: { line: number; character: number } } },
+  signature: string,
+  ctx: HoverContentContext,
+): HoverInfo | null {
   const cachedAutodoc = ctx.autodocCache.get(uri);
-  if (cachedAutodoc?.xml) {
-    const rendered = renderAutodoc(cachedAutodoc.xml, decl.name, signature);
-    if (rendered) {
-      return {
-        name: decl.name,
-        signature: rendered.signature || signature,
-        documentation: rendered.markdown,
-        line: decl.nameRange.start.line,
-        character: decl.nameRange.start.character,
-        isAutodoc: true,
-      };
-    }
-  }
+  if (!cachedAutodoc?.xml) return null;
 
-  // Tier 2: Stdlib — hash-table lookup in pre-computed index
+  const rendered = renderAutodoc(cachedAutodoc.xml, decl.name, signature);
+  if (!rendered) return null;
+
+  return makeHoverInfo(decl, rendered.signature || signature, rendered.markdown, true);
+}
+
+/** Tier 2: Stdlib + predef builtins — hash-table lookup. */
+function hoverFromStdlib(
+  decl: { name: string; nameRange: { start: { line: number; character: number } } },
+  signature: string,
+  ctx: HoverContentContext,
+): HoverInfo | null {
   const entry = ctx.stdlibIndex[`predef.${decl.name}`];
   if (entry) {
-    return {
-      name: decl.name,
-      signature: entry.signature,
-      documentation: entry.markdown,
-      line: decl.nameRange.start.line,
-      character: decl.nameRange.start.character,
-      isAutodoc: true,
-    };
+    return makeHoverInfo(decl, entry.signature, entry.markdown, true);
   }
 
-  // Tier 2b: Predef builtins (C-level functions) — type signature lookup
   const builtinSig = ctx.predefBuiltins[decl.name];
   if (builtinSig) {
-    return {
-      name: decl.name,
-      signature: renderPredefSignature(decl.name, builtinSig),
-      documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
-      line: decl.nameRange.start.line,
-      character: decl.nameRange.start.character,
-      isAutodoc: true,
-    };
+    return makeHoverInfo(
+      decl,
+      renderPredefSignature(decl.name, builtinSig),
+      `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+      true,
+    );
   }
 
-  // Tier 2b: Extract //! autodoc from lines immediately above the declaration.
-  // This handles cross-file hovers where the PikeExtractor XML cache isn't
-  // populated. Collects consecutive //! lines above the declaration, grouping
-  // them into paragraphs on blank //! separators.
-  {
-    const declLine = decl.nameRange.start.line;
-    if (declLine > 0) {
-      const autodocLines: string[] = [];
-      let scanLine = declLine - 1;
-      while (scanLine >= 0) {
-        const lineText = (lines[scanLine] ?? "").trimEnd();
-        if (lineText.endsWith("*/")) {
-          // Block comment end — scan backwards for start
-          const blockEnd = scanLine;
-          let blockStart = scanLine;
-          for (let bl = scanLine; bl >= 0; bl--) {
-            if ((lines[bl] ?? "").includes("/*")) {
-              blockStart = bl;
-              break;
-            }
-          }
-          scanLine = blockStart - 1;
-          continue;
-        }
-        const match = lineText.match(/^\/\/!\s?(.*)/);
-        if (match) {
-          autodocLines.unshift(match[1]);
-          scanLine--;
-        } else if (lineText === "" || lineText.startsWith("//")) {
-          // Blank line or regular comment — skip but keep scanning
-          scanLine--;
-        } else {
+  return null;
+}
+
+/** Scan backwards from declLine, collecting //! autodoc lines. */
+function collectAutodocLines(lines: string[], declLine: number): string[] {
+  const autodocLines: string[] = [];
+  let scanLine = declLine - 1;
+  while (scanLine >= 0) {
+    const lineText = (lines[scanLine] ?? "").trimEnd();
+    if (lineText.endsWith("*/")) {
+      for (let bl = scanLine; bl >= 0; bl--) {
+        if ((lines[bl] ?? "").includes("/*")) {
+          scanLine = bl - 1;
           break;
         }
       }
-      // Split into paragraphs on blank //! lines, render autodoc markup
-      const paragraphs: string[] = [];
-      let current: string[] = [];
-      for (const line of autodocLines) {
-        if (line.length === 0) {
-          if (current.length > 0) {
-            paragraphs.push(current.join(" "));
-            current = [];
-          }
-        } else {
-          current.push(line);
-        }
-      }
-      if (current.length > 0) paragraphs.push(current.join(" "));
-      if (paragraphs.length > 0) {
-        const rendered = renderAutodocLines(autodocLines);
-        return {
-          name: decl.name,
-          signature: signature,
-          documentation: rendered || paragraphs.join("\n\n"),
-          line: decl.nameRange.start.line,
-          character: decl.nameRange.start.character,
-          isAutodoc: true,
-        };
-      }
+      continue;
+    }
+    const match = lineText.match(/^\/\/!\s?(.*)/);
+    if (match) {
+      autodocLines.unshift(match[1]);
+      scanLine--;
+    } else if (lineText === "" || lineText.startsWith("//")) {
+      scanLine--;
+    } else {
+      break;
     }
   }
+  return autodocLines;
+}
+
+/** Group autodoc lines into paragraphs on blank separators. */
+function autodocParagraphs(autodocLines: string[]): string[] {
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const line of autodocLines) {
+    if (line.length === 0) {
+      if (current.length > 0) {
+        paragraphs.push(current.join(" "));
+        current = [];
+      }
+    } else {
+      current.push(line);
+    }
+  }
+  if (current.length > 0) paragraphs.push(current.join(" "));
+  return paragraphs;
+}
+
+/** Tier 2b: //! autodoc comments above the declaration. */
+function hoverFromComments(
+  decl: { name: string; nameRange: { start: { line: number; character: number } } },
+  signature: string,
+  lines: string[],
+): HoverInfo | null {
+  const declLine = decl.nameRange.start.line;
+  if (declLine <= 0) return null;
+
+  const autodocLines = collectAutodocLines(lines, declLine);
+  if (autodocLines.length === 0) return null;
+
+  const paragraphs = autodocParagraphs(autodocLines);
+  if (paragraphs.length === 0) return null;
+
+  const rendered = renderAutodocLines(autodocLines);
+  return makeHoverInfo(decl, signature, rendered || paragraphs.join("\n\n"), true);
+}
+
+// ---------------------------------------------------------------------------
+// Public: declForHover
+// ---------------------------------------------------------------------------
+
+/**
+ * Build hover info for a declaration from any source.
+ * Implements the three-tier hover resolution:
+ *   Tier 1: Workspace AutoDoc — XML from PikeExtractor (cached)
+ *   Tier 2: Stdlib — pre-computed index (hash lookup)
+ *   Tier 3: Tree-sitter — bare declared type
+ */
+export function declForHover(
+  decl: {
+    name: string;
+    kind: string;
+    nameRange: { start: { line: number; character: number } };
+    range: { start: { line: number; character: number }; end: { line: number; character: number } };
+  },
+  uri: string,
+  ctx: HoverContentContext,
+): HoverInfo | null {
+  const source = getSource(uri, ctx.documents) ?? ctx.documents.get(uri)?.getText() ?? "";
+  const lines = source.split("\n");
+  const signature = extractSignature(decl, lines);
+
+  // Tier 1: Workspace AutoDoc — check XML cache, render from XML
+  const autodoc = hoverFromAutodoc(uri, decl, signature, ctx);
+  if (autodoc) return autodoc;
+
+  // Tier 2: Stdlib + predef builtins
+  const stdlib = hoverFromStdlib(decl, signature, ctx);
+  if (stdlib) return stdlib;
+
+  // Tier 2b: //! autodoc comments above the declaration
+  const comments = hoverFromComments(decl, signature, lines);
+  if (comments) return comments;
 
   // Tier 3: Fall through to tree-sitter declared type
-  return {
-    name: decl.name,
-    signature: signature,
-    documentation: "",
-    line: decl.nameRange.start.line,
-    character: decl.nameRange.start.character,
-  };
+  return makeHoverInfo(decl, signature, "");
 }
 
 /**
