@@ -5,8 +5,18 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [Unreleased]
 
 ## [0.7.2] — 2026-05-16
+
+### Changed
+
+  - Audit documentation updated: `docs/audits/iteration-3.md` with full
+    remediation status table, `docs/audits/README.md` updated.
+  - Added `scripts/quality-gates.sh` — automated anti-pattern detection
+    (function length, non-null assertions, silent catches, rootNode.text,
+    unbounded Maps, import.meta assertions, file length) derived from
+    3 audit iterations (99 findings).
 
 ### Fixed
 
@@ -39,13 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **L12**: 87 golden snapshot files regenerated.
   - Performance benchmark `completion_cold` baseline raised to 200ms (shared
     server reality), eliminating flaky CI failures.
-
-### Changed
-
-  - Audit documentation updated: `docs/audits/iteration-3.md` with full
-    remediation status table, `docs/audits/README.md` updated.
-
-## [Unreleased]
 
 ## [0.7.1] — 2026-05-16
 
