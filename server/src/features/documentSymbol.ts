@@ -230,7 +230,6 @@ function collectSymbols(container: Node, parentKind: string | undefined, lines: 
 // Public API
 // ---------------------------------------------------------------------------
 
-export function getDocumentSymbols(tree: Tree): DocumentSymbol[] {
-  const lines = tree.rootNode.text.split('\n');
+export function getDocumentSymbols(tree: Tree, lines: string[]): DocumentSymbol[] {
   return collectSymbols(tree.rootNode, undefined, lines);
 }

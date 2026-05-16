@@ -39,6 +39,7 @@ const IMPLICIT_VOID_TYPES = new Set(["void", "mixed"]);
 export function detectMissingReturn(
   tree: Tree,
   table: SymbolTable,
+  source: string,
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
 
@@ -52,7 +53,7 @@ export function detectMissingReturn(
     if (decl.name === "create") continue;
 
     // Find the function's AST node — decl.range is in UTF-16, convert to UTF-8 for tree-sitter
-    const declLineText = getLineText(tree.rootNode.text, decl.range.start.line);
+    const declLineText = getLineText(source, decl.range.start.line);
     const utf8Col = utf16ToUtf8(declLineText, decl.range.start.character);
     const funcNode = tree.rootNode.descendantForPosition({
       row: decl.range.start.line,

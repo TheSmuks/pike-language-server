@@ -35,6 +35,7 @@ export function mergeDiagnostics(
   pikeDiags: PikeDiagnostic[],
   tree?: Tree,
   lintDiags?: Diagnostic[],
+  lines?: string[],
 ): Diagnostic[] {
   // Build set of line numbers that have Pike diagnostics.
   // Parse diagnostics on these lines will be suppressed (Pike is more precise).
@@ -57,7 +58,7 @@ export function mergeDiagnostics(
 
   for (const pd of pikeDiags) {
     const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
-    const character = tree ? lineToColumn(tree, pd.line) : 0;
+    const character = tree ? lineToColumn(tree, pd.line, lines) : 0;
 
     let message = pd.message;
     if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
@@ -105,7 +106,7 @@ export function computeContentHash(source: string): string {
  * Used to provide column-level precision for Pike diagnostics, which only
  * report line numbers (Pike compile_error provides no column data).
  */
-export function lineToColumn(tree: Tree, line: number): number {
+export function lineToColumn(tree: Tree, line: number, lines?: string[]): number {
   // line is 0-based in tree-sitter; Pike diagnostics are 1-based
   const lspLine = Math.max(0, line);
   const node = tree.rootNode.descendantForPosition({ row: lspLine, column: 0 });
@@ -123,8 +124,7 @@ export function lineToColumn(tree: Tree, line: number): number {
   }
 
   // Fallback: scan the text for first non-whitespace character
-  const lines = tree.rootNode.text.split("\n");
-  const lineText = lines[lspLine];
+  const lineText = lines?.[lspLine];
   if (lineText !== undefined) {
     const match = lineText.match(/\S/);
     if (match) return match.index ?? 0;

@@ -21,15 +21,18 @@ import { produceCodeActions } from "./codeAction";
 import { produceAutodocTemplateActions } from "./autodocTemplate";
 import { produceGetterSetterActions } from "./getterSetter";
 import { searchWorkspaceSymbols } from "./workspaceSymbol";
-import stdlibAutodocIndex from "../data/stdlib-autodoc.json";
-import predefBuiltinIndex from "../data/predef-builtin-index.json";
+import stdlibAutodocIndexRaw from "../data/stdlib-autodoc.json";
+import predefBuiltinIndexRaw from "../data/predef-builtin-index.json";
+import {
+  validateStdlibAutodocIndexOrEmpty,
+  validatePredefBuiltinIndexOrEmpty,
+} from "../util/staticDataValidation.js";
 
 // ---------------------------------------------------------------------------
 // Protected names (rename guard)
 // ---------------------------------------------------------------------------
 
-const predefBuiltins: Record<string, string> =
-  predefBuiltinIndex as Record<string, string>;
+const predefBuiltins = validatePredefBuiltinIndexOrEmpty(predefBuiltinIndexRaw);
 
 /**
  * Build the set of protected symbol names that cannot be renamed.
@@ -53,8 +56,10 @@ function buildProtectedNames(
   return names;
 }
 
+const stdlibAutodocValidated = validateStdlibAutodocIndexOrEmpty(stdlibAutodocIndexRaw);
+
 const protectedNames: Set<string> = buildProtectedNames(
-  stdlibAutodocIndex as Record<string, unknown>,
+  stdlibAutodocValidated,
   predefBuiltins,
 );
 
@@ -77,7 +82,7 @@ function buildStdlibModules(
 }
 
 const stdlibModules: Set<string> = buildStdlibModules(
-  stdlibAutodocIndex as Record<string, unknown>,
+  stdlibAutodocValidated,
 );
 
 // ---------------------------------------------------------------------------

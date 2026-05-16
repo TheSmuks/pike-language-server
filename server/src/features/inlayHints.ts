@@ -32,6 +32,8 @@ export interface InlayHintContext {
   table: SymbolTable;
   /** Range to provide hints for. */
   range: { start: Position; end: Position };
+  /** Pre-split lines of the source text (avoids tree.rootNode.text allocation). */
+  lines: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -54,7 +56,7 @@ export function produceInlayHints(ctx: InlayHintContext): InlayHint[] {
 
   const rangeStartLine = range.start.line;
   const rangeEndLine = range.end.line;
-  const lines = tree.rootNode.text.split('\n');
+  const lines = ctx.lines;
 
   // G1: Type hints for untyped variable declarations
   for (const decl of table.declarations) {
@@ -187,51 +189,47 @@ function hintsForCallSite(argListNode: Node, table: SymbolTable, lines: string[]
  * - Method call: postfix_expr(postfix_expr("obj", "->", "method"), args) → "method"
  */
 function extractCalleeName(postfixExpr: Node): string | null {
-  const children = postfixExpr.children;
-  // The callee is the first child if it's an identifier postfix_expr,
-  // or the identifier after -> if it's a method call.
-  const callee = children[0];
+  const callee = postfixExpr.children[0];
   if (!callee) return null;
 
-  // If the callee is itself a postfix_expr (common case), drill into it.
   if (callee.type === "postfix_expr") {
-    const calleeChildren = callee.children;
-    // Method call: postfix_expr(postfix_expr, "->", identifier)
-    // The identifier after -> is the method name.
-    for (let i = 0; i < calleeChildren.length; i++) {
-      if ((calleeChildren[i].type === "->" || calleeChildren[i].type === "->?"
-           || calleeChildren[i].type === "?->")
-          && i + 1 < calleeChildren.length
-          && calleeChildren[i + 1].type === "identifier") {
-        return calleeChildren[i + 1].text;
-      }
-    }
-    // Not a method call — drill for the base identifier.
-    return extractCalleeName(callee);
+    return extractPostfixCalleeName(callee);
   }
 
-  // primary_expr wrapping an identifier.
   if (callee.type === "primary_expr") {
-    const inner = callee.child(0);
-    if (inner) {
-      if (inner.type === "identifier_expr") {
-        const nameNode = inner.childForFieldName("name");
-        return nameNode?.text ?? inner.text;
-      }
-      return inner.text;
-    }
+    return extractPrimaryExprName(callee);
   }
 
-  // Direct identifier (less common but possible).
-  if (callee.type === "identifier" || callee.type === "identifier_expr") {
-    if (callee.type === "identifier_expr") {
-      const nameNode = callee.childForFieldName("name");
-      return nameNode?.text ?? callee.text;
-    }
-    return callee.text;
+  if (callee.type === "identifier") return callee.text;
+  if (callee.type === "identifier_expr") {
+    return callee.childForFieldName("name")?.text ?? callee.text;
   }
 
   return null;
+}
+
+/** Extract callee name from a nested postfix_expr (method call or recursive). */
+function extractPostfixCalleeName(callee: Node): string | null {
+  const children = callee.children;
+  for (let i = 0; i < children.length; i++) {
+    const isArrow = children[i].type === "->" || children[i].type === "->?"
+      || children[i].type === "?->";
+    if (isArrow && i + 1 < children.length && children[i + 1].type === "identifier") {
+      return children[i + 1].text;
+    }
+  }
+  return extractCalleeName(callee);
+}
+
+/** Extract name from a primary_expr wrapping an identifier. */
+function extractPrimaryExprName(callee: Node): string | null {
+  const inner = callee.child(0);
+  if (!inner) return null;
+
+  if (inner.type === "identifier_expr") {
+    return inner.childForFieldName("name")?.text ?? inner.text;
+  }
+  return inner.text;
 }
 
 /**
@@ -359,50 +357,41 @@ function containsRangeSimple(
  * with kind "parameter" inside the function's scope.
  */
 function extractParameterNames(decl: Declaration, table: SymbolTable): string[] {
-  // Find the scope that contains the parameters.
-  // For functions, parameters live in the function's own scope.
-  // The function declaration's scopeId points to the enclosing scope,
-  // but parameters are in a child scope of the function.
-  //
-  // Alternative: search for the function's parameters node in the parse tree.
-  // We use the declaration's range to find it.
-  const paramNames: string[] = [];
-
-  // Look for parameter declarations in scopes whose parent contains this decl.
-  // Actually, the simplest approach: parameters with scopeId equal to any
-  // scope that overlaps with this function's range.
   for (const scope of table.scopes) {
-    // Check if this scope is a child of the function's scope and
-    // its range is within the function's declaration range.
     if (scope.kind === "function" || scope.kind === "block") {
-      const scopeRange = scope.range;
-      const declStart = decl.range.start;
-      const declEnd = decl.range.end;
-
-      // Check if scope is within the function declaration.
-      if (scopeRange.start.line >= declStart.line
-          && scopeRange.end.line <= declEnd.line) {
-        const declsInScope = table.declarations.filter(
-          d => d.scopeId === scope.id && d.kind === "parameter",
-        );
-        if (declsInScope.length > 0) {
-          // Sort by position to maintain order.
-          declsInScope.sort((a, b) => {
-            if (a.nameRange.start.line !== b.nameRange.start.line) {
-              return a.nameRange.start.line - b.nameRange.start.line;
-            }
-            return a.nameRange.start.character - b.nameRange.start.character;
-          });
-          for (const pd of declsInScope) {
-            paramNames.push(pd.name);
-          }
-          return paramNames;
-        }
-      }
+      const params = collectParamsFromFunctionScope(scope, decl, table);
+      if (params.length > 0) return params;
     }
   }
+  return [];
+}
 
-  return paramNames;
+/** Collect parameter names from a scope whose range overlaps the declaration. */
+function collectParamsFromFunctionScope(
+  scope: { id: number; kind: string; range: { start: { line: number }; end: { line: number } } },
+  decl: Declaration,
+  table: SymbolTable,
+): string[] {
+  const declStart = decl.range.start;
+  const declEnd = decl.range.end;
+
+  if (scope.range.start.line < declStart.line || scope.range.end.line > declEnd.line) {
+    return [];
+  }
+
+  const declsInScope = table.declarations.filter(
+    d => d.scopeId === scope.id && d.kind === "parameter",
+  );
+  if (declsInScope.length === 0) return [];
+
+  declsInScope.sort((a, b) => {
+    if (a.nameRange.start.line !== b.nameRange.start.line) {
+      return a.nameRange.start.line - b.nameRange.start.line;
+    }
+    return a.nameRange.start.character - b.nameRange.start.character;
+  });
+
+  return declsInScope.map(pd => pd.name);
 }
 
 /**

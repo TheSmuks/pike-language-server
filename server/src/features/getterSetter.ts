@@ -15,6 +15,7 @@
 import type { CodeAction, CodeActionParams, TextEdit } from "vscode-languageserver/node";
 import { parse, isParserReady } from "../parser";
 import { buildSymbolTable, type Declaration, type SymbolTable } from "./symbolTable";
+import { CodeActionKindRefactorRewrite } from "../util/codeActionKinds.js";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -99,7 +100,7 @@ export function produceGetterSetterActions(
 
     actions.push({
       title: `Generate getter for ${varName}`,
-      kind: "refactor.rewrite" as any,
+      kind: CodeActionKindRefactorRewrite,
       edit: {
         changes: { [uri]: [getterEdit] },
       },
@@ -118,7 +119,7 @@ export function produceGetterSetterActions(
 
     actions.push({
       title: `Generate setter for ${varName}`,
-      kind: "refactor.rewrite" as any,
+      kind: CodeActionKindRefactorRewrite,
       edit: {
         changes: { [uri]: [setterEdit] },
       },
@@ -139,7 +140,7 @@ export function produceGetterSetterActions(
 
     actions.push({
       title: `Generate getter and setter for ${varName}`,
-      kind: "refactor.rewrite" as any,
+      kind: CodeActionKindRefactorRewrite,
       edit: {
         changes: { [uri]: [combinedEdit] },
       },

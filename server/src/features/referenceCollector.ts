@@ -181,20 +181,18 @@ function extractLhsIdentifier(lhsNode: Node | undefined): string | undefined {
   if (lhsNode.type === 'identifier') return lhsNode.text;
   // Drill into first child recursively
   if (lhsNode.childCount > 0) {
-    return extractLhsIdentifier(lhsNode.child(0)!);
+    const child = lhsNode.child(0);
+    return child ? extractLhsIdentifier(child) : undefined;
   }
   return undefined;
 }
 
 function collectPostfixRef(node: Node, state: BuildState): void {
-  // postfix_expr is polymorphic — dispatch based on children
   const children = node.children;
-  const refLine = node.startPosition.row;
 
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
 
-    // Check if this child is an arrow/dot operator
     const isArrowOp = child.type === '->' || child.type === '->?' || child.type === '?->';
     const isDotOp = child.type === '.';
     if (!isArrowOp && !isDotOp) continue;
@@ -206,46 +204,7 @@ function collectPostfixRef(node: Node, state: BuildState): void {
     const lhsName = extractLhsIdentifier(children[i - 1]);
     const kind = isArrowOp ? 'arrow_access' : 'dot_access';
 
-    // Try to resolve the LHS variable to its type, then find the member in that type.
-    // This provides 'high' confidence references when same-file type resolution succeeds.
-    let resolvesTo: number | null = null;
-    let confidence: 'high' | 'low' = 'low';
-
-    if (lhsName) {
-      const lhsDeclId = findDeclInScope(lhsName, findScopeForNode(node, state) ?? -1, state);
-      if (lhsDeclId !== null) {
-        const lhsDecl = state.declMap.get(lhsDeclId);
-        if (lhsDecl) {
-          const typeName = resolveTypeName(lhsDecl);
-          if (typeName && !PRIMITIVE_TYPES.has(typeName)) {
-            // Look for a class declaration with this name in the current table
-            const typeClassDecl = state.declarations.find(
-              d => d.kind === 'class' && d.name === typeName,
-            );
-            if (typeClassDecl) {
-              // Look for the member in that class's scope
-              const classScopeId = state.scopeStack.find(sid => {
-                const s = state.scopeMap.get(sid);
-                return s?.kind === 'class';
-              });
-              if (classScopeId !== undefined) {
-                const classScope = state.scopeMap.get(classScopeId);
-                if (classScope) {
-                  for (const memberDeclId of classScope.declarations) {
-                    const memberDecl = state.declMap.get(memberDeclId);
-                    if (memberDecl && memberDecl.name === memberName) {
-                      resolvesTo = memberDeclId;
-                      confidence = 'high';
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
+    const { resolvesTo, confidence } = resolvePostfixMember(lhsName, memberName, node, state);
 
     state.references.push({
       name: memberName,
@@ -256,6 +215,55 @@ function collectPostfixRef(node: Node, state: BuildState): void {
       lhsName,
     });
   }
+}
+
+/** Resolve a postfix member access to its declaration, if possible. */
+function resolvePostfixMember(
+  lhsName: string | undefined,
+  memberName: string,
+  node: Node,
+  state: BuildState,
+): { resolvesTo: number | null; confidence: 'high' | 'low' } {
+  if (!lhsName) return { resolvesTo: null, confidence: 'low' };
+
+  const lhsDeclId = findDeclInScope(lhsName, findScopeForNode(node, state) ?? -1, state);
+  if (lhsDeclId === null) return { resolvesTo: null, confidence: 'low' };
+
+  const lhsDecl = state.declMap.get(lhsDeclId);
+  if (!lhsDecl) return { resolvesTo: null, confidence: 'low' };
+
+  const typeName = resolveTypeName(lhsDecl);
+  if (!typeName || PRIMITIVE_TYPES.has(typeName)) return { resolvesTo: null, confidence: 'low' };
+
+  const typeClassDecl = state.declarations.find(
+    d => d.kind === 'class' && d.name === typeName,
+  );
+  if (!typeClassDecl) return { resolvesTo: null, confidence: 'low' };
+
+  return findMemberInClassScope(memberName, state);
+}
+
+/** Search for a member in the current class scope. */
+function findMemberInClassScope(
+  memberName: string,
+  state: BuildState,
+): { resolvesTo: number | null; confidence: 'high' | 'low' } {
+  const classScopeId = state.scopeStack.find(sid => {
+    const s = state.scopeMap.get(sid);
+    return s?.kind === 'class';
+  });
+  if (classScopeId === undefined) return { resolvesTo: null, confidence: 'low' };
+
+  const classScope = state.scopeMap.get(classScopeId);
+  if (!classScope) return { resolvesTo: null, confidence: 'low' };
+
+  for (const memberDeclId of classScope.declarations) {
+    const memberDecl = state.declMap.get(memberDeclId);
+    if (memberDecl && memberDecl.name === memberName) {
+      return { resolvesTo: memberDeclId, confidence: 'high' };
+    }
+  }
+  return { resolvesTo: null, confidence: 'low' };
 }
 
 function collectTypeRef(node: Node, state: BuildState): void {
@@ -359,51 +367,74 @@ function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: Buil
   const isBareScope = scopeNode.type === 'inherit_specifier' &&
     !scopeNode.children.some(c => c.type === 'identifier');
   if (isBareScope) {
-    const classScopeId = findEnclosingClassScopeId(refNode, state);
-    if (classScopeId !== null) {
-      const classScope = state.scopeMap.get(classScopeId);
-      if (classScope && classScope.inheritedScopes.length > 0) {
-        const firstInherited = classScope.inheritedScopes[0];
-        return findDeclInScope(name, firstInherited, state);
-      }
-    }
-    return null;
+    return resolveBareScopeAccess(name, refNode, state);
   }
 
   // Identifier::name — resolve identifier to inherited class by alias or name
   const firstIdent = scopeNode.children.find(c => c.type === 'identifier');
   if (firstIdent) {
-    const inheritName = firstIdent.text;
-    const classScopeId = findEnclosingClassScopeId(refNode, state);
-    if (classScopeId !== null) {
-      const classScope = state.scopeMap.get(classScopeId);
-      if (!classScope) return null;
-      // Find the inherit declaration matching this name (by alias or path name)
-      for (const declId of classScope.declarations) {
-        const decl = state.declMap.get(declId);
-        if (decl && decl.kind === 'inherit') {
-          const matches = decl.alias === inheritName || decl.name === inheritName;
-          if (matches) {
-            // Find the inherited scope that wireInheritance wired for this inherit
-            // by looking for a class declaration with name == decl.name
-            for (const inheritedId of classScope.inheritedScopes) {
-              const inheritedScope = state.scopeMap.get(inheritedId);
-              if (!inheritedScope || inheritedScope.parentId === null) continue;
-              const parentScope = state.scopeMap.get(inheritedScope.parentId);
-              if (parentScope) {
-                for (const parentDeclId of parentScope.declarations) {
-                  const parentDecl = state.declMap.get(parentDeclId);
-                  if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === decl.name) {
-                    return findDeclInScope(name, inheritedId, state);
-                  }
-                }
-              }
-            }
-          }
-        }
+    return resolveScopedByIdentifier(name, firstIdent.text, refNode, state);
+  }
+
+  return null;
+}
+
+/** Resolve bare `::` scope access to the first inherited class. */
+function resolveBareScopeAccess(name: string, refNode: Node, state: BuildState): number | null {
+  const classScopeId = findEnclosingClassScopeId(refNode, state);
+  if (classScopeId === null) return null;
+
+  const classScope = state.scopeMap.get(classScopeId);
+  if (!classScope || classScope.inheritedScopes.length === 0) return null;
+
+  return findDeclInScope(name, classScope.inheritedScopes[0], state);
+}
+
+/** Resolve `Identifier::name` scoped access by inherit alias or path name. */
+function resolveScopedByIdentifier(
+  name: string,
+  inheritName: string,
+  refNode: Node,
+  state: BuildState,
+): number | null {
+  const classScopeId = findEnclosingClassScopeId(refNode, state);
+  if (classScopeId === null) return null;
+
+  const classScope = state.scopeMap.get(classScopeId);
+  if (!classScope) return null;
+
+  for (const declId of classScope.declarations) {
+    const decl = state.declMap.get(declId);
+    if (!decl || decl.kind !== 'inherit') continue;
+    if (decl.alias !== inheritName && decl.name !== inheritName) continue;
+
+    const match = resolveInheritedScopeMember(name, decl.name, classScope.inheritedScopes, state);
+    if (match !== null) return match;
+  }
+
+  return null;
+}
+
+/** Find a member declaration in an inherited scope matching the inherit name. */
+function resolveInheritedScopeMember(
+  name: string,
+  inheritDeclName: string,
+  inheritedScopes: number[],
+  state: BuildState,
+): number | null {
+  for (const inheritedId of inheritedScopes) {
+    const inheritedScope = state.scopeMap.get(inheritedId);
+    if (!inheritedScope || inheritedScope.parentId === null) continue;
+
+    const parentScope = state.scopeMap.get(inheritedScope.parentId);
+    if (!parentScope) continue;
+
+    for (const parentDeclId of parentScope.declarations) {
+      const parentDecl = state.declMap.get(parentDeclId);
+      if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === inheritDeclName) {
+        return findDeclInScope(name, inheritedId, state);
       }
     }
   }
-
   return null;
 }

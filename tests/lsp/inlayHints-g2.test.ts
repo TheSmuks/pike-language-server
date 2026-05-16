@@ -33,6 +33,7 @@ describe("Inlay hints — G2: parameter name hints", () => {
         start: { line: startLine, character: 0 },
         end: { line: endLine, character: 999 },
       },
+      lines: source.split('\n'),
     });
   }
 

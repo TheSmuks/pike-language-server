@@ -162,20 +162,28 @@ export interface BuildOptions {
  */
 export function buildSymbolTable(tree: Tree, uri: string, version: number, options?: BuildOptions): SymbolTable {
   const root = tree.rootNode;
-  if (!root) {
-    // Parse produced no root node — return empty table
-    return {
-      uri,
-      version,
-      declarations: [],
-      references: [],
-      scopes: [],
-      declById: new Map(),
-      scopeById: new Map(),
-    };
-  }
+  if (!root) return emptySymbolTable(uri, version);
 
-  const state: BuildState = {
+  const state = initBuildState(root);
+  runDeclarationPass(root, state);
+  const table = buildTable(state, uri, version);
+  wireInheritance(table, options?.index, uri);
+  runReferencePass(tree.rootNode, state, table);
+  return table;
+}
+
+/** Create an empty symbol table for failed parses. */
+function emptySymbolTable(uri: string, version: number): SymbolTable {
+  return {
+    uri, version,
+    declarations: [], references: [], scopes: [],
+    declById: new Map(), scopeById: new Map(),
+  };
+}
+
+/** Initialize builder state from the root node. */
+function initBuildState(root: { text: string }): BuildState {
+  return {
     nextId: 0,
     declarations: [],
     references: [],
@@ -185,32 +193,32 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     scopeStack: [],
     lines: root.text.split('\n'),
   };
+}
 
-  // Pass 1: declarations + scope tree
+/** Pass 1: collect declarations and build scope tree. */
+function runDeclarationPass(root: any, state: BuildState): void {
   pushScope(state, 'file', toRangeUtf16(root, state.lines));
   collectDeclarations(root, state);
-  popScope(state); // file scope
+  popScope(state);
+}
 
-  // Pass 2: build the table so we can wire inheritance
-  const table: SymbolTable = {
-    uri,
-    version,
+/** Build intermediate SymbolTable from state (before reference pass). */
+function buildTable(state: BuildState, uri: string, version: number): SymbolTable {
+  return {
+    uri, version,
     declarations: state.declarations,
-    references: [], // filled in pass 4
+    references: [],
     scopes: state.scopes,
     declById: state.declMap,
     scopeById: state.scopeMap,
   };
+}
 
-  // Pass 3: wire inheritance BEFORE reference resolution
-  wireInheritance(table, options?.index, uri);
-
-  // Pass 4: collect and resolve references (inheritance now wired)
+/** Pass 4: collect and resolve references. */
+function runReferencePass(rootNode: any, state: BuildState, table: SymbolTable): void {
   state.references = table.references;
-  collectReferences(tree.rootNode, state);
+  collectReferences(rootNode, state);
   table.references = state.references;
-
-  return table;
 }
 
 // ---------------------------------------------------------------------------
@@ -386,39 +394,44 @@ export function getReferencesTo(
   line: number,
   character: number,
 ): Reference[] {
-  // Find what's at this position
-  let targetDeclId: number | null = null;
+  const targetDeclId = findDeclIdAtPosition(table, line, character);
+  if (targetDeclId === null) return [];
 
-  // Is it a declaration?
+  const results = collectResolvedReferences(table, targetDeclId);
+  collectUnresolvedArrowDotRefs(table, targetDeclId, results);
+  return results;
+}
+
+/** Find the declaration ID at the given position (declaration or reference). */
+function findDeclIdAtPosition(
+  table: SymbolTable,
+  line: number,
+  character: number,
+): number | null {
+  // Check declarations first
   for (const decl of table.declarations) {
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
         character >= nr.start.character && character <= nr.end.character) {
-      targetDeclId = decl.id;
-      break;
+      return decl.id;
     }
   }
 
-  // Is it a reference?
-  if (targetDeclId === null) {
-    for (const ref of table.references) {
-      if (ref.loc.line === line) {
-        const nameStart = ref.loc.character;
-        const nameEnd = nameStart + ref.name.length;
-        if (character >= nameStart && character < nameEnd) {
-          targetDeclId = ref.resolvesTo;
-          break;
-        }
+  // Check references
+  for (const ref of table.references) {
+    if (ref.loc.line === line) {
+      const nameStart = ref.loc.character;
+      const nameEnd = nameStart + ref.name.length;
+      if (character >= nameStart && character < nameEnd) {
+        return ref.resolvesTo;
       }
     }
   }
+  return null;
+}
 
-  if (targetDeclId === null) return [];
-
-  // Collect all references that resolve to this declaration.
-  // Deduplicate by (line, character) to avoid including the same location
-  // twice (e.g., when the return type identifier is collected both by the
-  // explicit function_decl handler and by the generic type walker).
+/** Collect deduplicated references that resolve to a given declaration. */
+function collectResolvedReferences(table: SymbolTable, targetDeclId: number): Reference[] {
   const results: Reference[] = [];
   const seenLocs = new Set<string>();
   for (const ref of table.references) {
@@ -430,41 +443,36 @@ export function getReferencesTo(
       }
     }
   }
+  return results;
+}
 
-  // Fallback: include arrow/dot access references by name when they couldn't
-  // be resolved to a specific declaration (untyped access). This ensures
-  // rename finds call sites like `d->bark()` even when the arrow reference
-  // has resolvesTo=null.
-  //
-  // US-004: filter by declared type when LHS type is known. If LHS resolves
-  // to a class that does NOT contain the target declaration, exclude it.
+/** Append unresolved arrow/dot access refs matching the target by name (type-aware). */
+function collectUnresolvedArrowDotRefs(
+  table: SymbolTable,
+  targetDeclId: number,
+  results: Reference[],
+): void {
   const targetDecl = table.declById.get(targetDeclId);
-  if (targetDecl) {
-    const targetName = targetDecl.name;
-    for (const ref of table.references) {
-      if (ref.resolvesTo === null && ref.name === targetName &&
-          (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
-        if (ref.lhsName) {
-          // Type-aware filtering: check if LHS's type contains the target.
-          // Uses declaredType first, falls back to assignedType.
-          const lhsDecl = findDeclInScopeAt(table, ref.lhsName, ref.loc.line);
-          const lhsTypeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
-          if (lhsTypeName) {
-            const typeClass = table.declarations.find(
-              d => d.kind === 'class' && d.name === lhsTypeName,
-            );
-            if (typeClass) {
-              // Check if target declaration is a member of the LHS's type class.
-              const isMember = isMemberOfClass(table, targetDeclId, typeClass);
-              if (!isMember) continue; // LHS type doesn't contain target — exclude
-            }
-          }
-        }
-        results.push(ref);
-      }
+  if (!targetDecl) return;
+
+  const targetName = targetDecl.name;
+  for (const ref of table.references) {
+    if (ref.resolvesTo === null && ref.name === targetName &&
+        (ref.kind === 'arrow_access' || ref.kind === 'dot_access')) {
+      if (ref.lhsName && !lhsTypeContainsDecl(table, targetDeclId, ref)) continue;
+      results.push(ref);
     }
   }
+}
 
-
-  return results;
+/** Check whether the LHS variable's declared type contains the target declaration. */
+function lhsTypeContainsDecl(table: SymbolTable, targetDeclId: number, ref: Reference): boolean {
+  const lhsDecl = findDeclInScopeAt(table, ref.lhsName!, ref.loc.line);
+  const lhsTypeName = lhsDecl ? resolveTypeName(lhsDecl) : null;
+  if (!lhsTypeName) return true; // no type info — include by default
+  const typeClass = table.declarations.find(
+    d => d.kind === 'class' && d.name === lhsTypeName,
+  );
+  if (!typeClass) return true; // unknown type — include
+  return isMemberOfClass(table, targetDeclId, typeClass);
 }
