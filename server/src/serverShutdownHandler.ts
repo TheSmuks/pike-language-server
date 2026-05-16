@@ -5,7 +5,8 @@
  * TigerStyle function limit.
  */
 
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Connection } from "vscode-languageserver/node";
 import { clearTreeCache } from "./parser";
 import { saveCache, computeWasmHash } from "./features/persistentCache";
@@ -42,7 +43,7 @@ async function savePersistentCache(
   ctx: ServerContext,
 ): Promise<void> {
   try {
-    const wasmPath = resolve(import.meta.dirname!, "tree-sitter-pike.wasm");
+    const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), "tree-sitter-pike.wasm");
     const wasmHash = computeWasmHash(wasmPath);
     await saveCache(ctx.index.workspaceRoot, ctx.index, wasmHash);
   } catch (err) {

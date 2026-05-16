@@ -110,7 +110,8 @@ function resolveErrorNode(node: Node): Node | null {
 
 /** Search previous siblings of an ERROR node for an identifier or postfix_expr. */
 function findIdentifierBeforeError(node: Node): Node | null {
-  const siblings = node.parent!.children;
+  if (!node.parent) return null;
+  const siblings = node.parent.children;
   // Tree-sitter node wrappers are not reference-identical;
   // use equals() to find the ERROR's index among siblings.
   let errorIdx = -1;

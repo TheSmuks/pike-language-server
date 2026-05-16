@@ -40,6 +40,7 @@ export async function resolveCrossFileDefinition(
   uri: string,
   line: number,
   character: number,
+  maxRetries = 1,
 ): Promise<{
   uri: string; decl: Declaration;
 } | null> {
@@ -56,9 +57,9 @@ export async function resolveCrossFileDefinition(
           character >= nr.start.character && character <= nr.end.character) {
         const result = await resolveInheritTarget(ctx, decl, uri);
         // If the index was mutated while we yielded, the result may be stale.
-        // A single retry is sufficient — the mutation already updated the data.
-        if (result && ctx.getGeneration() !== snapshotGen) {
-          return resolveCrossFileDefinition(ctx, uri, line, character);
+        // Retry once — the mutation already updated the data.
+        if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
+          return resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
         }
         return result;
       }
@@ -74,8 +75,8 @@ export async function resolveCrossFileDefinition(
         character >= ref.loc.character &&
         character < ref.loc.character + ref.name.length) {
       const result = await resolveUnresolvedReference(ctx, ref, table, uri);
-      if (result && ctx.getGeneration() !== snapshotGen) {
-        return resolveCrossFileDefinition(ctx, uri, line, character);
+      if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
+        return resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
       }
       return result;
     }
@@ -145,6 +146,83 @@ export function getCrossFileReferences(
 // Internal: cross-file resolution helpers
 // ---------------------------------------------------------------------------
 
+/** Synthesize a top-of-file class declaration for files with no explicit class. */
+function synthesizeFileClassDecl(name: string, uri: string): { uri: string; decl: Declaration } {
+  return {
+    uri,
+    decl: {
+      id: -1,
+      name,
+      kind: "class",
+      nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      scopeId: -1,
+    },
+  };
+}
+
+/**
+ * Find the target declaration in an indexed file based on the inherit path pattern.
+ * Handles .pmod, string-literal, dotted-path, and identifier inherits.
+ */
+function findTargetDeclInFile(
+  decl: Declaration,
+  targetEntry: FileEntry,
+  targetUri: string,
+  isStringLit: boolean,
+): { uri: string; decl: Declaration } | null {
+  const table = targetEntry.symbolTable!;
+
+  // For directory modules (.pmod/), the target brings all top-level symbols into scope.
+  // Return the first class declaration as a representative target.
+  if (targetUri.endsWith(".pmod")) {
+    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+  }
+
+  // For string literal inherits (file paths like "cross-inherit-simple-a.pike"):
+  // return the first class found (the entire file's symbols are inherited).
+  if (isStringLit) {
+    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+  }
+
+  // For dotted-path inherits to .pike files (e.g., "inherit Cache.Storage.Base"
+  // resolving to Base.pike): the .pike file is an implicit class.
+  const isDottedPath = decl.name.includes(".");
+  if (isDottedPath && targetUri.endsWith(".pike")) {
+    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+  }
+
+  // For identifier inherits/imports: look for a matching declaration first,
+  // then fall back to top-of-file for implicit classes.
+  const inheritName = decl.alias ?? decl.name;
+  for (const targetDecl of table.declarations) {
+    if (targetDecl.name === inheritName) {
+      return { uri: targetUri, decl: targetDecl };
+    }
+  }
+
+  // No matching declaration found — for .pike/.pmod files the file IS the class.
+  if (targetUri.endsWith(".pike") || targetUri.endsWith(".pmod")) {
+    return synthesizeFileClassDecl(inheritName, targetUri);
+  }
+
+  return null;
+}
+
+/** Find the first class declaration in the table, or synthesize a file-class decl. */
+function findFirstClassOrSynthesize(
+  table: SymbolTable,
+  name: string,
+  targetUri: string,
+): { uri: string; decl: Declaration } {
+  for (const targetDecl of table.declarations) {
+    if (targetDecl.kind === "class") {
+      return { uri: targetUri, decl: targetDecl };
+    }
+  }
+  return synthesizeFileClassDecl(name, targetUri);
+}
+
 async function resolveInheritTarget(
   ctx: ResolutionContext,
   decl: Declaration,
@@ -160,122 +238,29 @@ async function resolveInheritTarget(
 
   // On-demand indexing: if the target file is not yet indexed and an
   // on-demand callback is registered, trigger indexing so we can resolve
-  // into it. This handles the common case where the user navigates to a
-  // dependency before background indexing has reached it.
+  // into it.
   if (!targetEntry?.symbolTable && ctx.onDemandIndex) {
-    try {
-      const indexed = await ctx.onDemandIndex(targetUri);
-      if (indexed) {
-        targetEntry = indexed;
-      }
-    } catch (err) {
-      // On-demand indexing failure is non-fatal; fall through to the
-      // null-return below. Error is not logged because ResolutionContext
-      // doesn't expose a logging interface.
-      void err;
-    }
+    targetEntry = await indexOnDemand(ctx, targetUri);
   }
 
   if (!targetEntry?.symbolTable) return null;
 
-  // For directory modules (.pmod/), the target brings all top-level symbols into scope.
-  // Return the first class declaration as a representative target.
-  if (targetUri.endsWith(".pmod")) {
-    for (const targetDecl of targetEntry.symbolTable.declarations) {
-      if (targetDecl.kind === "class") {
-        return { uri: targetUri, decl: targetDecl };
-      }
-    }
-    // No explicit class — point at top of file.
-    return {
-      uri: targetUri,
-      decl: {
-        id: -1,
-        name: decl.name,
-        kind: "class",
-        nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        scopeId: -1,
-      },
-    };
-  }
+  return findTargetDeclInFile(decl, targetEntry, targetUri, isStringLit);
+}
 
-  // For string literal inherits (file paths like "cross-inherit-simple-a.pike"):
-  // return the first class found (the entire file's symbols are inherited).
-  if (isStringLit) {
-    for (const targetDecl of targetEntry.symbolTable.declarations) {
-      if (targetDecl.kind === "class") {
-        return { uri: targetUri, decl: targetDecl };
-      }
-    }
-    // No explicit class — point at top of file.
-    return {
-      uri: targetUri,
-      decl: {
-        id: -1,
-        name: decl.name,
-        kind: "class",
-        nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        scopeId: -1,
-      },
-    };
+/** Attempt on-demand indexing of a target URI. Returns the indexed entry or the original. */
+async function indexOnDemand(
+  ctx: ResolutionContext,
+  targetUri: string,
+): Promise<FileEntry | undefined> {
+  if (!ctx.onDemandIndex) return undefined;
+  try {
+    const indexed = await ctx.onDemandIndex(targetUri);
+    return indexed ?? undefined;
+  } catch (err) {
+    console.debug(`[workspaceResolution] on-demand indexing failed for ${targetUri}:`, err);
+    return undefined;
   }
-
-  // For dotted-path inherits to .pike files (e.g., "inherit Cache.Storage.Base"
-  // resolving to Base.pike): the .pike file is an implicit class.
-  // If there's an explicit class declaration, navigate to that.
-  // Otherwise, point at the top of the file — the file itself is the class.
-  const isDottedPath = decl.name.includes(".");
-  if (isDottedPath && targetUri.endsWith(".pike")) {
-    for (const targetDecl of targetEntry.symbolTable.declarations) {
-      if (targetDecl.kind === "class") {
-        return { uri: targetUri, decl: targetDecl };
-      }
-    }
-    // No explicit class — synthesize a target at the start of the file.
-    return {
-      uri: targetUri,
-      decl: {
-        id: -1,
-        name: decl.name,
-        kind: "class",
-        nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        scopeId: -1,
-      },
-    };
-  }
-
-  // For identifier inherits/imports to .pike files (e.g., "inherit Animal"
-  // or "import Foo" where Foo resolves to Foo.pike): look for a matching
-  // declaration first, then fall back to top-of-file for implicit classes.
-  // Most .pike files are implicit classes — they have no explicit class decl.
-  const inheritName = decl.alias ?? decl.name;
-  for (const targetDecl of targetEntry.symbolTable.declarations) {
-    if (targetDecl.name === inheritName) {
-      return { uri: targetUri, decl: targetDecl };
-    }
-  }
-
-  // No matching declaration found — for .pike files the file IS the class.
-  // Navigate to the top of the file (same fallback as string-literal and
-  // .pmod paths above).
-  if (targetUri.endsWith(".pike") || targetUri.endsWith(".pmod")) {
-    return {
-      uri: targetUri,
-      decl: {
-        id: -1,
-        name: inheritName,
-        kind: "class",
-        nameRange: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-        scopeId: -1,
-      },
-    };
-  }
-
-  return null;
 }
 
 async function resolveUnresolvedReference(

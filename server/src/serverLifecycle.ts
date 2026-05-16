@@ -5,7 +5,8 @@
  * project convention.
  */
 
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   Connection,
   TextDocuments,
@@ -99,7 +100,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
 
   // step 7d: load persistent cache
   logInfo(connection, "[init] step 7d: loading persistent cache");
-  const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
+  const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
   const currentWasmHash = computeWasmHash(wasmPath);
 
   try {

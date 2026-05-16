@@ -40,31 +40,45 @@ export function produceGetterSetterActions(
   if (!isParserReady()) return [];
 
   const uri = params.textDocument.uri;
-  const line = params.range.start.line;
-  const character = params.range.start.character;
-
   const tree = parse(text, uri);
   if (!tree) return [];
 
   const table = buildSymbolTable(tree, uri, 0);
-
-  // Find a variable declaration at the cursor position
-  const varDecl = findVariableAtPosition(table, line, character);
+  const varDecl = findVariableAtPosition(table, params.range.start.line, params.range.start.character);
   if (!varDecl) return [];
 
-  // Check that the variable is inside a class scope
   const classDecl = findParentClass(table, varDecl);
   if (!classDecl) return [];
 
-  // Check that getter/setter don't already exist
-  const className = classDecl.name;
-  const varName = varDecl.name;
-  const varType = varDecl.declaredType || varDecl.assignedType || "mixed";
+  return buildGetterSetterActions(uri, text, table, varDecl, classDecl);
+}
 
+// ---------------------------------------------------------------------------
+// Internal: action building
+// ---------------------------------------------------------------------------
+
+/** Info needed to generate getter/setter actions. */
+interface ActionContext {
+  varName: string;
+  varType: string;
+  insertLine: number;
+  methodIndent: string;
+  existingMethods: Set<string>;
+}
+
+/**
+ * Resolve the class scope and compute action context needed for code actions.
+ */
+function resolveActionContext(
+  table: SymbolTable,
+  text: string,
+  varDecl: Declaration,
+  classDecl: Declaration,
+): ActionContext | null {
   const classScope = table.scopes.find(
     s => s.kind === "class" && containsRange(s.range, classDecl.range),
   );
-  if (!classScope) return [];
+  if (!classScope) return null;
 
   const existingMethods = new Set<string>();
   for (const declId of classScope.declarations) {
@@ -74,84 +88,85 @@ export function produceGetterSetterActions(
     }
   }
 
+  const lines = text.split("\n");
+  const classIndent = lines[classDecl.range.start.line]?.match(/^(\s*)/)?.[1] ?? "";
+  return {
+    varName: varDecl.name,
+    varType: varDecl.declaredType || varDecl.assignedType || "mixed",
+    insertLine: classDecl.range.end.line,
+    methodIndent: classIndent + "  ",
+    existingMethods,
+  };
+}
+
+/**
+ * Build a single CodeAction that inserts `body` at the insertion line.
+ */
+function makeInsertAction(
+  title: string,
+  uri: string,
+  insertLine: number,
+  body: string,
+): CodeAction {
+  return {
+    title,
+    kind: CodeActionKindRefactorRewrite,
+    edit: {
+      changes: {
+        [uri]: [{
+          range: { start: { line: insertLine, character: 0 }, end: { line: insertLine, character: 0 } },
+          newText: body,
+        }],
+      },
+    },
+  };
+}
+
+/**
+ * Build getter, setter, and combined code actions for the given variable/class.
+ */
+function buildGetterSetterActions(
+  uri: string,
+  text: string,
+  table: SymbolTable,
+  varDecl: Declaration,
+  classDecl: Declaration,
+): CodeAction[] {
+  const ctx = resolveActionContext(table, text, varDecl, classDecl);
+  if (!ctx) return [];
+
+  const { varName, varType, insertLine, methodIndent, existingMethods } = ctx;
   const getterName = `get_${varName}`;
   const setterName = `set_${varName}`;
-
   const actions: CodeAction[] = [];
-  const lines = text.split("\n");
-
-  // Find the end of the class body for insertion
-  const insertLine = classDecl.range.end.line;
-  const insertChar = classDecl.range.end.character;
-
-  // Indent: match the class body indentation (typically 2 spaces)
-  const classIndent = lines[classDecl.range.start.line]?.match(/^(\s*)/)?.[1] ?? "";
-  const methodIndent = classIndent + "  ";
 
   if (!existingMethods.has(getterName)) {
-    const getterBody = generateGetter(varName, varType, methodIndent);
-    const getterEdit: TextEdit = {
-      range: {
-        start: { line: insertLine, character: 0 },
-        end: { line: insertLine, character: 0 },
-      },
-      newText: getterBody,
-    };
-
-    actions.push({
-      title: `Generate getter for ${varName}`,
-      kind: CodeActionKindRefactorRewrite,
-      edit: {
-        changes: { [uri]: [getterEdit] },
-      },
-    });
+    actions.push(makeInsertAction(
+      `Generate getter for ${varName}`, uri, insertLine,
+      generateGetter(varName, varType, methodIndent),
+    ));
   }
 
   if (!existingMethods.has(setterName)) {
-    const setterBody = generateSetter(varName, varType, methodIndent);
-    const setterEdit: TextEdit = {
-      range: {
-        start: { line: insertLine, character: 0 },
-        end: { line: insertLine, character: 0 },
-      },
-      newText: setterBody,
-    };
-
-    actions.push({
-      title: `Generate setter for ${varName}`,
-      kind: CodeActionKindRefactorRewrite,
-      edit: {
-        changes: { [uri]: [setterEdit] },
-      },
-    });
+    actions.push(makeInsertAction(
+      `Generate setter for ${varName}`, uri, insertLine,
+      generateSetter(varName, varType, methodIndent),
+    ));
   }
 
-  // Offer combined getter+setter action if both are available
   if (!existingMethods.has(getterName) && !existingMethods.has(setterName)) {
-    const combinedBody = generateGetter(varName, varType, methodIndent) +
+    const combined = generateGetter(varName, varType, methodIndent) +
       generateSetter(varName, varType, methodIndent);
-    const combinedEdit: TextEdit = {
-      range: {
-        start: { line: insertLine, character: 0 },
-        end: { line: insertLine, character: 0 },
-      },
-      newText: combinedBody,
-    };
-
-    actions.push({
-      title: `Generate getter and setter for ${varName}`,
-      kind: CodeActionKindRefactorRewrite,
-      edit: {
-        changes: { [uri]: [combinedEdit] },
-      },
-    });
+    actions.push(makeInsertAction(
+      `Generate getter and setter for ${varName}`, uri, insertLine, combined,
+    ));
   }
 
   return actions;
 }
 
 // ---------------------------------------------------------------------------
-// Internal: helpers
+// Internal: AST helpers
 // ---------------------------------------------------------------------------
 
 function findVariableAtPosition(

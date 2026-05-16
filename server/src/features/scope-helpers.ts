@@ -169,37 +169,7 @@ export function drillForIdentifier(node: Node): Node | null {
 export function extractInitializerType(node: Node): string | undefined {
   // Bare cond_expr (no variable_decl/local_declaration wrapper): handle it directly
   if (node.type === 'cond_expr') {
-    if (node.childCount === 1) return undefined;
-    const consequence = node.child(2);
-    if (consequence) {
-      // Drill through wrappers to find the actual expression
-      let expr: Node | undefined = consequence;
-      while (expr && expr.type !== 'cond_expr' && expr.type !== 'identifier') {
-        if (expr.type === 'postfix_expr') {
-          const id = drillForIdentifier(expr);
-          if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
-          break;
-        }
-        if (expr.namedChildCount === 1) {
-          expr = expr.namedChild(0) ?? undefined;
-        } else {
-          break;
-        }
-      }
-      if (expr?.type === 'cond_expr') {
-        // Nested ternary in consequence
-        const nestedType = extractInitializerType(expr);
-        if (nestedType) return nestedType;
-      } else if (expr?.type === 'identifier') {
-        if (!PRIMITIVE_TYPES.has(expr.text)) return expr.text;
-      }
-    }
-    const alternate = node.child(4);
-    if (alternate) {
-      const id = drillForIdentifier(alternate);
-      if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
-    }
-    return undefined;
+    return extractCondExprType(node);
   }
 
   // Only variable_decl or local_declaration has a 'value' field with an initializer
@@ -208,13 +178,66 @@ export function extractInitializerType(node: Node): string | undefined {
   const valueNode = node.childForFieldName('value');
   if (!valueNode) return undefined;
 
+  return extractInitializerExprType(valueNode);
+}
+
+/**
+ * Extract the type name from a bare cond_expr node.
+ * Handles consequence and alternate branches, including nested ternaries.
+ */
+function extractCondExprType(node: Node): string | undefined {
+  if (node.childCount === 1) return undefined;
+
+  const consequence = node.child(2);
+  if (consequence) {
+    const result = drillCondExprBranch(consequence);
+    if (result) return result;
+  }
+
+  const alternate = node.child(4);
+  if (alternate) {
+    const id = drillForIdentifier(alternate);
+    if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
+  }
+
+  return undefined;
+}
+
+/**
+ * Drill through wrappers in a cond_expr branch to find the type.
+ * Returns undefined for primitives or complex expressions.
+ */
+function drillCondExprBranch(expr: Node): string | undefined {
+  let current: Node | undefined = expr;
+  while (current && current.type !== 'cond_expr' && current.type !== 'identifier') {
+    if (current.type === 'postfix_expr') {
+      const id = drillForIdentifier(current);
+      if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
+      break;
+    }
+    if (current.namedChildCount === 1) {
+      current = current.namedChild(0) ?? undefined;
+    } else {
+      break;
+    }
+  }
+  if (current?.type === 'cond_expr') {
+    return extractInitializerType(current);
+  }
+  if (current?.type === 'identifier' && !PRIMITIVE_TYPES.has(current.text)) {
+    return current.text;
+  }
+  return undefined;
+}
+
+/**
+ * Extract the type name from an initializer expression node.
+ * Drills through wrappers and handles cond_expr branches.
+ */
+function extractInitializerExprType(valueNode: Node): string | undefined {
   let inner: Node | null = valueNode;
   while (inner !== null) {
     if (inner.type === 'postfix_expr') {
-      if (inner.childCount > 1) {
-        inner = inner.child(0);
-        continue;
-      }
       inner = inner.child(0);
       continue;
     }
@@ -223,31 +246,7 @@ export function extractInitializerType(node: Node): string | undefined {
       continue;
     }
     if (inner.type === 'cond_expr') {
-      if (inner.childCount === 1) {
-        // Fall through to single-child wrapper
-      } else {
-        const consequence = inner.child(2);
-        if (consequence) {
-          const id = drillForIdentifier(consequence);
-          if (id?.type === 'cond_expr') {
-            const nestedType = extractInitializerType(id);
-            if (nestedType) return nestedType;
-          } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
-            return id.text;
-          }
-        }
-        const alternate = inner.child(4);
-        if (alternate) {
-          const id = drillForIdentifier(alternate);
-          if (id?.type === 'cond_expr') {
-            const nestedType = extractInitializerType(id);
-            if (nestedType) return nestedType;
-          } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
-            return id.text;
-          }
-        }
-        return undefined;
-      }
+      return extractCondExprBranchType(inner);
     }
     if (inner.namedChildCount === 1) {
       inner = inner.namedChild(0);
@@ -257,11 +256,42 @@ export function extractInitializerType(node: Node): string | undefined {
   }
 
   if (!inner || inner.type !== 'identifier') return undefined;
+  if (PRIMITIVE_TYPES.has(inner.text)) return undefined;
+  return inner.text;
+}
 
-  const name = inner.text;
-  if (PRIMITIVE_TYPES.has(name)) return undefined;
+/**
+ * Extract the type from a cond_expr encountered during initializer drilling.
+ * Checks consequence and alternate branches.
+ */
+function extractCondExprBranchType(condNode: Node): string | undefined {
+  // Single-child cond_expr is just an expression-precedence wrapper,
+  // not a real ternary — fall through to normal drilling.
+  if (condNode.childCount === 1) return extractInitializerExprType(condNode.namedChild(0)!);
 
-  return name;
+  const consequence = condNode.child(2);
+  if (consequence) {
+    const id = drillForIdentifier(consequence);
+    if (id?.type === 'cond_expr') {
+      const nestedType = extractInitializerType(id);
+      if (nestedType) return nestedType;
+    } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
+      return id.text;
+    }
+  }
+
+  const alternate = condNode.child(4);
+  if (alternate) {
+    const id = drillForIdentifier(alternate);
+    if (id?.type === 'cond_expr') {
+      const nestedType = extractInitializerType(id);
+      if (nestedType) return nestedType;
+    } else if (id && !PRIMITIVE_TYPES.has(id.text)) {
+      return id.text;
+    }
+  }
+
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
