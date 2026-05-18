@@ -5,6 +5,26 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [Unreleased]
+
+## [0.8.1] — 2026-05-18
+
+### Added
+
+  - Pike-language test suite (`tests/pike/`) — 487 tests covering language
+    analysis, LSP protocol handling, and server behavior via PUnit framework
+    and Pike's `compile_string` introspection.
+  - `scripts/test-pike.sh` — test runner for the Pike suite with verbose mode
+    and single-file selection. Replaces the `pmp run` invocation.
+  - `bun run test:all` — runs TypeScript and Pike tests together.
+  - Testing section in README with directory structure, usage examples, and
+    guide for adding new Pike tests.
+
+### Changed
+
+  - Project structure in README updated to reflect the three test directories
+    (`tests/pike/`, `tests/lsp/`, `tests/perf/`).
+
 ## [0.8.0] — 2026-05-18
 
 ### Added
@@ -44,26 +64,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ensureDependenciesResolved` no longer re-runs for files with zero
     dependencies. Previously, `deps.size === 0` was used as the "not resolved"
     check, causing repeated resolution attempts on every cross-file query.
-
-## [0.8.1] — 2026-05-18
-
-### Added
-
-  - Pike-language test suite (`tests/pike/`) — 487 tests covering language
-    analysis, LSP protocol handling, and server behavior via PUnit framework
-    and Pike's `compile_string` introspection.
-  - `scripts/test-pike.sh` — test runner for the Pike suite with verbose mode
-    and single-file selection. Replaces the `pmp run` invocation.
-  - `bun run test:all` — runs TypeScript and Pike tests together.
-  - Testing section in README with directory structure, usage examples, and
-    guide for adding new Pike tests.
-
-### Changed
-
-  - Project structure in README updated to reflect the three test directories
-    (`tests/pike/`, `tests/lsp/`, `tests/perf/`).
-
-## [Unreleased]
 
 ## [0.7.5] — 2026-05-18
 
