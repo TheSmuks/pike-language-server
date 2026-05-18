@@ -194,15 +194,17 @@ export function deserializeSymbolTable(serialized: SerializedSymbolTable): Symbo
 /**
  * Compute a hash of the tree-sitter-pike WASM file for cache invalidation.
  */
-export function computeWasmHash(wasmPath: string): string {
-  // For now, use a simple marker. Real implementation would hash the WASM file.
-  // This is sufficient for cache invalidation when the grammar changes.
+export function computeWasmHash(wasmPath: string): string | null {
+  // Hash the WASM file so cached symbol tables are invalidated when
+  // the grammar changes.  Returns null when the WASM is unreadable —
+  // callers should skip cache operations in that case rather than
+  // storing a non-matching sentinel that defeats cache matching.
   try {
     const content = readFileSync(wasmPath);
     return createHash("sha256").update(content).digest("hex").slice(0, 16);
   } catch {
-    // WASM file unreadable (not found or permissions) — use fallback hash
-    return "unknown";
+    // WASM file unreadable (not found or permissions) — cannot validate cache
+    return null;
   }
 }
 

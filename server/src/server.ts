@@ -69,9 +69,6 @@ export interface PikeServer {
 
 export function createPikeServer(connection: Connection): PikeServer {
   const documents = new TextDocuments(TextDocument);
-  // Start parser initialization early so it completes before the first parse call.
-  // initParser() is idempotent — returns the same promise on subsequent calls.
-  void initParser();
   const worker = new PikeWorker();
 
   // -----------------------------------------------------------------
@@ -93,7 +90,9 @@ export function createPikeServer(connection: Connection): PikeServer {
   const pikeCache = new LRUCache<PikeCacheEntry>({
     maxEntries: 50,
     maxBytes: 25 * 1024 * 1024,
-    estimateSize: (entry) => JSON.stringify(entry).length,
+    estimateSize: (entry) =>
+      entry.contentHash.length +
+      entry.diagnostics.reduce((acc, d) => acc + (d.message?.length ?? 0) + 50, 0),
     onEvict(key) {
       // Coupled eviction: when a pike cache entry is evicted,
       // also evict the corresponding autodoc entry.
@@ -237,7 +236,7 @@ export function createPikeServer(connection: Connection): PikeServer {
         },
         documentSymbolProvider: true,
         definitionProvider: true,
-        referencesProvider: true,
+        referencesProvider: { workDoneProgress: true },
         renameProvider: { prepareProvider: true },
         hoverProvider: true,
         completionProvider: {
@@ -253,7 +252,7 @@ export function createPikeServer(connection: Connection): PikeServer {
           triggerCharacters: ['(', ','],
         },
         codeActionProvider: true,
-        workspaceSymbolProvider: true,
+        workspaceSymbolProvider: { workDoneProgress: true },
         documentLinkProvider: { resolveProvider: false },
         documentFormattingProvider: true,
         workspace: {
@@ -324,27 +323,36 @@ export function createPikeServer(connection: Connection): PikeServer {
     const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
     const currentWasmHash = computeWasmHash(wasmPath);
 
-    try {
-      const cached = await loadCache(index.workspaceRoot, currentWasmHash);
-      if (cached) {
-        let restored = 0;
-        for (const entry of cached) {
-          if (entry.symbolTable) {
-            const table = deserializeSymbolTable(entry.symbolTable);
-            // Rebuild only if not already indexed (open doc takes precedence)
-            if (!index.getFile(entry.uri)) {
-              index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
-              restored++;
+    if (currentWasmHash) {
+      try {
+        const cached = await loadCache(index.workspaceRoot, currentWasmHash);
+        if (cached) {
+          let restored = 0;
+          for (const entry of cached) {
+            if (entry.symbolTable) {
+              try {
+                const table = deserializeSymbolTable(entry.symbolTable);
+                // Rebuild only if not already indexed (open doc takes precedence)
+                if (!index.getFile(entry.uri)) {
+                  index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
+                  restored++;
+                }
+              } catch (entryErr) {
+                // Skip corrupt entries — keep the rest
+                connection.console.warn(
+                  `Pike LSP: skipping corrupt cache entry ${entry.uri}: ${(entryErr as Error).message}`,
+                );
+              }
             }
           }
+          connection.console.log(`Pike LSP: restored ${restored} files from cache`);
         }
-        connection.console.log(`Pike LSP: restored ${restored} files from cache`);
-      }
-    } catch (err) {
-      try {
-        connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
-      } catch {
-        // Connection may be closed during teardown
+      } catch (err) {
+        try {
+          connection.console.error(`Pike LSP: cache load failed: ${(err as Error).message}`);
+        } catch {
+          // Connection may be closed during teardown
+        }
       }
     }
 
@@ -440,7 +448,9 @@ export function createPikeServer(connection: Connection): PikeServer {
     try {
       const wasmPath = resolve(import.meta.dirname!, 'tree-sitter-pike.wasm');
       const wasmHash = computeWasmHash(wasmPath);
-      await saveCache(index.workspaceRoot, index, wasmHash);
+      if (wasmHash) {
+        await saveCache(index.workspaceRoot, index, wasmHash);
+      }
     } catch (err) {
       // Cache save failure is non-critical
     }

@@ -77,7 +77,7 @@ export function wireInheritance(
 ): void {
   // Track the next synthetic ID to avoid collisions with real declarations.
   let syntheticIdCounter = table.declarations.length > 0
-    ? Math.max(...table.declarations.map(d => d.id)) + 1
+    ? table.declarations.reduce((max, d) => Math.max(max, d.id), 0) + 1
     : 0;
 
   for (const scope of table.scopes) {
