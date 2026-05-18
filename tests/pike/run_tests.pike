@@ -25,6 +25,7 @@ int main(int argc, array(string) argv) {
   // Add paths to the Pike master so compiled test files can find modules
   master()->add_module_path(project_root + "/harness");
   master()->add_module_path(project_root + "/modules");
+  master()->add_module_path(project_root + "/tests/pike");
   
   array(string) test_dirs = argc > 1 ? ({ argv[1] }) : ({ "." });
   

@@ -7,7 +7,7 @@
 [![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server) <!-- template-v0.8.0 -->
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
 
-[Installation](#installation) · [Features](#features) · [Configuration](#configuration) · [Architecture](#architecture) · [Contributing](./CONTRIBUTING.md)
+| [Installation](#installation) · [Features](#features) · [Configuration](#configuration) · [Architecture](#architecture) · [Testing](#testing) · [Contributing](./CONTRIBUTING.md)
 
 </div>
 
@@ -116,9 +116,10 @@ pike-language-server/
 ├── client/               # VSCode extension hosting the LSP server
 ├── harness/              # Test harness — invokes pike, captures ground truth
 ├── corpus/               # 85 Pike files covering language features
-├── tests/                # 58 test files, 437+ test cases
-│   ├── lsp/              # In-process LSP integration tests
-│   └── perf/             # Performance benchmarks
+├── tests/                # Test suites
+│   ├── pike/            # PUnit tests — Pike-language test suite (487 tests)
+│   ├── lsp/             # In-process LSP integration tests
+│   └── perf/            # Performance benchmarks
 └── docs/                 # Architecture, decisions, known limitations
     └── decisions/        # Architecture Decision Records
 ```
@@ -134,6 +135,81 @@ See [docs/architecture.md](./docs/architecture.md) for the full system design an
 
 ---
 
+## Testing
+
+The project has two test layers:
+
+### TypeScript Tests (bun test)
+
+```bash
+bun test                        # Run all TS tests (harness + perf)
+bun test tests/lsp/             # LSP integration tests only
+bun run test:harness            # Harness tests only
+```
+
+### Pike Tests (PUnit)
+
+The Pike test suite uses [PUnit](./modules/PUnit.pmod/) and covers language analysis, LSP protocol handling, and server behavior via Pike's own `compile_string` introspection.
+
+```bash
+bun run test:pike               # Run all Pike tests (487 tests)
+bash scripts/test-pike.sh       # Run directly
+bun run test:all                # Run TS + Pike tests together
+```
+
+**Test directory structure:**
+
+```
+tests/pike/
+├── run_tests.pike              # PUnit test runner entry point
+├── PUnitSmokeTests.pike        # Framework smoke tests (13)
+├── DefinitionTests.pike        # Go-to-definition via Program.defined (18)
+├── DiagnosticsTests.pike       # Diagnostic normalization (18)
+├── CompilationHandlerTests.pike # Compilation handler (13)
+├── VersionTests.pike           # Pike version detection (5)
+├── IncrementalSyncTests.pike   # Edit-compile cycle simulation (10)
+├── StateConsistencyTests.pike  # Isolation and determinism (18)
+├── CompletionTests.pike        # Completion context tests (16)
+├── HoverTests.pike             # Hover/type inference tests (20)
+├── LintRulesTests.pike         # Static lint rule detection (23)
+├── SignatureTests.pike         # Function signature parsing (25)
+├── SymbolTableTests.pike       # Symbol extraction tests (23)
+├── JsonRpcProtocolTests.pike   # JSON-RPC 2.0 protocol (46)
+├── LspLifecycleTests.pike      # LSP initialize/shutdown lifecycle (33)
+├── LspDocumentTests.pike       # textDocument/didOpen/Change/Close/Save (50)
+├── WorkerProtocolTests.pike    # Worker IPC protocol (57)
+├── ProtocolEdgeCaseTests.pike  # Edge cases: malformed JSON, boundary values (101)
+├── LspProtocol.pmod            # Shared protocol builder/validator helpers
+└── TestBootstrap.pmod          # Test bootstrap utilities
+```
+
+### Adding New Pike Tests
+
+1. Create a new `.pike` file in `tests/pike/`:
+
+```pike
+//! MyTests.pike — Description of what these tests cover
+import PUnit;
+
+void test_my_feature() {
+  assert_equal(1 + 1, 2);
+}
+```
+
+2. Import shared helpers as needed:
+   - `import Common;` — for `DiagnosticHandler`, `get_pike_version`, `normalize_diagnostics`
+   - `import LspProtocol;` — for JSON-RPC/LSP message builders and validators
+
+3. Run your test file:
+
+```bash
+bash scripts/test-pike.sh tests/pike/MyTests.pike
+```
+
+The PUnit runner auto-discovers all `test_*` functions in each file. No registration needed.
+
+---
+
 ## Development
 
 ```bash
@@ -141,6 +217,7 @@ bun install                  # Install dependencies
 bun run build                # Build server + client
 bun test                     # Run default test suite (harness + perf)
 bun test tests/lsp/          # Run LSP integration tests
+bun run test:all             # Run TS + Pike tests together
 bun run typecheck            # Type-check the project
 bun run fmt:check            # Check formatting
 ```

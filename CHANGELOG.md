@@ -47,6 +47,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - Pike-language test suite (`tests/pike/`) — 487 tests covering language
+    analysis, LSP protocol handling, and server behavior via PUnit framework
+    and Pike's `compile_string` introspection.
+  - `scripts/test-pike.sh` — test runner for the Pike suite with verbose mode
+    and single-file selection. Replaces the `pmp run` invocation.
+  - `bun run test:all` — runs TypeScript and Pike tests together.
+  - Testing section in README with directory structure, usage examples, and
+    guide for adding new Pike tests.
+
+### Changed
+
+  - Project structure in README updated to reflect the three test directories
+    (`tests/pike/`, `tests/lsp/`, `tests/perf/`).
+
 ## [0.7.5] — 2026-05-18
 
 ### Fixed
