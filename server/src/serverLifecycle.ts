@@ -98,32 +98,40 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     logInfo(connection, "[init] step 7c: skipped — client does not support file watchers");
   }
 
-  // step 7d: load persistent cache
-  logInfo(connection, "[init] step 7d: loading persistent cache");
+  // step 7d + 7e: cache loading, background indexing, worker warm-up —
+  // ALL fire-and-forget. Only the parser (7a) is blocking because every
+  // feature needs it. These three can run in parallel since:
+  //   - Cache loading writes to the index via upsertCachedFile (async deps)
+  //   - Background indexing writes via upsertBackgroundFile (sync, no deps)
+  //   - Both are single-threaded JS — Map mutations are atomic
+  //   - Background indexing already skips files present in the index
+
+  // step 7d: load persistent cache (fire-and-forget)
+  logInfo(connection, "[init] step 7d: loading persistent cache (non-blocking)");
   const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
   const currentWasmHash = computeWasmHash(wasmPath);
 
-  try {
-    const cached = await loadCache(index.workspaceRoot, currentWasmHash);
-    if (cached) {
-      let restored = 0;
-      for (const entry of cached) {
-        if (entry.symbolTable) {
-          const table = deserializeSymbolTable(entry.symbolTable);
-          // Rebuild only if not already indexed (open doc takes precedence)
-          if (!index.getFile(entry.uri)) {
-            index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
-            restored++;
-          }
+  loadCache(index.workspaceRoot, currentWasmHash).then((cached) => {
+    if (!cached) {
+      logInfo(connection, "[init] step 7d: no cache found — fresh start");
+      return;
+    }
+
+    let restored = 0;
+    for (const entry of cached) {
+      if (entry.symbolTable) {
+        const table = deserializeSymbolTable(entry.symbolTable);
+        // Rebuild only if not already indexed (open doc takes precedence)
+        if (!index.getFile(entry.uri)) {
+          index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
+          restored++;
         }
       }
-      logInfo(connection, `[init] step 7d: restored ${restored} files from cache`);
-    } else {
-      logInfo(connection, "[init] step 7d: no cache found — fresh start");
     }
-  } catch (err) {
+    logInfo(connection, `[init] step 7d: restored ${restored} files from cache`);
+  }).catch((err) => {
     logError(connection, ErrorCategory.System, "[init] step 7d FAILED: cache load", err);
-  }
+  });
 
   // step 7e: background workspace indexing — fire-and-forget
   if (backgroundIndexEnabled) {
@@ -132,14 +140,14 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     worker.warmUp().then((ready) => {
       if (ready) {
         const version = worker.pikeVersion ?? "unknown";
-        logInfo(connection, `[init] step 7d: Pike worker pre-warmed successfully (Pike ${version})`);
+        logInfo(connection, `[init] Pike worker pre-warmed successfully (Pike ${version})`);
 
         // Warn if Pike version predates 8.0 — features may not work correctly.
         if (version && !version.startsWith("8.")) {
           logWarn(connection, `[init] Pike version ${version} predates 8.0 — some features may not work correctly`);
         }
       } else {
-        logInfo(connection, "[init] step 7d: Pike worker warm-up skipped (Pike unavailable)");
+        logInfo(connection, "[init] Pike worker warm-up skipped (Pike unavailable)");
       }
     });
 
@@ -148,7 +156,6 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       connection,
       index,
       workspaceRoot: index.workspaceRoot,
-      worker,
       batchSize: backgroundIndexBatchSize,
     }).then(() => {
       logInfo(connection, "[init] step 7e: background indexing complete");

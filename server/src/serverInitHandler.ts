@@ -33,6 +33,11 @@ interface InitOptions {
   workerNiceValue?: number;
   formatInsertFinalNewline?: boolean;
   formatOperatorSpacing?: boolean;
+  // Path overrides — when set, bypass auto-detection
+  pikeHome?: string;
+  modulePaths?: string[];
+  includePaths?: string[];
+  programPaths?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +74,7 @@ async function handleInitialize(
 
   const initOpts = params.initializationOptions as InitOptions | undefined;
 
-  await applyWorkspaceIndex(ctx, rootPath, initOpts?.pikeBinaryPath);
+  await applyWorkspaceIndex(ctx, rootPath, initOpts);
   applyDiagnosticOptions(ctx, initOpts);
   applyWorkerOptions(ctx, initOpts);
   applyBackgroundIndexOptions(ctx, initOpts);
@@ -85,10 +90,24 @@ async function handleInitialize(
 async function applyWorkspaceIndex(
   ctx: ServerContext,
   rootPath: string,
-  pikeBinaryPath?: string,
+  initOpts?: InitOptions,
 ): Promise<void> {
+  const pikeBinaryPath = initOpts?.pikeBinaryPath;
   logInfo(ctx.connection, `[init] step 6b: creating workspace index (pikeBinaryPath=${pikeBinaryPath ?? "pike"})`);
-  const newIndex = await WorkspaceIndex.create(rootPath, pikeBinaryPath);
+
+  // Build path overrides from settings. Only include non-empty values.
+  const overrides: import("./features/pikeDetection").PikePathOverrides = {};
+  if (initOpts?.pikeHome) overrides.pikeHome = initOpts.pikeHome;
+  if (initOpts?.modulePaths && initOpts.modulePaths.length > 0) overrides.modulePaths = initOpts.modulePaths;
+  if (initOpts?.includePaths && initOpts.includePaths.length > 0) overrides.includePaths = initOpts.includePaths;
+  if (initOpts?.programPaths && initOpts.programPaths.length > 0) overrides.programPaths = initOpts.programPaths;
+
+  const hasOverrides = overrides.pikeHome || overrides.modulePaths || overrides.includePaths || overrides.programPaths;
+  if (hasOverrides) {
+    logInfo(ctx.connection, `[init] step 6b: path overrides provided — ${JSON.stringify(overrides)}`);
+  }
+
+  const newIndex = await WorkspaceIndex.create(rootPath, pikeBinaryPath, hasOverrides ? overrides : undefined);
   ctx.index = newIndex;
   ctx.diagnosticManager.setIndex(newIndex);
 

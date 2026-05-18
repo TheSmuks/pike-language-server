@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "activationEvents": [
     "onLanguage:pike"
   ],
@@ -70,6 +70,33 @@
           "type": "string",
           "default": "pike",
           "description": "Path to the Pike binary. Used for language server subprocess and path discovery.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.pikeHome": {
+          "type": "string",
+          "default": "",
+          "description": "Pike installation root directory (e.g., /usr/local/pike/8.0.1116). When set, overrides auto-detected pikeHome. Leave empty to auto-detect from `pike --show-paths`.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.modulePaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional module search paths (-M). Prepended to auto-detected paths. The workspace root is always included automatically.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.includePaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional include search paths (-I). Prepended to auto-detected paths. The workspace root is always included automatically.",
+          "scope": "machine-overridable"
+        },
+        "pike.languageServer.programPaths": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Additional program search paths (for inherit string resolution). Prepended to auto-detected paths. The workspace root is always included automatically.",
           "scope": "machine-overridable"
         },
         "pike.languageServer.diagnosticMode": {

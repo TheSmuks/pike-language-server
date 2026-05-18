@@ -5,6 +5,34 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [0.7.5] — 2026-05-18
+
+### Added
+
+  - VSCode settings for Pike path configuration: `pikeHome`, `modulePaths`,
+    `includePaths`, `programPaths`. When all four are set, auto-detection is
+    skipped entirely — no `pike --show-paths` subprocess spawned.
+
+### Changed
+
+  - Background indexing and cache loading now start in parallel instead of
+    sequentially. Tree-sitter parsing (background indexing) does not depend
+    on Pike or on the cache, so both run fire-and-forget from `onInitialized`.
+  - Removed `worker.isAvailable` gate from background indexing —
+    tree-sitter indexing works without Pike; Pike-dependent features degrade
+    gracefully when the worker isn't ready.
+
+### Fixed
+
+  - Startup delay: `onInitialized` no longer blocks on cache loading.
+    Previously, `loadCache()` was awaited, blocking background indexing
+    from starting until every cached file's dependencies were resolved
+    (async fs operations per entry). Now fire-and-forget.
+  - Pike path auto-detection runs only when needed — user-configured paths
+    bypass the `pike --show-paths` subprocess and filesystem scanning.
+  - Removed `.pike-lsp/pike-paths.json` disk cache — no workspace directory
+    pollution. Detection results are cached in-memory per session only.
+
 ## [Unreleased]
 
 ## [0.7.4] — 2026-05-18

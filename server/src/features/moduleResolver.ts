@@ -23,7 +23,7 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 
 // Re-export pike detection utilities for backward compatibility
 export { detectPikePaths, getPikePaths } from "./pikeDetection";
-export type { PikePaths } from "./pikeDetection";
+export type { PikePaths, PikePathOverrides } from "./pikeDetection";
 
 // ---------------------------------------------------------------------------
 // Types

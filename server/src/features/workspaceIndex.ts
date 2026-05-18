@@ -3,7 +3,7 @@
  * See architecture decision 0010 for design rationale.
  */
 
-import { ModuleResolver, detectPikePaths, type PikePaths } from "./moduleResolver";
+import { ModuleResolver, detectPikePaths, type PikePaths, type PikePathOverrides } from "./moduleResolver";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
 import { uriToPath as uriToPathUtil, pathToUri } from "../util/uri";
@@ -65,8 +65,8 @@ export class WorkspaceIndex {
     this.onDemandIndex = fn;
   }
 
-  static async create(workspaceRoot: string, pikeBinaryPath?: string): Promise<WorkspaceIndex> {
-    const pikePaths = await detectPikePaths(workspaceRoot, pikeBinaryPath);
+  static async create(workspaceRoot: string, pikeBinaryPath?: string, overrides?: PikePathOverrides): Promise<WorkspaceIndex> {
+    const pikePaths = await detectPikePaths(workspaceRoot, pikeBinaryPath, overrides);
     return new WorkspaceIndex({ workspaceRoot, pikePaths });
   }
 
