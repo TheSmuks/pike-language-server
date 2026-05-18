@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     dependencies. Previously, `deps.size === 0` was used as the "not resolved"
     check, causing repeated resolution attempts on every cross-file query.
 
-## [Unreleased]
+## [0.8.1] — 2026-05-18
 
 ### Added
 
@@ -62,6 +62,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   - Project structure in README updated to reflect the three test directories
     (`tests/pike/`, `tests/lsp/`, `tests/perf/`).
+
+## [Unreleased]
 
 ## [0.7.5] — 2026-05-18
 
