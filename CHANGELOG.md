@@ -17,8 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     and constants are now colorized immediately on file open with zero indexing delay.
     Previously only comments and strings were highlighted.
 
-dg|  - **Removed build artifacts**: `out/pike-language-server-*.vsix` and scratch
-th|    files `test2.md`, `test-changelog.md` are no longer tracked by git.
+- **Removed build artifacts**: `out/pike-language-server-*.vsix` and scratch
+    files `test2.md`, `test-changelog.md` are no longer tracked by git.
 
   - **pike-fmt upgraded to v0.1.5**: Uses npm semver (`^0.1.5`). The npm package
     bundles `tree-sitter-pike.wasm` in `dist/`. `.pmod` files are now discovered
@@ -65,6 +65,42 @@ th|    files `test2.md`, `test-changelog.md` are no longer tracked by git.
     setup instructions for nvim-treesitter and Helix tree-sitter queries.
 
 ### Fixed
+
+  - **computeWasmHash returns null on unreadable WASM**: `computeWasmHash()` in
+    `server/src/features/persistentCache.ts` returned `"unknown"` when the WASM
+    file was unreadable, which defeated cache matching on every server restart
+    (every new hash failed to match the `"unknown"` sentinel).  Returns `null`
+    instead; callers now skip cache save/load when the hash is unavailable.
+
+  - **Cache load is per-entry resilient**: A single corrupt symbol table entry in
+    the on-disk cache would delete the entire cache file.  `server.ts:onInitialized`
+    now wraps each entry's `deserializeSymbolTable()` call in `try/catch` and
+    logs a warning, skipping only the corrupt entry and restoring the rest.
+
+  - **pikeCache size estimation avoids JSON.stringify**: Replaced the hot-path
+    `JSON.stringify(entry).length` in the Pike diagnostic LRU cache `estimateSize`
+    callback with a cheap estimator: `entry.contentHash.length` plus per-diagnostic
+    overhead.  Eliminates GC pressure during active editing (debounce fires
+    every 500ms).
+
+  - **scopeBuilder synthetic ID counter avoids Math.max spread**: `wireInheritedScopes()`
+    used `Math.max(...table.declarations.map(d => d.id))` which overflows the JS
+    call stack for files with >100K declarations.  Replaced with
+    `table.declarations.reduce((max, d) => Math.max(max, d.id), 0)`.
+
+  - **workDoneProgress on slow provider capabilities**: `referencesProvider` and
+    `workspaceSymbolProvider` now declare `workDoneProgress: true` in their
+    capability objects so clients can show progress for long-running operations.
+
+  - **CI: bun audit step**: Added `bun audit` to the CI `test` job before the
+    Pike build step, closing the security audit gap.
+
+  - **CI: coverage reporting**: `bun test` in CI now runs with `--coverage`
+    for coverage data upload.
+
+  - **Removed stray initParser() from server.ts**: Eliminated the fire-and-forget
+    `void initParser()` call in `createPikeServer()` that served no purpose
+    (the real init happens in `onInitialized`).
 
   - **sigHelp.second-param SKIP → PASS**: `resolveSignature()` in
     `server/src/features/signatureHelp.ts` was looking up the class scope
