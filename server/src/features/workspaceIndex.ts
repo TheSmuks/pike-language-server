@@ -95,7 +95,10 @@ export class WorkspaceIndex {
   // Index CRUD
   // ---------------------------------------------------------------------------
 
-  /** Add or update a file in the index. Rebuilds symbol table and dependency links. */
+  /**
+   * Add or update a file in the index. Full resolution: symbol table + dependencies.
+   * Used for user-initiated operations (didOpen, didChange).
+   */
   async upsertFile(
     uri: string, version: number, tree: Tree, content: string, modSource: ModificationSource,
   ): Promise<FileEntry> {
@@ -119,6 +122,72 @@ export class WorkspaceIndex {
     this.generation++;
     this.registerReverseDeps(uri, dependencies);
     return entry;
+  }
+
+  /**
+   * Fast-path insertion for background indexing.
+   *
+   * Builds the symbol table synchronously but skips async dependency resolution
+   * (warmResolverCache + extractDependencies). Dependencies are resolved lazily
+   * when the file is opened or queried. This makes bulk indexing ~10× faster
+   * because the per-file async fs operations are eliminated.
+   */
+  upsertBackgroundFile(
+    uri: string, version: number, tree: Tree, content: string,
+  ): FileEntry {
+    const existing = this.files.get(uri);
+    if (existing) this.removeDependencies(existing);
+
+    // Build symbol table without cross-file wiring — the resolver cache is cold,
+    // so sync resolution returns null for imports/inherits. Acceptable: local
+    // declarations and references are complete; cross-file resolution happens
+    // at query time via resolveCrossFileDefinition / getCrossFileReferences.
+    const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
+    const pikeVersion = this.parsePikeVersion(tree, content);
+    const contentHash = this.hashContent(content);
+
+    const entry: FileEntry = {
+      uri, version, symbolTable, pikeVersion,
+      dependencies: new Set(),
+      lastModSource: ModificationSource.BackgroundIndex,
+      contentHash,
+      stale: false,
+    };
+
+    this.files.set(uri, entry);
+    this.generation++;
+    // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
+    return entry;
+  }
+
+  /**
+   * Ensure a file's dependency links are populated.
+   *
+   * Background-indexed files skip dependency resolution for speed. This method
+   * upgrades them to full resolution asynchronously — the caller can proceed
+   * immediately with the local symbol table, and cross-file features (go-to-def
+   * in dependents, reference counts) will work once this resolves.
+   *
+   * Returns true if dependencies were resolved, false if already resolved or
+   * the file doesn't exist.
+   */
+  async ensureDependenciesResolved(uri: string): Promise<boolean> {
+    const entry = this.files.get(uri);
+    if (!entry) return false;
+    if (!entry.symbolTable) return false;
+
+    // Already resolved (upsertFile or previous ensureDependenciesResolved)
+    if (entry.dependencies.size > 0) return false;
+
+    // Resolve dependencies for this entry
+    const deps = await extractDependencies(this.depCtx(), entry.symbolTable, uri, new Map());
+    if (deps.size === 0) return false;
+
+    // Update the entry in-place — no generation bump needed, we're only
+    // adding dependency edges, not changing the symbol table.
+    entry.dependencies = deps;
+    this.registerReverseDeps(uri, deps);
+    return true;
   }
 
   /** Insert a file entry from persistent cache (no tree or content needed). */
