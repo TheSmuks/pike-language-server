@@ -5,7 +5,7 @@
  * Re-exported by moduleResolver.ts so existing imports continue to work.
  */
 
-import { join, dirname } from "node:path";
+import { join } from "node:path";
 import { stat, readdir } from "node:fs/promises";
 import { execFile } from "node:child_process";
 
@@ -22,6 +22,17 @@ export interface PikePaths {
   includePaths: string[];
   /** Program search paths (for inherit string resolution). */
   programPaths: string[];
+}
+
+/**
+ * User-supplied path overrides from VSCode settings.
+ * When set, these bypass auto-detection entirely.
+ */
+export interface PikePathOverrides {
+  pikeHome?: string;
+  modulePaths?: string[];
+  includePaths?: string[];
+  programPaths?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -53,10 +64,6 @@ const execFileAsync = (
       resolve(stdout + stderr);
     });
   });
-
-// ---------------------------------------------------------------------------
-// detectPikePaths
-// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // Detection phase helpers
@@ -104,8 +111,8 @@ function parseShowPathsOutput(output: string): ShowPathsResult {
     if (masterMatch) {
       const masterPath = masterMatch[1].trim();
       pikeHome = masterPath.endsWith("/lib/master.pike")
-        ? dirname(dirname(masterPath))
-        : dirname(masterPath);
+        ? join(masterPath, "..", "..")
+        : join(masterPath, "..");
     }
 
     const moduleMatch = line.match(/^Module path\.\.\.\s*:\s*(.+)$/);
@@ -113,15 +120,15 @@ function parseShowPathsOutput(output: string): ShowPathsResult {
       systemModulePath = moduleMatch[1].trim();
       if (!pikeHome) {
         pikeHome = systemModulePath.endsWith("/lib/modules")
-          ? dirname(dirname(systemModulePath))
-          : dirname(systemModulePath);
+          ? join(systemModulePath, "..", "..")
+          : join(systemModulePath, "..");
       }
     }
 
-    const includeMatch = line.match(/^Include path\.\.\s*:\s*(.+)$/);
+    const includeMatch = line.match(/^Include path\.\.\.\s*:\s*(.+)$/);
     if (includeMatch) includePath = includeMatch[1].trim();
 
-    const programMatch = line.match(/^Program path\.\.\s*:\s*(.+)$/);
+    const programMatch = line.match(/^Program path\.\.\.\s*:\s*(.+)$/);
     if (programMatch) programPath = programMatch[1].trim();
   }
 
@@ -204,16 +211,34 @@ function buildPikePaths(
 // ---------------------------------------------------------------------------
 
 /**
- * Detect Pike installation paths from the running Pike binary.
- * Falls back to well-known paths.
+ * Detect Pike installation paths.
+ *
+ * Accepts optional user-supplied overrides from VSCode settings.
+ * When ALL paths are overridden, auto-detection is skipped entirely
+ * (no Pike subprocess spawned, no filesystem scanning).
+ *
+ * When only some paths are overridden, auto-detection fills in the gaps
+ * and the overrides take precedence over detected values.
  */
 export async function detectPikePaths(
   workspaceRoot: string,
   pikeBinaryPath?: string,
+  overrides?: PikePathOverrides,
 ): Promise<PikePaths> {
   const pike = pikeBinaryPath ?? "pike";
 
-  // Phase 1: query the Pike binary
+  // If the user has provided all path overrides, use them directly —
+  // no subprocess spawning, no filesystem scanning.
+  if (overrides?.pikeHome && overrides?.modulePaths && overrides?.includePaths && overrides?.programPaths) {
+    return {
+      pikeHome: overrides.pikeHome,
+      modulePaths: [workspaceRoot, ...overrides.modulePaths],
+      includePaths: [workspaceRoot, ...overrides.includePaths],
+      programPaths: [workspaceRoot, ...overrides.programPaths],
+    };
+  }
+
+  // Auto-detect from system (spawns Pike subprocess).
   const paths = await queryShowPaths(pike);
   let pikeHome = paths.pikeHome;
   let systemModulePath = paths.systemModulePath;
@@ -226,22 +251,36 @@ export async function detectPikePaths(
   // Phase 3: scan well-known directories
   if (!pikeHome) pikeHome = await scanForPikeHome();
 
-  return buildPikePaths(workspaceRoot, pikeHome, systemModulePath, includePath, programPath);
+  const result = buildPikePaths(workspaceRoot, pikeHome, systemModulePath, includePath, programPath);
+
+  // Apply individual overrides — user settings take precedence over detected values.
+  if (overrides?.pikeHome) result.pikeHome = overrides.pikeHome;
+  if (overrides?.modulePaths && overrides.modulePaths.length > 0) {
+    result.modulePaths = [workspaceRoot, ...overrides.modulePaths];
+  }
+  if (overrides?.includePaths && overrides.includePaths.length > 0) {
+    result.includePaths = [workspaceRoot, ...overrides.includePaths];
+  }
+  if (overrides?.programPaths && overrides.programPaths.length > 0) {
+    result.programPaths = [workspaceRoot, ...overrides.programPaths];
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
-// Lazy singleton: cached Pike paths promise
+// Lazy singleton: cached Pike paths promise (in-memory per session)
 // ---------------------------------------------------------------------------
 
 let pikePathsPromise: Promise<PikePaths> | null = null;
 
 /**
- * Get Pike installation paths (lazy, cached).
- * Safe to call repeatedly; the detection runs only once.
+ * Get Pike installation paths (lazy, cached in memory).
+ * Safe to call repeatedly; the detection runs only once per session.
  */
-export function getPikePaths(workspaceRoot: string, pikeBinaryPath?: string): Promise<PikePaths> {
+export function getPikePaths(workspaceRoot: string, pikeBinaryPath?: string, overrides?: PikePathOverrides): Promise<PikePaths> {
   if (!pikePathsPromise) {
-    pikePathsPromise = detectPikePaths(workspaceRoot, pikeBinaryPath);
+    pikePathsPromise = detectPikePaths(workspaceRoot, pikeBinaryPath, overrides);
   }
   return pikePathsPromise;
 }

@@ -151,6 +151,12 @@ function getSettings(): Record<string, unknown> {
     diagnosticDebounceMs: config.get<number>("diagnosticDebounceMs", 500),
     maxNumberOfProblems: config.get<number>("maxNumberOfProblems", 100),
 
+    // Pike path overrides — when set, bypass auto-detection
+    pikeHome: config.get<string>("pikeHome", ""),
+    modulePaths: config.get<string[]>("modulePaths", []),
+    includePaths: config.get<string[]>("includePaths", []),
+    programPaths: config.get<string[]>("programPaths", []),
+
     // Background indexing
     backgroundIndexEnabled: config.get<boolean>("backgroundIndex.enabled", true),
     backgroundIndexBatchSize: config.get<number>("backgroundIndex.batchSize", 8),

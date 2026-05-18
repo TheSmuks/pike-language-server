@@ -34,10 +34,6 @@ export interface BackgroundIndexOptions {
   connection: Connection;
   index: WorkspaceIndex;
   workspaceRoot: string;
-  /** Pike worker for type-aware indexing. Omit if Pike is unavailable. */
-  worker?: { isAvailable: boolean };
-  /** Progress token from the client, if it supports workDoneProgress. */
-  progressToken?: string | number;
   /** Number of files to index concurrently. Default: 8. */
   batchSize?: number;
 }
@@ -246,16 +242,11 @@ export async function indexWorkspaceFiles(
   options: BackgroundIndexOptions,
 ): Promise<void> {
 
-  const { connection, index, workspaceRoot, worker } = options;
+  const { connection, index, workspaceRoot } = options;
   const batchSize = options.batchSize ?? BATCH_SIZE;
 
   if (!workspaceRoot) {
     logInfo(connection, "no workspace root, skipping background indexing");
-    return;
-  }
-
-  if (worker && !worker.isAvailable) {
-    logInfo(connection, "Pike binary not found — skipping background indexing");
     return;
   }
 
