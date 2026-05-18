@@ -181,7 +181,7 @@ function extractAutodocIfStale(
     });
 }
 
-/** Register didOpen handler — extract AutoDoc XML on document open. */
+/** Register didOpen handler — extract AutoDoc XML + lazy dep resolution. */
 function registerDidOpenHandler(ctx: NavigationContext): void {
   ctx.documents.onDidOpen((event) => {
     const doc = event.document;
@@ -191,6 +191,13 @@ function registerDidOpenHandler(ctx: NavigationContext): void {
       return;
     }
     extractAutodocIfStale(source, doc.uri, ctx);
+
+    // Fire-and-forget: resolve dependencies for background-indexed files.
+    // This is a no-op if the file was already fully resolved (upsertFile).
+    ctx.index.ensureDependenciesResolved(doc.uri).catch(() => {
+      // Swallow — dependency resolution failure is non-critical.
+      // Cross-file features will gracefully return no results.
+    });
   });
 }
 

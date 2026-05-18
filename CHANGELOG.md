@@ -5,6 +5,46 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [Unreleased]
+
+## [0.7.4] — 2026-05-18
+
+### Added
+
+  - `upsertBackgroundFile()` — synchronous fast path for background indexing
+    that builds symbol tables without async dependency resolution. ~10× faster
+    bulk indexing by eliminating per-file `warmResolverCache` + `extractDependencies`
+    async fs operations.
+  - `ensureDependenciesResolved()` — lazy dependency resolution that upgrades
+    background-indexed files on demand when opened. Cross-file features
+    (go-to-def, reference counts) light up without blocking startup.
+  - Generation-based reference count cache in code lens provider. Code lens
+    requests return cached results instantly when the workspace index hasn't
+    changed, avoiding redundant cross-file reference walks.
+  - `tests/perf/large-workspace.test.ts` — synthetic 1000-file workspace
+    profiling test measuring indexing throughput, code lens, and cross-file
+    reference performance with budget assertions.
+  - `tests/perf/micro-upsert.test.ts` — per-operation breakdown benchmark
+    isolating parse, buildSymbolTable, and upsert costs.
+
+### Changed
+
+  - Background indexer (`backgroundIndex.ts`) now uses `upsertBackgroundFile()`
+    instead of `upsertFile()`, making batch insertion synchronous and
+    eliminating async bottlenecks from the critical startup path.
+  - `didOpen` handler triggers `ensureDependenciesResolved()` fire-and-forget,
+    so dependency edges are populated without blocking the editor.
+
+### Fixed
+
+  - Performance regression on workspaces with 1000+ files: background indexing
+    no longer blocks the LSP server during startup. Users see completions,
+    highlights, and diagnostics immediately while dependency resolution
+    continues in the background.
+  - VSIX build version format: replaced dot-separated `build.NNNNNN` with
+    single alphanumeric identifier `buildNNNNNN` to avoid semver leading-zero
+    validation errors in vsce 3.x.
+
 ## [0.7.3] — 2026-05-16
 
 ### Added
@@ -13,8 +53,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     function length, non-null assertions, silent catches, rootNode.text usage,
     unbounded Maps, import.meta assertions, and file length. Derived from 3
     audit iterations (99 findings).
-
-## [Unreleased]
 
 ## [0.7.2] — 2026-05-16
 

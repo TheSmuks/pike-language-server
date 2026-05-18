@@ -16,10 +16,11 @@ RAW_VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').versi
 VERSION="${RAW_VERSION%%+*}"
 VERSION="${VERSION%%-*}"
 BUILD_NUM=$(date +%s | tail -c 7)
-# Use dash, not plus — VS Code's "Install from VSIX" rejects versions
-# containing + in some code paths. A dash suffix is a valid semver
-# pre-release identifier that installs cleanly.
-FULL_VERSION="${VERSION}-${BUILD_NUM}"
+# Use a single alphanumeric pre-release identifier — VS Code's vsce rejects
+# purely numeric pre-release parts (leading-zero violation per semver spec)
+# and dot-separated identifiers where a sub-part is numeric with leading zeros.
+# "buildNNNNNN" (no dot) avoids both issues.
+FULL_VERSION="${VERSION}-build${BUILD_NUM}"
 VSIX_NAME="pike-language-server-${FULL_VERSION}.vsix"
 
 echo "Packaging pike-language-server v${FULL_VERSION}..."
