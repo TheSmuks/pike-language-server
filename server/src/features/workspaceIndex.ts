@@ -116,6 +116,7 @@ export class WorkspaceIndex {
     const entry: FileEntry = {
       uri, version, symbolTable, pikeVersion, dependencies,
       lastModSource: modSource, contentHash, stale: false,
+      depsResolved: true,
     };
 
     this.files.set(uri, entry);
@@ -163,10 +164,11 @@ export class WorkspaceIndex {
   /**
    * Ensure a file's dependency links are populated.
    *
-   * Background-indexed files skip dependency resolution for speed. This method
-   * upgrades them to full resolution asynchronously — the caller can proceed
-   * immediately with the local symbol table, and cross-file features (go-to-def
-   * in dependents, reference counts) will work once this resolves.
+   * Background-indexed and cache-restored files skip dependency resolution for
+   * speed. This method upgrades them to full resolution asynchronously — the
+   * caller can proceed immediately with the local symbol table, and cross-file
+   * features (go-to-def in dependents, reference counts) will work once this
+   * resolves.
    *
    * Returns true if dependencies were resolved, false if already resolved or
    * the file doesn't exist.
@@ -176,35 +178,44 @@ export class WorkspaceIndex {
     if (!entry) return false;
     if (!entry.symbolTable) return false;
 
-    // Already resolved (upsertFile or previous ensureDependenciesResolved)
-    if (entry.dependencies.size > 0) return false;
+    // Already resolved — distinguish "resolved and found deps" from
+    // "resolved and found nothing" via the depsResolved sentinel flag.
+    if (entry.depsResolved) return false;
 
     // Resolve dependencies for this entry
     const deps = await extractDependencies(this.depCtx(), entry.symbolTable, uri, new Map());
-    if (deps.size === 0) return false;
 
-    // Update the entry in-place — no generation bump needed, we're only
-    // adding dependency edges, not changing the symbol table.
-    entry.dependencies = deps;
-    this.registerReverseDeps(uri, deps);
+    // Mark as resolved even if no deps found — avoids re-running resolution
+    // for files that genuinely have no imports/inherits.
+    entry.depsResolved = true;
+
+    if (deps.size > 0) {
+      entry.dependencies = deps;
+      this.registerReverseDeps(uri, deps);
+    }
     return true;
   }
 
-  /** Insert a file entry from persistent cache (no tree or content needed). */
-  async upsertCachedFile(
+  /**
+   * Insert a file entry from persistent cache.
+   *
+   * Like upsertBackgroundFile, this skips dependency resolution — cache
+   * restoration should be fast (just deserialize + insert). Dependencies
+   * are resolved lazily when cross-file queries need them.
+   */
+  upsertCachedFile(
     uri: string, version: number, symbolTable: SymbolTable, contentHash: string,
-  ): Promise<FileEntry> {
-    const dependencies = await extractDependencies(this.depCtx(), symbolTable, uri, new Map());
-
+  ): FileEntry {
     const entry: FileEntry = {
       uri, version, symbolTable,
-      pikeVersion: null, dependencies,
+      pikeVersion: null,
+      dependencies: new Set(),
       lastModSource: ModificationSource.DidOpen, contentHash, stale: false,
     };
 
     this.files.set(uri, entry);
     this.generation++;
-    this.registerReverseDeps(uri, dependencies);
+    // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
     return entry;
   }
 
@@ -366,6 +377,9 @@ export class WorkspaceIndex {
   async resolveCrossFileDefinition(uri: string, line: number, character: number): Promise<{
     uri: string; decl: Declaration;
   } | null> {
+    // Ensure the source file's dependencies are resolved so cross-file
+    // queries can follow import/inherit edges. Lazy per ADR 0023.
+    await this.ensureDependenciesResolved(uri);
     return resolveCrossFileDefinitionFn(this.resolutionCtx(), uri, line, character);
   }
 
@@ -373,6 +387,12 @@ export class WorkspaceIndex {
   getCrossFileReferences(uri: string, line: number, character: number): Array<{
     uri: string; ref: Reference;
   }> {
+    // Note: dependencies are resolved lazily on the source file above, but
+    // finding references IN dependents requires those dependents to also have
+    // resolved dependencies. Since getCrossFileReferences is synchronous,
+    // we can only work with whatever dependency data is available right now.
+    // The didOpen handler (navigationAdvanced.ts) calls ensureDependenciesResolved
+    // asynchronously, so most actively-edited files will have deps resolved.
     return getCrossFileReferencesFn(this.resolutionCtx(), uri, line, character);
   }
 

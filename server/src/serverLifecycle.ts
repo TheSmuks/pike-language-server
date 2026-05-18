@@ -11,10 +11,12 @@ import {
   Connection,
   TextDocuments,
   DidChangeWatchedFilesNotification,
+  CancellationTokenSource,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { initParser, getTreeCacheStats, evictTreeCacheOldest } from "./parser";
+import { isParserReady, parse, initParser, getTreeCacheStats, evictTreeCacheOldest } from "./parser";
 import type { WorkspaceIndex } from "./features/workspaceIndex";
+import { ModificationSource } from "./features/workspaceIndex";
 import { indexWorkspaceFiles } from "./features/backgroundIndex";
 import {
   loadCache,
@@ -44,6 +46,7 @@ export interface InitializedContext {
 export async function handleInitialized(ctx: InitializedContext): Promise<void> {
   const {
     connection,
+    documents,
     index,
     worker,
     clientSupportsWatchedFiles,
@@ -62,11 +65,34 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     logError(connection, ErrorCategory.System, "[init] step 7a FAILED: parser init", err);
   }
 
-  // step 7b: pike binary probe
-  logInfo(connection, "[init] step 7b: probing Pike binary");
+  // step 7b: index open documents immediately (typically 0-5 files).
+  // This gives full feature availability for the files the user is looking
+  // at before any background work starts. Full resolution includes dependency
+  // resolution so cross-file features work from the first request.
+  const openDocs = documents.all();
+  if (openDocs.length > 0) {
+    logInfo(connection, `[init] step 7b: indexing ${openDocs.length} open document(s)`);
+    for (const doc of openDocs) {
+      try {
+        const content = doc.getText();
+        const tree = parse(content, doc.uri);
+        await index.upsertFile(
+          doc.uri, doc.version, tree, content, ModificationSource.DidOpen,
+        );
+      } catch (err) {
+        logError(connection, ErrorCategory.Index, `[init] step 7b: failed to index ${doc.uri}`, err);
+      }
+    }
+    logInfo(connection, `[init] step 7b: open documents indexed`);
+  } else {
+    logInfo(connection, "[init] step 7b: no open documents to index");
+  }
+
+  // step 7c: pike binary probe (fire-and-forget)
+  logInfo(connection, "[init] step 7c: probing Pike binary");
   worker.ping().catch((err: unknown) => {
     if (err instanceof PikeUnavailableError) {
-      logInfo(connection, "[init] step 7b: Pike binary NOT found — degraded mode");
+      logInfo(connection, "[init] step 7c: Pike binary NOT found — degraded mode");
       try {
         connection.window.showWarningMessage(
           "Pike binary not found. Syntax highlighting and navigation still work. " +
@@ -76,13 +102,13 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
         // Connection may be closed during teardown
       }
     } else {
-      logError(connection, ErrorCategory.Worker, "[init] step 7b: Pike ping failed", err);
+      logError(connection, ErrorCategory.Worker, "[init] step 7c: Pike ping failed", err);
     }
   });
 
-  // step 7c: file watchers
+  // step 7d: file watchers
   if (clientSupportsWatchedFiles) {
-    logInfo(connection, "[init] step 7c: registering file watchers");
+    logInfo(connection, "[init] step 7d: registering file watchers");
     connection.client.register(
       DidChangeWatchedFilesNotification.type,
       {
@@ -95,25 +121,25 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       // Registration may still fail (e.g., client rejects it)
     });
   } else {
-    logInfo(connection, "[init] step 7c: skipped — client does not support file watchers");
+    logInfo(connection, "[init] step 7d: skipped — client does not support file watchers");
   }
 
-  // step 7d + 7e: cache loading, background indexing, worker warm-up —
-  // ALL fire-and-forget. Only the parser (7a) is blocking because every
-  // feature needs it. These three can run in parallel since:
-  //   - Cache loading writes to the index via upsertCachedFile (async deps)
+  // step 7e + 7f: cache loading and background indexing — both fire-and-forget.
+  // Open documents (step 7b) are already fully indexed. Cache and background
+  // indexing pre-populate the rest of the workspace. They run in parallel since:
+  //   - Cache loading writes via upsertCachedFile (sync, no deps — see ADR 0023)
   //   - Background indexing writes via upsertBackgroundFile (sync, no deps)
-  //   - Both are single-threaded JS — Map mutations are atomic
-  //   - Background indexing already skips files present in the index
+  //   - Both skip files already in the index (open docs take precedence)
+  //   - Single-threaded JS — Map mutations are atomic
 
-  // step 7d: load persistent cache (fire-and-forget)
-  logInfo(connection, "[init] step 7d: loading persistent cache (non-blocking)");
+  // step 7e: load persistent cache (fire-and-forget)
+  logInfo(connection, "[init] step 7e: loading persistent cache (non-blocking)");
   const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
   const currentWasmHash = computeWasmHash(wasmPath);
 
   loadCache(index.workspaceRoot, currentWasmHash).then((cached) => {
     if (!cached) {
-      logInfo(connection, "[init] step 7d: no cache found — fresh start");
+      logInfo(connection, "[init] step 7e: no cache found — fresh start");
       return;
     }
 
@@ -121,19 +147,19 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     for (const entry of cached) {
       if (entry.symbolTable) {
         const table = deserializeSymbolTable(entry.symbolTable);
-        // Rebuild only if not already indexed (open doc takes precedence)
+        // Skip files already indexed (open doc or previous entry takes precedence)
         if (!index.getFile(entry.uri)) {
           index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
           restored++;
         }
       }
     }
-    logInfo(connection, `[init] step 7d: restored ${restored} files from cache`);
+    logInfo(connection, `[init] step 7e: restored ${restored} files from cache`);
   }).catch((err) => {
-    logError(connection, ErrorCategory.System, "[init] step 7d FAILED: cache load", err);
+    logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
   });
 
-  // step 7e: background workspace indexing — fire-and-forget
+  // step 7f: background workspace indexing — fire-and-forget, cancellable
   if (backgroundIndexEnabled) {
     // Pre-warm the Pike worker during initialization so the first user
     // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
@@ -151,24 +177,27 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       }
     });
 
-    logInfo(connection, `[init] step 7e: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+    const backgroundCts = new CancellationTokenSource();
+
+    logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
     indexWorkspaceFiles({
       connection,
       index,
       workspaceRoot: index.workspaceRoot,
       batchSize: backgroundIndexBatchSize,
+      cancellationToken: backgroundCts.token,
     }).then(() => {
-      logInfo(connection, "[init] step 7e: background indexing complete");
+      logInfo(connection, "[init] step 7f: background indexing complete");
     }).catch((err) => {
-      logError(connection, ErrorCategory.Index, "[init] step 7e FAILED: background index", err);
+      logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
     });
   } else {
-    logInfo(connection, "[init] step 7e: background indexing disabled by settings");
+    logInfo(connection, "[init] step 7f: background indexing disabled by settings");
   }
 
   logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
 
-  // step 7f: periodic memory monitor — log warnings and trigger eviction
+  // step 7g: periodic memory monitor — log warnings and trigger eviction
   // when heap usage is high. Checks every 60 seconds. Timer is unreffed
   // so it doesn't prevent the process from exiting.
   const MEMORY_CHECK_INTERVAL_MS = 60_000;

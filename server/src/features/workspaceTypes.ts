@@ -42,6 +42,12 @@ export interface FileEntry {
   contentHash: string;
   /** True when a dependency changed and this entry's symbol table may be stale. */
   stale: boolean;
+  /**
+   * Whether dependency resolution has been attempted.
+   * Distinguishes "not yet resolved" (false) from "resolved, found nothing" (true + empty deps).
+   * Set true by upsertFile (full resolution) and ensureDependenciesResolved.
+   */
+  depsResolved?: boolean;
 }
 
 export interface WorkspaceIndexOptions {

@@ -5,7 +5,7 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
-## [0.7.5] — 2026-05-18
+## [0.8.0] — 2026-05-18
 
 ### Added
 
@@ -15,12 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-  - Background indexing and cache loading now start in parallel instead of
-    sequentially. Tree-sitter parsing (background indexing) does not depend
-    on Pike or on the cache, so both run fire-and-forget from `onInitialized`.
-  - Removed `worker.isAvailable` gate from background indexing —
-    tree-sitter indexing works without Pike; Pike-dependent features degrade
-    gracefully when the worker isn't ready.
+  - **Lazy on-demand indexing (ADR 0023).** Background indexing no longer
+    resolves dependencies — it builds symbol tables only (synchronous, fast).
+    Dependencies are resolved lazily when cross-file queries need them. This
+    follows the pattern used by rust-analyzer and gopls.
+  - Open files are indexed first with full dependency resolution before
+    background workspace indexing starts. The files you're looking at get
+    full features immediately.
+  - Background indexing is now cancellable — accepts a `CancellationToken`
+    and checks it between batches. User-facing requests always take priority.
+  - Cache restoration (`upsertCachedFile`) is now synchronous and skips
+    dependency resolution entirely. Previously it called `extractDependencies`
+    for every cached entry, triggering hundreds of async filesystem operations
+    at startup.
+  - `depsResolved` sentinel on `FileEntry` distinguishes "not yet resolved"
+    from "resolved, found nothing" — prevents redundant re-resolution for
+    files with no imports/inherits.
+  - `resolveCrossFileDefinition` now calls `ensureDependenciesResolved`
+    internally before following import/inherit edges — cross-file go-to-def
+    works even for background-indexed files.
 
 ### Fixed
 
@@ -28,12 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Previously, `loadCache()` was awaited, blocking background indexing
     from starting until every cached file's dependencies were resolved
     (async fs operations per entry). Now fire-and-forget.
+  - `ensureDependenciesResolved` no longer re-runs for files with zero
+    dependencies. Previously, `deps.size === 0` was used as the "not resolved"
+    check, causing repeated resolution attempts on every cross-file query.
+
+## [Unreleased]
+
+## [0.7.5] — 2026-05-18
+
+### Fixed
+
+  - Initial release of startup performance improvements (superseded by
+    lazy indexing in [Unreleased]).
   - Pike path auto-detection runs only when needed — user-configured paths
     bypass the `pike --show-paths` subprocess and filesystem scanning.
   - Removed `.pike-lsp/pike-paths.json` disk cache — no workspace directory
     pollution. Detection results are cached in-memory per session only.
-
-## [Unreleased]
 
 ## [0.7.4] — 2026-05-18
 
