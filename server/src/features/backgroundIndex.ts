@@ -10,6 +10,7 @@
  */
 
 import type { Connection } from "vscode-languageserver/node";
+import type { CancellationToken } from "vscode-jsonrpc";
 import { ProgressType } from "vscode-jsonrpc";
 import { readdir, readFile } from "node:fs/promises";
 import { join, extname } from "node:path";
@@ -36,6 +37,8 @@ export interface BackgroundIndexOptions {
   workspaceRoot: string;
   /** Number of files to index concurrently. Default: 8. */
   batchSize?: number;
+  /** Token to cancel background indexing between batches. */
+  cancellationToken?: CancellationToken;
 }
 
 /** Parsed file ready for insertion into the index. */
@@ -195,6 +198,7 @@ function upsertParsedBatch(
 /**
  * Process all pending files in batches.
  * Reads + parses concurrently per batch, upserts sequentially.
+ * Checks cancellation token between batches — stops cleanly if cancelled.
  */
 async function processBatches(
   connection: Connection,
@@ -203,11 +207,18 @@ async function processBatches(
   batchSize: number,
   progressToken: string | number | undefined,
   totalFiles: number,
-): Promise<{ indexed: number; errors: number }> {
+  cancellationToken?: CancellationToken,
+): Promise<{ indexed: number; errors: number; cancelled: boolean }> {
   let indexed = 0;
   let errors = 0;
 
   for (let start = 0; start < pending.length; start += batchSize) {
+    // Check cancellation between batches — exit early without error.
+    if (cancellationToken?.isCancellationRequested) {
+      logInfo(connection, `background indexing cancelled after ${indexed}/${totalFiles} files`);
+      return { indexed, errors, cancelled: true };
+    }
+
     const batch = pending.slice(start, start + batchSize);
 
     // Phase 1: Read and parse concurrently (no URI to avoid cache eviction)
@@ -225,7 +236,7 @@ async function processBatches(
     // Yield to the event loop between batches
     await new Promise(resolve => setTimeout(resolve, 0));
   }
-  return { indexed, errors };
+  return { indexed, errors, cancelled: false };
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +284,7 @@ export async function indexWorkspaceFiles(
 
   const { indexed, errors } = await processBatches(
     connection, index, pending, batchSize, progressToken, files.length,
+    options.cancellationToken,
   );
 
   reportProgressDone(connection, progressToken, indexed, errors);
