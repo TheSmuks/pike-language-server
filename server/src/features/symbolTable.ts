@@ -1,4 +1,5 @@
 import { Tree } from 'web-tree-sitter';
+import type { OffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Types — mirrors decision 0009
@@ -112,6 +113,10 @@ export interface BuildState {
   declMap: Map<number, Declaration>; // ID → Declaration for O(1) lookup
   scopeStack: number[]; // stack of scope IDs (innermost last)
   lines: string[]; // pre-split source lines for UTF-16 position conversion
+  /** Pre-computed byte→UTF-16 offset map per line. Built once at init, O(1) per lookup. */
+  offsetMap: OffsetMap;
+  /** Scopes sorted by (startLine, startChar) after declaration pass, for binary search. */
+  sortedScopes: Scope[];
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +142,8 @@ import { pushScope, popScope, toRangeUtf16, resolveTypeName } from './scope-help
 import { wireInheritance } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
+import { startSpan, stopSpan, bump, measureSync } from './profiler';
+import { buildOffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Build orchestrator
@@ -161,15 +168,32 @@ export interface BuildOptions {
  * @param index Optional WorkspaceIndex for cross-file inheritance wiring.
  */
 export function buildSymbolTable(tree: Tree, uri: string, version: number, options?: BuildOptions): SymbolTable {
-  const root = tree.rootNode;
-  if (!root) return emptySymbolTable(uri, version);
+  return measureSync("buildSymbolTable", () => {
+    const root = tree.rootNode;
+    if (!root) return emptySymbolTable(uri, version);
 
-  const state = initBuildState(root);
-  runDeclarationPass(root, state);
-  const table = buildTable(state, uri, version);
-  wireInheritance(table, options?.index, uri);
-  runReferencePass(tree.rootNode, state, table);
-  return table;
+    bump("symbolTablesBuilt");
+    const state = initBuildState(root);
+
+    startSpan("declarationPass");
+    runDeclarationPass(root, state);
+    stopSpan("declarationPass");
+
+    startSpan("buildTable");
+    const table = buildTable(state, uri, version);
+    stopSpan("buildTable");
+
+    startSpan("wireInheritance");
+    wireInheritance(table, options?.index, uri);
+    bump("inheritanceWiringOps");
+    stopSpan("wireInheritance");
+
+    startSpan("referencePass");
+    runReferencePass(tree.rootNode, state, table);
+    stopSpan("referencePass");
+
+    return table;
+  });
 }
 
 /** Create an empty symbol table for failed parses. */
@@ -183,6 +207,7 @@ function emptySymbolTable(uri: string, version: number): SymbolTable {
 
 /** Initialize builder state from the root node. */
 function initBuildState(root: { text: string }): BuildState {
+  const lines = root.text.split('\n');
   return {
     nextId: 0,
     declarations: [],
@@ -191,15 +216,21 @@ function initBuildState(root: { text: string }): BuildState {
     scopeMap: new Map(),
     declMap: new Map(),
     scopeStack: [],
-    lines: root.text.split('\n'),
+    lines,
+    offsetMap: buildOffsetMap(lines),
+    sortedScopes: [],
   };
 }
 
 /** Pass 1: collect declarations and build scope tree. */
 function runDeclarationPass(root: any, state: BuildState): void {
-  pushScope(state, 'file', toRangeUtf16(root, state.lines));
+  pushScope(state, 'file', toRangeUtf16(root, state.lines, state.offsetMap));
   collectDeclarations(root, state);
   popScope(state);
+
+  // Sort scopes by start position for binary search in findScopeForNode.
+  // Done here because all scopes are known after the declaration pass.
+  state.sortedScopes = sortScopesByStart(state.scopes);
 }
 
 /** Build intermediate SymbolTable from state (before reference pass). */
@@ -476,4 +507,17 @@ function lhsTypeContainsDecl(table: SymbolTable, targetDeclId: number, ref: Refe
   );
   if (!typeClass) return true; // unknown type — include
   return isMemberOfClass(table, targetDeclId, typeClass);
+}
+
+/**
+ * Sort scopes by (startLine, startChar) for binary search in findScopeForNode.
+ * Stable sort preserves ID order for scopes starting at the same position,
+ * which matters for preferring higher IDs (deeper nesting) when ranges overlap.
+ */
+function sortScopesByStart(scopes: Scope[]): Scope[] {
+  return [...scopes].sort((a, b) => {
+    const lineDiff = a.range.start.line - b.range.start.line;
+    if (lineDiff !== 0) return lineDiff;
+    return a.range.start.character - b.range.start.character;
+  });
 }

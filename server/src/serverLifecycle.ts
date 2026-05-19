@@ -22,10 +22,108 @@ import {
   loadCache,
   deserializeSymbolTable,
   computeWasmHash,
+  type CachedFileEntry,
 } from "./features/persistentCache";
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
+import { hashContent } from "./features/cacheHash";
+
+// ---------------------------------------------------------------------------
+// Cache restore + refresh (M2: two-phase startup)
+// ---------------------------------------------------------------------------
+
+/**
+ * Restore cached entries into the index. Skips files already present
+ * (open documents take precedence). Reconstructs forward dependencies
+ * from the serialized dependency lists.
+ */
+function restoreCachedEntries(
+  index: WorkspaceIndex,
+  cached: CachedFileEntry[],
+): number {
+  let restored = 0;
+  for (const entry of cached) {
+    if (!entry.symbolTable) continue;
+    if (index.getFile(entry.uri)) continue;
+
+    const table = deserializeSymbolTable(entry.symbolTable);
+    const fileEntry = index.upsertCachedFile(
+      entry.uri, entry.version, table, entry.contentHash,
+    );
+    if (entry.dependencies.length > 0) {
+      index.restoreDependencies(fileEntry.uri, new Set(entry.dependencies));
+    }
+    restored++;
+  }
+  return restored;
+}
+
+/**
+ * Background refresh of cached entries whose content has changed on disk.
+ *
+ * After the cache is restored (phase 1), this function reads each cached
+ * file from disk, computes its content hash, and compares against the cached
+ * hash. Changed files are re-indexed, and their dependents are invalidated
+ * via invalidateWithDependents (M3: pruned invalidation).
+ *
+ * This runs asynchronously — the server is already serving requests from
+ * cached data. Re-indexed entries replace stale data in-place.
+ */
+async function refreshStaleCacheEntries(
+  connection: Connection,
+  index: WorkspaceIndex,
+  cached: CachedFileEntry[],
+): Promise<number> {
+  if (!isParserReady()) return 0;
+
+  const { readFile: readFileAsync } = await import("node:fs/promises");
+  const { fileURLToPath } = await import("node:url");
+  let reindexed = 0;
+
+  for (const entry of cached) {
+    if (!entry.symbolTable) continue;
+
+    // Skip files already re-indexed by background indexing or didOpen.
+    const current = index.getFile(entry.uri);
+    if (!current) continue;
+    if (current.lastModSource !== ModificationSource.DidOpen &&
+        current.lastModSource !== ModificationSource.BackgroundIndex) {
+      // This entry was restored from cache — check if stale.
+    } else {
+      // Already re-indexed by a later step — skip.
+      continue;
+    }
+
+    let diskContent: string;
+    try {
+      const filePath = fileURLToPath(entry.uri);
+      diskContent = await readFileAsync(filePath, "utf-8");
+    } catch {
+      // File deleted or unreadable — invalidate entry.
+      index.invalidateWithDependents(entry.uri);
+      reindexed++;
+      continue;
+    }
+
+    const diskHash = hashContent(diskContent);
+    if (diskHash === entry.contentHash) continue;
+
+    // Content changed — re-index and invalidate dependents.
+    try {
+      const tree = parse(diskContent, entry.uri);
+      index.upsertBackgroundFile(entry.uri, 0, tree, diskContent);
+      index.invalidateWithDependents(entry.uri);
+      reindexed++;
+    } catch {
+      // Parse failure — invalidate but don't crash.
+      index.invalidateWithDependents(entry.uri);
+      reindexed++;
+    }
+  }
+
+  return reindexed;
+}
 
 // ---------------------------------------------------------------------------
 // Post-initialization handler (registered via connection.onInitialized)
@@ -124,51 +222,28 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     logInfo(connection, "[init] step 7d: skipped — client does not support file watchers");
   }
 
-  // step 7e + 7f: cache loading and background indexing — both fire-and-forget.
-  // Open documents (step 7b) are already fully indexed. Cache and background
-  // indexing pre-populate the rest of the workspace. They run in parallel since:
-  //   - Cache loading writes via upsertCachedFile (sync, no deps — see ADR 0023)
-  //   - Background indexing writes via upsertBackgroundFile (sync, no deps)
-  //   - Both skip files already in the index (open docs take precedence)
-  //   - Single-threaded JS — Map mutations are atomic
-
-  // step 7e: load persistent cache (fire-and-forget)
-  logInfo(connection, "[init] step 7e: loading persistent cache (non-blocking)");
+  // step 7e: load persistent cache, then start background indexing.
+  // Cache load must complete before background indexing so that:
+  //   1. Cached entries are available for immediate feature queries
+  //   2. Background indexing skips already-cached files (no double work)
+  // Open documents (step 7b) are already fully indexed and take precedence.
+  logInfo(connection, "[init] step 7e: loading persistent cache");
   const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
   const currentWasmHash = computeWasmHash(wasmPath);
 
-  loadCache(index.workspaceRoot, currentWasmHash).then((cached) => {
-    if (!cached) {
-      logInfo(connection, "[init] step 7e: no cache found — fresh start");
-      return;
-    }
+  const cacheLoadPromise = loadCache(index.workspaceRoot, currentWasmHash)
+    .catch((err) => {
+      logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
+      return null;
+    });
 
-    let restored = 0;
-    for (const entry of cached) {
-      if (entry.symbolTable) {
-        const table = deserializeSymbolTable(entry.symbolTable);
-        // Skip files already indexed (open doc or previous entry takes precedence)
-        if (!index.getFile(entry.uri)) {
-          index.upsertCachedFile(entry.uri, entry.version, table, entry.contentHash);
-          restored++;
-        }
-      }
-    }
-    logInfo(connection, `[init] step 7e: restored ${restored} files from cache`);
-  }).catch((err) => {
-    logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
-  });
-
-  // step 7f: background workspace indexing — fire-and-forget, cancellable
+  // Pre-warm the Pike worker during initialization so the first user
+  // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
   if (backgroundIndexEnabled) {
-    // Pre-warm the Pike worker during initialization so the first user
-    // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
     worker.warmUp().then((ready) => {
       if (ready) {
         const version = worker.pikeVersion ?? "unknown";
         logInfo(connection, `[init] Pike worker pre-warmed successfully (Pike ${version})`);
-
-        // Warn if Pike version predates 8.0 — features may not work correctly.
         if (version && !version.startsWith("8.")) {
           logWarn(connection, `[init] Pike version ${version} predates 8.0 — some features may not work correctly`);
         }
@@ -176,24 +251,46 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
         logInfo(connection, "[init] Pike worker warm-up skipped (Pike unavailable)");
       }
     });
-
-    const backgroundCts = new CancellationTokenSource();
-
-    logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
-    indexWorkspaceFiles({
-      connection,
-      index,
-      workspaceRoot: index.workspaceRoot,
-      batchSize: backgroundIndexBatchSize,
-      cancellationToken: backgroundCts.token,
-    }).then(() => {
-      logInfo(connection, "[init] step 7f: background indexing complete");
-    }).catch((err) => {
-      logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
-    });
-  } else {
-    logInfo(connection, "[init] step 7f: background indexing disabled by settings");
   }
+
+  // Cache restore + stale refresh + background indexing, chained sequentially.
+  cacheLoadPromise.then((cached) => {
+    if (!cached) {
+      logInfo(connection, "[init] step 7e: no cache found — fresh start");
+    } else {
+      const restored = restoreCachedEntries(index, cached);
+      const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
+      logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
+
+      // Phase 2: Re-validate stale entries (content hash mismatch).
+      refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
+        if (reindexed > 0) {
+          logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
+        }
+      }).catch((err) => {
+        logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
+      });
+    }
+
+    // Phase 3: Background-index remaining unindexed files.
+    if (backgroundIndexEnabled) {
+      const backgroundCts = new CancellationTokenSource();
+      logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+      indexWorkspaceFiles({
+        connection,
+        index,
+        workspaceRoot: index.workspaceRoot,
+        batchSize: backgroundIndexBatchSize,
+        cancellationToken: backgroundCts.token,
+      }).then(() => {
+        logInfo(connection, "[init] step 7f: background indexing complete");
+      }).catch((err) => {
+        logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
+      });
+    } else {
+      logInfo(connection, "[init] step 7f: background indexing disabled by settings");
+    }
+  });
 
   logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
 

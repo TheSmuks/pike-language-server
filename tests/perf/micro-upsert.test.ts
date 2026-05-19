@@ -3,6 +3,11 @@
  *
  * Measures each step separately to find the exact bottleneck.
  * Run: bun test tests/perf/micro-upsert.test.ts
+ *
+ * For phase-level breakdown inside buildSymbolTable, run with:
+ *   PIKE_LSP_PROFILE=1 bun test tests/perf/micro-upsert.test.ts
+ * and check the profiler report for declarationPass / buildTable /
+ * wireInheritance / referencePass timings.
  */
 
 import { describe, test, expect, beforeAll } from "bun:test";
@@ -29,7 +34,7 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
 }`;
     const uri = "file:///tmp/micro/f0.pike";
 
-    // Pre-parse
+    // Pre-parse trees for reuse
     const trees = [];
     for (let i = 0; i < N; i++) trees.push(parse(content));
 
@@ -91,6 +96,35 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
     console.log(`  sum of parts:             ${(parseMs + buildTableMs + hashMs + mapMs).toFixed(1)}ms`);
     console.log(`  unaccounted:              ${(upsertMs - buildTableMs - hashMs - mapMs).toFixed(1)}ms`);
     console.log("  =================================\n");
+
+    for (const t of trees) t.delete();
+    expect(true).toBe(true);
+  });
+
+  test("buildSymbolTable phase breakdown", () => {
+    // Isolates the 4 phases inside buildSymbolTable:
+    // declarationPass, buildTable, wireInheritance, referencePass
+    const content = `class Test {
+  int fn1(int x) { return x + 1; }
+  int fn2(int x) { return x + 2; }
+  int fn3() { return 3; }
+}`;
+    const N_PHASES = 1000;
+    const trees: import("web-tree-sitter").Tree[] = [];
+    for (let i = 0; i < N_PHASES; i++) {
+      trees.push(parse(content));
+    }
+
+    const t0 = process.hrtime.bigint();
+    for (let i = 0; i < N_PHASES; i++) {
+      buildSymbolTable(trees[i]!, `file:///tmp/perf/f${i}.pike`, 1);
+    }
+    const totalMs = hrMs(t0);
+
+    console.log(`\n  === buildSymbolTable × ${N_PHASES} ===`);
+    console.log(`  total: ${totalMs.toFixed(1)}ms  (${(totalMs/N_PHASES).toFixed(3)}ms/file)`);
+    console.log(`  With PIKE_LSP_PROFILE=1, check the profiler report for per-phase breakdown.`);
+    console.log("  ===============================\n");
 
     for (const t of trees) t.delete();
     expect(true).toBe(true);

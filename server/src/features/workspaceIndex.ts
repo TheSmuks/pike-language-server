@@ -13,6 +13,8 @@ import {
   type ResolutionContext,
 } from "./workspaceResolution";
 import { warmResolverCache, extractDependencies, type DependencyContext } from "./workspaceDependencies";
+import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
+import { hashContent } from "./cacheHash";
 
 // Re-export types so all existing imports from this module continue to work.
 // Interfaces/types use `export type` — runtime re-export of type-only symbols
@@ -102,27 +104,37 @@ export class WorkspaceIndex {
   async upsertFile(
     uri: string, version: number, tree: Tree, content: string, modSource: ModificationSource,
   ): Promise<FileEntry> {
-    const existing = this.files.get(uri);
-    if (existing) this.removeDependencies(existing);
+    return measureAsync("upsertFile", async () => {
+      const existing = this.files.get(uri);
+      if (existing) this.removeDependencies(existing);
 
-    // Pre-warm the ModuleResolver cache so buildSymbolTable can do sync cross-file wiring
-    const warmCacheResult = await warmResolverCache(this.depCtx(), tree, uri);
+      // Pre-warm the ModuleResolver cache so buildSymbolTable can do sync cross-file wiring
+      bump("depResolutionCalls");
+      const warmCacheResult = await measureAsync("warmResolverCache", () =>
+        warmResolverCache(this.depCtx(), tree, uri),
+      );
 
-    const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
-    const pikeVersion = this.parsePikeVersion(tree, content);
-    const contentHash = this.hashContent(content);
-    const dependencies = await extractDependencies(this.depCtx(), symbolTable, uri, warmCacheResult);
+      const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
+      const pikeVersion = this.parsePikeVersion(tree, content);
+      const contentHash = this.hashContent(content);
+      const dependencies = await measureAsync("extractDependencies", () =>
+        extractDependencies(this.depCtx(), symbolTable, uri, warmCacheResult),
+      );
 
-    const entry: FileEntry = {
-      uri, version, symbolTable, pikeVersion, dependencies,
-      lastModSource: modSource, contentHash, stale: false,
-      depsResolved: true,
-    };
+      const entry: FileEntry = {
+        uri, version, symbolTable, pikeVersion, dependencies,
+        lastModSource: modSource, contentHash, stale: false,
+        depsResolved: true,
+      };
 
-    this.files.set(uri, entry);
-    this.generation++;
-    this.registerReverseDeps(uri, dependencies);
-    return entry;
+      this.files.set(uri, entry);
+      this.generation++;
+      this.registerReverseDeps(uri, dependencies);
+
+      bump("indexWrites");
+      bump("indexWritesFull");
+      return entry;
+    });
   }
 
   /**
@@ -136,6 +148,7 @@ export class WorkspaceIndex {
   upsertBackgroundFile(
     uri: string, version: number, tree: Tree, content: string,
   ): FileEntry {
+    startSpan("upsertBackgroundFile");
     const existing = this.files.get(uri);
     if (existing) this.removeDependencies(existing);
 
@@ -158,6 +171,10 @@ export class WorkspaceIndex {
     this.files.set(uri, entry);
     this.generation++;
     // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
+
+    bump("indexWrites");
+    bump("indexWritesBackground");
+    stopSpan("upsertBackgroundFile");
     return entry;
   }
 
@@ -174,6 +191,7 @@ export class WorkspaceIndex {
    * the file doesn't exist.
    */
   async ensureDependenciesResolved(uri: string): Promise<boolean> {
+    bump("lazyDepResolutionCalls");
     const entry = this.files.get(uri);
     if (!entry) return false;
     if (!entry.symbolTable) return false;
@@ -206,6 +224,7 @@ export class WorkspaceIndex {
   upsertCachedFile(
     uri: string, version: number, symbolTable: SymbolTable, contentHash: string,
   ): FileEntry {
+    startSpan("upsertCachedFile");
     const entry: FileEntry = {
       uri, version, symbolTable,
       pikeVersion: null,
@@ -216,6 +235,10 @@ export class WorkspaceIndex {
     this.files.set(uri, entry);
     this.generation++;
     // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
+
+    bump("indexWrites");
+    bump("indexWritesCached");
+    stopSpan("upsertCachedFile");
     return entry;
   }
 
@@ -227,6 +250,25 @@ export class WorkspaceIndex {
     this.files.delete(uri);
     this.dependents.delete(uri);
     this.generation++;
+  }
+
+  /**
+   * Restore forward dependencies for a cache-restored file.
+   *
+   * Reconstructs the reverse-dependency graph from serialized forward deps
+   * without requiring async resolution. Called after upsertCachedFile to
+   * enable M3 pruned invalidation from the first request.
+   */
+  restoreDependencies(uri: string, dependencies: Set<string>): void {
+    const entry = this.files.get(uri);
+    if (!entry) return;
+
+    // Only restore if the entry has no deps yet (just cached).
+    if (entry.dependencies.size > 0) return;
+
+    entry.dependencies = dependencies;
+    entry.depsResolved = true;
+    this.registerReverseDeps(uri, dependencies);
   }
 
   getFile(uri: string): FileEntry | undefined {
@@ -452,13 +494,9 @@ export class WorkspaceIndex {
     return { major: parseInt(match[1], 10), minor: match[2] ? parseInt(match[2], 10) : 0 };
   }
 
-  /** DJB2 content hash for cache validity. */
+  /** Content hash for cache validity — delegates to shared DJB2. */
   private hashContent(content: string): string {
-    let hash = 5381;
-    for (let i = 0; i < content.length; i++) {
-      hash = ((hash << 5) + hash + content.charCodeAt(i)) >>> 0;
-    }
-    return hash.toString(16);
+    return hashContent(content);
   }
 
   private uriToPath(uri: string): string { return uriToPathUtil(uri); }

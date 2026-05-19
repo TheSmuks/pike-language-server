@@ -18,6 +18,7 @@ import { pathToFileURL } from "node:url";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, logWarn, ErrorCategory } from "../util/errorLog.js";
+import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -144,7 +145,10 @@ async function parseFile(
 ): Promise<ParsedFile | null> {
   const uri = pathToFileURL(filepath).href;
   try {
-    const content = await readFile(filepath, "utf-8");
+    startSpan("readFile");
+    const content = await measureAsync("readFile", () => readFile(filepath, "utf-8"));
+    stopSpan("readFile");
+    bump("fileReads");
     const tree = parse(content);
     return { filepath, uri, content, tree };
   } catch (err) {
@@ -222,12 +226,16 @@ async function processBatches(
     const batch = pending.slice(start, start + batchSize);
 
     // Phase 1: Read and parse concurrently (no URI to avoid cache eviction)
-    const parsed: (ParsedFile | null)[] = await Promise.all(
-      batch.map(fp => parseFile(fp, connection)),
+    startSpan("batchParse");
+    const parsed: (ParsedFile | null)[] = await measureAsync("batchParse", () =>
+      Promise.all(batch.map(fp => parseFile(fp, connection))),
     );
+    stopSpan("batchParse");
 
     // Phase 2: Insert sequentially (shared mutable state, now synchronous)
+    startSpan("batchUpsert");
     const result = upsertParsedBatch(parsed, index, connection);
+    stopSpan("batchUpsert");
     indexed += result.indexed;
     errors += result.errors;
 
@@ -252,6 +260,7 @@ async function processBatches(
 export async function indexWorkspaceFiles(
   options: BackgroundIndexOptions,
 ): Promise<void> {
+  startSpan("backgroundIndex");
 
   const { connection, index, workspaceRoot } = options;
   const batchSize = options.batchSize ?? BATCH_SIZE;
@@ -264,7 +273,7 @@ export async function indexWorkspaceFiles(
   // Discover files via recursive directory walk
   const files: string[] = [];
   try {
-    await discoverFiles(workspaceRoot, files);
+    await measureAsync("discoverFiles", () => discoverFiles(workspaceRoot, files));
   } catch (err) {
     logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:discoverFiles(${workspaceRoot})`, err);
     return;
@@ -293,6 +302,9 @@ export async function indexWorkspaceFiles(
     connection,
     `background indexing complete — ${indexed} files indexed, ${errors} errors`,
   );
+
+  bump("filesDiscovered", files.length);
+  stopSpan("backgroundIndex");
 }
 
 /**

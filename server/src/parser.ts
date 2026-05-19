@@ -9,6 +9,7 @@ import { Parser, Tree, Language } from 'web-tree-sitter';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { LRUCache } from './util/lruCache';
+import { startSpan, stopSpan, bump, measureSync, measureAsync } from './features/profiler';
 
 // ---------------------------------------------------------------------------
 // Parser singleton
@@ -30,41 +31,43 @@ export function initParser(wasmPath?: string): Promise<void> {
 }
 
 async function doInit(wasmPath?: string): Promise<void> {
-  await Parser.init();
-  const parser = new Parser();
+  await measureAsync("parserInit", async () => {
+    await Parser.init();
+    const parser = new Parser();
 
-  // Try WASM in multiple locations:
-  // 1. Explicit path provided by caller
-  // 2. Same directory as this module (standalone bundle)
-  // 3. One level up (tsc output: dist/server/src/ -> dist/server/)
-  // 4. Sibling to server/ directory (extension bundle: server/dist/ -> server/)
-  // Resolve __dirname equivalent that works in both CJS (tsc) and ESM (esbuild)
-  const thisDir = typeof __dirname !== 'undefined'
-    ? __dirname
-    : dirname(fileURLToPath(import.meta.url));
-  const candidates = wasmPath ? [wasmPath] : [
-    resolve(thisDir, 'tree-sitter-pike.wasm'),
-    resolve(thisDir, '..', 'tree-sitter-pike.wasm'),
-    resolve(thisDir, '..', '..', 'tree-sitter-pike.wasm'),
-  ];
-  let loaded = false;
-  for (const candidate of candidates) {
-    try {
-      language = await Language.load(candidate);
-      loaded = true;
-      break;
-    } catch {
-      // Try next location
+    // Try WASM in multiple locations:
+    // 1. Explicit path provided by caller
+    // 2. Same directory as this module (standalone bundle)
+    // 3. One level up (tsc output: dist/server/src/ -> dist/server/)
+    // 4. Sibling to server/ directory (extension bundle: server/dist/ -> server/)
+    // Resolve __dirname equivalent that works in both CJS (tsc) and ESM (esbuild)
+    const thisDir = typeof __dirname !== 'undefined'
+      ? __dirname
+      : dirname(fileURLToPath(import.meta.url));
+    const candidates = wasmPath ? [wasmPath] : [
+      resolve(thisDir, 'tree-sitter-pike.wasm'),
+      resolve(thisDir, '..', 'tree-sitter-pike.wasm'),
+      resolve(thisDir, '..', '..', 'tree-sitter-pike.wasm'),
+    ];
+    let loaded = false;
+    for (const candidate of candidates) {
+      try {
+        language = await Language.load(candidate);
+        loaded = true;
+        break;
+      } catch {
+        // Try next location
+      }
     }
-  }
-  if (!loaded) {
-    throw new Error(`tree-sitter-pike.wasm not found. Searched: ${candidates.join(', ')}`);
-  }
-  parser.setLanguage(language);
-  // Only assign parserInstance after language is fully loaded so parse() callers
-  // always see a fully-initialized parser.
-  parserInstance = parser;
-  parserReady = true;
+    if (!loaded) {
+      throw new Error(`tree-sitter-pike.wasm not found. Searched: ${candidates.join(', ')}`);
+    }
+    parser.setLanguage(language);
+    // Only assign parserInstance after language is fully loaded so parse() callers
+    // always see a fully-initialized parser.
+    parserInstance = parser;
+    parserReady = true;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -108,24 +111,27 @@ export function isParserReady(): boolean {
  * should use this function — not `parseFresh`.
  */
 export function parse(source: string, uri?: string): Tree {
-  if (!parserInstance) throw new Error('Parser not initialized — call initParser() first');
+  bump("parseCalls");
+  return measureSync("parse", () => {
+    if (!parserInstance) throw new Error('Parser not initialized — call initParser() first');
 
-  let oldTree: Tree | undefined;
-  if (uri) {
-    const cached = treeCache.get(uri);
-    if (cached) {
-      oldTree = cached.tree;
+    let oldTree: Tree | undefined;
+    if (uri) {
+      const cached = treeCache.get(uri);
+      if (cached) {
+        oldTree = cached.tree;
+      }
     }
-  }
 
-  const tree = parserInstance.parse(source, oldTree ?? null);
-  if (!tree) throw new Error('Parse returned null — is a language set?');
+    const tree = parserInstance.parse(source, oldTree ?? null);
+    if (!tree) throw new Error('Parse returned null — is a language set?');
 
-  if (uri) {
-    treeCache.set(uri, { tree, sourceLength: source.length });
-  }
+    if (uri) {
+      treeCache.set(uri, { tree, sourceLength: source.length });
+    }
 
-  return tree;
+    return tree;
+  });
 }
 
 /**
