@@ -431,7 +431,10 @@ describe("Missing return lint rule (E3)", () => {
 // ---------------------------------------------------------------------------
 
 describe("Unused imports lint rule (E4)", () => {
-  test("flags unused inherit", () => {
+  test("does not flag unused inherit (implicit member usage)", () => {
+    // Inherits are excluded from the unused check because their members are
+    // available through implicit scope access. Detecting whether inherited
+    // members are actually used requires cross-file type analysis.
     const src = `inherit Animal;
 
 int main() {
@@ -440,9 +443,7 @@ int main() {
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
     const diags = detectUnusedImports(tree, table, src);
-    expect(diags.length).toBe(1);
-    expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
-    expect(diags[0].message).toContain("Animal");
+    expect(diags.length).toBe(0);
   });
 
   test("does not flag used inherit", () => {

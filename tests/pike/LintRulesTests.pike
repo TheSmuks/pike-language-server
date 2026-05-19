@@ -5,7 +5,7 @@
 //! - P3002: Unused function parameters
 //! - P3003: Unreachable code (dead code after return/break/continue)
 //! - P3004: Non-void functions missing return
-//! - P3005: Unused import / inherit
+//! - P3005: Unused import (inherit excluded — members used through implicit scope)
 //!
 //! Each test compiles a fixture and asserts the expected diagnostic
 //! category appears (or does not appear).

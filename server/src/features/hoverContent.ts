@@ -45,19 +45,139 @@ export interface HoverContentContext {
 // ---------------------------------------------------------------------------
 
 /**
- * Render a predef builtin type signature into a human-readable display form.
+ * Render a predef builtin type signature into human-readable display lines.
+ *
+ * Pike runtime signatures look like:
+ *   `scope(0, function(void : int) | function(int : float))`
+ *
+ * This function strips scope wrappers and renders each overload as a
+ * separate `name(params) → returnType` line for clarity.
+ *
+ * @returns Array of rendered signature strings (one per overload)
  */
-export function renderPredefSignature(name: string, rawSig: string): string {
+export function renderPredefSignature(name: string, rawSig: string): string[] {
   let cleanSig = stripScopeWrapper(rawSig);
   // Remove attribute annotations for cleaner display
   cleanSig = cleanSig.replace(/__attribute__\("[^"]*",\s*/g, "");
-  // Take the first overload for brevity
-  const overloads = cleanSig.split(" | function");
-  if (overloads.length > 1) overloads[0] += ")";
-  const displaySig = overloads[0]
-    .replace(/^function\(/, "")
-    .replace(/\)$/, "");
-  return `${name}(${displaySig})`;
+
+  const overloads = extractOverloads(cleanSig);
+  if (overloads.length === 0) return [`${name}()`];
+
+  return overloads.map(sig => {
+    const parsed = parseFunctionType(sig);
+    if (!parsed) return `${name}()`;
+    const paramList = cleanPikeType(parsed.params);
+    const returnType = cleanPikeType(parsed.returnType);
+    return `${name}(${paramList}) → ${returnType}`;
+  });
+}
+
+/**
+ * Clean Pike type annotations for display.
+ * - `void | int(1bit)` → `void|int` (optional parameter indicator)
+ * - `int(2..2147483647)` → `int`
+ * - `int(1bit)` → `int`
+ * - Preserves meaningful constraints like `int(0..255)`
+ *   only when they add clarity (range not obvious from context).
+ */
+function cleanPikeType(type: string): string {
+  let result = type.trim();
+  // Remove bit-width constraints — `int(1bit)` → `int`
+  result = result.replace(/\bint\(\d+bit\)/g, "int");
+  // Remove full-range constraints — `int(2..2147483647)` → `int`
+  result = result.replace(/\bint\(\d+\.\.\d+\)/g, "int");
+  // Collapse whitespace around |
+  result = result.replace(/\s*\|\s*/g, "|");
+  // void|int means optional parameter — display as `void|int`
+  return result;
+}
+
+/**
+ * Extract individual function(...) overload strings from a union type.
+ * Handles balanced parens so `|` inside function params is not misinterpreted.
+ *
+ * Input:  `function(void : int) | function(int : float)`
+ * Output: [`function(void : int)`, `function(int : float)`]
+ */
+function extractOverloads(unionSig: string): string[] {
+  const results: string[] = [];
+  let depth = 0;
+  let start = 0;
+
+  for (let i = 0; i < unionSig.length; i++) {
+    const ch = unionSig[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+
+    // Split on ` | function` at top level only
+    if (depth === 0 && unionSig.slice(i).startsWith(" | function(")) {
+      results.push(unionSig.slice(start, i).trim());
+      start = i + 3; // skip " | "
+      i += 2; // skip "| " — loop will skip " f" naturally
+    }
+  }
+
+  const remaining = unionSig.slice(start).trim();
+  if (remaining) results.push(remaining);
+  return results.filter(s => s.length > 0);
+}
+
+/** Parsed function type: params and return type. */
+interface FunctionType {
+  params: string;
+  returnType: string;
+}
+
+/**
+ * Parse `function(params : returnType)` into its components.
+ * Handles balanced parens so `:` inside nested types is not misinterpreted.
+ */
+function parseFunctionType(sig: string): FunctionType | null {
+  const match = sig.match(/^function\(/);
+  if (!match) return null;
+
+  const inner = sig.slice(match[0].length);
+  // Walk to find the matching `)` and the top-level `:` separator
+  let depth = 1;
+  let colonPos = -1;
+  let endPos = -1;
+
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") {
+      depth--;
+      if (depth === 0) {
+        endPos = i;
+        break;
+      }
+    } else if (ch === ":" && depth === 1 && colonPos === -1) {
+      colonPos = i;
+    }
+  }
+
+  if (endPos === -1 || colonPos === -1) {
+    // Malformed — return the inner content as params with unknown return
+    return { params: inner.replace(/\)$/, ""), returnType: "mixed" };
+  }
+
+  return {
+    params: inner.slice(0, colonPos).trim(),
+    returnType: inner.slice(colonPos + 1, endPos).trim(),
+  };
+}
+
+/**
+ * Build hover markdown for a predef builtin function.
+ * Shows each overload as a separate code line in a pike code block.
+ */
+export function buildPredefHoverMarkdown(name: string, overloads: string[]): string {
+  const lines: string[] = ["```pike"];
+  for (const sig of overloads) {
+    lines.push(sig);
+  }
+  lines.push("```");
+  return lines.join("\n");
 }
 
 /** Format a declaration into a Hover response. */
@@ -201,10 +321,11 @@ function hoverFromStdlib(
 
   const builtinSig = ctx.predefBuiltins[decl.name];
   if (builtinSig) {
+    const overloads = renderPredefSignature(decl.name, builtinSig);
     return makeHoverInfo(
       decl,
-      renderPredefSignature(decl.name, builtinSig),
-      `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+      overloads.join("\n"),
+      buildPredefHoverMarkdown(decl.name, overloads),
       true,
     );
   }

@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/cross-lib-consumer.pike",
   "parseCount": 0,
-  "lintCount": 4,
+  "lintCount": 3,
   "diagnostics": [
     {
       "range": {
@@ -50,22 +50,6 @@
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'rev' is unused"
-    },
-    {
-      "range": {
-        "start": {
-          "line": 10,
-          "character": 8
-        },
-        "end": {
-          "line": 10,
-          "character": 33
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module '.cross_lib_base.Formatter' is never used"
     }
   ]
 }
