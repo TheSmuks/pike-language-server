@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - `docs/perf/q3-profile-report.md` — profiling report documenting where
+    buildSymbolTable time is spent. Key finding: type text extraction and
+    tree traversal dominate; disk I/O is negligible.
+  - `tests/perf/micro-upsert.test.ts` — per-phase micro-benchmark for
+    upsertBackgroundFile breakdown.
+  - **Startup:** Two-phase startup serves cached data immediately, then
+    refreshes stale entries in background. Time-to-first-response drops
+    to cache load time (<500ms for most workspaces).
+  - **Startup:** Background cache refresh only re-indexes files whose
+    content hash changed, plus their dependents. Pruned invalidation
+    avoids re-indexing the entire workspace on restart.
+  - `server/src/features/cacheHash.ts` — extracted DJB2 hash utility.
+  - `WorkspaceIndex.restoreDependencies()` — reconstructs reverse-dep
+    graph from serialized forward deps without async resolution.
+
+### Changed
+
+  - **Performance:** Pre-computed byte→UTF-16 offset map per file, eliminating
+    the dominant `utf8ToUtf16` bottleneck in the symbol table build pipeline.
+    Position conversion is now O(1) per lookup instead of O(lineLength).
+  - **Performance:** Scope lookup uses binary search on sorted scopes instead
+    of linear scan, reducing complexity from O(R × S) to O(R × log S).
+  - **Cache:** Persistent cache split into per-file entries under
+    `.pike-lsp/cache/<contentHash>.json` with atomic writes (temp file +
+    rename). Loading validates each entry individually — only changed files
+    are rebuilt. Format version bumped to 2.
+  - **Cache:** Forward dependencies serialized per entry, enabling reverse-dep
+    graph reconstruction from cache without async resolution.
+  - ADR 0024: documents the offset map and binary search scope lookup decision.
+  - ADR 0025: documents Q3 profiling results and M1 per-file cache architecture.
+  - ADR 0026: documents two-phase startup and pruned cache invalidation.
+  - **Startup:** Cache load and background indexing now run sequentially
+    (cache first, then background). Previously both ran in parallel,
+    causing background indexing to re-index files that were about to be
+    loaded from cache.
+
+### Fixed
+
+  - **Bug:** Feature handlers (workspace/symbol, hover, definition, etc.)
+    returned empty results because they captured the placeholder index at
+    registration time. `handleInitialize` replaced the index, but handlers
+    still held the stale reference. Fixed by using getters that delegate
+    to the live context object.
+  - **Bug:** Background indexing ran concurrently with cache loading,
+    wasting CPU on files that would be served from cache moments later.
+    Now chained sequentially: cache load → stale refresh → background index.
+
 ## [0.8.1] — 2026-05-18
 
 ### Added
