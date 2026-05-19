@@ -25,7 +25,7 @@ import { DECL_KIND_MAP } from './declarationCollector';
 
 export function collectForStatement(node: Node, state: BuildState): void {
   // for_init_decl introduces a scope
-  pushScope(state, 'for', toRangeUtf16(node, state.lines));
+  pushScope(state, 'for', toRangeUtf16(node, state.lines, state.offsetMap));
 
   // for_statement has initializer, body, and condition fields (tree-sitter-pike v1.1.1+)
   const initializer = node.childForFieldName('initializer');
@@ -38,8 +38,8 @@ export function collectForStatement(node: Node, state: BuildState): void {
       addDeclaration(state, {
         name: nameNode.text,
         kind: 'variable',
-        nameRange: toRangeUtf16(nameNode, state.lines),
-        range: toRangeUtf16(initializer, state.lines),
+        nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
+        range: toRangeUtf16(initializer, state.lines, state.offsetMap),
         scopeId,
       });
     }
@@ -57,7 +57,7 @@ export function collectForStatement(node: Node, state: BuildState): void {
 import { collectDeclarations } from './declarationCollector';
 
 export function collectForeachStatement(node: Node, state: BuildState): void {
-  pushScope(state, 'foreach', toRangeUtf16(node, state.lines));
+  pushScope(state, 'foreach', toRangeUtf16(node, state.lines, state.offsetMap));
 
   // foreach_lvalues is an unnamed child — find it by type, not by field name
   let lvals: Node | null = null;
@@ -101,8 +101,8 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
         addDeclaration(state, {
           name: n.text,
           kind: 'parameter',
-          nameRange: toRangeUtf16(n, state.lines),
-          range: toRangeUtf16(n, state.lines),
+          nameRange: toRangeUtf16(n, state.lines, state.offsetMap),
+          range: toRangeUtf16(n, state.lines, state.offsetMap),
           scopeId,
         });
       }
@@ -121,8 +121,8 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
               addDeclaration(state, {
                 name: child.text,
                 kind: 'parameter',
-                nameRange: toRangeUtf16(child, state.lines),
-                range: toRangeUtf16(child, state.lines),
+                nameRange: toRangeUtf16(child, state.lines, state.offsetMap),
+                range: toRangeUtf16(child, state.lines, state.offsetMap),
                 scopeId,
               });
             }
@@ -133,8 +133,8 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
               addDeclaration(state, {
                 name: child.text,
                 kind: 'parameter',
-                nameRange: toRangeUtf16(child, state.lines),
-                range: toRangeUtf16(child, state.lines),
+                nameRange: toRangeUtf16(child, state.lines, state.offsetMap),
+                range: toRangeUtf16(child, state.lines, state.offsetMap),
                 scopeId,
               });
             }
@@ -155,7 +155,7 @@ export function collectIfStatement(node: Node, state: BuildState): void {
   if (condition) {
     for (const child of condition.children) {
       if (child.type === 'cond_decl') {
-        pushScope(state, 'if_cond', toRangeUtf16(node, state.lines));
+        pushScope(state, 'if_cond', toRangeUtf16(node, state.lines, state.offsetMap));
         collectDeclarations(child, state);
         pushedCondScope = true;
         break;
@@ -166,7 +166,7 @@ export function collectIfStatement(node: Node, state: BuildState): void {
   // Consequence gets its own block scope
   const consequence = node.childForFieldName('consequence');
   if (consequence) {
-    pushScope(state, 'block', toRangeUtf16(consequence, state.lines));
+    pushScope(state, 'block', toRangeUtf16(consequence, state.lines, state.offsetMap));
     collectDeclarations(consequence, state);
     popScope(state);
   }
@@ -174,7 +174,7 @@ export function collectIfStatement(node: Node, state: BuildState): void {
   // Alternative gets its own block scope
   const alternative = node.childForFieldName('alternative');
   if (alternative) {
-    pushScope(state, 'block', toRangeUtf16(alternative, state.lines));
+    pushScope(state, 'block', toRangeUtf16(alternative, state.lines, state.offsetMap));
     collectDeclarations(alternative, state);
     popScope(state);
   }
@@ -191,7 +191,7 @@ export function collectWhileStatement(node: Node, state: BuildState): void {
   if (condition) {
     for (const child of condition.children) {
       if (child.type === 'cond_decl') {
-        pushScope(state, 'while', toRangeUtf16(node, state.lines));
+        pushScope(state, 'while', toRangeUtf16(node, state.lines, state.offsetMap));
         collectDeclarations(child, state);
         pushedCondScope = true;
         break;
@@ -202,7 +202,7 @@ export function collectWhileStatement(node: Node, state: BuildState): void {
   // Body gets its own block scope
   const body = node.childForFieldName('body');
   if (body) {
-    pushScope(state, 'block', toRangeUtf16(body, state.lines));
+    pushScope(state, 'block', toRangeUtf16(body, state.lines, state.offsetMap));
     collectDeclarations(body, state);
     popScope(state);
   }
@@ -216,7 +216,7 @@ export function collectDoWhileStatement(node: Node, state: BuildState): void {
   // No cond_decl possible in do-while condition
   const body = node.childForFieldName('body');
   if (body) {
-    pushScope(state, 'do_while', toRangeUtf16(body, state.lines));
+    pushScope(state, 'do_while', toRangeUtf16(body, state.lines, state.offsetMap));
     collectDeclarations(body, state);
     popScope(state);
   }
@@ -229,7 +229,7 @@ export function collectSwitchStatement(node: Node, state: BuildState): void {
   if (value) {
     for (const child of value.children) {
       if (child.type === 'cond_decl') {
-        pushScope(state, 'switch', toRangeUtf16(node, state.lines));
+        pushScope(state, 'switch', toRangeUtf16(node, state.lines, state.offsetMap));
         collectDeclarations(child, state);
         pushedCondScope = true;
         break;
@@ -242,7 +242,7 @@ export function collectSwitchStatement(node: Node, state: BuildState): void {
   // switch_statement has 'body' and 'value' fields (tree-sitter-pike v1.1.1+)
   const body = node.childForFieldName('body');
   if (body) {
-    pushScope(state, 'block', toRangeUtf16(body, state.lines));
+    pushScope(state, 'block', toRangeUtf16(body, state.lines, state.offsetMap));
     collectDeclarations(body, state);
     popScope(state);
   }
@@ -260,7 +260,7 @@ export function collectSwitchStatement(node: Node, state: BuildState): void {
 export function collectCatchExpr(node: Node, state: BuildState): void {
   const block = node.childForFieldName('value');
   if (block) {
-    pushScope(state, 'catch', toRangeUtf16(block, state.lines));
+    pushScope(state, 'catch', toRangeUtf16(block, state.lines, state.offsetMap));
     collectDeclarations(block, state);
     popScope(state);
   }
@@ -307,8 +307,8 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
       addDeclaration(state, {
         name: nameNode.text,
         kind: actualKind,
-        nameRange: toRangeUtf16(nameNode, state.lines),
-        range: toRangeUtf16(decl, state.lines),
+        nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
+        range: toRangeUtf16(decl, state.lines, state.offsetMap),
         scopeId,
         declaredType: typeText,
         assignedType,
@@ -321,8 +321,8 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
       addDeclaration(state, {
         name: nameNode.text,
         kind: actualKind,
-        nameRange: toRangeUtf16(nameNode, state.lines),
-        range: toRangeUtf16(decl, state.lines),
+        nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
+        range: toRangeUtf16(decl, state.lines, state.offsetMap),
         scopeId,
         declaredType: typeText,
         assignedType,
@@ -338,8 +338,8 @@ function collectEnumDecl(node: Node, state: BuildState): void {
     addDeclaration(state, {
       name: nameNode.text,
       kind: 'enum',
-      nameRange: toRangeUtf16(nameNode, state.lines),
-      range: toRangeUtf16(node, state.lines),
+      nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
+      range: toRangeUtf16(node, state.lines, state.offsetMap),
       scopeId,
     });
   }
@@ -352,8 +352,8 @@ function collectEnumDecl(node: Node, state: BuildState): void {
         addDeclaration(state, {
           name: memberName.text,
           kind: 'enum_member',
-          nameRange: toRangeUtf16(memberName, state.lines),
-          range: toRangeUtf16(child, state.lines),
+          nameRange: toRangeUtf16(memberName, state.lines, state.offsetMap),
+          range: toRangeUtf16(child, state.lines, state.offsetMap),
           scopeId,
         });
       }
@@ -375,8 +375,8 @@ function collectInheritDecl(node: Node, state: BuildState): void {
   addDeclaration(state, {
     name: pathNode.text,
     kind,
-    nameRange: toRangeUtf16(pathNode, state.lines),
-    range: toRangeUtf16(node, state.lines),
+    nameRange: toRangeUtf16(pathNode, state.lines, state.offsetMap),
+    range: toRangeUtf16(node, state.lines, state.offsetMap),
     scopeId,
     alias: aliasNode ? aliasNode.text : undefined,
   });

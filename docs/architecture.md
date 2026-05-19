@@ -122,11 +122,32 @@ Go-to-definition, references, implementation, document highlights, call hierarch
 
 - `navigationHandler.ts` — dispatcher
 - `navigationGoTo.ts` — definition/implementation
-- `navigationRefactoring.ts` — rename/prepare rename
+- `navigationRefactoring.ts` — rename/prepare rename/workspace symbol
 - `navigationCompletion.ts` — references/highlights
 - `navigationDocumentFeatures.ts` — document symbol/folding/selection
-- `navigationAdvanced.ts` — call hierarchy/workspace symbol
+- `navigationAdvanced.ts` — call hierarchy
 - `navigationInclude.ts` — include/import navigation
+
+### Symbol Table Pipeline
+
+High-performance symbol table construction with O(1) position conversion and O(R log S) scope lookup.
+
+- `symbolTable.ts` — symbol table builder: declarations, scopes, references
+- `offsetMap.ts` — pre-computed byte-to-UTF-16 offset map per file (O(1) per lookup)
+- `declarationCollector.ts` — tree-sitter node → declaration extraction
+- `declarationBlockCollectors.ts` — block-scoped declaration collectors
+- `referenceCollector.ts` — identifier reference collection
+- `scope-helpers.ts` — scope construction helpers
+- `cacheHash.ts` — DJB2 content hash utility (shared between index and cache)
+
+### Workspace Indexing (`workspaceIndex.ts`, `backgroundIndex.ts`, `persistentCache.ts`)
+
+Two-phase startup: cache restore (synchronous) → stale refresh (background) → full background index. Per-file cache entries with forward-dependency serialization enable pruned invalidation on restart.
+
+- `workspaceIndex.ts` — central index: file entries, symbol tables, dependency graph
+- `backgroundIndex.ts` — batch file discovery, parallel parse, sequential upsert
+- `persistentCache.ts` — per-file JSON cache with atomic writes and format versioning
+- `profiler.ts` — optional per-phase timing for build pipeline profiling
 
 ## Two-Speed Diagnostics
 

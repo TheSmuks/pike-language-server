@@ -119,7 +119,8 @@ export function registerRefactoringHandlers(
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     const query = params.query ?? "";
-    return searchWorkspaceSymbols(query, ctx.index);
+    const results = searchWorkspaceSymbols(query, ctx.index);
+    return results;
   });
 
   // -----------------------------------------------------------------------

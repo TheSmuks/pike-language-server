@@ -2,6 +2,12 @@
  * Scope helpers: geometry, resolution, and tree-sitter utilities.
  *
  * Extracted from scopeBuilder.ts to reduce file size.
+ *
+ * Performance note: all position conversion functions accept an optional
+ * OffsetMap for O(1) byte→UTF-16 lookup. When the map is provided (during
+ * buildSymbolTable), conversions are array-index lookups instead of
+ * per-character scans. When omitted (feature handlers), falls back to
+ * the original utf8ToUtf16 function.
  */
 import type { Node, Point } from 'web-tree-sitter';
 import type {
@@ -11,6 +17,8 @@ import type {
   Scope,
   ScopeKind,
 } from './symbolTable';
+import type { OffsetMap } from '../util/offsetMap';
+import { lookupUtf16 } from '../util/offsetMap';
 import { utf8ToUtf16 } from '../util/positionConverter';
 
 // ---------------------------------------------------------------------------
@@ -28,11 +36,20 @@ export function toRange(node: Node): Range {
 /**
  * Convert a tree-sitter Point (UTF-8 byte column) to an LSP Location
  * with UTF-16 character offset, using pre-split source lines.
+ *
+ * When offsetMap is provided, uses O(1) array lookup.
+ * When omitted, falls back to the per-character utf8ToUtf16 scan.
  */
-export function toLocUtf16(point: Point, lines: string[]): { line: number; character: number } {
+export function toLocUtf16(
+  point: Point,
+  lines: string[],
+  offsetMap?: OffsetMap,
+): { line: number; character: number } {
+  if (offsetMap) {
+    return { line: point.row, character: lookupUtf16(offsetMap, point.row, point.column) };
+  }
   const lineText = lines[point.row];
   if (lineText === undefined) {
-    // Fallback: line index out of range — return raw column
     return { line: point.row, character: point.column };
   }
   return { line: point.row, character: utf8ToUtf16(lineText, point.column) };
@@ -41,11 +58,14 @@ export function toLocUtf16(point: Point, lines: string[]): { line: number; chara
 /**
  * Convert a tree-sitter Node to an LSP Range with UTF-16 character offsets,
  * using pre-split source lines.
+ *
+ * When offsetMap is provided, uses O(1) array lookup.
+ * When omitted, falls back to the per-character utf8ToUtf16 scan.
  */
-export function toRangeUtf16(node: Node, lines: string[]): Range {
+export function toRangeUtf16(node: Node, lines: string[], offsetMap?: OffsetMap): Range {
   return {
-    start: toLocUtf16(node.startPosition, lines),
-    end: toLocUtf16(node.endPosition, lines),
+    start: toLocUtf16(node.startPosition, lines, offsetMap),
+    end: toLocUtf16(node.endPosition, lines, offsetMap),
   };
 }
 
@@ -59,10 +79,31 @@ export const PRIMITIVE_TYPES = new Set([
   'bool', 'auto', 'any',
 ]);
 
-export function containsPosition(range: Range, start: Point, end: Point, lines?: string[]): boolean {
-  // Convert tree-sitter UTF-8 columns to UTF-16 for comparison with range (UTF-16)
-  const startCol = lines ? utf8ToUtf16(lines[start.row] ?? '', start.column) : start.column;
-  const endCol = lines ? utf8ToUtf16(lines[end.row] ?? '', end.column) : end.column;
+/**
+ * Check whether a range contains the position spanned by (start, end).
+ *
+ * When offsetMap is provided, converts tree-sitter byte columns to UTF-16
+ * using O(1) array lookups. When omitted, uses the original utf8ToUtf16 scan.
+ */
+export function containsPosition(
+  range: Range,
+  start: Point,
+  end: Point,
+  lines?: string[],
+  offsetMap?: OffsetMap,
+): boolean {
+  let startCol: number;
+  let endCol: number;
+  if (offsetMap) {
+    startCol = lookupUtf16(offsetMap, start.row, start.column);
+    endCol = lookupUtf16(offsetMap, end.row, end.column);
+  } else if (lines) {
+    startCol = utf8ToUtf16(lines[start.row] ?? '', start.column);
+    endCol = utf8ToUtf16(lines[end.row] ?? '', end.column);
+  } else {
+    startCol = start.column;
+    endCol = end.column;
+  }
   return (
     (range.start.line < start.row ||
      (range.start.line === start.row && range.start.character <= startCol)) &&
@@ -337,18 +378,69 @@ export function addDeclaration(state: BuildState, decl: Omit<Declaration, 'id'>)
 
 /**
  * Find the scope ID that contains a given node.
+ *
+ * Uses binary search on sortedScopes (sorted by start position) to find
+ * candidate scopes in O(log S) instead of O(S). For each candidate, verifies
+ * containment using the pre-computed offset map for O(1) position conversion.
+ *
+ * Overall complexity: O(R × log S) for the reference pass instead of O(R × S).
  */
 export function findScopeForNode(node: Node, state: BuildState): number | null {
-  const nodeStart = node.startPosition;
-  const nodeEnd = node.endPosition;
+  const nodeStartRow = node.startPosition.row;
+  const nodeStartCol = node.startPosition.column;
+  const nodeEndRow = node.endPosition.row;
+  const nodeEndCol = node.endPosition.column;
 
-  // Find the innermost scope that contains the node
-  // When scopes have equal range size, prefer higher ID (deeper nesting)
+  const sorted = state.sortedScopes;
+  if (sorted.length === 0) return null;
+
+  // Convert node positions to UTF-16 once for all containment checks.
+  const nodeStartChar = lookupUtf16(state.offsetMap, nodeStartRow, nodeStartCol);
+  const nodeEndChar = lookupUtf16(state.offsetMap, nodeEndRow, nodeEndCol);
+
+  // Binary search: find the rightmost scope whose start is ≤ the node's start.
+  // sorted is sorted by (startLine, startChar) ascending.
+  let lo = 0;
+  let hi = sorted.length - 1;
   let bestScopeId: number | null = null;
   let bestSize = Infinity;
 
-  for (const scope of state.scopes) {
-    if (containsPosition(scope.range, nodeStart, nodeEnd, state.lines)) {
+  // Find the index of the last scope whose start is ≤ node start position.
+  // We want all scopes that could possibly contain this node.
+  let lastCandidateIdx = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >>> 1;
+    const scope = sorted[mid]!;
+    const cmp = comparePositionToRangeStart(
+      nodeStartRow, nodeStartChar,
+      scope.range.start.line, scope.range.start.character,
+    );
+    if (cmp >= 0) {
+      // Scope starts at or before node — this is a candidate.
+      lastCandidateIdx = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  if (lastCandidateIdx === -1) return null;
+
+  // Walk backward from the rightmost candidate to find the innermost containing scope.
+  // Scopes are sorted by start position, so later scopes with same-or-later start
+  // positions are more deeply nested (smaller range). We check all candidates that
+  // start at or before the node, picking the one with the smallest range (innermost).
+  for (let i = lastCandidateIdx; i >= 0; i--) {
+    const scope = sorted[i]!;
+    // Stop early: if this scope starts after the node, no more candidates can contain it.
+    if (scope.range.start.line > nodeStartRow ||
+        (scope.range.start.line === nodeStartRow &&
+         scope.range.start.character > nodeStartChar)) {
+      break;
+    }
+
+    // Check containment: scope.start ≤ node.start AND scope.end ≥ node.end
+    if (scopeEndsAfterOrAt(scope, nodeEndRow, nodeEndChar)) {
       const size = rangeSize(scope.range);
       if (size < bestSize || (size === bestSize && scope.id > bestScopeId!)) {
         bestSize = size;
@@ -358,6 +450,29 @@ export function findScopeForNode(node: Node, state: BuildState): number | null {
   }
 
   return bestScopeId;
+}
+
+/**
+ * Compare a position (line, char) to a range start (line, char).
+ * Returns negative if pos < rangeStart, 0 if equal, positive if pos > rangeStart.
+ */
+function comparePositionToRangeStart(
+  posLine: number, posChar: number,
+  rangeLine: number, rangeChar: number,
+): number {
+  const lineDiff = posLine - rangeLine;
+  if (lineDiff !== 0) return lineDiff;
+  return posChar - rangeChar;
+}
+
+/**
+ * Check whether a scope's end position is at or after the given position.
+ */
+function scopeEndsAfterOrAt(scope: Scope, endRow: number, endChar: number): boolean {
+  return (
+    scope.range.end.line > endRow ||
+    (scope.range.end.line === endRow && scope.range.end.character >= endChar)
+  );
 }
 
 /**

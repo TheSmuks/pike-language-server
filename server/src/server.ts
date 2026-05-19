@@ -119,14 +119,18 @@ function registerFeatureHandlers(
   connection: Connection,
   ctx: ServerContext,
 ): void {
+  // Use getters for fields that are replaced during initialization.
+  // ctx.index is a placeholder at registration time; handleInitialize
+  // replaces it with the real index. A direct value capture would hold
+  // the stale placeholder forever.
   const handlerContext = {
     documents: ctx.documents,
-    index: ctx.index,
+    get index() { return ctx.index; },
     worker: ctx.worker,
     getSymbolTable: (uri: string) => getSymbolTable(ctx, uri),
     autodocCache: ctx.autodocCache,
-    stdlibIndex: ctx.stdlibIndex,
-    predefBuiltins: ctx.predefBuiltins,
+    get stdlibIndex() { return ctx.stdlibIndex; },
+    get predefBuiltins() { return ctx.predefBuiltins; },
     diagnosticManager: ctx.diagnosticManager,
     connection: ctx.connection,
   };
