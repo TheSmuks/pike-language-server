@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 import type { Connection } from "vscode-languageserver/node";
 import { clearTreeCache } from "./parser";
 import { saveCache, computeWasmHash } from "./features/persistentCache";
-import { logWarn } from "./util/errorLog.js";
+import { logWarn, logInfo } from "./util/errorLog.js";
 import { cacheClear, type ServerContext } from "./serverContext";
+import { generateReport, isProfiling } from "./features/profiler";
 
 // ---------------------------------------------------------------------------
 // Registration
@@ -24,6 +25,11 @@ export function registerShutdownHandler(
 ): void {
   connection.onShutdown(async () => {
     ctx.diagnosticManager.dispose();
+
+    // Emit profiling report before clearing state (step 8).
+    if (isProfiling()) {
+      logInfo(connection, generateReport());
+    }
 
     await savePersistentCache(connection, ctx);
 
