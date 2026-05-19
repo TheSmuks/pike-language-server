@@ -1,39 +1,6 @@
 {
   "file": "corpus/files/cross-inherit-chain-b.pike",
   "parseCount": 0,
-  "lintCount": 2,
-  "diagnostics": [
-    {
-      "range": {
-        "start": {
-          "line": 8,
-          "character": 8
-        },
-        "end": {
-          "line": 8,
-          "character": 36
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module '\"cross-inherit-chain-a.pike\"' is never used"
-    },
-    {
-      "range": {
-        "start": {
-          "line": 11,
-          "character": 10
-        },
-        "end": {
-          "line": 11,
-          "character": 14
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module 'Base' is never used"
-    }
-  ]
+  "lintCount": 0,
+  "diagnostics": []
 }

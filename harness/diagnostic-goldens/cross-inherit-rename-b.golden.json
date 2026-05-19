@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/cross-inherit-rename-b.pike",
   "parseCount": 0,
-  "lintCount": 2,
+  "lintCount": 1,
   "diagnostics": [
     {
       "range": {
@@ -18,22 +18,6 @@
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'hp' is unused"
-    },
-    {
-      "range": {
-        "start": {
-          "line": 8,
-          "character": 8
-        },
-        "end": {
-          "line": 8,
-          "character": 37
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module 'motor' is never used"
     }
   ]
 }

@@ -31,6 +31,7 @@ import {
   declForHover,
   fileLevelHover,
   renderPredefSignature,
+  buildPredefHoverMarkdown,
   type HoverContentContext,
 } from "./hoverContent";
 import { utf16ToUtf8 } from "../util/positionConverter";
@@ -227,9 +228,10 @@ function resolveHoverBuiltin(
 
   const builtinSig = ctx.predefBuiltins[identName];
   if (builtinSig) {
+    const overloads = renderPredefSignature(identName, builtinSig);
     return formatHover({
-      name: identName, signature: renderPredefSignature(identName, builtinSig),
-      documentation: `Type signature (from Pike runtime):\n\`${builtinSig}\``,
+      name: identName, signature: overloads.join("\n"),
+      documentation: buildPredefHoverMarkdown(identName, overloads),
       line: params.position.line, character: params.position.character, isAutodoc: true,
     });
   }

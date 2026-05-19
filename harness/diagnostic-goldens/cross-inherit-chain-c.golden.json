@@ -1,39 +1,6 @@
 {
   "file": "corpus/files/cross-inherit-chain-c.pike",
   "parseCount": 0,
-  "lintCount": 2,
-  "diagnostics": [
-    {
-      "range": {
-        "start": {
-          "line": 8,
-          "character": 8
-        },
-        "end": {
-          "line": 8,
-          "character": 36
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module '\"cross-inherit-chain-b.pike\"' is never used"
-    },
-    {
-      "range": {
-        "start": {
-          "line": 11,
-          "character": 10
-        },
-        "end": {
-          "line": 11,
-          "character": 16
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module 'Middle' is never used"
-    }
-  ]
+  "lintCount": 0,
+  "diagnostics": []
 }

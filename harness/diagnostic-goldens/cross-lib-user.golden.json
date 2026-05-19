@@ -1,23 +1,6 @@
 {
   "file": "corpus/files/cross-lib-user.pike",
   "parseCount": 0,
-  "lintCount": 1,
-  "diagnostics": [
-    {
-      "range": {
-        "start": {
-          "line": 5,
-          "character": 8
-        },
-        "end": {
-          "line": 5,
-          "character": 24
-        }
-      },
-      "severity": 4,
-      "code": "P3005",
-      "source": "pike-lint",
-      "message": "Inherited module 'cross_lib_module' is never used"
-    }
-  ]
+  "lintCount": 0,
+  "diagnostics": []
 }
