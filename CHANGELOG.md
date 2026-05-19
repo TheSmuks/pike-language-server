@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - P3005 lint rule no longer flags `inherit` declarations as unused. Inherited
+    members are available through implicit scope access and cannot be reliably
+    detected without cross-file type analysis. Removing a "seemingly unused"
+    inherit silently breaks code because Pike returns 0 (null) for missing members.
+  - Predef builtin hover (e.g., hovering on `time`) now renders clean,
+    human-readable signatures instead of raw Pike runtime type syntax.
+    Overloaded functions show each overload as `name(params) → returnType`.
+    Pike-internal noise like `int(1bit)`, `scope(0,...)` is stripped.
+
 ## [0.8.2] — 2026-05-19
 
 ### Added
