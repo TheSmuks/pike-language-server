@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] — 2026-05-20
+
 ### Fixed
 
   - P3005 lint rule no longer flags `inherit` declarations as unused. Inherited
@@ -17,6 +19,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     human-readable signatures instead of raw Pike runtime type syntax.
     Overloaded functions show each overload as `name(params) → returnType`.
     Pike-internal noise like `int(1bit)`, `scope(0,...)` is stripped.
+  - Semantic highlighting no longer breaks after a few edits on restart.
+    `refreshStaleCacheEntries` was calling `invalidateWithDependents` after
+    `upsertBackgroundFile`, immediately nulling the freshly-built symbol
+    table. All cached files ended up permanently stale — semantic token
+    requests returned empty data. Fix: invalidate before re-indexing.
 
 ## [0.8.2] — 2026-05-19
 
