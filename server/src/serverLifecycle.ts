@@ -109,15 +109,19 @@ async function refreshStaleCacheEntries(
     const diskHash = hashContent(diskContent);
     if (diskHash === entry.contentHash) continue;
 
-    // Content changed — re-index and invalidate dependents.
+    // Invalidate dependents BEFORE re-indexing so that the re-indexed file
+    // is immediately available (stale=false) and can serve requests.
+    // Order matters: invalidateWithDependents sets stale=true on the file
+    // itself; upsertBackgroundFile then sets stale=false and installs the
+    // new symbol table. Reversing the order would null the symbol table
+    // immediately after building it (ADR 0026 consequence).
+    index.invalidateWithDependents(entry.uri);
     try {
       const tree = parse(diskContent, entry.uri);
       index.upsertBackgroundFile(entry.uri, 0, tree, diskContent);
-      index.invalidateWithDependents(entry.uri);
       reindexed++;
     } catch {
-      // Parse failure — invalidate but don't crash.
-      index.invalidateWithDependents(entry.uri);
+      // Parse failure — already invalidated, just count it.
       reindexed++;
     }
   }
@@ -307,16 +311,19 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     if (heapRatio > HEAP_USAGE_WARNING_RATIO) {
       const treeStats = getTreeCacheStats();
 
-      logWarn(connection,
-        `Memory pressure: heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / `
-        + `${Math.round(mem.heapTotal / 1024 / 1024)}MB `
-        + `(${Math.round(heapRatio * 100)}%). `
-        + `Tree cache: ${treeStats.size} entries (${Math.round(treeStats.bytes / 1024)}KB). `
-        + `Consider reducing backgroundIndex.batchSize.`
-      );
-
-      // Aggressively evict half the tree cache under memory pressure.
+      // Only warn when eviction could actually help. If the tree cache is
+      // small, the heap pressure is from other sources (WASM runtime,
+      // stdlib-autodoc.json, V8 internals) and reducing batchSize won't help.
       if (treeStats.size > 5) {
+        logWarn(connection,
+          `Memory pressure: heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / `
+          + `${Math.round(mem.heapTotal / 1024 / 1024)}MB `
+          + `(${Math.round(heapRatio * 100)}%). `
+          + `Tree cache: ${treeStats.size} entries (${Math.round(treeStats.bytes / 1024)}KB). `
+          + `Evicting ${Math.ceil(treeStats.size / 2)} entries.`
+        );
+
+        // Aggressively evict half the tree cache under memory pressure.
         const evictCount = Math.ceil(treeStats.size / 2);
         const evicted = evictTreeCacheOldest(evictCount);
         logWarn(connection, `Evicted ${evicted} tree cache entries due to memory pressure`);
