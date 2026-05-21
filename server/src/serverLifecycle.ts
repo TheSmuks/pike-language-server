@@ -259,6 +259,9 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   }
 
   // Cache restore + stale refresh + background indexing, chained sequentially.
+  // The .catch() prevents an unhandled rejection if the synchronous wrapper
+  // throws (e.g., restoreCachedEntries fails) before reaching the inner async
+  // chains that have their own .catch() handlers.
   cacheLoadPromise.then((cached) => {
     if (!cached) {
       logInfo(connection, "[init] step 7e: no cache found — fresh start");
@@ -295,6 +298,8 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     } else {
       logInfo(connection, "[init] step 7f: background indexing disabled by settings");
     }
+  }).catch((err) => {
+    logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
   });
 
   logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");

@@ -129,10 +129,17 @@ export function getCrossFileReferences(
     if (!depEntry.dependencies.has(uri)) continue;
 
     for (const ref of depEntry.symbolTable.references) {
-      // Match by name. Inherited/imported symbols have resolvesTo=null because
+      // Match by name only. Inherited/imported symbols have resolvesTo=null because
       // single-file analysis cannot resolve cross-file references. Locally-resolved
       // references (resolvesTo !== null) are excluded because they point to a
       // different declaration in the dependent file, not the inherited one.
+      //
+      // Known simplification: this is a name-only match, not a type-aware match.
+      // Two different classes with identically-named members (e.g., Dog.speak and
+      // Cat.speak) will both match. Pike's last-wins inherit semantics would need
+      // type-based disambiguation across the full inherit graph. The source-file
+      // filter (depEntry.dependencies.has(uri)) mitigates false positives by only
+      // considering files that actually depend on this one.
       if (ref.name === target.name && ref.resolvesTo === null) {
         results.push({ uri: depUri, ref });
       }
@@ -270,6 +277,12 @@ async function resolveUnresolvedReference(
   uri: string,
 ): Promise<{ uri: string; decl: Declaration } | null> {
   // Try to find the name through explicit inheritance/import chains.
+  //
+  // Known limitation: only direct (one-hop) inherit targets are searched.
+  // Transitive chains (A inherits B which inherits C) are not followed here.
+  // Full transitive resolution would require recursive lookups through the
+  // inherit graph with cycle detection. Deferred until a concrete use case
+  // demonstrates the need.
   for (const decl of table.declarations) {
     if (decl.kind === "inherit" || decl.kind === "import") {
       const target = await resolveInheritTarget(ctx, decl, uri);

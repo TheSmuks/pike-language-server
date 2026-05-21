@@ -77,16 +77,27 @@ async function handleDidChangeContent(
     }
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, `onDidChangeContent(${doc.uri})`, err);
+    return;
   }
 
-  // Delegate real-time diagnostics to DiagnosticManager
-  ctx.diagnosticManager.onDidChange(doc.uri);
+  // Delegate real-time diagnostics to DiagnosticManager.
+  // These run after the index upsert succeeds — diagnostics depend on the
+  // updated symbol table. Wrapped in try/catch because sendDiagnostics and
+  // semanticTokens.refresh() both cross the LSP connection boundary where
+  // the client may have disconnected.
+  try {
+    ctx.diagnosticManager.onDidChange(doc.uri);
 
-  // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
-  // re-requests tokens on tab switch. The token data is produced from the
-  // symbol table which was just rebuilt above.
-  if (ctx.clientSupportsSemanticTokensRefresh) {
-    ctx.connection.languages.semanticTokens.refresh();
+    // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
+    // re-requests tokens on tab switch. The token data is produced from the
+    // symbol table which was just rebuilt above.
+    // Note: semanticTokens.refresh() is fire-and-forget on the server side —
+    // it sends a notification to the client and returns void.
+    if (ctx.clientSupportsSemanticTokensRefresh) {
+      ctx.connection.languages.semanticTokens.refresh();
+    }
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.System, `post-didChange(${doc.uri})`, err);
   }
 }
 

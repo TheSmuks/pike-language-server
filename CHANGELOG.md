@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-05-22
+
+### Changed
+
+  - Documented four design-level concerns as known limitations:
+    synthetic ID counter thread-safety (`typeResolver.ts`), name-only
+    cross-file reference matching (`workspaceResolution.ts`), no transitive
+    inherit resolution (`workspaceResolution.ts`, `typeResolver.ts`), and
+    scope boundary inclusion (`scope-helpers.ts`). These are not bugs but
+    intentional simplifications with documented rationale.
+  - serverContext: document fire-and-forget parser init pattern.
+  - serverLifecycle: add `.catch()` on startup chain to prevent
+    unhandled rejection if cache restore fails before reconnecting.
+
+### Fixed
+
+  - xmlParser: guard against out-of-bounds position advance when
+    AutoDoc attribute value is unterminated (missing closing quote).
+  - errorLog: reset `_nextId` counter in `clear()` so IDs restart
+    after clearing — prevents confusing ID gaps in test assertions.
+  - parser: clear cached promise on WASM init failure so transient
+    I/O errors (e.g., NFS) don't make the parser permanently unusable.
+  - serverDocumentHandler: add early return after parse error catch,
+    preventing diagnostic manager from running on a failed parse.
+    Wrap post-didChange diagnostics in try/catch for client disconnect.
+  - getterSetter: fix `findParentClass` range check direction — was
+    checking if class scope contains the declaration; now correctly
+    checks if the declaration contains the class scope.
+  - pikeWorkerProcess: replace deprecated `RegExp.$1` with `exec()`
+    result — static RegExp properties are unsafe under async concurrency.
+  - main: save persistent cache on SIGTERM/SIGINT before exiting.
+    Without this, force-close loses the workspace index built during
+    the session.
+  - harness: remove self-healing snapshot/golden auto-generation.
+    Missing files should fail the test, not silently create new baselines.
+  - lifecycle test: remove stray `kg|` characters from test source.
+
+  - Documented four design-level concerns as known limitations:
+    synthetic ID counter thread-safety (`typeResolver.ts`), name-only
+    cross-file reference matching (`workspaceResolution.ts`), no transitive
+    inherit resolution (`workspaceResolution.ts`, `typeResolver.ts`), and
+    scope boundary inclusion (`scope-helpers.ts`). These are not bugs but
+    intentional simplifications with documented rationale.
+  - serverContext: document fire-and-forget parser init pattern.
+  - serverLifecycle: add `.catch()` on startup chain to prevent
+    unhandled rejection if cache restore fails before reconnecting.
+
 ## [0.8.4] — 2026-05-21
 
 ### Fixed

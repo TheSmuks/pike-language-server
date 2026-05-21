@@ -29,10 +29,17 @@ let parserReady = false;
 /**
  * Initialize the tree-sitter parser.  Safe to call multiple times — subsequent
  * calls return the same promise and do not re-initialize.
+ *
+ * If initialization fails (e.g., WASM file transiently unavailable on NFS),
+ * the cached promise is cleared so the next call retries. Without this, a
+ * one-time I/O error makes the parser permanently unusable for the entire
+ * server lifetime.
  */
 export function initParser(wasmPath?: string): Promise<void> {
   if (initPromise) return initPromise;
   initPromise = doInit(wasmPath);
+  // Allow retry on failure — transient I/O errors should not be permanent.
+  initPromise.catch(() => { initPromise = null; });
   return initPromise;
 }
 

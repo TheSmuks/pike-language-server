@@ -114,7 +114,8 @@ export async function runIntrospect(
   args.push(absCorpusFile);
 
   const proc = Bun.spawn([PIKE_BINARY, "-M", "harness", INTROSPECT_SCRIPT, ...args], {
-
+    stdout: "pipe",
+    stderr: "pipe",
   });
 
   const [stdout, stderr] = await Promise.all([
