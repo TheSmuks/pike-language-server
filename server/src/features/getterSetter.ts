@@ -197,9 +197,11 @@ function findParentClass(table: SymbolTable, varDecl: Declaration): Declaration 
   const varScope = table.scopes.find(s => s.kind === "class" && containsRange(s.range, varDecl.range));
   if (!varScope) return null;
 
-  // Find the class declaration for this scope
-  // Class declarations live in the file scope, class members live in the class scope
-  return table.declarations.find(d => d.kind === "class" && containsRange(varScope.range, d.range)) ?? null;
+  // Find the class declaration for this scope.
+  // Class declarations live in the file scope, class members live in the class scope.
+  // The class declaration's range *encloses* the class scope's range (decl starts at
+  // "class" keyword, scope starts at the body), so we check d.range contains varScope.range.
+  return table.declarations.find(d => d.kind === "class" && containsRange(d.range, varScope.range)) ?? null;
 }
 
 function generateGetter(varName: string, varType: string, indent: string): string {

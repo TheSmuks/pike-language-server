@@ -96,7 +96,11 @@ export function createServerContext(
   connection: Connection,
 ): ServerContext {
   const documents = new TextDocuments(TextDocument);
-  void initParser();
+  // Fire-and-forget parser init. handleInitialized awaits the cached promise
+  // later. The .catch() suppresses the early-rejection unhandled-promise
+  // warning — the same promise is re-awaitable via initParser() after the
+  // retry logic in parser.ts clears it on failure.
+  initParser().catch(() => {});
   const worker = new PikeWorker();
 
   worker.setErrorHandler((ctx, err) => {

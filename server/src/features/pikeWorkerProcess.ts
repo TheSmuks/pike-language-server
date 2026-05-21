@@ -252,11 +252,14 @@ export abstract class PikeWorkerProcess {
       // Pike prints this to stderr but continues running — it is not fatal.
       // Show the user a one-time actionable message instead of spamming
       // every stderr line as a critical error.
+      // Use exec() instead of RegExp.$1 — the static property is deprecated
+      // and unsafe under async concurrency (any intervening regex overwrites it).
+      const libMatch = /Failed to load library: (lib[\w-]+\.so[\d.]*)/.exec(msg);
       if (
         !this.warnedAboutMissingLibs &&
-        /Failed to load library: (lib[\w-]+\.so[\d.]*)/.test(msg)
+        libMatch
       ) {
-        const libName = RegExp.$1;
+        const libName = libMatch[1];
         this.warnedAboutMissingLibs = true;
         if (this.config.libraryPath) {
           this.onWarning?.(

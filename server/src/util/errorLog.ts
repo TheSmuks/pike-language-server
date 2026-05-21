@@ -108,6 +108,7 @@ export class ErrorLog {
   /** Remove all entries and reset the ID counter. */
   clear(): void {
     this.entries = [];
+    this._nextId = 1;
   }
 }
 
@@ -216,7 +217,6 @@ export function logError(
   ctx: string,
   err: unknown,
 ): void {
-  const ts = now();
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
 

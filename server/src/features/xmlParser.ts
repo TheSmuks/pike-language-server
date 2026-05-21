@@ -54,7 +54,7 @@ function parseQuotedValue(s: XmlParseState): string {
   const start = s.pos;
   while (s.pos < s.xml.length && s.xml[s.pos] !== quote) s.pos++;
   const value = s.xml.slice(start, s.pos);
-  s.pos++; // skip closing quote
+  if (s.pos < s.xml.length) s.pos++; // skip closing quote (guard: unterminated value)
   return decodeEntities(value);
 }
 
