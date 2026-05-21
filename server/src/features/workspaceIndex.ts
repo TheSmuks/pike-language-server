@@ -55,6 +55,7 @@ export class WorkspaceIndex {
       modulePaths: [options.workspaceRoot],
       includePaths: [options.workspaceRoot],
       programPaths: [options.workspaceRoot],
+      ldLibraryPath: "",
     };
     this.resolver = new ModuleResolver({
       workspaceRoot: pathToUri(this.workspaceRoot),

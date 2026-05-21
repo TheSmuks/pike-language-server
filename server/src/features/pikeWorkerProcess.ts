@@ -142,6 +142,17 @@ export abstract class PikeWorkerProcess {
    * Signature: (ctx: string, err: unknown) => void.
    */
   protected onCriticalError: ((ctx: string, err: unknown) => void) | null = null;
+  /**
+   * Callback for non-fatal warnings that should be routed through the
+   * centralized log. Set by the server after construction.
+   */
+  protected onWarning: ((ctx: string, msg: string) => void) | null = null;
+  /**
+   * Tracks whether we have already warned about a missing library warning
+   * from Nettle.so. Used to show the user a one-time actionable message
+   * instead of spamming errors on every stderr line.
+   */
+  protected warnedAboutMissingLibs = false;
 
   constructor(config?: Partial<PikeWorkerConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -153,6 +164,14 @@ export abstract class PikeWorkerProcess {
    */
   setErrorHandler(handler: (ctx: string, err: unknown) => void): void {
     this.onCriticalError = handler;
+  }
+
+  /**
+   * Install the warning handler for non-fatal advisory messages.
+   * Call this once after the server has a Connection.
+   */
+  setWarningHandler(handler: (ctx: string, msg: string) => void): void {
+    this.onWarning = handler;
   }
 
   /** Update configuration. Only effective before the worker starts (lazy). */
@@ -195,9 +214,21 @@ export abstract class PikeWorkerProcess {
 
     // Use the resolved root as cwd; prefer VSIX root if available.
     const cwd = VSIX_ROOT || DEV_ROOT;
+    // Build the environment for the Pike worker. Merge libraryPath into
+    // LD_LIBRARY_PATH so Pike's native modules can find shared libraries
+    // that are not on the default linker search path.
+    const spawnEnv = { ...process.env } as typeof process.env;
+    if (this.config.libraryPath) {
+      const base = process.env.LD_LIBRARY_PATH ?? "";
+      spawnEnv.LD_LIBRARY_PATH = base
+        ? `${this.config.libraryPath}:${base}`
+        : this.config.libraryPath;
+    }
+
     this.proc = spawn(finalCmd, finalArgs, {
       stdio: ["pipe", "pipe", "pipe"],
       cwd,
+      env: spawnEnv,
     });
 
     const stdout = this.proc.stdout;
@@ -212,12 +243,42 @@ export abstract class PikeWorkerProcess {
 
     stderr.on("data", (data: Buffer) => {
       const msg = data.toString().trim();
+      if (!msg) return;
+
       // Suppress stderr logging once Pike is known to be unavailable.
-      // The first occurrence (the "nice: pike: No such file" spam) is
-      // unavoidable since pikeAvailable is null at spawn time.
-      if (msg && this.pikeAvailable !== false) {
-        this.onCriticalError?.("worker.stderr", new Error(`[pike-worker stderr] ${msg}`));
+      if (this.pikeAvailable === false) return;
+
+      // Detect the specific Nettle/libhogweed missing-library warning.
+      // Pike prints this to stderr but continues running — it is not fatal.
+      // Show the user a one-time actionable message instead of spamming
+      // every stderr line as a critical error.
+      if (
+        !this.warnedAboutMissingLibs &&
+        /Failed to load library: (lib[\w-]+\.so[\d.]*)/.test(msg)
+      ) {
+        const libName = RegExp.$1;
+        this.warnedAboutMissingLibs = true;
+        if (this.config.libraryPath) {
+          this.onWarning?.(
+            "worker.missingLibrary",
+            `Failed to load ${libName} — the configured ` +
+            `pike.languageServer.worker.ldLibraryPath ` +
+            `("${this.config.libraryPath}") may not contain it.`,
+          );
+        } else {
+          this.onWarning?.(
+            "worker.missingLibrary",
+            `Failed to load ${libName}. ` +
+            `Set pike.languageServer.worker.ldLibraryPath to the directory ` +
+            `containing this library (e.g. /usr/lib/x86_64-linux-gnu).`,
+          );
+        }
+        return;
       }
+
+      // Other stderr output — route as a critical error (but only once Pike
+      // is confirmed available; during startup pikeAvailable is null).
+      this.onCriticalError?.("worker.stderr", new Error(`[pike-worker stderr] ${msg}`));
     });
 
     const exitingProc = this.proc;

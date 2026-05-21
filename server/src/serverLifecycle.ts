@@ -143,6 +143,7 @@ export interface InitializedContext {
   backgroundIndexEnabled: boolean;
   backgroundIndexBatchSize: number;
   clientSupportsWatchedFiles: boolean;
+  clientSupportsSemanticTokensRefresh: boolean;
 }
 
 export async function handleInitialized(ctx: InitializedContext): Promise<void> {

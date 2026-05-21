@@ -179,16 +179,27 @@ export function logInfo(connection: Connection, message: string): void {
 }
 
 /**
- * Log a warning message.
+ * Log a warning with an optional context label.
+ *
+ * Unlike logError, warnings do not increment the error count badge and do
+ * not send a pike/errorCount notification.
  */
-export function logWarn(connection: Connection, message: string): void {
-  const ts = now();
+export function logWarn(
+  connection: Connection,
+  messageOrCategory: ErrorCategory | string,
+  maybeMessage?: string,
+  maybeCtx?: string,
+): void {
+  const category = typeof messageOrCategory === "string" ? undefined : messageOrCategory;
+  const message = typeof messageOrCategory === "string" ? messageOrCategory : (maybeMessage ?? "");
+  const ctx = maybeCtx;
+
   errorLog.push({
     level: "WARN",
-    category: undefined,
-    message,
+    category,
+    message: ctx ? `[${ctx}] ${message}` : message,
     stack: undefined,
-    context: undefined,
+    context: ctx,
   });
   safeWrite(connection, "WARN", [message]);
 }

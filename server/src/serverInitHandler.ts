@@ -13,6 +13,8 @@ import { uriToPath } from "./util/uri";
 import { parse } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { logInfo, logWarn } from "./util/errorLog.js";
+import { getPikePaths } from "./features/pikeDetection.js";
+import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +33,7 @@ interface InitOptions {
   workerMaxRequestsBeforeRestart?: number;
   workerMaxActiveMinutes?: number;
   workerNiceValue?: number;
+  workerLdLibraryPath?: string;
   formatInsertFinalNewline?: boolean;
   formatOperatorSpacing?: boolean;
   // Path overrides — when set, bypass auto-detection
@@ -69,6 +72,8 @@ async function handleInitialize(
   const rootPath = uriToPath(rootUri);
   ctx.clientSupportsWatchedFiles =
     params.capabilities?.workspace?.didChangeWatchedFiles?.dynamicRegistration === true;
+  ctx.clientSupportsSemanticTokensRefresh =
+    params.capabilities?.workspace?.semanticTokens?.refreshSupport === true;
 
   logInfo(ctx.connection, `[init] step 6a: workspace root = ${rootPath || "(none)"}`);
 
@@ -76,7 +81,7 @@ async function handleInitialize(
 
   await applyWorkspaceIndex(ctx, rootPath, initOpts);
   applyDiagnosticOptions(ctx, initOpts);
-  applyWorkerOptions(ctx, initOpts);
+  await applyWorkerOptions(ctx, rootPath, initOpts);
   applyBackgroundIndexOptions(ctx, initOpts);
   applyFormattingOptions(ctx, initOpts);
 
@@ -155,27 +160,44 @@ function applyDiagnosticOptions(
   }
 }
 
-function applyWorkerOptions(
+async function applyWorkerOptions(
   ctx: ServerContext,
+  rootPath: string,
   initOpts?: InitOptions,
-): void {
-  if (!initOpts) return;
-  if (initOpts.pikeBinaryPath) {
+): Promise<void> {
+  // Build path overrides from settings (same logic as applyWorkspaceIndex).
+  const overrides: PikePathOverrides = {};
+  if (initOpts?.pikeHome) overrides.pikeHome = initOpts.pikeHome;
+  if (initOpts?.modulePaths && initOpts.modulePaths.length > 0) overrides.modulePaths = initOpts.modulePaths;
+  if (initOpts?.includePaths && initOpts.includePaths.length > 0) overrides.includePaths = initOpts.includePaths;
+  if (initOpts?.programPaths && initOpts.programPaths.length > 0) overrides.programPaths = initOpts.programPaths;
+
+  const pikePaths = await getPikePaths(rootPath, initOpts?.pikeBinaryPath, overrides);
+  const autoLdLibraryPath = pikePaths.ldLibraryPath;
+
+  // Apply explicit user setting if provided; otherwise fall back to auto-detected path.
+  if (initOpts?.workerLdLibraryPath != null && initOpts.workerLdLibraryPath !== "") {
+    ctx.worker.updateConfig({ libraryPath: initOpts.workerLdLibraryPath });
+  } else if (autoLdLibraryPath !== "") {
+    ctx.worker.updateConfig({ libraryPath: autoLdLibraryPath });
+  }
+
+  if (initOpts?.pikeBinaryPath) {
     ctx.worker.updateConfig({ pikeBinaryPath: initOpts.pikeBinaryPath });
   }
-  if (initOpts.workerRequestTimeoutMs != null && initOpts.workerRequestTimeoutMs > 0) {
+  if (initOpts?.workerRequestTimeoutMs != null && initOpts.workerRequestTimeoutMs > 0) {
     ctx.worker.updateConfig({ requestTimeoutMs: initOpts.workerRequestTimeoutMs });
   }
-  if (initOpts.workerIdleTimeoutMs != null && initOpts.workerIdleTimeoutMs >= 0) {
+  if (initOpts?.workerIdleTimeoutMs != null && initOpts.workerIdleTimeoutMs >= 0) {
     ctx.worker.updateConfig({ idleTimeoutMs: initOpts.workerIdleTimeoutMs });
   }
-  if (initOpts.workerMaxRequestsBeforeRestart != null && initOpts.workerMaxRequestsBeforeRestart >= 0) {
+  if (initOpts?.workerMaxRequestsBeforeRestart != null && initOpts.workerMaxRequestsBeforeRestart >= 0) {
     ctx.worker.updateConfig({ maxRequestsBeforeRestart: initOpts.workerMaxRequestsBeforeRestart });
   }
-  if (initOpts.workerMaxActiveMinutes != null && initOpts.workerMaxActiveMinutes >= 0) {
+  if (initOpts?.workerMaxActiveMinutes != null && initOpts.workerMaxActiveMinutes >= 0) {
     ctx.worker.updateConfig({ maxActiveMinutes: initOpts.workerMaxActiveMinutes });
   }
-  if (initOpts.workerNiceValue != null && initOpts.workerNiceValue >= 0) {
+  if (initOpts?.workerNiceValue != null && initOpts.workerNiceValue >= 0) {
     ctx.worker.updateConfig({ niceValue: initOpts.workerNiceValue });
   }
 }

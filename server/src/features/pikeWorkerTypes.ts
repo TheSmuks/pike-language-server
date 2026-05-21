@@ -21,6 +21,13 @@ export interface PikeWorkerConfig {
   niceValue: number;
   /** Path to the Pike binary. Default: "pike". */
   pikeBinaryPath: string;
+  /**
+   * Extra directories to add to LD_LIBRARY_PATH when spawning the Pike
+   * worker subprocess. Useful on systems where Pike's native modules
+   * depend on libraries not on the default linker search path.
+   * Default: unset (inherit the extension host's LD_LIBRARY_PATH).
+   */
+  libraryPath?: string;
 }
 
 export const DEFAULT_CONFIG: PikeWorkerConfig = {
