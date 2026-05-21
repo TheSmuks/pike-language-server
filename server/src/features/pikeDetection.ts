@@ -22,6 +22,12 @@ export interface PikePaths {
   includePaths: string[];
   /** Program search paths (for inherit string resolution). */
   programPaths: string[];
+  /**
+   * Default directory for native library loading (LD_LIBRARY_PATH).
+   * Derived from pikeHome/lib when pikeHome is auto-detected.
+   * Used as the fallback libraryPath for the Pike worker.
+   */
+  ldLibraryPath: string;
 }
 
 /**
@@ -203,7 +209,13 @@ function buildPikePaths(
   const programPaths = [workspaceRoot];
   if (programPath) programPaths.push(programPath);
 
-  return { pikeHome, modulePaths, includePaths, programPaths };
+  // Derive LD_LIBRARY_PATH from pikeHome if auto-detected.
+  // Pike's native modules (Nettle, etc.) are installed under pikeHome/lib.
+  const ldLibraryPath = pikeHome
+    ? join(pikeHome, "lib")
+    : "";
+
+  return { pikeHome, modulePaths, includePaths, programPaths, ldLibraryPath };
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +247,7 @@ export async function detectPikePaths(
       modulePaths: [workspaceRoot, ...overrides.modulePaths],
       includePaths: [workspaceRoot, ...overrides.includePaths],
       programPaths: [workspaceRoot, ...overrides.programPaths],
+      ldLibraryPath: "",
     };
   }
 

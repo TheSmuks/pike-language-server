@@ -167,6 +167,7 @@ function getSettings(): Record<string, unknown> {
     workerMaxRequestsBeforeRestart: config.get<number>("worker.maxRequestsBeforeRestart", 100),
     workerMaxActiveMinutes: config.get<number>("worker.maxActiveMinutes", 30),
     workerNiceValue: config.get<number>("worker.niceValue", 5),
+    workerLdLibraryPath: config.get<string>("worker.ldLibraryPath", ""),
 
     // Formatting
     formatInsertFinalNewline: config.get<boolean>("format.insertFinalNewline", true),

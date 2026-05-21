@@ -4,8 +4,14 @@
 // to `parser.parse(newText, oldTree)` so tree-sitter can reuse unchanged
 // subtrees.  A size-bounded LRU cache evicts trees when documents close or
 // the memory ceiling is hit.
+//
+// The old tree MUST be edited via `tree.edit()` before re-parsing so that
+// tree-sitter's ReusableNode mechanism has correct position information.
+// Without this, tree-sitter may incorrectly reuse stale subtrees, producing
+// wrong parse results after edits (missing new declarations, broken
+// highlighting, stale completions).
 
-import { Parser, Tree, Language } from 'web-tree-sitter';
+import { Parser, Tree, Language, Edit, type Point } from 'web-tree-sitter';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { LRUCache } from './util/lruCache';
@@ -76,12 +82,12 @@ async function doInit(wasmPath?: string): Promise<void> {
 
 interface TreeEntry {
   tree: Tree;
-  sourceLength: number;
+  source: string;
 }
 
 function estimateTreeBytes(entry: TreeEntry): number {
   // Conservative: 1 node per ~40 bytes of source, each node ~200 bytes.
-  return Math.max(entry.sourceLength, entry.tree.rootNode.descendantCount * 200);
+  return Math.max(entry.source.length, entry.tree.rootNode.descendantCount * 200);
 }
 
 const treeCache = new LRUCache<TreeEntry>({
@@ -90,6 +96,73 @@ const treeCache = new LRUCache<TreeEntry>({
   estimateSize: estimateTreeBytes,
   onEvict(_key, entry) { entry.tree.delete(); },
 });
+
+// ---------------------------------------------------------------------------
+// Edit computation
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute a tree-sitter Edit by finding the common prefix and suffix between
+ * old and new source text.  O(N) where N is the length of the shorter string.
+ *
+ * Returns null when old and new are identical (no edit needed).
+ */
+function computeEdit(oldSource: string, newSource: string): Edit | null {
+  if (oldSource === newSource) return null;
+
+  // Find common prefix length (in UTF-16 code units = JS string indices).
+  const minLen = Math.min(oldSource.length, newSource.length);
+  let prefixLen = 0;
+  while (prefixLen < minLen && oldSource[prefixLen] === newSource[prefixLen]) {
+    prefixLen++;
+  }
+
+  // Find common suffix length, stopping before the common prefix.
+  const maxSuffix = Math.min(oldSource.length, newSource.length) - prefixLen;
+  let suffixLen = 0;
+  while (
+    suffixLen < maxSuffix &&
+    oldSource[oldSource.length - 1 - suffixLen] === newSource[newSource.length - 1 - suffixLen]
+  ) {
+    suffixLen++;
+  }
+
+  const startIndex = prefixLen;
+  const oldEndIndex = oldSource.length - suffixLen;
+  const newEndIndex = newSource.length - suffixLen;
+
+  // Compute line/column for the three points from old and new source.
+  const oldStartPos = offsetToPoint(oldSource, startIndex);
+  const oldEndPos = offsetToPoint(oldSource, oldEndIndex);
+  const newEndPos = offsetToPoint(newSource, newEndIndex);
+
+  return new Edit({
+    startIndex,
+    oldEndIndex,
+    newEndIndex,
+    startPosition: oldStartPos,
+    oldEndPosition: oldEndPos,
+    newEndPosition: newEndPos,
+  });
+}
+
+/**
+ * Convert a byte offset in a string to a tree-sitter Point (row, column).
+ * O(N) but only called once per edit boundary.
+ */
+function offsetToPoint(source: string, offset: number): Point {
+  let row = 0;
+  let column = 0;
+  for (let i = 0; i < offset && i < source.length; i++) {
+    if (source[i] === '\n') {
+      row++;
+      column = 0;
+    } else {
+      column++;
+    }
+  }
+  return { row, column };
+}
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -106,9 +179,11 @@ export function isParserReady(): boolean {
 /**
  * Parse source text, using the cached tree for the given URI if available.
  *
+ * The old tree is edited via `tree.edit()` with a computed diff before being
+ * passed to tree-sitter for incremental re-parse.  This is required by the
+ * tree-sitter incremental algorithm (see "Advanced Parsing" docs).
+ *
  * After parsing, the new tree is stored in the cache keyed by `uri`.
- * Callers that need the tree for later operations (symbol table, diagnostics)
- * should use this function — not `parseFresh`.
  */
 export function parse(source: string, uri?: string): Tree {
   bump("parseCalls");
@@ -119,6 +194,11 @@ export function parse(source: string, uri?: string): Tree {
     if (uri) {
       const cached = treeCache.get(uri);
       if (cached) {
+        // Edit the old tree so tree-sitter's ReusableNode has correct positions.
+        const edit = computeEdit(cached.source, source);
+        if (edit) {
+          cached.tree.edit(edit);
+        }
         oldTree = cached.tree;
       }
     }
@@ -127,7 +207,7 @@ export function parse(source: string, uri?: string): Tree {
     if (!tree) throw new Error('Parse returned null — is a language set?');
 
     if (uri) {
-      treeCache.set(uri, { tree, sourceLength: source.length });
+      treeCache.set(uri, { tree, source });
     }
 
     return tree;

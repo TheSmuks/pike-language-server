@@ -20,7 +20,7 @@ import {
 } from "./util/staticDataValidation.js";
 import stdlibAutodocIndexRaw from "./data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "./data/predef-builtin-index.json";
-import { logError, ErrorCategory } from "./util/errorLog.js";
+import { logError, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
 
@@ -52,6 +52,7 @@ export interface ServerContext {
   backgroundIndexEnabled: boolean;
   backgroundIndexBatchSize: number;
   clientSupportsWatchedFiles: boolean;
+  clientSupportsSemanticTokensRefresh: boolean;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
 }
@@ -102,6 +103,10 @@ export function createServerContext(
     logError(connection, ErrorCategory.Worker, ctx, err);
   });
 
+  worker.setWarningHandler((ctx, msg) => {
+    logWarn(connection, `[${ctx}] ${msg}`);
+  });
+
   const { autodocCache, pikeCache } = createCaches();
   const index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
 
@@ -134,6 +139,7 @@ export function createServerContext(
     backgroundIndexEnabled: true,
     backgroundIndexBatchSize: 8,
     clientSupportsWatchedFiles: false,
+    clientSupportsSemanticTokensRefresh: false,
     stdlibIndex,
     predefBuiltins,
   };

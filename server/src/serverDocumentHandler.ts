@@ -81,6 +81,13 @@ async function handleDidChangeContent(
 
   // Delegate real-time diagnostics to DiagnosticManager
   ctx.diagnosticManager.onDidChange(doc.uri);
+
+  // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
+  // re-requests tokens on tab switch. The token data is produced from the
+  // symbol table which was just rebuilt above.
+  if (ctx.clientSupportsSemanticTokensRefresh) {
+    ctx.connection.languages.semanticTokens.refresh();
+  }
 }
 
 function handleDidClose(

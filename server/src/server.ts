@@ -95,6 +95,7 @@ function registerPostInitHandler(
       backgroundIndexEnabled: ctx.backgroundIndexEnabled,
       backgroundIndexBatchSize: ctx.backgroundIndexBatchSize,
       clientSupportsWatchedFiles: ctx.clientSupportsWatchedFiles,
+      clientSupportsSemanticTokensRefresh: ctx.clientSupportsSemanticTokensRefresh,
     });
   });
 }

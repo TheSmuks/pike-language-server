@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] — 2026-05-21
+
+### Fixed
+
+  - Semantic highlighting, completions, and go-to-definition now update
+    correctly after editing a file. Two root causes: (1) the server never
+    sent `workspace/semanticTokens/refresh` after document changes, so
+    VSCode only re-requested tokens on tab switch; (2) tree-sitter
+    incremental re-parse was missing the required `tree.edit()` call,
+    causing stale subtrees to be reused after edits.
+  - Pike worker subprocess now sets `LD_LIBRARY_PATH` from auto-detected
+    `pikeHome/lib`, so native modules (Nettle, etc.) load correctly
+    without manual configuration. A one-time warning is shown if a
+    required shared library is missing, instead of spamming every
+    stderr line as a critical error.
+  - `worker.ldLibraryPath` VSCode setting is now passed through from the
+    client to the server during initialization.
+
 ## [0.8.3] — 2026-05-20
 
 ### Fixed
