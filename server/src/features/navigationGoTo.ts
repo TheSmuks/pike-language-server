@@ -108,7 +108,7 @@ function resolveDeclLocation(
   const nr = decl.nameRange;
   const cursorOnDeclName = nr.start.line === params.position.line &&
     params.position.character >= nr.start.character &&
-    params.position.character <= nr.end.character;
+    params.position.character < nr.end.character;
 
   if (cursorOnDeclName && decl.kind !== "inherit" && decl.kind !== "import") {
     const refs = getReferencesTo(table, params.position.line, params.position.character);
