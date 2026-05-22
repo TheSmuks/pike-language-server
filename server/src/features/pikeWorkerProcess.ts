@@ -107,6 +107,15 @@ export abstract class PikeWorkerProcess {
   protected restarting = false;
   protected consecutiveMalformed = 0;
   protected static readonly MALFORMED_RESTART_THRESHOLD = 5;
+  /**
+   * Tracks consecutive Pike process crashes (exit with non-zero, non-127 code).
+   * Used to prevent crash loops: if Pike crashes repeatedly, we stop
+   * auto-restarting until the backoff period expires.
+   */
+  protected consecutiveCrashes = 0;
+  protected static readonly CRASH_BACKOFF_THRESHOLD = 3;
+  protected static readonly CRASH_BACKOFF_MS = 30_000;
+  protected crashBackoffUntil = 0;
   protected readonly config: PikeWorkerConfig;
 
   // Priority queue — ensures exactly one write to stdin at a time.
@@ -252,11 +261,14 @@ export abstract class PikeWorkerProcess {
       // Pike prints this to stderr but continues running — it is not fatal.
       // Show the user a one-time actionable message instead of spamming
       // every stderr line as a critical error.
+      // Use exec() instead of RegExp.$1 — the static property is deprecated
+      // and unsafe under async concurrency (any intervening regex overwrites it).
+      const libMatch = /Failed to load library: (lib[\w-]+\.so[\d.]*)/.exec(msg);
       if (
         !this.warnedAboutMissingLibs &&
-        /Failed to load library: (lib[\w-]+\.so[\d.]*)/.test(msg)
+        libMatch
       ) {
-        const libName = RegExp.$1;
+        const libName = libMatch[1];
         this.warnedAboutMissingLibs = true;
         if (this.config.libraryPath) {
           this.onWarning?.(
@@ -276,6 +288,21 @@ export abstract class PikeWorkerProcess {
         return;
       }
 
+      // Detect Pike internal fatal errors (e.g. "pike_types.c:707: Fatal error:
+      // Type mark stack underflow"). These indicate bugs in Pike itself, not in
+      // the LSP. Log as a warning (not error) since the crash-loop backoff
+      // mechanism handles the recovery.
+      const isFatalPikeError = /Fatal error:/i.test(msg);
+      if (isFatalPikeError) {
+        // Suppress duplicate fatal errors during crash loops — the backoff
+        // mechanism already warned the user.
+        if (this.consecutiveCrashes >= PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD) {
+          return;
+        }
+        this.onWarning?.("worker.pikeFatal", `[pike-worker stderr] ${msg}`);
+        return;
+      }
+
       // Other stderr output — route as a critical error (but only once Pike
       // is confirmed available; during startup pikeAvailable is null).
       this.onCriticalError?.("worker.stderr", new Error(`[pike-worker stderr] ${msg}`));
@@ -291,6 +318,21 @@ export abstract class PikeWorkerProcess {
         // Detect "binary not found" (exit code 127 on Linux)
         if (code === 127) {
           this.pikeAvailable = false;
+        }
+
+        // Track consecutive crashes (non-zero, non-127 exit) to prevent
+        // infinite crash loops when Pike hits an internal fatal error.
+        if (code !== 0 && code !== 127) {
+          this.consecutiveCrashes++;
+          if (this.consecutiveCrashes >= PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD) {
+            this.crashBackoffUntil = Date.now() + PikeWorkerProcess.CRASH_BACKOFF_MS;
+            this.onWarning?.(
+              "worker.crashBackoff",
+              `Pike worker crashed ${this.consecutiveCrashes} times in a row — ` +
+              `pausing diagnostics for ${PikeWorkerProcess.CRASH_BACKOFF_MS / 1000}s. ` +
+              `This is likely a Pike compiler bug (check stderr for "Fatal error").`,
+            );
+          }
         }
 
         // Reject pending requests with typed error
@@ -513,6 +555,8 @@ export abstract class PikeWorkerProcess {
         const raw: unknown = JSON.parse(line);
         const response = validatePikeResponse(raw);
         this.consecutiveMalformed = 0;
+        // Successful response means the worker is healthy — reset crash counter.
+        this.consecutiveCrashes = 0;
         const pending = this.pending.get(response.id);
         if (pending) {
           clearTimeout(pending.timeout);

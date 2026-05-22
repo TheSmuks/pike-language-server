@@ -56,9 +56,11 @@ describe("snapshot matches ground truth", () => {
 
       expect(actual).toBeDefined();
       if (!expected) {
-        // Generate missing snapshot so the test suite is self-healing
-        writeSnapshot(name, actual!);
-        return;
+        // Missing snapshot — this is a test failure, not self-healing.
+        // Run the harness with --snapshot to regenerate intentionally.
+        throw new Error(
+          `Missing snapshot for ${filename} (${name}) — run with --snapshot to generate`,
+        );
       }
 
       const diffs = diffSnapshot(actual!, expected);
@@ -116,6 +118,7 @@ describe("mutation detection", () => {
     try {
       const result = await runIntrospect(`corpus/files/__test_tmp__/basic-types-mutated.pike`, { strict: true });
       const snapshot = readSnapshot("basic-types");
+      expect(snapshot).not.toBeNull();
 
       // The mutated file should have different diagnostics than the original
       const diffs = diffSnapshot(result, snapshot!);
@@ -134,7 +137,7 @@ describe("mutation detection", () => {
 describe("snapshot schema validation", () => {
   test("all snapshots have valid schema", () => {
     for (const f of corpusFiles) {
-      const name = f.replace(/\.(pike|pmod)$/, "");
+      const name = snapshotNameForFile(f);
       const snap = readSnapshot(name);
       if (!snap) continue; // covered by coverage test above
 

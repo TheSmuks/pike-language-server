@@ -8,6 +8,9 @@
 import { createConnection, ProposedFeatures } from "vscode-languageserver/node";
 import { createPikeServer } from "./server.js";
 import { logError, ErrorCategory } from "./util/errorLog.js";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { saveCache, computeWasmHash } from "./features/persistentCache.js";
 
 function shouldListen(): boolean {
   return process.env.PIKE_LSP_STDIO === "1";
@@ -55,9 +58,26 @@ if (shouldListen()) {
   // Without this, the Pike worker becomes an orphan consuming resources
   // on shared development servers.
   const cleanupWorker = () => { server.worker.stop(); };
+
+  // SIGTERM/SIGINT: save the persistent cache before exiting.
+  // Without this, force-close loses the entire workspace index built during
+  // the session. The LSP onShutdown handler does this normally, but signals
+  // bypass it. Cache save is non-critical — if it fails, we still exit.
+  const saveCacheAndExit = async () => {
+    try {
+      const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), "tree-sitter-pike.wasm");
+      const wasmHash = computeWasmHash(wasmPath);
+      await saveCache(server.index.workspaceRoot, server.index, wasmHash);
+    } catch {
+      // Cache save failure is non-critical — proceed to exit.
+    }
+    cleanupWorker();
+    process.exit(0);
+  };
+
   process.on("exit", cleanupWorker);
-  process.on("SIGTERM", () => { cleanupWorker(); process.exit(0); });
-  process.on("SIGINT", () => { cleanupWorker(); process.exit(0); });
+  process.on("SIGTERM", saveCacheAndExit);
+  process.on("SIGINT", saveCacheAndExit);
 
   server.connection.listen();
 }

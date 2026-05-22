@@ -117,6 +117,15 @@ export function rangeSize(range: Range): number {
          (range.end.character - range.start.character);
 }
 
+/**
+ * Check whether `outer` range fully contains `inner` range.
+ *
+ * Boundary inclusion: uses `<=` and `>=` (not `<` and `>`) so that the
+ * closing brace character of a Pike scope is considered part of the scope.
+ * Tree-sitter ranges for blocks include the closing `}`, so a node ending
+ * at the brace position should still be considered inside the scope.
+ * This is intentional — do NOT change to strict inequality.
+ */
 export function containsRange(outer: Range, inner: Range): boolean {
   return (
     (outer.start.line < inner.start.line ||
@@ -308,7 +317,11 @@ function extractInitializerExprType(valueNode: Node): string | undefined {
 function extractCondExprBranchType(condNode: Node): string | undefined {
   // Single-child cond_expr is just an expression-precedence wrapper,
   // not a real ternary — fall through to normal drilling.
-  if (condNode.childCount === 1) return extractInitializerExprType(condNode.namedChild(0)!);
+  if (condNode.childCount === 1) {
+    const single = condNode.namedChild(0);
+    if (single) return extractInitializerExprType(single);
+    return undefined;
+  }
 
   const consequence = condNode.child(2);
   if (consequence) {

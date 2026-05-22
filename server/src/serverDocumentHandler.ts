@@ -55,18 +55,22 @@ async function handleDidChangeContent(
       return;
     }
 
-    const tree = parse(doc.getText(), doc.uri);
+    const tree = parse(content, doc.uri);
 
     // Update workspace index, invalidating dependents
     const invalidated = ctx.index.invalidateWithDependents(doc.uri);
     const promise = ctx.index.upsertFile(
-      doc.uri, doc.version, tree, doc.getText(), ModificationSource.DidChange,
+      doc.uri, doc.version, tree, content, ModificationSource.DidChange,
     );
     ctx.upsertInFlight.set(doc.uri, promise);
     try {
       await promise;
     } finally {
-      ctx.upsertInFlight.delete(doc.uri);
+      // Guard: only delete if this promise is still the in-flight one.
+      // A concurrent didChange for the same URI may have overwritten it.
+      if (ctx.upsertInFlight.get(doc.uri) === promise) {
+        ctx.upsertInFlight.delete(doc.uri);
+      }
     }
 
     if (invalidated.length > 1) {
@@ -77,16 +81,27 @@ async function handleDidChangeContent(
     }
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, `onDidChangeContent(${doc.uri})`, err);
+    return;
   }
 
-  // Delegate real-time diagnostics to DiagnosticManager
-  ctx.diagnosticManager.onDidChange(doc.uri);
+  // Delegate real-time diagnostics to DiagnosticManager.
+  // These run after the index upsert succeeds — diagnostics depend on the
+  // updated symbol table. Wrapped in try/catch because sendDiagnostics and
+  // semanticTokens.refresh() both cross the LSP connection boundary where
+  // the client may have disconnected.
+  try {
+    ctx.diagnosticManager.onDidChange(doc.uri);
 
-  // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
-  // re-requests tokens on tab switch. The token data is produced from the
-  // symbol table which was just rebuilt above.
-  if (ctx.clientSupportsSemanticTokensRefresh) {
-    ctx.connection.languages.semanticTokens.refresh();
+    // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
+    // re-requests tokens on tab switch. The token data is produced from the
+    // symbol table which was just rebuilt above.
+    // Note: semanticTokens.refresh() is fire-and-forget on the server side —
+    // it sends a notification to the client and returns void.
+    if (ctx.clientSupportsSemanticTokensRefresh) {
+      ctx.connection.languages.semanticTokens.refresh();
+    }
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.System, `post-didChange(${doc.uri})`, err);
   }
 }
 

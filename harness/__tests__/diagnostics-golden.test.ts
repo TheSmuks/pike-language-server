@@ -76,11 +76,12 @@ describe("diagnostic golden file verification", () => {
       const actual = results.get(filename);
 
       expect(actual).toBeDefined();
-
       if (!expected) {
-        // Self-healing: generate missing golden file
-        writeGolden(name, actual!);
-        return;
+        // Missing golden — this is a test failure, not self-healing.
+        // Run the harness with --golden to regenerate intentionally.
+        throw new Error(
+          `Missing golden for ${filename} (${name}) — run with --golden to generate`,
+        );
       }
 
       const diffs = diffGolden(actual!, expected);

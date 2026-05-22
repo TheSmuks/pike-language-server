@@ -283,7 +283,7 @@ export function getDefinitionAt(
   for (const decl of table.declarations) {
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
-        character >= nr.start.character && character <= nr.end.character) {
+        character >= nr.start.character && character < nr.end.character) {
       // For inherit declarations, follow through to the target class.
       // If the target isn't resolvable locally (external module), return
       // null so the caller falls through to cross-file resolution.
@@ -299,7 +299,7 @@ export function getDefinitionAt(
       // The alias is in the range but after the nameRange
       // Check if the position is within the declaration range and matches the alias text
       if (decl.range.start.line === line && decl.range.end.line === line &&
-          character >= decl.range.start.character && character <= decl.range.end.character) {
+          character >= decl.range.start.character && character < decl.range.end.character) {
         // Verify it's actually on the alias by checking the source text
         const target = resolveInheritToClass(decl, table);
         if (target) return target;
@@ -443,7 +443,7 @@ function findDeclIdAtPosition(
   for (const decl of table.declarations) {
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
-        character >= nr.start.character && character <= nr.end.character) {
+        character >= nr.start.character && character < nr.end.character) {
       return decl.id;
     }
   }

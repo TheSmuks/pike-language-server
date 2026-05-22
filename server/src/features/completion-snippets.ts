@@ -105,7 +105,7 @@ function findCreateMethod(table: SymbolTable, scope: { id: number }): Declaratio
  */
 function rangesOverlap(a: { start: { line: number; character: number }; end: { line: number; character: number } }, b: { start: { line: number; character: number }; end: { line: number; character: number } }): boolean {
   if (a.start.line > b.end.line || (a.start.line === b.end.line && a.start.character > b.end.character)) return false;
-  if (a.end.line < b.start.line || (a.end.line === b.end.line && a.end.character < b.start.character)) return false;
+  if (a.end.line < b.start.line || (a.end.line === b.start.line && a.end.character < b.start.character)) return false;
   return true;
 }
 

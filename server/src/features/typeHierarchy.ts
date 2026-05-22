@@ -58,7 +58,7 @@ function findClassAtPosition(
       nr.start.line === line &&
       nr.end.line === line &&
       character >= nr.start.character &&
-      character <= nr.end.character
+      character < nr.end.character
     ) {
       return decl;
     }

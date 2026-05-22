@@ -105,7 +105,7 @@ describe("lifecycle: performance", () => {
     const avg = timings.reduce((a, b) => a + b, 0) / timings.length;
     expect(avg).toBeLessThan(200);
 
-kg|    await teardown();
+    await teardown();
   });
 });
 

@@ -54,13 +54,13 @@ function findEnclosingFunction(
   line: number,
   character: number,
 ): Declaration | null {
-  // First check if cursor is directly on a function/method declaration
+  // First check if cursor is directly on a function/method declaration name
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
     if (decl.nameRange.start.line <= line &&
         decl.nameRange.end.line >= line &&
-        decl.range.start.character <= character &&
-        decl.range.end.character >= character) {
+        decl.nameRange.start.character <= character &&
+        decl.nameRange.end.character > character) {
       return decl;
     }
     // Also check if cursor is anywhere within the function body

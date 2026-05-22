@@ -93,6 +93,18 @@ simple constructor or ternary call still require explicit type annotations.
 variables initialized with simple constructors or ternary expressions, even when
 declared as `mixed`. Other complex initializers still require explicit annotations.
 
+### Design-Level Concerns (Documented, Not Bugs)
+
+These are architectural decisions or simplifications that are known limitations
+but are not bugs. They are documented in code comments and here for completeness.
+
+| Concern | Location | Impact | Rationale |
+|---------|----------|--------|-----------|
+| Synthetic ID counter not thread-safe | `typeResolver.ts:nextSyntheticId` | None in Node.js single-threaded runtime | Safe under event loop concurrency. Would need atomic increment only if runtime changes to shared-memory multi-threading. |
+| Name-only cross-file reference matching | `workspaceResolution.ts:getCrossFileReferences` | False positives when different classes have identically-named members | Source-file filter (dependency graph) mitigates most false positives. Type-aware matching would require full inherit graph resolution — deferred. |
+| No transitive inherit resolution | `workspaceResolution.ts:resolveUnresolvedReference`, `typeResolver.ts:resolveCrossFileType` | Members from grandparent classes not found through cross-file resolution | Direct (one-hop) inherits work correctly. Transitive chains need recursive graph traversal with cycle detection — deferred until a concrete use case surfaces. |
+| Scope boundary inclusion (`>=` not `>`) | `scope-helpers.ts:containsRange` | None — intentional | Tree-sitter ranges for Pike blocks include the closing `}` character. Using `>=` ensures positions on the closing brace are considered inside the scope. |
+
 ### Severity Classification
 
 #### Critical (Blocks core functionality)
