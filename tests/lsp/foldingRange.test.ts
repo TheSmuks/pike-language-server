@@ -120,6 +120,66 @@ describe("produceFoldingRanges unit tests", () => {
     // Outer function block, class body, inner method block
     expect(ranges.length).toBeGreaterThanOrEqual(3);
   });
+
+  test("folds switch case groups", () => {
+    const src = [
+      "switch (x) {",
+      "  case 1:",
+      "    int a = 1;",
+      "    break;",
+      "  case 2:",
+      "  case 3:",
+      "    int b = 2;",
+      "    break;",
+      "  default:",
+      "    int c = 3;",
+      "    break;",
+      "}",
+    ].join("\n");
+    const ranges = parseAndGetRanges(src);
+
+    // Should fold: the entire switch block (line 0-11),
+    // plus 3 case groups:
+    //   case 1:     lines 1-3
+    //   case 2..3:  lines 4-7 (fall-through: case 2 has no body)
+    //   default:    lines 8-10
+    const switchBlock = ranges.find(r => r.startLine === 0 && r.endLine === 11);
+    expect(switchBlock).toBeDefined();
+
+    // case 1 group: lines 1-3
+    const case1 = ranges.find(r => r.startLine === 1 && r.endLine === 3);
+    expect(case1).toBeDefined();
+
+    // case 2..3 group: starts at case 2 (line 4), ends at break (line 7).
+    // Fall-through merges case 2 and case 3 into one foldable group.
+    const case23 = ranges.find(r => r.startLine === 4 && r.endLine === 7);
+    expect(case23).toBeDefined();
+
+    // default group: lines 8-10 (does not include closing `}`)
+    const defaultGroup = ranges.find(r => r.startLine === 8 && r.endLine === 10);
+    expect(defaultGroup).toBeDefined();
+  });
+
+  test("does not fold single-line case groups", () => {
+    const src = [
+      "switch (x) {",
+      "  case 1: break;",
+      "  case 2: break;",
+      "}",
+    ].join("\n");
+    const ranges = parseAndGetRanges(src);
+
+    // The switch block itself should be foldable (lines 0-3),
+    // but individual case groups are single-line — no extra fold ranges.
+    const switchBlock = ranges.find(r => r.startLine === 0 && r.endLine === 3);
+    expect(switchBlock).toBeDefined();
+
+    // No case group folds (they're all single-line).
+    const caseFolds = ranges.filter(
+      r => r.startLine > 0 && r.endLine < 3,
+    );
+    expect(caseFolds.length).toBe(0);
+  });
 });
 
 // ---------------------------------------------------------------------------

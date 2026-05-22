@@ -83,6 +83,20 @@ export class PikeWorker extends PikeWorkerProcess {
       return Promise.reject(new PikeUnavailableError());
     }
 
+    // Crash-loop backoff: if Pike has been crashing repeatedly, reject
+    // requests until the backoff period expires. This prevents infinite
+    // restart loops when Pike hits an internal fatal error on a specific file.
+    if (this.crashBackoffUntil > 0 && Date.now() < this.crashBackoffUntil) {
+      return Promise.reject(
+        new Error(`Pike worker is in crash-loop backoff until ${new Date(this.crashBackoffUntil).toISOString()}`),
+      );
+    }
+    // Backoff expired — reset crash counter so a fresh start is possible.
+    if (this.crashBackoffUntil > 0 && Date.now() >= this.crashBackoffUntil) {
+      this.consecutiveCrashes = 0;
+      this.crashBackoffUntil = 0;
+    }
+
     // Check if forced restart is needed before queuing
     if (this.shouldForceRestart()) {
       this.restarting = true;
@@ -189,6 +203,15 @@ export class PikeWorker extends PikeWorkerProcess {
           diagnostics: [],
           exit_code: 1,
           timedOut: true,
+        };
+      }
+      // Crash-loop backoff — surface as a special result so the caller
+      // can show a user-friendly diagnostic instead of logging an error.
+      if ((err as Error).message?.includes("crash-loop backoff")) {
+        return {
+          diagnostics: [],
+          exit_code: 1,
+          timedOut: false,
         };
       }
       throw err;

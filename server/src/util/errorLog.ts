@@ -108,6 +108,7 @@ export class ErrorLog {
   /** Remove all entries and reset the ID counter. */
   clear(): void {
     this.entries = [];
+    this._nextId = 1;
   }
 }
 
@@ -190,8 +191,12 @@ export function logWarn(
   maybeMessage?: string,
   maybeCtx?: string,
 ): void {
-  const category = typeof messageOrCategory === "string" ? undefined : messageOrCategory;
-  const message = typeof messageOrCategory === "string" ? messageOrCategory : (maybeMessage ?? "");
+  // ErrorCategory is a string enum, so typeof cannot distinguish it from a
+  // plain string.  Check against the known enum values to detect category usage.
+  const categoryValues = new Set<string>(Object.values(ErrorCategory));
+  const isCategory = categoryValues.has(messageOrCategory as string) && maybeMessage !== undefined;
+  const category = isCategory ? messageOrCategory as ErrorCategory : undefined;
+  const message = isCategory ? maybeMessage : (messageOrCategory as string);
   const ctx = maybeCtx;
 
   errorLog.push({
@@ -216,7 +221,6 @@ export function logError(
   ctx: string,
   err: unknown,
 ): void {
-  const ts = now();
   const message = err instanceof Error ? err.message : String(err);
   const stack = err instanceof Error ? err.stack : undefined;
 

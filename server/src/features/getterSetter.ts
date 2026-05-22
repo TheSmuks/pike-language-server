@@ -178,14 +178,14 @@ function findVariableAtPosition(
     if (decl.kind !== "variable") continue;
     if (decl.nameRange.start.line === line &&
         decl.nameRange.start.character <= character &&
-        decl.nameRange.end.character >= character) {
+        decl.nameRange.end.character > character) {
       return decl;
     }
     // Also match by range
     if (decl.range.start.line === line &&
         decl.range.end.line === line &&
         decl.range.start.character <= character &&
-        decl.range.end.character >= character) {
+        decl.range.end.character > character) {
       return decl;
     }
   }
@@ -197,9 +197,11 @@ function findParentClass(table: SymbolTable, varDecl: Declaration): Declaration 
   const varScope = table.scopes.find(s => s.kind === "class" && containsRange(s.range, varDecl.range));
   if (!varScope) return null;
 
-  // Find the class declaration for this scope
-  // Class declarations live in the file scope, class members live in the class scope
-  return table.declarations.find(d => d.kind === "class" && containsRange(varScope.range, d.range)) ?? null;
+  // Find the class declaration for this scope.
+  // Class declarations live in the file scope, class members live in the class scope.
+  // The class declaration's range *encloses* the class scope's range (decl starts at
+  // "class" keyword, scope starts at the body), so we check d.range contains varScope.range.
+  return table.declarations.find(d => d.kind === "class" && containsRange(d.range, varScope.range)) ?? null;
 }
 
 function generateGetter(varName: string, varType: string, indent: string): string {

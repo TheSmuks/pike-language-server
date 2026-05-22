@@ -16,6 +16,14 @@ import type { Declaration, Scope, SymbolTable } from "./symbolTable";
 import { containsRange } from "./scopeBuilder";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
+/**
+ * Monotonically decreasing counter for synthetic Declaration IDs (negative).
+ *
+ * Safe under Node.js single-threaded event loop: no two resolveType calls
+ * execute concurrently. If the runtime ever becomes multi-threaded (e.g.,
+ * worker threads sharing this module state), this would need atomic
+ * increment or per-request ID generation.
+ */
 let nextSyntheticId = -1;
 
 // ---------------------------------------------------------------------------
@@ -243,6 +251,12 @@ async function resolveQualifiedType(
 
 /**
  * Resolve a type name through cross-file inherit/import declarations.
+ *
+ * Known limitation: only direct (one-hop) inherits are traversed.
+ * Transitive chains (A inherits B which inherits C) are not followed.
+ * Pike's last-wins semantics would require tracking the full resolution
+ * order across the inherit graph. Deferred until a concrete use case
+ * surfaces that needs it.
  */
 async function resolveCrossFileType(
   typeName: string,
