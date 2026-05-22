@@ -192,7 +192,11 @@ export async function getSymbolTable(
     try {
       await promise;
     } finally {
-      ctx.upsertInFlight.delete(uri);
+      // Guard: only delete if this promise is still the in-flight one.
+      // A concurrent operation for the same URI may have overwritten it.
+      if (ctx.upsertInFlight.get(uri) === promise) {
+        ctx.upsertInFlight.delete(uri);
+      }
     }
     return ctx.index.getSymbolTable(uri);
   } catch (err) {

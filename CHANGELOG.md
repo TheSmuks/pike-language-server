@@ -5,6 +5,32 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [0.8.6] — 2026-05-22
+
+### Fixed
+
+  - serverDocumentHandler / serverContext: guard `upsertInFlight.delete()`
+    so a concurrent `didChangeContent` for the same URI cannot prematurely
+    evict the second in-flight upsert promise (race condition where the
+    first promise's `finally` block would delete an entry already replaced
+    by a second call).
+  - serverLifecycle: chain Phase 3 (`indexWorkspaceFiles`) after Phase 2
+    (`refreshStaleCacheEntries`) resolves — previously they ran concurrently,
+    causing double-indexing of the same files and stale-cache-entry
+    corruption when background indexing raced ahead of the stale-refresh.
+  - serverLifecycle: remove redundant dynamic import of `fileURLToPath`
+    in `refreshStaleCacheEntries` — the symbol is already statically
+    imported at the top of the file.
+  - serverInitHandler: add `else` branch to log non-filesystem errors in
+    `onDemandIndex` (parse errors, JSON errors) that were previously
+    silently swallowed. Also add missing `logError` and `ErrorCategory`
+    imports.
+  - harness/diagnosticsGolden: use `canonicalStringify` instead of
+    `JSON.stringify` for diagnostic comparison — ensures key-order
+    differences don't produce false mismatches.
+  - scope-helpers: replace non-null assertion on `namedChild(0)` with
+    explicit null guard — tree-sitter nodes can be null on ERROR nodes.
+
 ## [Unreleased]
 
 ## [0.8.5] — 2026-05-22

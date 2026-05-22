@@ -19,6 +19,7 @@
 import { resolve, join, dirname, basename } from "node:path";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";
 import type { Diagnostic } from "vscode-languageserver/node";
+import { canonicalStringify } from "./snapshot.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -187,10 +188,10 @@ export function diffGolden(
   for (let i = 0; i < actual.diagnostics.length; i++) {
     const a = actual.diagnostics[i];
     const e = expected.diagnostics[i];
-    if (JSON.stringify(a) !== JSON.stringify(e)) {
+    if (canonicalStringify(a) !== canonicalStringify(e)) {
       diffs.push({
         kind: "diagnostic_mismatch",
-        detail: `diagnostic[${i}]: expected ${JSON.stringify(e)}, got ${JSON.stringify(a)}`,
+        detail: `diagnostic[${i}]: expected ${canonicalStringify(e)}, got ${canonicalStringify(a)}`,
       });
     }
   }

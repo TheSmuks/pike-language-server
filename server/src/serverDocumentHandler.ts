@@ -55,18 +55,22 @@ async function handleDidChangeContent(
       return;
     }
 
-    const tree = parse(doc.getText(), doc.uri);
+    const tree = parse(content, doc.uri);
 
     // Update workspace index, invalidating dependents
     const invalidated = ctx.index.invalidateWithDependents(doc.uri);
     const promise = ctx.index.upsertFile(
-      doc.uri, doc.version, tree, doc.getText(), ModificationSource.DidChange,
+      doc.uri, doc.version, tree, content, ModificationSource.DidChange,
     );
     ctx.upsertInFlight.set(doc.uri, promise);
     try {
       await promise;
     } finally {
-      ctx.upsertInFlight.delete(doc.uri);
+      // Guard: only delete if this promise is still the in-flight one.
+      // A concurrent didChange for the same URI may have overwritten it.
+      if (ctx.upsertInFlight.get(doc.uri) === promise) {
+        ctx.upsertInFlight.delete(doc.uri);
+      }
     }
 
     if (invalidated.length > 1) {
