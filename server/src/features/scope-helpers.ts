@@ -317,7 +317,11 @@ function extractInitializerExprType(valueNode: Node): string | undefined {
 function extractCondExprBranchType(condNode: Node): string | undefined {
   // Single-child cond_expr is just an expression-precedence wrapper,
   // not a real ternary — fall through to normal drilling.
-  if (condNode.childCount === 1) return extractInitializerExprType(condNode.namedChild(0)!);
+  if (condNode.childCount === 1) {
+    const single = condNode.namedChild(0);
+    if (single) return extractInitializerExprType(single);
+    return undefined;
+  }
 
   const consequence = condNode.child(2);
   if (consequence) {

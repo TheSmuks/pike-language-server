@@ -77,10 +77,16 @@ export function wireInheritance(
   },
   uri?: string,
 ): void {
-  // Track the next synthetic ID to avoid collisions with real declarations.
-  let syntheticIdCounter = table.declarations.length > 0
-    ? Math.max(...table.declarations.map(d => d.id)) + 1
-    : 0;
+  // Track the next synthetic ID to avoid collisions with real declarations AND scopes.
+  // Both share the same freshId counter during building, so the max across both
+  // sets is the correct starting point.
+  const maxDeclId = table.declarations.length > 0
+    ? Math.max(...table.declarations.map(d => d.id))
+    : -1;
+  const maxScopeId = table.scopes.length > 0
+    ? Math.max(...table.scopes.map(s => s.id))
+    : -1;
+  let syntheticIdCounter = Math.max(maxDeclId, maxScopeId) + 1;
 
   for (const scope of table.scopes) {
     if (scope.kind !== 'class') continue;

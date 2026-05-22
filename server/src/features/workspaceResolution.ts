@@ -54,7 +54,7 @@ export async function resolveCrossFileDefinition(
     if (decl.kind === "inherit" || decl.kind === "import") {
       const nr = decl.nameRange;
       if (nr.start.line === line && nr.end.line === line &&
-          character >= nr.start.character && character <= nr.end.character) {
+          character >= nr.start.character && character < nr.end.character) {
         const result = await resolveInheritTarget(ctx, decl, uri);
         // If the index was mutated while we yielded, the result may be stale.
         // Retry once — the mutation already updated the data.

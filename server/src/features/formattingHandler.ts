@@ -11,13 +11,8 @@ import {
   type DocumentFormattingParams,
   type DocumentOnTypeFormattingParams,
   type TextEdit,
-  type FormattingOptions,
   type CancellationToken,
-  ResponseError,
-  ErrorCodes,
 } from "vscode-languageserver/node";
-// LSP extended error codes from vscode-languageserver-protocol.
-import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { TextDocuments } from "vscode-languageserver/node";
 
@@ -35,55 +30,35 @@ interface FormattingContext {
 }
 
 /**
- * Compute minimal TextEdit[] that transforms original into formatted.
+ * Compute TextEdit[] that transforms original into formatted.
  *
- * Simple line-by-line diff: for each line, if the leading whitespace differs,
- * produce a replace edit for that line's indentation.
+ * Uses a single full-document replace when the formatter produces any change.
+ * This is the standard LSP formatter approach — pike-fmt normalizes indentation,
+ * internal whitespace, blank lines, and operator spacing, so a line-by-line
+ * indentation-only diff would silently drop most formatting changes and produce
+ * a corrupt half-formatted result.
  */
-function computeIndentEdits(
+function computeEdits(
   original: string,
   formatted: string,
 ): TextEdit[] {
-  const origLines = original.split("\n");
-  const fmtLines = formatted.split("\n");
-  const edits: TextEdit[] = [];
+  if (original === formatted) return [];
 
-  // Process line by line up to the longer of the two
-  const maxLen = Math.max(origLines.length, fmtLines.length);
-  for (let i = 0; i < maxLen; i++) {
-    const origLine = origLines[i] ?? "";
-    const fmtLine = fmtLines[i] ?? "";
+  // Count lines to build a range that covers the entire document.
+  // end position is start of the line after the last content line,
+  // with character 0 — this captures the trailing newline if present.
+  const lines = original.split("\n");
+  const lastLine = lines.length - 1;
 
-    // Extract leading whitespace
-    const origIndent = origLine.match(/^\s*/)?.[0] ?? "";
-    const fmtIndent = fmtLine.match(/^\s*/)?.[0] ?? "";
-
-    if (origIndent !== fmtIndent) {
-      edits.push({
-        range: {
-          start: { line: i, character: 0 },
-          end: { line: i, character: origIndent.length },
-        },
-        newText: fmtIndent,
-      });
-    }
-  }
-
-  // Handle trailing newline difference
-  const origHasNewline = original.endsWith("\n");
-  const fmtHasNewline = formatted.endsWith("\n");
-  if (!origHasNewline && fmtHasNewline) {
-    const lastLine = origLines.length > 0 ? origLines.length - 1 : 0;
-    edits.push({
+  return [
+    {
       range: {
-        start: { line: lastLine, character: (origLines[lastLine] ?? "").length },
-        end: { line: lastLine, character: (origLines[lastLine] ?? "").length },
+        start: { line: 0, character: 0 },
+        end: { line: lastLine, character: lines[lastLine].length },
       },
-      newText: "\n",
-    });
-  }
-
-  return edits;
+      newText: formatted,
+    },
+  ];
 }
 
 /**
@@ -133,7 +108,7 @@ async function handleFormatting(
       operatorSpacing: ctx.formattingConfig.operatorSpacing,
     }, parserInstance);
 
-    return computeIndentEdits(source, formatted);
+    return computeEdits(source, formatted);
   } catch (err) {
     logError(connection, ErrorCategory.System, "formattingHandler.handleFormatting", err);
     return null;
@@ -182,6 +157,11 @@ async function handleOnTypeFormatting(
 
 /**
  * Compute minimal on-type formatting edits for lines near the trigger.
+ *
+ * For on-type formatting (triggered by '}' or ';'), we compare the full
+ * content of the affected lines between original and formatted, not just
+ * indentation. This handles cases where the formatter also normalizes
+ * whitespace or adjusts spacing on those lines.
  */
 function computeOnTypeEdits(
   source: string,
@@ -200,12 +180,12 @@ function computeOnTypeEdits(
 
   for (let i = rangeStart; i < rangeEnd; i++) {
     if (i >= origLines.length || i >= fmtLines.length) break;
-    const origIndent = origLines[i].match(/^\s*/)?.[0] ?? "";
-    const fmtIndent = fmtLines[i].match(/^\s*/)?.[0] ?? "";
-    if (origIndent !== fmtIndent) {
+    const origLine = origLines[i];
+    const fmtLine = fmtLines[i];
+    if (origLine !== fmtLine) {
       edits.push({
-        range: { start: { line: i, character: 0 }, end: { line: i, character: origIndent.length } },
-        newText: fmtIndent,
+        range: { start: { line: i, character: 0 }, end: { line: i, character: origLine.length } },
+        newText: fmtLine,
       });
     }
   }

@@ -178,14 +178,14 @@ function findVariableAtPosition(
     if (decl.kind !== "variable") continue;
     if (decl.nameRange.start.line === line &&
         decl.nameRange.start.character <= character &&
-        decl.nameRange.end.character >= character) {
+        decl.nameRange.end.character > character) {
       return decl;
     }
     // Also match by range
     if (decl.range.start.line === line &&
         decl.range.end.line === line &&
         decl.range.start.character <= character &&
-        decl.range.end.character >= character) {
+        decl.range.end.character > character) {
       return decl;
     }
   }

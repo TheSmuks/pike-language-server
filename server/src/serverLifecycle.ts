@@ -78,7 +78,6 @@ async function refreshStaleCacheEntries(
   if (!isParserReady()) return 0;
 
   const { readFile: readFileAsync } = await import("node:fs/promises");
-  const { fileURLToPath } = await import("node:url");
   let reindexed = 0;
 
   for (const entry of cached) {
@@ -265,15 +264,55 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   cacheLoadPromise.then((cached) => {
     if (!cached) {
       logInfo(connection, "[init] step 7e: no cache found — fresh start");
+
+      // Phase 3 (no cache): background-index everything.
+      if (backgroundIndexEnabled) {
+        const backgroundCts = new CancellationTokenSource();
+        logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+        indexWorkspaceFiles({
+          connection,
+          index,
+          workspaceRoot: index.workspaceRoot,
+          batchSize: backgroundIndexBatchSize,
+          cancellationToken: backgroundCts.token,
+        }).then(() => {
+          logInfo(connection, "[init] step 7f: background indexing complete");
+        }).catch((err) => {
+          logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
+        });
+      } else {
+        logInfo(connection, "[init] step 7f: background indexing disabled by settings");
+      }
     } else {
       const restored = restoreCachedEntries(index, cached);
       const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
       logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
 
       // Phase 2: Re-validate stale entries (content hash mismatch).
+      // Phase 3 (background indexing) is chained after Phase 2 so that
+      // already-reindexed files are skipped, avoiding double work.
       refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
         if (reindexed > 0) {
           logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
+        }
+
+        // Phase 3: Background-index remaining unindexed files.
+        if (backgroundIndexEnabled) {
+          const backgroundCts = new CancellationTokenSource();
+          logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+          indexWorkspaceFiles({
+            connection,
+            index,
+            workspaceRoot: index.workspaceRoot,
+            batchSize: backgroundIndexBatchSize,
+            cancellationToken: backgroundCts.token,
+          }).then(() => {
+            logInfo(connection, "[init] step 7f: background indexing complete");
+          }).catch((err) => {
+            logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
+          });
+        } else {
+          logInfo(connection, "[init] step 7f: background indexing disabled by settings");
         }
       }).catch((err) => {
         logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);

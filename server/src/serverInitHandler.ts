@@ -12,7 +12,7 @@ import { buildServerCapabilities } from "./serverCapabilities";
 import { uriToPath } from "./util/uri";
 import { parse } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
-import { logInfo, logWarn } from "./util/errorLog.js";
+import { logInfo, logWarn, logError, ErrorCategory } from "./util/errorLog.js";
 import { getPikePaths } from "./features/pikeDetection.js";
 import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
@@ -138,6 +138,8 @@ async function onDemandIndex(
     const code = (err as NodeJS.ErrnoException).code;
     if (code === "EACCES" || code === "EPERM" || code === "ENOENT") {
       logWarn(ctx.connection, `on-demand index: skipping ${targetUri}: ${code}`);
+    } else {
+      logError(ctx.connection, ErrorCategory.Index, `on-demand index: ${targetUri}`, err);
     }
     return null;
   }
