@@ -191,8 +191,12 @@ export function logWarn(
   maybeMessage?: string,
   maybeCtx?: string,
 ): void {
-  const category = typeof messageOrCategory === "string" ? undefined : messageOrCategory;
-  const message = typeof messageOrCategory === "string" ? messageOrCategory : (maybeMessage ?? "");
+  // ErrorCategory is a string enum, so typeof cannot distinguish it from a
+  // plain string.  Check against the known enum values to detect category usage.
+  const categoryValues = new Set<string>(Object.values(ErrorCategory));
+  const isCategory = categoryValues.has(messageOrCategory as string) && maybeMessage !== undefined;
+  const category = isCategory ? messageOrCategory as ErrorCategory : undefined;
+  const message = isCategory ? maybeMessage : (messageOrCategory as string);
   const ctx = maybeCtx;
 
   errorLog.push({

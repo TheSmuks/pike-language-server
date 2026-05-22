@@ -187,7 +187,7 @@ function registerDidOpenHandler(ctx: NavigationContext): void {
     const doc = event.document;
     const source = doc.getText();
     if (source === undefined || source === null) {
-      logError(ctx.connection, ErrorCategory.System, `navigationHandler.handleHover(${doc.uri})`, new Error("unexpected null content"));
+      logError(ctx.connection, ErrorCategory.System, `registerDidOpenHandler(${doc.uri})`, new Error("unexpected null content"));
       return;
     }
     extractAutodocIfStale(source, doc.uri, ctx);

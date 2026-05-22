@@ -240,27 +240,43 @@ function resolvePostfixMember(
   );
   if (!typeClassDecl) return { resolvesTo: null, confidence: 'low' };
 
-  return findMemberInClassScope(memberName, state);
+  return findMemberInClassScope(memberName, typeClassDecl, state);
 }
 
-/** Search for a member in the current class scope. */
+/**
+ * Search for a member in the class scope associated with the resolved type
+ * declaration.  Uses range overlap to find the class body scope, matching
+ * the pattern documented in architecture-gotchas.md: class declarations live
+ * in FILE scope but class MEMBERS live in the CLASS scope whose range
+ * overlaps the class declaration.
+ */
 function findMemberInClassScope(
   memberName: string,
+  typeClassDecl: Declaration,
   state: BuildState,
 ): { resolvesTo: number | null; confidence: 'high' | 'low' } {
-  const classScopeId = state.scopeStack.find(sid => {
-    const s = state.scopeMap.get(sid);
-    return s?.kind === 'class';
-  });
-  if (classScopeId === undefined) return { resolvesTo: null, confidence: 'low' };
-
-  const classScope = state.scopeMap.get(classScopeId);
-  if (!classScope) return { resolvesTo: null, confidence: 'low' };
-
-  for (const memberDeclId of classScope.declarations) {
-    const memberDecl = state.declMap.get(memberDeclId);
-    if (memberDecl && memberDecl.name === memberName) {
-      return { resolvesTo: memberDeclId, confidence: 'high' };
+  // Find the class body scope whose range overlaps the class declaration.
+  // The class scope is a child of the scope containing the class declaration
+  // (typically file scope), and its range is contained within the declaration
+  // range.
+  for (const scope of state.scopes) {
+    if (scope.kind !== 'class') continue;
+    // The class body scope's parentId should be the class declaration's scopeId,
+    // and the scope's range should overlap with the class declaration's range.
+    if (scope.parentId === typeClassDecl.scopeId &&
+        scope.range.start.line >= typeClassDecl.range.start.line &&
+        scope.range.start.line <= typeClassDecl.range.end.line) {
+      for (const memberDeclId of scope.declarations) {
+        const memberDecl = state.declMap.get(memberDeclId);
+        if (memberDecl && memberDecl.name === memberName) {
+          return { resolvesTo: memberDeclId, confidence: 'high' };
+        }
+      }
+      // Also check inherited scopes for the member.
+      for (const inheritedId of scope.inheritedScopes) {
+        const match = findDeclInScope(memberName, inheritedId, state);
+        if (match !== null) return { resolvesTo: match, confidence: 'high' };
+      }
     }
   }
   return { resolvesTo: null, confidence: 'low' };

@@ -31,6 +31,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - scope-helpers: replace non-null assertion on `namedChild(0)` with
     explicit null guard — tree-sitter nodes can be null on ERROR nodes.
 
+## [0.8.7] — 2026-05-22
+
+### Fixed
+
+  - formattingHandler: replace broken `computeIndentEdits` (only matched
+    leading whitespace, silently dropped all other pike-fmt changes —
+    internal whitespace, trailing whitespace, blank-line collapse,
+    operator spacing) with `computeEdits` that does a single full-document
+    replace. Also fixed `computeOnTypeEdits` to compare full line content
+    rather than indentation only. Removed four unused imports.
+
 ## [Unreleased]
 
 ## [0.8.5] — 2026-05-22
