@@ -5,6 +5,40 @@ All notable changes to the Pike Language Server project will be documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html/).
 
+## [Unreleased]
+
+### Fixed
+
+  - TextMate grammar: remove greedy `function-call` pattern that incorrectly
+    highlighted function declarations as function calls (e.g. `int foo(` was
+    colored as a call, not a declaration).
+  - TextMate grammar: remove `.` from punctuation character class so that
+    `member-access` patterns can match `identifier.identifier` chains
+    (e.g. `Stdio.FILE`, `Crypto.SHA256`).
+  - TextMate grammar: reorder root patterns so `scope-access` and
+    `member-access` are tried before `operators` — previously `->` and `::`
+    were consumed as operators, preventing accessor highlighting from
+    ever firing.
+  - TextMate grammar: fix complex-type declaration regex capture group
+    numbering (was referencing non-existent group `"2"`, now `"1"`).
+  - formattingHandler: replace index-based line comparison in
+    `computeOnTypeEdits` with a proper diff approach (find common prefix
+    and suffix). The old ±10 window broke when the formatter added or
+    removed lines, producing corrupt edits on paste/move operations.
+  - diagnosticManager: `onDidChange` now merges cached pike diagnostics
+    with fresh parse diagnostics so that existing pike diagnostics are not
+    cleared while a debounced run is pending or skipped (fixes stale
+    error clearing on file switch).
+  - serverFileWatchHandler: clear pike/autodoc caches for dependents when
+    a dependency changes or is deleted, so stale diagnostics from the old
+    dependency state are not merged back into dependent files.
+  - serverFileWatchHandler: propagate invalidation to dependents on file
+    deletion — previously dependents kept stale cross-file references and
+    diagnostics when an included/imported file was deleted.
+  - serverFileWatchHandler: extract `propagateDependentInvalidation()`
+    helper to deduplicate 20+ lines of identical dependent-propagation
+    logic between `handleFileCreatedOrChanged` and `handleFileDeleted`.
+
 ## [0.8.6] — 2026-05-22
 
 ### Fixed
@@ -41,8 +75,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     operator spacing) with `computeEdits` that does a single full-document
     replace. Also fixed `computeOnTypeEdits` to compare full line content
     rather than indentation only. Removed four unused imports.
-
-## [Unreleased]
 
 ## [0.8.5] — 2026-05-22
 

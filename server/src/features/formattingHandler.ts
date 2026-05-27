@@ -156,12 +156,13 @@ async function handleOnTypeFormatting(
 }
 
 /**
- * Compute minimal on-type formatting edits for lines near the trigger.
+ * Compute minimal on-type formatting edits.
  *
- * For on-type formatting (triggered by '}' or ';'), we compare the full
- * content of the affected lines between original and formatted, not just
- * indentation. This handles cases where the formatter also normalizes
- * whitespace or adjusts spacing on those lines.
+ * Compares the full original and formatted text by finding the common
+ * prefix and suffix of lines, then returns a single TextEdit that replaces
+ * the differing middle range. This correctly handles all cases where the
+ * formatter adds, removes, or modifies lines — unlike an index-based
+ * comparison which breaks when line counts differ.
  */
 function computeOnTypeEdits(
   source: string,
@@ -169,26 +170,47 @@ function computeOnTypeEdits(
   triggerChar: string,
   triggerLine: number,
 ): TextEdit[] | null {
-  const rangeStart = triggerChar === "}"
-    ? Math.max(0, triggerLine - 1)
-    : triggerLine;
-  const rangeEnd = triggerLine + 1;
+  if (source === formatted) return null;
 
   const origLines = source.split("\n");
   const fmtLines = formatted.split("\n");
-  const edits: TextEdit[] = [];
 
-  for (let i = rangeStart; i < rangeEnd; i++) {
-    if (i >= origLines.length || i >= fmtLines.length) break;
-    const origLine = origLines[i];
-    const fmtLine = fmtLines[i];
-    if (origLine !== fmtLine) {
-      edits.push({
-        range: { start: { line: i, character: 0 }, end: { line: i, character: origLine.length } },
-        newText: fmtLine,
-      });
-    }
+  // Find the first line that differs
+  let startLine = 0;
+  while (startLine < origLines.length && startLine < fmtLines.length) {
+    if (origLines[startLine] !== fmtLines[startLine]) break;
+    startLine++;
   }
 
-  return edits.length > 0 ? edits : null;
+  // If all lines matched up to the shorter length and lengths are equal, no change
+  if (
+    startLine === origLines.length &&
+    startLine === fmtLines.length
+  ) {
+    return null;
+  }
+
+  // Find the last line that differs (walking backwards from the end)
+  let endOrig = origLines.length - 1;
+  let endFmt = fmtLines.length - 1;
+  while (endOrig > startLine && endFmt > startLine) {
+    if (origLines[endOrig] !== fmtLines[endFmt]) break;
+    endOrig--;
+    endFmt--;
+  }
+
+  // Build the replacement range in the original
+  const newText = fmtLines.slice(startLine, endFmt + 1).join("\n");
+  const oldText = origLines.slice(startLine, endOrig + 1).join("\n");
+  if (oldText === newText) return null;
+
+  return [
+    {
+      range: {
+        start: { line: startLine, character: 0 },
+        end: { line: endOrig, character: origLines[endOrig].length },
+      },
+      newText,
+    },
+  ];
 }
