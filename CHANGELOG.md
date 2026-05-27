@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - serverFileWatchHandler: extract `propagateDependentInvalidation()`
     helper to deduplicate 20+ lines of identical dependent-propagation
     logic between `handleFileCreatedOrChanged` and `handleFileDeleted`.
+  - completion: suppress autocomplete popup after a lone `:` (case labels,
+    goto labels, ternary expressions) — only `::` should trigger scope
+    completion, not a single colon.
 
 ## [0.8.6] — 2026-05-22
 
