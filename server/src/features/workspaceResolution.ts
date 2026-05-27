@@ -8,6 +8,7 @@
 import { type ModuleResolver } from "./moduleResolver";
 import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { FileEntry } from "./workspaceIndex";
+import { normalizeUri } from "../util/uri";
 
 // ---------------------------------------------------------------------------
 // Context interface
@@ -24,6 +25,11 @@ export interface ResolutionContext {
   readonly resolveInherit: (pathText: string, isStringLiteral: boolean, fromUri: string) => Promise<string | null>;
   readonly onDemandIndex: ((uri: string) => Promise<FileEntry | null>) | null;
   readonly resolver: ModuleResolver;
+}
+
+/** Normalize and look up a file entry from the raw files map. */
+function getFile(ctx: ResolutionContext, uri: string): FileEntry | undefined {
+  return ctx.files.get(normalizeUri(uri));
 }
 
 // ---------------------------------------------------------------------------
@@ -45,7 +51,7 @@ export async function resolveCrossFileDefinition(
   uri: string; decl: Declaration;
 } | null> {
   const snapshotGen = ctx.getGeneration();
-  const entry = ctx.files.get(uri);
+  const entry = getFile(ctx, uri);
   if (!entry?.symbolTable) return null;
 
   const table = entry.symbolTable;
@@ -98,7 +104,7 @@ export function getCrossFileReferences(
   uri: string; ref: Reference;
 }> {
   const results: Array<{ uri: string; ref: Reference }> = [];
-  const entry = ctx.files.get(uri);
+  const entry = getFile(ctx, uri);
   if (!entry?.symbolTable) return results;
 
   // First, get same-file references
@@ -120,7 +126,7 @@ export function getCrossFileReferences(
   // from unrelated files (e.g., two independent files each defining 'process').
   const dependents = ctx.getDependents(uri);
   for (const depUri of dependents) {
-    const depEntry = ctx.files.get(depUri);
+    const depEntry = getFile(ctx, depUri);
     if (!depEntry?.symbolTable) continue;
 
     // Source-file filter: the dependent must actually depend on this file.
@@ -242,7 +248,7 @@ async function resolveInheritTarget(
   const targetUri = await ctx.resolveInherit(decl.name, isStringLit, fromUri);
   if (!targetUri) return null;
 
-  let targetEntry = ctx.files.get(targetUri);
+  let targetEntry = getFile(ctx, targetUri);
 
   // On-demand indexing: if the target file is not yet indexed and an
   // on-demand callback is registered, trigger indexing so we can resolve
@@ -289,7 +295,7 @@ async function resolveUnresolvedReference(
       const target = await resolveInheritTarget(ctx, decl, uri);
       if (target) {
         // Check if the target file has a declaration matching the reference name.
-        const targetEntry = ctx.files.get(target.uri);
+        const targetEntry = getFile(ctx, target.uri);
         if (targetEntry?.symbolTable) {
           for (const targetDecl of targetEntry.symbolTable.declarations) {
             if (targetDecl.name === ref.name) {
@@ -305,7 +311,7 @@ async function resolveUnresolvedReference(
   // automatically see symbols from Foo.pmod/module.pmod.
   const directoryModule = await ctx.resolver.findDirectoryModulePmod(uri);
   if (directoryModule) {
-    const moduleEntry = ctx.files.get(directoryModule);
+    const moduleEntry = getFile(ctx, directoryModule);
     if (moduleEntry?.symbolTable) {
       for (const moduleDecl of moduleEntry.symbolTable.declarations) {
         if (moduleDecl.name === ref.name) {
