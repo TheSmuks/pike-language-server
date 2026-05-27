@@ -24,6 +24,16 @@ export function registerShutdownHandler(
   ctx: ServerContext,
 ): void {
   connection.onShutdown(async () => {
+    // Cancel background indexing if still running.
+    ctx.backgroundIndexCts?.cancel();
+    ctx.backgroundIndexCts?.dispose();
+
+    // Clear the periodic memory monitor.
+    if (ctx.memoryTimer) {
+      clearInterval(ctx.memoryTimer);
+      ctx.memoryTimer = undefined;
+    }
+
     ctx.diagnosticManager.dispose();
 
     // Emit profiling report before clearing state (step 8).

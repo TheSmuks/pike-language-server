@@ -20,7 +20,11 @@ export function getErrorCount(): number {
   return errorCount;
 }
 
-/** Register a callback for error count changes. */
-export function onErrorCountChange(cb: ChangeCallback): void {
+/** Register a callback for error count changes. Returns a dispose function. */
+export function onErrorCountChange(cb: ChangeCallback): () => void {
   listeners.push(cb);
+  return () => {
+    const idx = listeners.indexOf(cb);
+    if (idx >= 0) listeners.splice(idx, 1);
+  };
 }

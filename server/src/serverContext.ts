@@ -53,6 +53,8 @@ export interface ServerContext {
   backgroundIndexBatchSize: number;
   clientSupportsWatchedFiles: boolean;
   clientSupportsSemanticTokensRefresh: boolean;
+  backgroundIndexCts?: import("vscode-languageserver/node").CancellationTokenSource;
+  memoryTimer?: ReturnType<typeof setInterval>;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
 }

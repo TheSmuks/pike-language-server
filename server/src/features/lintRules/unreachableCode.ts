@@ -100,7 +100,6 @@ function checkBlock(
 
   // Scan forward. Once we see a terminator, flag everything after it.
   let foundTerminator = false;
-  let terminatorLine = -1;
 
   for (const child of children) {
     // Comments are not executable code — never flag them.
@@ -125,7 +124,6 @@ function checkBlock(
 
     if (TERMINATOR_TYPES.has(child.type)) {
       foundTerminator = true;
-      terminatorLine = child.startPosition.row;
     }
   }
 }

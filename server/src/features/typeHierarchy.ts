@@ -73,7 +73,9 @@ function findClassAtPosition(
     const startLine = decl.range.start.line;
     const endLine = decl.range.end.line;
     if (startLine <= line && endLine >= line) {
-      const size = endLine - startLine;
+      // Use character-based size to break ties when classes span the same lines.
+      const size = (endLine - startLine) * 10000
+        + (decl.range.end.character - decl.range.start.character);
       if (size < bestSize) {
         bestSize = size;
         best = decl;
@@ -186,7 +188,6 @@ function collectCrossFileSupertypes(
     for (const entry of index.getAllEntries()) {
       if (!entry.symbolTable) continue;
       for (const decl of entry.symbolTable.declarations) {
-        if (decl.kind !== "class" && decl.name !== inheritDecl.name) continue;
         if (decl.kind !== "class") continue;
         if (decl.name !== inheritDecl.name) continue;
         const key = `${entry.uri}:${decl.nameRange.start.line}`;

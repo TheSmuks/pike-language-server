@@ -268,7 +268,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // Listen for state transitions to update status bar.
   let restartAttempt = 0;
   const maxRestartAttempts = 3;
-  client.onDidChangeState((event: StateChangeEvent) => {
+  context.subscriptions.push(
+    client.onDidChangeState((event: StateChangeEvent) => {
     updateStatusBar(event.newState);
     const label = event.newState === State.Starting ? "Starting"
       : event.newState === State.Running ? "Running"
@@ -296,7 +297,8 @@ export function activate(context: vscode.ExtensionContext): void {
     if (event.newState === State.Running) {
       restartAttempt = 0;
     }
-  });
+  }),
+  );
 
   log("info", "EXT", "[init] step 5/6: starting server process...");
   client.start();
@@ -352,9 +354,10 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Keep status bar updated when error count changes.
-  onErrorCountChange((count) => {
+  const unsubscribeErrors = onErrorCountChange((count) => {
     updateStatusBarWithErrors(State.Running, count);
   });
+  context.subscriptions.push({ dispose: unsubscribeErrors });
 
   // Restart the server when settings change.
   // Guard against rapid-fire config changes creating duplicate clients.
@@ -423,7 +426,8 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): Thenable<void> | undefined {
   log("info", "EXT", "deactivate() — shutting down");
   if (!client) return undefined;
-  const result = client.stop();
-  client.dispose();
-  return result;
+  const c = client;
+  return c.stop().then(() => {
+    c.dispose();
+  });
 }

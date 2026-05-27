@@ -247,6 +247,11 @@ export abstract class PikeWorkerProcess {
     }
     stdout.on("data", (data: Buffer) => {
       this.buffer += data.toString();
+      // Guard against unbounded buffer growth (e.g. Pike binary dump without newlines).
+      if (this.buffer.length > 1_000_000) {
+        this.buffer = "";
+        this.onCriticalError?.("worker.bufferOverflow", new Error("Response buffer exceeded 1MB — clearing"));
+      }
       this.processBuffer();
     });
 

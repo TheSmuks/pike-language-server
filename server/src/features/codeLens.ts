@@ -47,7 +47,7 @@ function getOrComputeRefCounts(
   uri: string,
   workspaceIndex: WorkspaceIndex,
 ): Map<number, number> {
-  const currentGen = (workspaceIndex as any).generation as number;
+  const currentGen = workspaceIndex.currentGeneration;
   const cached = refCountCache.get(uri);
 
   // Cache hit: same generation, return cached counts

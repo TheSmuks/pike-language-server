@@ -143,6 +143,8 @@ export interface InitializedContext {
   backgroundIndexBatchSize: number;
   clientSupportsWatchedFiles: boolean;
   clientSupportsSemanticTokensRefresh: boolean;
+  backgroundIndexCts?: import("vscode-languageserver-protocol").CancellationTokenSource;
+  memoryTimer?: ReturnType<typeof setInterval>;
 }
 
 export async function handleInitialized(ctx: InitializedContext): Promise<void> {
@@ -267,14 +269,14 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
 
       // Phase 3 (no cache): background-index everything.
       if (backgroundIndexEnabled) {
-        const backgroundCts = new CancellationTokenSource();
+        ctx.backgroundIndexCts = new CancellationTokenSource();
         logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
         indexWorkspaceFiles({
           connection,
           index,
           workspaceRoot: index.workspaceRoot,
           batchSize: backgroundIndexBatchSize,
-          cancellationToken: backgroundCts.token,
+          cancellationToken: ctx.backgroundIndexCts.token,
         }).then(() => {
           logInfo(connection, "[init] step 7f: background indexing complete");
         }).catch((err) => {
@@ -298,14 +300,14 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
 
         // Phase 3: Background-index remaining unindexed files.
         if (backgroundIndexEnabled) {
-          const backgroundCts = new CancellationTokenSource();
+          ctx.backgroundIndexCts = new CancellationTokenSource();
           logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
           indexWorkspaceFiles({
             connection,
             index,
             workspaceRoot: index.workspaceRoot,
             batchSize: backgroundIndexBatchSize,
-            cancellationToken: backgroundCts.token,
+            cancellationToken: ctx.backgroundIndexCts.token,
           }).then(() => {
             logInfo(connection, "[init] step 7f: background indexing complete");
           }).catch((err) => {
@@ -317,25 +319,6 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       }).catch((err) => {
         logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
       });
-    }
-
-    // Phase 3: Background-index remaining unindexed files.
-    if (backgroundIndexEnabled) {
-      const backgroundCts = new CancellationTokenSource();
-      logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
-      indexWorkspaceFiles({
-        connection,
-        index,
-        workspaceRoot: index.workspaceRoot,
-        batchSize: backgroundIndexBatchSize,
-        cancellationToken: backgroundCts.token,
-      }).then(() => {
-        logInfo(connection, "[init] step 7f: background indexing complete");
-      }).catch((err) => {
-        logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
-      });
-    } else {
-      logInfo(connection, "[init] step 7f: background indexing disabled by settings");
     }
   }).catch((err) => {
     logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
@@ -349,7 +332,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   const MEMORY_CHECK_INTERVAL_MS = 60_000;
   const HEAP_USAGE_WARNING_RATIO = 0.80;
 
-  const memoryTimer = setInterval(() => {
+  ctx.memoryTimer = setInterval(() => {
     const mem = process.memoryUsage();
     const heapRatio = mem.heapUsed / mem.heapTotal;
 
@@ -375,7 +358,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       }
     }
   }, MEMORY_CHECK_INTERVAL_MS);
-  if (memoryTimer.unref) memoryTimer.unref();
+  if (ctx.memoryTimer.unref) ctx.memoryTimer.unref();
 }
 
 // ---------------------------------------------------------------------------
