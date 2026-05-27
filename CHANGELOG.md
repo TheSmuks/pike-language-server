@@ -8,6 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Call hierarchy outgoing calls now correctly resolve through `postfix_expr`
+    nodes with `(` children instead of searching for non-existent
+    `call_expression` nodes. Handles bare calls (`helper()`), method chains
+    (`obj->method()`), and nested calls (`foo(bar())`).
+  - Transitive inherit resolution: cross-file go-to-definition now follows
+    inherit chains beyond one hop (e.g., A→B→C where C references a symbol
+    from grandparent A). Cycle detection prevents infinite recursion.
+  - Cross-file rename: scope-aware filtering excludes arrow/dot access
+    references where the receiver's type doesn't match the target's owning
+    class. Renaming `Dog.speak()` no longer catches `cat->speak()` when
+    `cat` is a `Cat`.
+  - Variable alias type propagation: `Dog d2 = d1;` now sets
+    `assignedType = "Dog"` instead of `assignedType = "d1"`. Multi-hop
+    alias chains are resolved iteratively.
+  - Diagnostic column precision: Pike error messages are parsed for
+    identifier names to locate the specific error token on the diagnostic
+    line, instead of always pointing to the first meaningful token.
+
 ## [0.8.8] — 2026-05-27
 
 ### Fixed

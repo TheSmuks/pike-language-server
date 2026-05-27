@@ -195,7 +195,7 @@ export function generateReport(): string {
     "PARSING": ["parse", "parserInit"],
     "SYMBOL TABLE BUILD": [
       "buildSymbolTable", "declarationPass", "referencePass",
-      "wireInheritance", "buildTable",
+      "wireInheritance", "buildTable", "propagateAssignedTypes",
     ],
     "INDEX UPSERT": [
       "upsertFile", "upsertBackgroundFile", "upsertCachedFile",

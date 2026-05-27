@@ -197,7 +197,12 @@ export function getOutgoingCalls(
 }
 
 /**
- * Recursively collect call expressions within a line range.
+ * Recursively collect function calls within a line range.
+ *
+ * tree-sitter-pike represents calls as `postfix_expr` nodes that contain an
+ * `argument_list` child. There is no `call_expression` node type. The callee
+ * is extracted from the first child of the `postfix_expr` (which may itself be
+ * a nested `postfix_expr` for method chains like `obj->method(args)`).
  */
 function collectCallExpressions(
   node: Node,
@@ -214,52 +219,189 @@ function collectCallExpressions(
     const child = node.child(i);
     if (!child) continue;
 
-    // Skip nodes outside the target range
+    // Skip nodes outside the target range.
     if (child.endPosition.row < startLine) continue;
     if (child.startPosition.row > endLine) break;
 
-    if (child.type === "call_expression") {
-      // The callee is the first named child (the function being called)
-      const callee = child.firstChild;
-      if (callee) {
-        const calleeName = callee.text;
-        if (calleeName && !seen.has(calleeName)) {
-          // Try to resolve the callee to its declaration
-          const calleeDecl = resolveCallee(
-            calleeName,
-            table,
-            uri,
-            child.startPosition.row,
-            workspaceIndex,
-          );
-          if (calleeDecl) {
-            const key = `${calleeDecl.uri}:${calleeDecl.decl.nameRange.start.line}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              results.push({
-                to: calleeDecl.item,
-                fromRanges: [{
-                  start: {
-                    line: child.startPosition.row,
-                    character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column),
-                  },
-                  end: {
-                    line: child.startPosition.row,
-                    character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) + calleeName.length,
-                  },
-                }],
-              });
-            }
+    // Detect function calls: postfix_expr with "(" child.
+    if (child.type === "postfix_expr" && isCallPostfixExpr(child)) {
+      const calleeName = extractCalleeName(child);
+      if (calleeName) {
+        const calleeDecl = resolveCallee(
+          calleeName,
+          table,
+          uri,
+          child.startPosition.row,
+          workspaceIndex,
+        );
+        if (calleeDecl) {
+          const key = `${calleeDecl.uri}:${calleeDecl.decl.nameRange.start.line}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            // The callee name's start position within the postfix_expr.
+            const calleeNode = findCalleeIdentifierNode(child);
+            const fromLine = calleeNode?.startPosition.row ?? child.startPosition.row;
+            const fromCol = calleeNode?.startPosition.column ?? child.startPosition.column;
+            const nameLength = calleeNode?.text.length ?? calleeName.length;
+            results.push({
+              to: calleeDecl.item,
+              fromRanges: [{
+                start: {
+                  line: fromLine,
+                  character: utf8ToUtf16(lines[fromLine] ?? '', fromCol),
+                },
+                end: {
+                  line: fromLine,
+                  character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) + nameLength,
+                },
+              }],
+            });
           }
         }
       }
     }
 
-    // Recurse into children
+    // Recurse into children.
     collectCallExpressions(
       child, startLine, endLine, table, uri, workspaceIndex, results, seen, lines,
     );
   }
+}
+
+/**
+ * Check whether a postfix_expr node represents a function/method call.
+ *
+ * tree-sitter-pike represents calls as postfix_expr with `(` as a direct
+ * child. When arguments are present, an argument_list sits between `(` and `)`.
+ * When there are no arguments, `(` and `)` are the only bracketing children.
+ */
+function isCallPostfixExpr(node: Node): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    if (node.child(i)?.type === "(") return true;
+  }
+  return false;
+}
+
+/**
+ * Extract the callee name from a postfix_expr call node.
+ *
+ * tree-sitter-pike structures:
+ *   Simple call: postfix_expr(postfix_expr(primary_expr(identifier_expr(id)), "(", ...))
+ *   Method call: postfix_expr(postfix_expr(inner, "->", id), "(", ...))
+ *
+ * The first child of the outer postfix_expr is the callee expression.
+ * For method calls, the callee identifier follows "->" in the child.
+ */
+function extractCalleeName(node: Node): string | null {
+  const callee = node.children[0];
+  if (!callee) return null;
+
+  // For method chains (obj->method), look for "->" operator and take
+  // the identifier after it. The callee child is a postfix_expr containing
+  // the chain.
+  if (callee.type === "postfix_expr") {
+    return extractCalleeFromChain(callee);
+  }
+
+  // Bare identifier (shouldn't normally happen, but handle defensively).
+  if (callee.type === "identifier") return callee.text;
+
+  return null;
+}
+
+/**
+ * Given the first child of a call postfix_expr (which is always a
+ * postfix_expr itself), extract the callee name.
+ *
+ * For simple calls like helper():
+ *   postfix_expr -> primary_expr -> identifier_expr -> identifier
+ *
+ * For method calls like obj->method():
+ *   postfix_expr(postfix_expr(...), "->", identifier)
+ *   The callee is the identifier after "->".
+ *
+ * For chained calls like getDog()->bark():
+ *   postfix_expr(postfix_expr(postfix_expr(...), "(", ")"), "->", identifier)
+ *   Same: identifier after "->".
+ */
+function extractCalleeFromChain(node: Node): string | null {
+  // If this node has "->" or ".", the callee is the identifier after it.
+  for (let i = 0; i < node.childCount - 1; i++) {
+    const child = node.child(i);
+    if (child?.type === "->" || child?.type === ".") {
+      const next = node.child(i + 1);
+      if (next?.type === "identifier") return next.text;
+    }
+  }
+
+  // No "->" or "." — this is a simple call. Drill to the innermost identifier.
+  // Structure: postfix_expr -> primary_expr -> identifier_expr -> identifier
+  const inner = node.child(0);
+  if (!inner) return null;
+
+  if (inner.type === "primary_expr") {
+    const idExpr = inner.namedChild(0);
+    if (idExpr?.type === "identifier_expr") {
+      return idExpr.childForFieldName("name")?.text ?? idExpr.namedChild(0)?.text ?? null;
+    }
+    if (idExpr?.type === "identifier") return idExpr.text;
+  }
+
+  // Nested postfix_expr without "->" — drill further.
+  if (inner.type === "postfix_expr") {
+    return extractCalleeFromChain(inner);
+  }
+
+  return null;
+}
+
+/**
+ * Find the AST node for the callee identifier in a postfix_expr,
+ * so we can report accurate source ranges for the fromRanges field.
+ */
+function findCalleeIdentifierNode(node: Node): Node | null {
+  const callee = node.children[0];
+  if (!callee) return null;
+
+  if (callee.type === "postfix_expr") {
+    return findCalleeIdNodeInChain(callee);
+  }
+  if (callee.type === "identifier") return callee;
+  return null;
+}
+
+/**
+ * Walk a callee postfix_expr chain to find the identifier node.
+ * For method calls, returns the identifier after "->".
+ * For simple calls, drills to the innermost identifier.
+ */
+function findCalleeIdNodeInChain(node: Node): Node | null {
+  // Method call: identifier after "->" or "."
+  for (let i = 0; i < node.childCount - 1; i++) {
+    const child = node.child(i);
+    if (child?.type === "->" || child?.type === ".") {
+      const next = node.child(i + 1);
+      if (next?.type === "identifier") return next;
+    }
+  }
+
+  // Simple call: drill to primary_expr -> identifier_expr -> identifier
+  const inner = node.child(0);
+  if (!inner) return null;
+
+  if (inner.type === "primary_expr") {
+    const idExpr = inner.namedChild(0);
+    if (idExpr?.type === "identifier_expr") {
+      return idExpr.childForFieldName("name") ?? idExpr.namedChild(0) ?? null;
+    }
+    if (idExpr?.type === "identifier") return idExpr;
+  }
+
+  if (inner.type === "postfix_expr") {
+    return findCalleeIdNodeInChain(inner);
+  }
+
+  return null;
 }
 
 /**

@@ -183,6 +183,15 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     const table = buildTable(state, uri, version);
     stopSpan("buildTable");
 
+    // Propagate assignedType through variable aliases.
+    // After extraction, variables initialized from other variables (e.g.,
+    // `Dog d2 = d1;`) have assignedType set to the variable name ("d1"),
+    // not the actual type ("Dog"). This pass looks up the initializer's
+    // assignedType from the symbol table and propagates it.
+    startSpan("propagateAssignedTypes");
+    propagateAssignedTypes(table);
+    stopSpan("propagateAssignedTypes");
+
     startSpan("wireInheritance");
     wireInheritance(table, options?.index, uri);
     bump("inheritanceWiringOps");
@@ -243,6 +252,41 @@ function buildTable(state: BuildState, uri: string, version: number): SymbolTabl
     declById: state.declMap,
     scopeById: state.scopeMap,
   };
+}
+
+/** Pass 2.5: propagate assignedType through variable aliases. */
+function propagateAssignedTypes(table: SymbolTable): void {
+  // Build a map of variable name → type for all declarations that have a
+  // resolved type (either declaredType or assignedType from constructor init).
+  const varTypes = new Map<string, string>();
+  for (const decl of table.declarations) {
+    if (decl.kind !== "variable") continue;
+    const type = resolveTypeName(decl);
+    if (type) {
+      varTypes.set(decl.name, type);
+    }
+  }
+
+  // For each declaration with an assignedType that matches a variable name
+  // in scope, replace it with that variable's resolved type.
+  // Limit propagation depth to prevent cycles (e.g., `mixed x = x;`).
+  const MAX_PASSES = 5;
+  for (let pass = 0; pass < MAX_PASSES; pass++) {
+    let changed = false;
+    for (const decl of table.declarations) {
+      if (decl.kind !== "variable") continue;
+      if (!decl.assignedType) continue;
+
+      // If assignedType is a known variable name, propagate its type.
+      const sourceType = varTypes.get(decl.assignedType);
+      if (sourceType && sourceType !== decl.assignedType) {
+        decl.assignedType = sourceType;
+        varTypes.set(decl.name, sourceType);
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
 }
 
 /** Pass 4: collect and resolve references. */
