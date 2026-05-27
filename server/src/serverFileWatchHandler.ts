@@ -62,20 +62,72 @@ function handleFileCreatedOrChanged(
   ctx: ServerContext,
   uri: string,
 ): void {
+  // Capture dependents BEFORE removing the file — removeFile clears the
+  // reverse-dependency map entries, so getDependents would return empty after.
+  const dependents = ctx.index.getDependents(uri);
+
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
+
+  // File not open in editor — the on-demand indexer will re-index it
+  // when cross-file queries need it (file watchers only provide URIs,
+  // not content). Open files are managed by the didChange handler.
+
+  // Invalidate and refresh open dependents so they pick up the external change.
+  propagateDependentInvalidation(ctx, dependents);
 }
 
 function handleFileDeleted(
   ctx: ServerContext,
   uri: string,
 ): void {
+  // Capture dependents before removing — same pattern as handleFileCreatedOrChanged.
+  const dependents = ctx.index.getDependents(uri);
+
   ctx.index.removeFile(uri);
   deleteTree(uri);
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
+
+  // Invalidate and refresh open dependents — they now have a broken dependency.
+  propagateDependentInvalidation(ctx, dependents);
+}
+
+/**
+ * Propagate invalidation to dependents after a file is removed or changed.
+ *
+ * Shared by handleFileCreatedOrChanged and handleFileDeleted. Invalidates
+ * each dependent's symbol table, clears pike/autodoc caches (so stale
+ * diagnostics don't get merged), and triggers diagnostic refresh for open
+ * dependents. Also requests a semantic token refresh.
+ */
+function propagateDependentInvalidation(
+  ctx: ServerContext,
+  dependents: Set<string>,
+): void {
+  if (dependents.size === 0) return;
+
+  for (const depUri of dependents) {
+    ctx.index.invalidate(depUri);
+    // Clear caches so stale pike diagnostics aren't merged.
+    ctx.pikeCache.delete(depUri);
+    ctx.autodocCache.delete(depUri);
+
+    const depDoc = ctx.documents.get(depUri);
+    if (depDoc) {
+      ctx.diagnosticManager.onDidChange(depUri);
+    }
+  }
+
+  if (ctx.clientSupportsSemanticTokensRefresh) {
+    try {
+      ctx.connection.languages.semanticTokens.refresh();
+    } catch {
+      // Connection may be closed during teardown
+    }
+  }
 }
 
 interface FileRename {

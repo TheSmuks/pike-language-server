@@ -167,14 +167,20 @@ export class DiagnosticManager {
 
     // Always publish parse diagnostics immediately (tree-sitter, no worker).
     // Only scan for ERROR nodes — buildSymbolTable is deferred to the debounced path.
+    // Merge with last known pike diagnostics so that existing pike diagnostics
+    // are not cleared while a debounced run is pending or skipped.
     try {
       const source = doc.getText();
       const tree = parse(source, uri);
       if (!this.disposed) {
-        const parseDiags = getParseDiagnostics(tree, source.split('\n'));
+        const lines = source.split('\n');
+        const parseDiags = getParseDiagnostics(tree, lines);
+        const cached = this.pikeCache.get(uri);
+        const pikeDiags = cached ? cached.diagnostics : [];
+        const merged = mergeDiagnostics(parseDiags, pikeDiags, tree, [], lines);
         this.connection.sendDiagnostics({
           uri,
-          diagnostics: parseDiags,
+          diagnostics: merged,
         });
       }
     } catch (err) {
