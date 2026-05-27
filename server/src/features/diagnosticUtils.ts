@@ -58,7 +58,7 @@ export function mergeDiagnostics(
 
   for (const pd of pikeDiags) {
     const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
-    const character = tree ? lineToColumn(tree, pd.line, lines) : 0;
+    const character = tree ? messageAwareColumn(tree, pd.line, pd.message, lines) : 0;
 
     let message = pd.message;
     if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
@@ -93,6 +93,115 @@ export function computeContentHash(source: string): string {
     hash = (hash * 1099511628211n) & 0xffffffffffffffffn;
   }
   return hash.toString(36);
+}
+
+// ---------------------------------------------------------------------------
+// messageAwareColumn
+// ---------------------------------------------------------------------------
+
+/**
+ * Common Pike error message patterns that embed identifier names.
+ * Each pattern captures a specific identifier that the diagnostic refers to.
+ * Ordered from most specific to least specific.
+ */
+const PIKE_MSG_PATTERNS: Array<{ re: RegExp; group: number }> = [
+  // "Undefined identifier: bark."
+  { re: /Undefined identifier:\s+(\w+)/, group: 1 },
+  // "Too few arguments to bark."
+  { re: /Too (?:few|many) arguments to (\w+)/, group: 1 },
+  // "Bad argument 1 to bark()."
+  { re: /Bad argument \d+ to (\w+)/, group: 1 },
+  // "Cannot call non-function in foo()."
+  { re: /Cannot call non-function in (\w+)/, group: 1 },
+  // "Class not found: 'MissingClass'."
+  { re: /Class not found:\s+'(\w+)'/, group: 1 },
+  // "No such index: 'bark'."
+  { re: /No such (?:index|member):\s+'(\w+)'/, group: 1 },
+  // "No such symbol: bark."
+  { re: /No such symbol:\s+(\w+)/, group: 1 },
+  // "Cannot index TYPE with..." — no useful identifier for column
+  // Generic fallback: capture the last quoted or backtick'd word
+  { re: /'(\w+)'/, group: 1 },
+];
+
+/**
+ * Find the column of the specific token referenced in a Pike error message.
+ *
+ * Pike diagnostics only report line numbers. When a parse tree is available,
+ * this function extracts the identifier from the message text and locates it
+ * on the diagnostic line using tree-sitter, providing column-level precision.
+ *
+ * Falls back to `lineToColumn` (first meaningful token on the line) when the
+ * message doesn't contain an identifiable token or the token isn't found on
+ * the line.
+ */
+export function messageAwareColumn(
+  tree: Tree,
+  line: number,
+  message: string,
+  lines?: string[],
+): number {
+  const lspLine = Math.max(0, line);
+
+  // Extract candidate identifier from the message.
+  let identifier: string | null = null;
+  for (const { re, group } of PIKE_MSG_PATTERNS) {
+    const match = message.match(re);
+    if (match && match[group]) {
+      identifier = match[group];
+      break;
+    }
+  }
+
+  if (!identifier) return lineToColumn(tree, line, lines);
+
+  // Search the source line text for the identifier occurrence.
+  const lineText = lines?.[lspLine];
+  if (lineText !== undefined) {
+    const idx = lineText.indexOf(identifier);
+    if (idx >= 0) return idx;
+  }
+
+  // Fallback: use tree-sitter to walk nodes on this line and find the
+  // first node whose text matches the identifier.
+  const root = tree.rootNode;
+  const cursor = root.walk();
+  let result = -1;
+
+  // Depth-first search for a node on the target line matching the identifier.
+  const stack: number[] = [0]; // child index stack for DFS
+  const nodeStack: any[] = [root];
+
+  while (nodeStack.length > 0 && result < 0) {
+    const node = nodeStack[nodeStack.length - 1];
+    const childIdx = stack[stack.length - 1] ?? 0;
+
+    if (childIdx < node.childCount) {
+      stack[stack.length - 1] = childIdx + 1;
+      const child = node.child(childIdx);
+
+      // Skip nodes that don't overlap with the target line
+      if (child.startPosition.row > lspLine) continue;
+      if (child.endPosition.row < lspLine) continue;
+
+      // Check if this node matches
+      if (child.startPosition.row === lspLine && child.text === identifier) {
+        result = child.startPosition.column;
+        break;
+      }
+
+      // Recurse into children
+      nodeStack.push(child);
+      stack.push(0);
+    } else {
+      nodeStack.pop();
+      stack.pop();
+    }
+  }
+
+  cursor.delete();
+
+  return result >= 0 ? result : lineToColumn(tree, line, lines);
 }
 
 // ---------------------------------------------------------------------------

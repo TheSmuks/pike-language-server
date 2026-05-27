@@ -9,6 +9,7 @@ import { type ModuleResolver } from "./moduleResolver";
 import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
+import { resolveTypeName } from "./scope-helpers";
 
 // ---------------------------------------------------------------------------
 // Context interface
@@ -91,6 +92,41 @@ export async function resolveCrossFileDefinition(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Scope-aware cross-file filtering helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether a declaration is a class member (lives inside a class scope).
+ */
+function isClassMember(decl: Declaration, table: SymbolTable): boolean {
+  // Only method/variable/constant/enum_member can be class members.
+  if (decl.kind !== "method" && decl.kind !== "variable" &&
+      decl.kind !== "constant" && decl.kind !== "enum_member") {
+    return false;
+  }
+  // Find a class scope whose declarations[] contains this decl's ID.
+  return table.scopes.some(
+    s => s.kind === "class" && s.declarations.includes(decl.id),
+  );
+}
+
+/**
+ * Find the class name that owns a member declaration.
+ * Returns the class name, or null if the declaration is not a class member.
+ */
+function findOwningClassName(decl: Declaration, table: SymbolTable): string | null {
+  const classBodyScope = table.scopes.find(
+    s => s.kind === "class" && s.declarations.includes(decl.id),
+  );
+  if (!classBodyScope) return null;
+
+  const classDecl = table.declarations.find(
+    d => d.kind === "class" && d.scopeId === classBodyScope.parentId,
+  );
+  return classDecl?.name ?? null;
+}
+
 /**
  * Get all references to a declaration across the workspace.
  * Extends single-file references with cross-file references.
@@ -134,21 +170,43 @@ export function getCrossFileReferences(
     // explicitly guards against stale or inconsistently updated graph entries.
     if (!depEntry.dependencies.has(uri)) continue;
 
-    for (const ref of depEntry.symbolTable.references) {
-      // Match by name only. Inherited/imported symbols have resolvesTo=null because
-      // single-file analysis cannot resolve cross-file references. Locally-resolved
-      // references (resolvesTo !== null) are excluded because they point to a
-      // different declaration in the dependent file, not the inherited one.
-      //
-      // Known simplification: this is a name-only match, not a type-aware match.
-      // Two different classes with identically-named members (e.g., Dog.speak and
-      // Cat.speak) will both match. Pike's last-wins inherit semantics would need
-      // type-based disambiguation across the full inherit graph. The source-file
-      // filter (depEntry.dependencies.has(uri)) mitigates false positives by only
-      // considering files that actually depend on this one.
+    // Collect all references matching by name in the dependent file.
+    // Then apply scope-aware filtering for inherited member symbols.
+    const depTable = depEntry.symbolTable;
+    const matchingRefs: Reference[] = [];
+    for (const ref of depTable.references) {
+      // Name match + must be unresolved (inherited/imported symbols have
+      // resolvesTo=null because single-file analysis can't resolve them).
+      // Locally-resolved references point to a different declaration in the
+      // dependent file, not the inherited one.
       if (ref.name === target.name && ref.resolvesTo === null) {
-        results.push({ uri: depUri, ref });
+        matchingRefs.push(ref);
       }
+    }
+
+    // For class members (methods, variables in class scope): apply
+    // scope-aware filtering. If the target is a class member and the
+    // reference uses arrow/dot access, check that the receiver's type
+    // matches the target's owning class. This prevents renaming Dog.speak
+    // from catching cat->speak references when both Dog and Cat define speak.
+    const targetIsMember = isClassMember(target, entry.symbolTable);
+    for (const ref of matchingRefs) {
+      if (targetIsMember && (ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName) {
+        // Look up the LHS variable in the dependent's symbol table.
+        const lhsDecl = depTable.declarations.find(
+          d => d.name === ref.lhsName && (d.kind === 'variable' || d.kind === 'parameter'),
+        );
+        if (lhsDecl) {
+          const lhsType = resolveTypeName(lhsDecl);
+          if (lhsType) {
+            // Find the owning class of the target member.
+            const owningClass = findOwningClassName(target, entry.symbolTable);
+            // If we can determine both types and they don't match, skip.
+            if (owningClass && lhsType !== owningClass) continue;
+          }
+        }
+      }
+      results.push({ uri: depUri, ref });
     }
   }
 
@@ -282,26 +340,39 @@ async function resolveUnresolvedReference(
   ref: Reference,
   table: SymbolTable,
   uri: string,
+  visited?: Set<string>,
+  depth?: number,
 ): Promise<{ uri: string; decl: Declaration } | null> {
-  // Try to find the name through explicit inheritance/import chains.
-  //
-  // Known limitation: only direct (one-hop) inherit targets are searched.
-  // Transitive chains (A inherits B which inherits C) are not followed here.
-  // Full transitive resolution would require recursive lookups through the
-  // inherit graph with cycle detection. Deferred until a concrete use case
-  // demonstrates the need.
+  const MAX_DEPTH = 10;
+  const seen = visited ?? new Set<string>();
+  const currentDepth = depth ?? 0;
+
+  // Cycle detection: don't revisit files already on the resolution path.
+  if (seen.has(uri)) return null;
+  seen.add(uri);
+
+  // Depth limit: prevent unbounded recursion on deeply nested inherit chains.
+  if (currentDepth > MAX_DEPTH) return null;
+
+  // Try to find the name through explicit inheritance/import chains,
+  // recursively following transitive inherits.
   for (const decl of table.declarations) {
     if (decl.kind === "inherit" || decl.kind === "import") {
       const target = await resolveInheritTarget(ctx, decl, uri);
       if (target) {
-        // Check if the target file has a declaration matching the reference name.
         const targetEntry = getFile(ctx, target.uri);
         if (targetEntry?.symbolTable) {
+          // Check direct declarations in the target file.
           for (const targetDecl of targetEntry.symbolTable.declarations) {
             if (targetDecl.name === ref.name) {
               return { uri: target.uri, decl: targetDecl };
             }
           }
+          // Recurse: check what the target itself inherits.
+          const transitive = await resolveUnresolvedReference(
+            ctx, ref, targetEntry.symbolTable, target.uri, seen, currentDepth + 1,
+          );
+          if (transitive) return transitive;
         }
       }
     }

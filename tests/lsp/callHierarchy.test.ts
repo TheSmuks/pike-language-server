@@ -8,10 +8,8 @@
  * For getOutgoingCalls, a real tree-sitter parse is required to find
  * call nodes within a function body.
  *
- * Known limitation: tree-sitter-pike represents function calls as
- * postfix_expr nodes (not call_expression). The callHierarchy provider
- * currently searches for call_expression, so outgoing calls always
- * return empty. Tests document this behavior.
+ * Outgoing calls detect postfix_expr nodes with argument_list children,
+ * matching tree-sitter-pike's AST representation for function calls.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -346,10 +344,8 @@ describe("getOutgoingCalls", () => {
     tree.delete();
   });
 
-  // tree-sitter-pike represents calls as postfix_expr, not call_expression.
-  // getOutgoingCalls searches for call_expression nodes, so it currently
-  // returns empty even when calls exist. This test documents the behavior.
-  test("returns empty for function with calls (known limitation: postfix_expr mismatch)", () => {
+  // Outgoing calls now correctly resolve through postfix_expr nodes.
+  test("finds outgoing call to helper function", () => {
     const src = [
       "void caller() {",
       "  helper();",
@@ -384,10 +380,132 @@ describe("getOutgoingCalls", () => {
     };
 
     const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
-    // Currently returns [] because call_expression node type doesn't exist
-    // in tree-sitter-pike. Calls are postfix_expr with parenthesized args.
-    // TODO: Fix collectCallExpressions to search for postfix_expr instead.
-    expect(result).toEqual([]);
+    assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
+    assert(result[0].to.name === "helper", `Expected callee "helper", got "${result[0].to.name}"`);
+    tree.delete();
+  });
+
+  // Deduplication: multiple calls to the same function produce one outgoing entry.
+  test("deduplicates multiple calls to the same function", () => {
+    const src = [
+      "void caller() {",
+      "  helper();",
+      "  helper();",
+      "}",
+    ].join("\n");
+    const tree = parser.parse(src);
+    assert(tree, "Parse failed");
+
+    const caller = makeDecl({
+      id: 1,
+      name: "caller",
+      kind: "function",
+      nameRange: { start: { line: 0, character: 5 }, end: { line: 0, character: 11 } },
+      range: { start: { line: 0, character: 0 }, end: { line: 3, character: 1 } },
+    });
+    const helper = makeDecl({
+      id: 2,
+      name: "helper",
+      kind: "function",
+      nameRange: { start: { line: 99, character: 5 }, end: { line: 99, character: 11 } },
+      range: { start: { line: 99, character: 0 }, end: { line: 100, character: 1 } },
+    });
+    const table = makeTable([caller, helper]);
+    const index = makeWorkspaceIndex({});
+
+    const item: CallHierarchyItem = {
+      name: "caller",
+      kind: 12,
+      uri: "file:///test/test.pike",
+      range: caller.range,
+      selectionRange: caller.nameRange,
+    };
+
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    assert(result.length === 1, `Expected 1 deduplicated outgoing call, got ${result.length}`);
+    tree.delete();
+  });
+
+  // Nested calls: foo(bar()) should produce two outgoing entries.
+  test("finds nested calls", () => {
+    const src = [
+      "void caller() {",
+      "  foo(bar());",
+      "}",
+    ].join("\n");
+    const tree = parser.parse(src);
+    assert(tree, "Parse failed");
+
+    const caller = makeDecl({
+      id: 1,
+      name: "caller",
+      kind: "function",
+      nameRange: { start: { line: 0, character: 5 }, end: { line: 0, character: 11 } },
+      range: { start: { line: 0, character: 0 }, end: { line: 2, character: 1 } },
+    });
+    const foo = makeDecl({
+      id: 2,
+      name: "foo",
+      kind: "function",
+      nameRange: { start: { line: 50, character: 5 }, end: { line: 50, character: 8 } },
+      range: { start: { line: 50, character: 0 }, end: { line: 51, character: 1 } },
+    });
+    const bar = makeDecl({
+      id: 3,
+      name: "bar",
+      kind: "function",
+      nameRange: { start: { line: 60, character: 5 }, end: { line: 60, character: 8 } },
+      range: { start: { line: 60, character: 0 }, end: { line: 61, character: 1 } },
+    });
+    const table = makeTable([caller, foo, bar]);
+    const index = makeWorkspaceIndex({});
+
+    const item: CallHierarchyItem = {
+      name: "caller",
+      kind: 12,
+      uri: "file:///test/test.pike",
+      range: caller.range,
+      selectionRange: caller.nameRange,
+    };
+
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const names = result.map(r => r.to.name).sort();
+    assert(names.length === 2, `Expected 2 outgoing calls, got ${names.length}: ${names}`);
+    assert(names[0] === "bar", `Expected "bar", got "${names[0]}"`);
+    assert(names[1] === "foo", `Expected "foo", got "${names[1]}"`);
+    tree.delete();
+  });
+
+  // Unresolved callee: function not in the symbol table — should not produce an entry.
+  test("skips unresolved callees", () => {
+    const src = [
+      "void caller() {",
+      "  unknown_func();",
+      "}",
+    ].join("\n");
+    const tree = parser.parse(src);
+    assert(tree, "Parse failed");
+
+    const caller = makeDecl({
+      id: 1,
+      name: "caller",
+      kind: "function",
+      nameRange: { start: { line: 0, character: 5 }, end: { line: 0, character: 11 } },
+      range: { start: { line: 0, character: 0 }, end: { line: 2, character: 1 } },
+    });
+    const table = makeTable([caller]);
+    const index = makeWorkspaceIndex({});
+
+    const item: CallHierarchyItem = {
+      name: "caller",
+      kind: 12,
+      uri: "file:///test/test.pike",
+      range: caller.range,
+      selectionRange: caller.nameRange,
+    };
+
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    assert(result.length === 0, `Expected 0 outgoing calls for unresolved, got ${result.length}`);
     tree.delete();
   });
 });
