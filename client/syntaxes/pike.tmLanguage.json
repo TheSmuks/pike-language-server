@@ -8,10 +8,10 @@
 		{ "include": "#strings" },
 		{ "include": "#preprocessor" },
 		{ "include": "#constants" },
+		{ "include": "#declarations" },
 		{ "include": "#types" },
 		{ "include": "#keywords" },
 		{ "include": "#numbers" },
-		{ "include": "#declarations" },
 		{ "include": "#scope-access" },
 		{ "include": "#member-access" },
 		{ "include": "#type-cast" },
@@ -103,9 +103,9 @@
 		"preprocessor": {
 			"patterns": [
 				{
-					"comment": "Preprocessor directives",
+					"comment": "Preprocessor directives — must be anchored to line start",
 					"name": "keyword.control.directive.pike",
-					"match": "#\\s*(if|ifdef|ifndef|else|elif|endif|define|undef|include|string|error|warning|pike|charset|pragma|require|elifdef|elifndef|elseif)\\b"
+					"match": "^\\s*#\\s*(if|ifdef|ifndef|else|elif|endif|define|undef|include|string|error|warning|pike|charset|pragma|require|elifdef|elifndef|elseif)\\b"
 				}
 			]
 		},
@@ -168,14 +168,14 @@
 					"match": "\\b(0[xX][0-9a-fA-F]+|0[oO][0-7]+|0[bB][01]+)\\b"
 				},
 				{
+					"comment": "Float literals — must come before integer to prevent leading digit being consumed",
+					"name": "constant.numeric.float.pike",
+					"match": "\\b[0-9][0-9_]*\\.[0-9_]*([eE][+-]?[0-9_]+)?|(?<!\\.)\\.[0-9][0-9_]*([eE][+-]?[0-9_]+)?|\\b[0-9][0-9_]*[eE][+-]?[0-9_]+"
+				},
+				{
 					"comment": "Integer literals",
 					"name": "constant.numeric.pike",
 					"match": "\\b[0-9][0-9_]*\\b"
-				},
-				{
-					"comment": "Float literals",
-					"name": "constant.numeric.float.pike",
-					"match": "\\b[0-9][0-9_]*\\.[0-9_]*([eE][+-]?[0-9_]+)?|\\b\\.[0-9][0-9_]*([eE][+-]?[0-9_]+)?|\\b[0-9][0-9_]*[eE][+-]?[0-9_]+"
 				}
 			]
 		},
@@ -183,9 +183,9 @@
 		"operators": {
 			"patterns": [
 				{
-					"comment": "Operators",
+					"comment": "Operators — multi-char alternatives must precede single-char to prevent partial matches (e.g. -> must beat -)",
 					"name": "keyword.operator.pike",
-					"match": "\\?->|->>|->\\?|[+\\-*/%]=?|\\+\\+|--|&&|\\|\\||!|==|!=|<=|>=|<|>|&|\\||\\^|~|\\.\\.\\.|\\.\\.|::|->|<<|>>|<<=|>>="
+					"match": "\\?->|->>|->\\?|<<=|>>=|[+\\-*/%]=|\\+\\+|--|&&|\\|\\||==|!=|<=|>=|<<|>>|\\.{3}|\\.\\.|::|->|[+\\-*/%]|[!<>&\\|^~=]"
 				}
 			]
 		},
@@ -204,9 +204,10 @@
 			"patterns": [
 				{
 					"comment": "Function declaration with qualified/complex type: array(int) name(, mapping(string:int) name(, string* name(, int|string name(",
-					"match": "(?:\\b(?:void|mixed|int|float|string|array|mapping|multiset|object|program|function|type|zero|auto)\\b(?:\\s*\\*|\\s*\\|\\s*\\b(?:void|mixed|int|float|string|array|mapping|multiset|object|program|function|type|zero|auto)\\b|\\s*\\([^)]*\\))*(?:\\s*\\*)?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
+					"match": "(\\b(?:void|mixed|int|float|string|array|mapping|multiset|object|program|function|type|zero|auto)\\b(?:\\s*\\*|\\s*\\|\\s*\\b(?:void|mixed|int|float|string|array|mapping|multiset|object|program|function|type|zero|auto)\\b|\\s*\\((?:[^()]|\\([^)]*\\))*\\))*(?:\\s*\\*)?)\\s+([a-zA-Z_][a-zA-Z0-9_]*)\\s*(?=\\()",
 					"captures": {
-						"1": { "name": "entity.name.function.pike" }
+						"1": { "name": "storage.type.pike" },
+						"2": { "name": "entity.name.function.pike" }
 					}
 				},
 				{
