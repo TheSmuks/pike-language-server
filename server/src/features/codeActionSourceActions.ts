@@ -53,25 +53,15 @@ export function organizeImports(text: string): TextEdit[] {
   }
 
   // Replace the import block
-  const edits: TextEdit[] = [];
-  // Delete all existing import lines
-  for (const { line } of importLines) {
-    edits.push({
+  const edits: TextEdit[] = [
+    {
       range: {
-        start: { line, character: 0 },
-        end: { line: line + 1, character: 0 },
+        start: { line: firstImport, character: 0 },
+        end: { line: lastImport + 1, character: 0 },
       },
-      newText: "",
-    });
-  }
-  // Insert sorted imports at the first import position
-  edits.push({
-    range: {
-      start: { line: firstImport, character: 0 },
-      end: { line: firstImport, character: 0 },
+      newText: sorted.join("\n") + "\n",
     },
-    newText: sorted.join("\n") + "\n",
-  });
+  ];
 
   return edits;
 }

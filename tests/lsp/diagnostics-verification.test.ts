@@ -124,6 +124,7 @@ describe.skipIf(!pikeAvailable)("V1: Worker thrashing prevention", () => {
   let ts: InstrumentedServer;
 
   beforeEach(async () => {
+    changeVersion = 100;
     ts = await createInstrumentedServer();
   });
 

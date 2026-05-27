@@ -12,7 +12,7 @@ STAGE="$ROOT/out/.vsix-stage"
 # Strip any existing build suffix (+NNNNNNN) to prevent doubling when
 # extension.package.json was left with a build-suffixed version from a
 # previous interrupted run or manual edit.
-RAW_VERSION=$(node -e "console.log(require('$ROOT/extension.package.json').version)")
+RAW_VERSION=$(node -e "const fs=require('fs'),p=require('path');console.log(JSON.parse(fs.readFileSync(p.join('$ROOT','extension.package.json'),'utf8')).version)")
 VERSION="${RAW_VERSION%%+*}"
 VERSION="${VERSION%%-*}"
 BUILD_NUM=$(date +%s | tail -c 7)
@@ -47,9 +47,11 @@ mkdir -p "$STAGE"
 
 # Copy extension manifest as package.json with build number in version
 node -e "
-  const pkg = require('$ROOT/extension.package.json');
+  const fs = require('fs');
+  const p = require('path');
+  const pkg = JSON.parse(fs.readFileSync(p.join('$ROOT','extension.package.json'), 'utf8'));
   pkg.version = '${FULL_VERSION}';
-  require('fs').writeFileSync('$STAGE/package.json', JSON.stringify(pkg, null, 2) + '\n');
+  fs.writeFileSync(p.join('$STAGE','package.json'), JSON.stringify(pkg, null, 2) + '\n');
 "
 
 # Copy extension client

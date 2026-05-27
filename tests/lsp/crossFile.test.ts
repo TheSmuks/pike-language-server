@@ -31,7 +31,7 @@ async function indexFile(index: WorkspaceIndex, name: string): Promise<void> {
   const uri = corpusUri(name);
   const content = readCorpus(name);
   const tree = parse(content);
-  await await index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
+  await index.upsertFile(uri, 1, tree, content, ModificationSource.DidOpen);
 }
 
 // ---------------------------------------------------------------------------

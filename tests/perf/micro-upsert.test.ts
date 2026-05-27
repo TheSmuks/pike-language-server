@@ -98,7 +98,10 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
     console.log("  =================================\n");
 
     for (const t of trees) t.delete();
-    expect(true).toBe(true);
+    // Verify that buildSymbolTable actually produced results
+    const sampleTable = buildSymbolTable(parse(content), "file:///tmp/micro/verify.pike", 1);
+    expect(sampleTable.scopes.length).toBeGreaterThan(0);
+    expect(sampleTable.declarations.length).toBeGreaterThan(0);
   });
 
   test("buildSymbolTable phase breakdown", () => {
@@ -126,7 +129,11 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
     console.log(`  With PIKE_LSP_PROFILE=1, check the profiler report for per-phase breakdown.`);
     console.log("  ===============================\n");
 
+    // Verify buildSymbolTable actually produces results
+    const sampleResult = buildSymbolTable(parse(content), "file:///tmp/perf/verify.pike", 1);
+    expect(sampleResult).toBeDefined();
+    expect(sampleResult.scopes.length).toBeGreaterThan(0);
+
     for (const t of trees) t.delete();
-    expect(true).toBe(true);
   });
 });

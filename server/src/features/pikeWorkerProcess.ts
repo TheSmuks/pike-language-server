@@ -366,6 +366,8 @@ export abstract class PikeWorkerProcess {
     // Reset tracking
     this.requestCount = 0;
     this.startTime = Date.now();
+    this.buffer = "";
+    this.consecutiveMalformed = 0;
   }
 
   /**

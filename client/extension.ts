@@ -25,6 +25,7 @@ import {
 import {
   setErrorCount,
   onErrorCountChange,
+  resetListeners,
 } from "./errorNotificationState";
 
 let client: LanguageClient | undefined;
@@ -175,7 +176,40 @@ function getSettings(): Record<string, unknown> {
   };
 }
 
-// ─── Extension lifecycle ────────────────────────────────────────────────────
+/** Create a state-change handler with crash auto-restart and exponential backoff. */
+function handleClientStateChange(label: string): (event: StateChangeEvent) => void {
+  let restartAttempt = 0;
+  const maxRestartAttempts = 3;
+  return (event: StateChangeEvent) => {
+    updateStatusBar(event.newState);
+    const stateLabel = event.newState === State.Starting ? "Starting"
+      : event.newState === State.Running ? "Running"
+      : event.newState === State.Stopped ? "Stopped"
+      : `unknown(${event.newState})`;
+    log("info", "CLIENT", `[${label}] state change: ${stateLabel}`);
+
+    // Auto-restart on unexpected server crash (Stopped without explicit deactivate).
+    if (event.newState === State.Stopped && event.oldState === State.Running) {
+      if (restartAttempt < maxRestartAttempts) {
+        restartAttempt++;
+        const delayMs = restartAttempt * 2000; // 2s, 4s, 6s backoff
+        log("warn", "CLIENT", `Server crashed — restarting in ${delayMs}ms (attempt ${restartAttempt}/${maxRestartAttempts})`);
+        setTimeout(() => {
+          if (client) {
+            client.start();
+          }
+        }, delayMs);
+      } else {
+        log("error", "CLIENT", `Server crashed ${maxRestartAttempts} times — giving up. Reload window to retry.`);
+      }
+    }
+
+    // Reset restart counter on successful start.
+    if (event.newState === State.Running) {
+      restartAttempt = 0;
+    }
+  };
+}
 
 export function activate(context: vscode.ExtensionContext): void {
   // Clear stale output from previous activations (OutputChannel content
@@ -266,38 +300,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   // Listen for state transitions to update status bar.
-  let restartAttempt = 0;
-  const maxRestartAttempts = 3;
   context.subscriptions.push(
-    client.onDidChangeState((event: StateChangeEvent) => {
-    updateStatusBar(event.newState);
-    const label = event.newState === State.Starting ? "Starting"
-      : event.newState === State.Running ? "Running"
-      : event.newState === State.Stopped ? "Stopped"
-      : `unknown(${event.newState})`;
-    log("info", "CLIENT", `[init] state change: ${label}`);
-
-    // Auto-restart on unexpected server crash (Stopped without explicit deactivate).
-    if (event.newState === State.Stopped && event.oldState === State.Running) {
-      if (restartAttempt < maxRestartAttempts) {
-        restartAttempt++;
-        const delayMs = restartAttempt * 2000; // 2s, 4s, 6s backoff
-        log("warn", "CLIENT", `Server crashed — restarting in ${delayMs}ms (attempt ${restartAttempt}/${maxRestartAttempts})`);
-        setTimeout(() => {
-          if (client) {
-            client.start();
-          }
-        }, delayMs);
-      } else {
-        log("error", "CLIENT", `Server crashed ${maxRestartAttempts} times — giving up. Reload window to retry.`);
-      }
-    }
-
-    // Reset restart counter on successful start.
-    if (event.newState === State.Running) {
-      restartAttempt = 0;
-    }
-  }),
+    client.onDidChangeState(handleClientStateChange("init")),
   );
 
   log("info", "EXT", "[init] step 5/6: starting server process...");
@@ -382,9 +386,7 @@ export function activate(context: vscode.ExtensionContext): void {
               outputChannel,
             },
           );
-          const stateDisposable = client.onDidChangeState((ev: StateChangeEvent) => {
-            updateStatusBar(ev.newState);
-          });
+          const stateDisposable = client.onDidChangeState(handleClientStateChange("restart"));
           context.subscriptions.push(stateDisposable);
 
           // Re-register notification handlers on the new client.
@@ -425,6 +427,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
 export function deactivate(): Thenable<void> | undefined {
   log("info", "EXT", "deactivate() — shutting down");
+  resetListeners();
   if (!client) return undefined;
   const c = client;
   return c.stop().then(() => {
