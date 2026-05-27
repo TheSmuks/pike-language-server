@@ -62,9 +62,46 @@
         ],
         "aliases": [
           "Pike"
-        ]
+        ],
+        "configuration": "./client/language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "pike",
+        "scopeName": "source.pike",
+        "path": "./client/syntaxes/pike.tmLanguage.json"
+      }
+    ],
+    "semanticTokenTypes": [
+      {
+        "id": "builtinFunction",
+        "superType": "function",
+        "description": "Built-in Pike functions provided by the runtime or predef"
+      }
+    ],
+    "semanticTokenModifiers": [
+      {
+        "id": "mutable",
+        "description": "Mutable variables that can be reassigned"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "pike",
+        "scopes": {
+          "builtinFunction": ["support.function.builtin.pike"],
+          "variable.mutable": ["variable.other.mutable.pike"]
+        }
+      }
+    ],
+    "configurationDefaults": {
+      "[pike]": {
+        "editor.tabSize": 4,
+        "editor.insertSpaces": true,
+        "editor.detectIndentation": false
+      }
+    },
     "configuration": {
       "title": "Pike Language Server",
       "properties": {
