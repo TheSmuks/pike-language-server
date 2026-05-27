@@ -357,13 +357,24 @@ function containsRangeSimple(
  * with kind "parameter" inside the function's scope.
  */
 function extractParameterNames(decl: Declaration, table: SymbolTable): string[] {
+  // Find the smallest (most specific) function/block scope that contains the
+  // declaration. Using the first match could return an outer/enclosing scope
+  // when nested functions exist — we want the most specific one.
+  let bestParams: string[] = [];
+  let bestScopeRange: { start: { line: number; character: number }; end: { line: number; character: number } } | undefined;
+
   for (const scope of table.scopes) {
-    if (scope.kind === "function" || scope.kind === "block") {
-      const params = collectParamsFromFunctionScope(scope, decl, table);
-      if (params.length > 0) return params;
+    if (scope.kind !== "function" && scope.kind !== "block") continue;
+    const params = collectParamsFromFunctionScope(scope, decl, table);
+    if (params.length === 0) continue;
+    // Keep this scope if it is the first match or strictly smaller than the
+    // current best (i.e. its range is contained within the best's range).
+    if (!bestScopeRange || containsRangeSimple(bestScopeRange, scope.range)) {
+      bestParams = params;
+      bestScopeRange = scope.range;
     }
   }
-  return [];
+  return bestParams;
 }
 
 /** Collect parameter names from a scope whose range overlaps the declaration. */

@@ -68,9 +68,20 @@ function getOrComputeRefCounts(
 
   // Evict stale entries for other URIs to bound memory
   if (refCountCache.size > 100) {
+    // First pass: evict stale entries (older generation)
     for (const [cachedUri, entry] of refCountCache) {
       if (entry.generation < currentGen) {
         refCountCache.delete(cachedUri);
+      }
+    }
+    // Second pass: if still oversized, evict oldest (first-inserted) entries
+    if (refCountCache.size > 100) {
+      const excess = refCountCache.size - 50;
+      let evicted = 0;
+      for (const cachedUri of refCountCache.keys()) {
+        if (evicted >= excess) break;
+        refCountCache.delete(cachedUri);
+        evicted++;
       }
     }
   }

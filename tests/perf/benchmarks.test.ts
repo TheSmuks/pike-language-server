@@ -79,6 +79,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.completion_cold * SLACK);
     expect(result).toBeDefined();
+    expect((result as { items?: unknown[] }).items!.length).toBeGreaterThan(0);
   });
 
   test("completion (warm) < baseline", async () => {
@@ -94,6 +95,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.completion_warm * SLACK);
     expect(result).toBeDefined();
+    expect((result as { items?: unknown[] }).items!.length).toBeGreaterThan(0);
   });
 
   test("hover < baseline", async () => {
@@ -107,6 +109,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.hover * SLACK);
     expect(result).toBeDefined();
+    expect((result as { contents: unknown }).contents).toBeDefined();
   });
 
   test("definition < baseline", async () => {
@@ -145,6 +148,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.documentSymbol * SLACK);
     expect(Array.isArray(result)).toBe(true);
+    expect((result as unknown[]).length).toBeGreaterThan(0);
   });
 
   test("workspaceSymbol < baseline", async () => {
@@ -157,6 +161,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.workspaceSymbol * SLACK);
     expect(Array.isArray(result)).toBe(true);
+    expect((result as unknown[]).length).toBeGreaterThan(0);
   });
 
   test("foldingRange < baseline", async () => {
@@ -169,6 +174,7 @@ describe("US-027: Performance benchmarks", () => {
     const ms = measureMs(start);
     expect(ms).toBeLessThan(BASELINES.foldingRange * SLACK);
     expect(Array.isArray(result)).toBe(true);
+    expect((result as unknown[]).length).toBeGreaterThan(0);
   });
 
   test("documentHighlight < baseline", async () => {

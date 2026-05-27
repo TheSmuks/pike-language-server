@@ -164,6 +164,35 @@ if (currentSection && !sectionHasContent) {
   addError(`Final section '### ${currentSection}' under '${currentVersion}' is empty`, lineNum);
 }
 
+// 3. Validate version order (newer semver versions first)
+const semverPattern = /^\d+\.\d+\.\d+$/;
+const semverVersions = [];
+for (const [id, line] of versions) {
+  if (semverPattern.test(id)) {
+    semverVersions.push({ id, line });
+  }
+}
+
+for (let i = 1; i < semverVersions.length; i++) {
+  const prev = semverVersions[i - 1];
+  const curr = semverVersions[i];
+  const prevParts = prev.id.split(".").map(Number);
+  const currParts = curr.id.split(".").map(Number);
+  // Compare semver: prev should be >= curr (descending order)
+  let prevIsOlder = false;
+  for (let j = 0; j < 3; j++) {
+    if (currParts[j] > prevParts[j]) { prevIsOlder = true; break; }
+    if (currParts[j] < prevParts[j]) { break; }
+  }
+  if (prevIsOlder) {
+    addError(
+      `Version ${curr.id} (line ${curr.line}) appears after ${prev.id} (line ${prev.line}) ` +
+      `but should come first (newer versions first)`,
+      curr.line
+    );
+  }
+}
+
 // Report results
 if (errors.length > 0) {
   console.error("CHANGELOG.md validation failed:");

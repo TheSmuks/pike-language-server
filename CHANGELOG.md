@@ -62,6 +62,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     goto labels, ternary expressions) — only `::` should trigger scope
     completion, not a single colon.
 
+## [0.8.7] — 2026-05-22
+
+### Fixed
+
+  - formattingHandler: replace broken `computeIndentEdits` (only matched
+    leading whitespace, silently dropped all other pike-fmt changes —
+    internal whitespace, trailing whitespace, blank-line collapse,
+    operator spacing) with `computeEdits` that does a single full-document
+    replace. Also fixed `computeOnTypeEdits` to compare full line content
+    rather than indentation only. Removed four unused imports.
+
 ## [0.8.6] — 2026-05-22
 
 ### Fixed
@@ -87,17 +98,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     differences don't produce false mismatches.
   - scope-helpers: replace non-null assertion on `namedChild(0)` with
     explicit null guard — tree-sitter nodes can be null on ERROR nodes.
-
-## [0.8.7] — 2026-05-22
-
-### Fixed
-
-  - formattingHandler: replace broken `computeIndentEdits` (only matched
-    leading whitespace, silently dropped all other pike-fmt changes —
-    internal whitespace, trailing whitespace, blank-line collapse,
-    operator spacing) with `computeEdits` that does a single full-document
-    replace. Also fixed `computeOnTypeEdits` to compare full line content
-    rather than indentation only. Removed four unused imports.
 
 ## [0.8.5] — 2026-05-22
 
@@ -135,16 +135,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - harness: remove self-healing snapshot/golden auto-generation.
     Missing files should fail the test, not silently create new baselines.
   - lifecycle test: remove stray `kg|` characters from test source.
-
-  - Documented four design-level concerns as known limitations:
-    synthetic ID counter thread-safety (`typeResolver.ts`), name-only
-    cross-file reference matching (`workspaceResolution.ts`), no transitive
-    inherit resolution (`workspaceResolution.ts`, `typeResolver.ts`), and
-    scope boundary inclusion (`scope-helpers.ts`). These are not bugs but
-    intentional simplifications with documented rationale.
-  - serverContext: document fire-and-forget parser init pattern.
-  - serverLifecycle: add `.catch()` on startup chain to prevent
-    unhandled rejection if cache restore fails before reconnecting.
 
 ## [0.8.4] — 2026-05-21
 
@@ -525,16 +515,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     markdown metacharacters in inline content to prevent injection from
     user-written Pike doc comments.
 
-## [0.6.4] — 2026-05-15
-
-### Added
-
-  - Directory module convention: files inside `Foo.pmod/` now automatically
-    see symbols from `Foo.pmod/module.pmod` without explicit `inherit`/`import`.
-    This works for hover, go-to-definition, and completions. Pike's module
-    system treats `module.pmod` as the implicit parent of all files in the
-    same directory module.
-
 ## [0.6.5] — 2026-05-15
 
 ### Fixed
@@ -546,6 +526,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Unreachable code lint (P3003) no longer flags comments after a terminator.
     Comments are not executable code and were incorrectly included in the
     named-children scan. Affects both regular blocks and switch case segments.
+
+## [0.6.4] — 2026-05-15
+
+### Added
+
+  - Directory module convention: files inside `Foo.pmod/` now automatically
+    see symbols from `Foo.pmod/module.pmod` without explicit `inherit`/`import`.
+    This works for hover, go-to-definition, and completions. Pike's module
+    system treats `module.pmod` as the implicit parent of all files in the
+    same directory module.
 
 ## [0.6.3] — 2026-05-15
 
@@ -674,6 +664,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     referenced the deleted provider have been removed. The remaining output
     channel test is documented as a manual smoke test.
 
+## [0.5.1] — 2026-05-14
+
+### Fixed
+
+  - **Angle-bracket `#include <file>` navigation**: CTRL+CLICK and document links
+    now resolve `#include <stdio.h>` directives against Pike's system include paths
+    (from `pike --show-paths`). Previously these were explicitly skipped with a
+    `return null` bail-out.
+
+  - **UriError on Windows paths**: Replaced fragile `"file://" + encodeURI(path)`
+    URI construction with Node.js `pathToFileURL()` across all handlers
+    (definition, document link, background index). The old pattern produced
+    malformed URIs on paths containing special characters, causing VSCode to
+    throw "UriError: Scheme contains illegal characters".
+
+  - **Fact-check audit of `docs/known-limitations.md`**: Corrected 5 factual
+    errors — stale "PARTIALLY RESOLVED" / "MOSTLY RESOLVED" statuses for
+    `for_statement` and `switch_statement` (both fully resolved), removed a
+    fabricated `BLOCK_SCOPES` constant reference, removed stale line-number
+    anchors from `typeof_()` entries, and fixed corrupted severity table headers.
+
 ## [0.5.0] — 2026-05-14
 
 ### Added
@@ -732,27 +743,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   - **Updated tree-sitter-pike WASM** to v1.1.3 with structured `preproc_include`
     node (upstream fix for TheSmuks/tree-sitter-pike#17).
-
-## [0.5.1] — 2026-05-14
-
-### Fixed
-
-  - **Angle-bracket `#include <file>` navigation**: CTRL+CLICK and document links
-    now resolve `#include <stdio.h>` directives against Pike's system include paths
-    (from `pike --show-paths`). Previously these were explicitly skipped with a
-    `return null` bail-out.
-
-  - **UriError on Windows paths**: Replaced fragile `"file://" + encodeURI(path)`
-    URI construction with Node.js `pathToFileURL()` across all handlers
-    (definition, document link, background index). The old pattern produced
-    malformed URIs on paths containing special characters, causing VSCode to
-    throw "UriError: Scheme contains illegal characters".
-
-  - **Fact-check audit of `docs/known-limitations.md`**: Corrected 5 factual
-    errors — stale "PARTIALLY RESOLVED" / "MOSTLY RESOLVED" statuses for
-    `for_statement` and `switch_statement` (both fully resolved), removed a
-    fabricated `BLOCK_SCOPES` constant reference, removed stale line-number
-    anchors from `typeof_()` entries, and fixed corrupted severity table headers.
 
 ## [0.4.3] — 2026-05-14
 

@@ -104,3 +104,9 @@ logs/
 *.dll
 *.so
 *.dylib
+
+# Stale lock files (bun.lock is the source of truth)
+package-lock.json
+
+# Local development scripts
+scripts/ralph/

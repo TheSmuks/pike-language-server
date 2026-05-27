@@ -24,7 +24,7 @@ import {
 // Config
 // ---------------------------------------------------------------------------
 
-const PIKE_LIB = "/usr/local/pike/8.0.1116/lib/modules";
+const PIKE_LIB = process.env.PIKE_LIB || "/usr/local/pike/8.0.1116/lib/modules";
 const OUTPUT_PATH = join(
   import.meta.dir,
   "..",

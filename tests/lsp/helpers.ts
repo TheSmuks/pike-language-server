@@ -88,15 +88,8 @@ export interface TestServer {
 // Factory
 // ---------------------------------------------------------------------------
 
-let nextDocVersion = 1;
-
-/**
- * Create an in-process LSP server with a connected client.
- *
- * The server is initialized (sends initialize + initialized) before returning.
- * The caller can immediately send requests.
- */
 export async function createTestServer(options?: TestServerOptions): Promise<TestServer> {
+  let nextDocVersion = 1;
   // Two silent PassThrough streams: client→server and server→client
   const c2s = createSilentStream();
   const s2c = createSilentStream();

@@ -28,3 +28,8 @@ export function onErrorCountChange(cb: ChangeCallback): () => void {
     if (idx >= 0) listeners.splice(idx, 1);
   };
 }
+
+/** Clear all registered listeners (called on extension deactivation). */
+export function resetListeners(): void {
+  listeners.length = 0;
+}

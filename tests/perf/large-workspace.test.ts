@@ -24,7 +24,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 import { produceCodeLenses } from "../../server/src/features/codeLens";
 import { getCrossFileReferences } from "../../server/src/features/workspaceResolution";
-import { initParser } from "../../server/src/parser";
+import { initParser, parse } from "../../server/src/parser";
 import type { Tree } from "web-tree-sitter";
 
 // ---------------------------------------------------------------------------
@@ -143,13 +143,12 @@ describe("Large workspace profiling (1000 files)", () => {
 
       const content = generatePikeSource(i, refTargets);
       const uri = `file:///tmp/bench-workspace/file${i}.pike`;
-      const tree = { ...null as any }; // Will be set below
+      const tree = null! as unknown as Tree; // Will be set below
       files.push({ uri, content, tree });
     }
 
     // Parse all files
     for (const f of files) {
-      const { parse } = require("../../server/src/parser") as { parse: (c: string) => Tree };
       f.tree = parse(f.content);
     }
 
@@ -248,7 +247,6 @@ describe("Large workspace profiling (1000 files)", () => {
     const targetIdx = Math.floor(TOTAL_FILES / 2);
     const f = files[targetIdx];
     const newContent = f.content + "\n  int newFn() { return 42; }\n";
-    const { parse } = require("../../server/src/parser") as { parse: (c: string) => Tree };
     const newTree = parse(newContent);
 
     const start = process.hrtime.bigint();
@@ -323,6 +321,10 @@ describe("Large workspace profiling (1000 files)", () => {
     }
 
     console.log("\n========================================\n");
-    expect(true).toBe(true);
+    // Verify profiling data was collected
+    expect(timings.length).toBeGreaterThan(0);
+    for (const t of timings) {
+      expect(t.ms).toBeGreaterThanOrEqual(0);
+    }
   });
 });
