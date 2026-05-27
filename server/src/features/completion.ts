@@ -93,6 +93,8 @@ export async function getCompletions(
     default:
       items = await completeUnqualified(table, tree, line, character, ctx, node);
       break;
+    case "none":
+      return { isIncomplete: false, items: [] };
   }
 
   return { isIncomplete: items.length > 50, items };

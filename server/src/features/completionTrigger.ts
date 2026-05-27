@@ -34,7 +34,8 @@ export type TriggerContext =
   | { type: "arrow"; lhsNode: Node }
   | { type: "scope"; scopeNode: Node }
   | { type: "call_args"; calleeNode: Node; calleeName: string }
-  | { type: "unqualified" };
+  | { type: "unqualified" }
+  | { type: "none" };
 
 /**
  * Determine what kind of completion is requested based on the node at the cursor.
@@ -173,10 +174,17 @@ function resolveTriggerFromLineText(
   tree: Tree,
   line: number,
 ): TriggerContext {
-  if (character < 1) return { type: "unqualified" };
+  if (character < 1) return { type: "none" };
 
   const oneBefore = lineText[character - 1];
   const rootNode = tree.rootNode;
+
+  // A lone ':' (not '::') never triggers meaningful completions in Pike.
+  // It appears in case labels, goto labels, and ternary expressions —
+  // none of which should show completions.
+  if (oneBefore === ":" && (character < 2 || lineText[character - 2] !== ":")) {
+    return { type: "none" };
+  }
 
   // Dot access: 'Foo.' → find 'Foo' before the dot
   if (oneBefore === ".") {
