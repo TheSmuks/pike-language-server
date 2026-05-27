@@ -345,11 +345,11 @@ function countCommasInNode(node: Node, line: number, character: number, lines?: 
 // ---------------------------------------------------------------------------
 
 /**
- * Produce signature help for a position in the source.
- *
+/**
+ * Find the enclosing function call for a position.
  * Exported for direct unit testing.
  */
-export function findEnclosingCallExport(tree: Tree, line: number, character: number, source?: string): Node | null {
+function findEnclosingCallExport(tree: Tree, line: number, character: number, source?: string): Node | null {
   const src = source ?? tree.rootNode.text;
   const lines = src.split('\n');
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);

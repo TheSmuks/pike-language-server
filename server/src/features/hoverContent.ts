@@ -340,7 +340,12 @@ function collectAutodocLines(lines: string[], declLine: number): string[] {
   while (scanLine >= 0) {
     const lineText = (lines[scanLine] ?? "").trimEnd();
     if (lineText.endsWith("*/")) {
-      for (let bl = scanLine; bl >= 0; bl--) {
+      // Skip over block comments by scanning back to the opening /*.
+      // Default to bailing out in case /* is never found (malformed input)
+      // to avoid an infinite loop when scanLine is not decremented.
+      const commentEnd = scanLine;
+      scanLine = -1;
+      for (let bl = commentEnd; bl >= 0; bl--) {
         if ((lines[bl] ?? "").includes("/*")) {
           scanLine = bl - 1;
           break;

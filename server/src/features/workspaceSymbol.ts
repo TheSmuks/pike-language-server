@@ -49,9 +49,6 @@ export function searchWorkspaceSymbols(
   query: string,
   index: WorkspaceIndex,
 ): SymbolInformation[] {
-  // Only reject null/undefined, not empty string — empty string matches all.
-  if (query === undefined || query === null) return [];
-
   const lowerQuery = query.toLowerCase();
   const results: SymbolInformation[] = [];
 

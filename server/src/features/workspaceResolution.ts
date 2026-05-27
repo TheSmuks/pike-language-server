@@ -178,7 +178,8 @@ function findTargetDeclInFile(
   targetUri: string,
   isStringLit: boolean,
 ): { uri: string; decl: Declaration } | null {
-  const table = targetEntry.symbolTable!;
+  const table = targetEntry.symbolTable;
+  if (!table) return null;
 
   // For directory modules (.pmod/), the target brings all top-level symbols into scope.
   // Return the first class declaration as a representative target.

@@ -123,9 +123,10 @@ function renderSimpleLabel(node: XmlNode, label: string, prefix: string, lines: 
 function renderExample(node: XmlNode, prefix: string, lines: string[]): void {
   const content = renderInline(node.children ?? []).trim();
   if (content) {
-    lines.push(`${prefix}\n${prefix}\`\`\`pike`);
-    lines.push(...content.split("\n").map((l) => prefix + l));
-    lines.push(`${prefix}\`\`\``);
+    // Use indented code block (4-space prefix) to avoid conflicts with
+    // triple-backtick sequences inside the example content.
+    lines.push(`${prefix}`);
+    lines.push(...content.split("\n").map((l) => prefix + "    " + l));
   }
 }
 

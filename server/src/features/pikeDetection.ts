@@ -282,17 +282,22 @@ export async function detectPikePaths(
 }
 
 // ---------------------------------------------------------------------------
-// Lazy singleton: cached Pike paths promise (in-memory per session)
+// Lazy singleton: cached Pike paths promise (in-memory, parameter-keyed)
 // ---------------------------------------------------------------------------
 
+let pikePathsKey = "";
 let pikePathsPromise: Promise<PikePaths> | null = null;
 
 /**
  * Get Pike installation paths (lazy, cached in memory).
- * Safe to call repeatedly; the detection runs only once per session.
+ * Safe to call repeatedly; the detection runs once per unique set of parameters.
+ * If parameters change (e.g. user updates Pike binary path in settings),
+ * the cache is invalidated and detection re-runs.
  */
 export function getPikePaths(workspaceRoot: string, pikeBinaryPath?: string, overrides?: PikePathOverrides): Promise<PikePaths> {
-  if (!pikePathsPromise) {
+  const key = `${workspaceRoot}\0${pikeBinaryPath ?? ""}\0${JSON.stringify(overrides ?? null)}`;
+  if (key !== pikePathsKey || !pikePathsPromise) {
+    pikePathsKey = key;
     pikePathsPromise = detectPikePaths(workspaceRoot, pikeBinaryPath, overrides);
   }
   return pikePathsPromise;

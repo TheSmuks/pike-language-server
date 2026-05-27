@@ -26,8 +26,8 @@ export function registerFileWatchHandlers(
 
   // Handle file renames — the file watcher sends Created/Deleted but
   // that loses the old→new mapping needed for dependency propagation.
-  (connection as any).onDidRenameFiles?.((params: { files: Array<{ oldUri: string; newUri: string }> }) => {
-    handleFileRenames(ctx, params.files);
+  (connection as any).onDidRenameFiles?.(async (params: { files: Array<{ oldUri: string; newUri: string }> }) => {
+    await handleFileRenames(ctx, params.files);
   });
 }
 
@@ -135,19 +135,19 @@ interface FileRename {
   newUri: string;
 }
 
-function handleFileRenames(
+async function handleFileRenames(
   ctx: ServerContext,
   files: readonly FileRename[],
-): void {
+): Promise<void> {
   for (const rename of files) {
-    reindexRenamedFile(ctx, rename);
+    await reindexRenamedFile(ctx, rename);
   }
 }
 
-function reindexRenamedFile(
+async function reindexRenamedFile(
   ctx: ServerContext,
   rename: FileRename,
-): void {
+): Promise<void> {
   const dependents = ctx.index.getDependents(rename.oldUri);
   ctx.index.removeFile(rename.oldUri);
   deleteTree(rename.oldUri);
@@ -157,7 +157,7 @@ function reindexRenamedFile(
   if (doc) {
     const tree = parse(doc.getText(), rename.newUri);
     if (tree) {
-      ctx.index.upsertFile(
+      await ctx.index.upsertFile(
         rename.newUri, doc.version, tree, doc.getText(), ModificationSource.DidOpen,
       );
     }
@@ -169,7 +169,7 @@ function reindexRenamedFile(
     if (depDoc) {
       const depTree = parse(depDoc.getText(), depUri);
       if (depTree) {
-        ctx.index.upsertFile(
+        await ctx.index.upsertFile(
           depUri, depDoc.version, depTree, depDoc.getText(), ModificationSource.DidOpen,
         );
       }

@@ -307,6 +307,9 @@ export class WorkspaceIndex {
 
   get size(): number { return this.files.size; }
 
+  /** Current generation counter — incremented on every mutation. */
+  get currentGeneration(): number { return this.generation; }
+
   invalidate(uri: string): void {
     const entry = this.files.get(uri);
     if (entry) { entry.symbolTable = null; entry.stale = true; }

@@ -40,6 +40,9 @@ export enum ErrorCategory {
 
 export type LogLevel = "INFO" | "WARN" | "ERROR";
 
+/** Pre-computed set of ErrorCategory values for fast lookup in logWarn. */
+const ERROR_CATEGORY_VALUES = new Set<string>(Object.values(ErrorCategory));
+
 export interface LogEntry {
   /** Monotonically incrementing ID across the process lifetime. */
   id: number;
@@ -193,8 +196,7 @@ export function logWarn(
 ): void {
   // ErrorCategory is a string enum, so typeof cannot distinguish it from a
   // plain string.  Check against the known enum values to detect category usage.
-  const categoryValues = new Set<string>(Object.values(ErrorCategory));
-  const isCategory = categoryValues.has(messageOrCategory as string) && maybeMessage !== undefined;
+  const isCategory = ERROR_CATEGORY_VALUES.has(messageOrCategory as string) && maybeMessage !== undefined;
   const category = isCategory ? messageOrCategory as ErrorCategory : undefined;
   const message = isCategory ? maybeMessage : (messageOrCategory as string);
   const ctx = maybeCtx;

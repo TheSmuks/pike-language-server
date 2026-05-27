@@ -1,7 +1,7 @@
 /**
  * Lightweight XML parser and tree walker.
  *
- * Handles: elements, attributes, self-closing tags, text content, CDATA,
+ * Handles: elements, attributes, self-closing tags, text content,
  * XML entities (&amp; &lt; &gt; &quot; &apos; &#NNN;).
  * Skips: processing instructions (<?...?>), comments (<!--...-->).
  */
