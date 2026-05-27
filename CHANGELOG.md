@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+  - TextMate grammar: add missing `=` (assignment) operator to the operators
+    regex — bare `=` was the only Pike operator with no scope, causing every
+    assignment to render in default foreground instead of the theme's operator
+    color.
+  - TextMate grammar: support nested parametric types in function declaration
+    matching (e.g. `mapping(string:array(int)) foo(`). The pattern used
+    `[^)]*` which stopped at the first `)`, breaking on nested generics.
+    Replaced with `(?:[^()]|\([^)]*\))*` to handle one level of nesting.
+  - TextMate grammar: move `#declarations` before `#types` and `#keywords` in
+    root pattern order so that `array(int) foo(` matches the declaration
+    pattern instead of having `array` consumed by the generic type catch-all.
+  - TextMate grammar: anchor preprocessor directive pattern to line start
+    (`^\s*#`) to prevent `// #ifdef` comments from being highlighted as
+    directives.
+  - TextMate grammar: reorder float literal pattern before integer so `3.14`
+    is consumed atomically instead of splitting into `3` (integer) + `.14`
+    (float).
+  - TextMate grammar: add `storage.type.pike` capture to the complex-type
+    declaration pattern so the type portion (e.g. `mapping(string:int)`) gets
+    proper type highlighting alongside the function name.
   - TextMate grammar: remove greedy `function-call` pattern that incorrectly
     highlighted function declarations as function calls (e.g. `int foo(` was
     colored as a call, not a declaration).
