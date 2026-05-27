@@ -6,7 +6,7 @@
 import { ModuleResolver, detectPikePaths, type PikePaths, type PikePathOverrides } from "./moduleResolver";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
-import { uriToPath as uriToPathUtil, pathToUri } from "../util/uri";
+import { uriToPath as uriToPathUtil, pathToUri, normalizeUri } from "../util/uri";
 import {
   resolveCrossFileDefinition as resolveCrossFileDefinitionFn,
   getCrossFileReferences as getCrossFileReferencesFn,
@@ -95,6 +95,29 @@ export class WorkspaceIndex {
   }
 
   // ---------------------------------------------------------------------------
+  // URI normalization
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Normalize a URI for use as an index key.
+   *
+   * Resolves symlinks via realpath so that the same file always maps to the
+   * same key, regardless of how the URI was obtained (VSCode didOpen,
+   * ModuleResolver resolution, background indexing, file watcher).
+   *
+   * This prevents the "two entries for one file" bug where:
+   * - ModuleResolver resolves `import CoreModule` -> `/opt/pike/modules/Core.pmod`
+   *   (the path reported by Pike, which may contain symlinks)
+   * - VSCode opens the same file -> `/opt/pike-8.0.1116/modules/Core.pmod`
+   *   (the real path, after resolving symlinks)
+   * Without normalization these produce two different URIs, two index entries,
+   * and cross-file references between them break silently.
+   */
+  private norm(uri: string): string {
+    return normalizeUri(uri);
+  }
+
+  // ---------------------------------------------------------------------------
   // Index CRUD
   // ---------------------------------------------------------------------------
 
@@ -106,31 +129,32 @@ export class WorkspaceIndex {
     uri: string, version: number, tree: Tree, content: string, modSource: ModificationSource,
   ): Promise<FileEntry> {
     return measureAsync("upsertFile", async () => {
-      const existing = this.files.get(uri);
+      const normalizedUri = this.norm(uri);
+      const existing = this.files.get(normalizedUri);
       if (existing) this.removeDependencies(existing);
 
       // Pre-warm the ModuleResolver cache so buildSymbolTable can do sync cross-file wiring
       bump("depResolutionCalls");
       const warmCacheResult = await measureAsync("warmResolverCache", () =>
-        warmResolverCache(this.depCtx(), tree, uri),
+        warmResolverCache(this.depCtx(), tree, normalizedUri),
       );
 
-      const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
+      const symbolTable = buildSymbolTable(tree, normalizedUri, version, { index: this.createSyncIndexAdapter(normalizedUri) });
       const pikeVersion = this.parsePikeVersion(tree, content);
       const contentHash = this.hashContent(content);
       const dependencies = await measureAsync("extractDependencies", () =>
-        extractDependencies(this.depCtx(), symbolTable, uri, warmCacheResult),
+        extractDependencies(this.depCtx(), symbolTable, normalizedUri, warmCacheResult),
       );
 
       const entry: FileEntry = {
-        uri, version, symbolTable, pikeVersion, dependencies,
+        uri: normalizedUri, version, symbolTable, pikeVersion, dependencies,
         lastModSource: modSource, contentHash, stale: false,
         depsResolved: true,
       };
 
-      this.files.set(uri, entry);
+      this.files.set(normalizedUri, entry);
       this.generation++;
-      this.registerReverseDeps(uri, dependencies);
+      this.registerReverseDeps(normalizedUri, dependencies);
 
       bump("indexWrites");
       bump("indexWritesFull");
@@ -143,35 +167,36 @@ export class WorkspaceIndex {
    *
    * Builds the symbol table synchronously but skips async dependency resolution
    * (warmResolverCache + extractDependencies). Dependencies are resolved lazily
-   * when the file is opened or queried. This makes bulk indexing ~10× faster
+   * when the file is opened or queried. This makes bulk indexing ~10x faster
    * because the per-file async fs operations are eliminated.
    */
   upsertBackgroundFile(
     uri: string, version: number, tree: Tree, content: string,
   ): FileEntry {
     startSpan("upsertBackgroundFile");
-    const existing = this.files.get(uri);
+    const normalizedUri = this.norm(uri);
+    const existing = this.files.get(normalizedUri);
     if (existing) this.removeDependencies(existing);
 
-    // Build symbol table without cross-file wiring — the resolver cache is cold,
+    // Build symbol table without cross-file wiring -- the resolver cache is cold,
     // so sync resolution returns null for imports/inherits. Acceptable: local
     // declarations and references are complete; cross-file resolution happens
     // at query time via resolveCrossFileDefinition / getCrossFileReferences.
-    const symbolTable = buildSymbolTable(tree, uri, version, { index: this.createSyncIndexAdapter(uri) });
+    const symbolTable = buildSymbolTable(tree, normalizedUri, version, { index: this.createSyncIndexAdapter(normalizedUri) });
     const pikeVersion = this.parsePikeVersion(tree, content);
     const contentHash = this.hashContent(content);
 
     const entry: FileEntry = {
-      uri, version, symbolTable, pikeVersion,
+      uri: normalizedUri, version, symbolTable, pikeVersion,
       dependencies: new Set(),
       lastModSource: ModificationSource.BackgroundIndex,
       contentHash,
       stale: false,
     };
 
-    this.files.set(uri, entry);
+    this.files.set(normalizedUri, entry);
     this.generation++;
-    // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
+    // No registerReverseDeps -- dependencies are empty. Resolved lazily on demand.
 
     bump("indexWrites");
     bump("indexWritesBackground");
@@ -183,7 +208,7 @@ export class WorkspaceIndex {
    * Ensure a file's dependency links are populated.
    *
    * Background-indexed and cache-restored files skip dependency resolution for
-   * speed. This method upgrades them to full resolution asynchronously — the
+   * speed. This method upgrades them to full resolution asynchronously -- the
    * caller can proceed immediately with the local symbol table, and cross-file
    * features (go-to-def in dependents, reference counts) will work once this
    * resolves.
@@ -193,24 +218,25 @@ export class WorkspaceIndex {
    */
   async ensureDependenciesResolved(uri: string): Promise<boolean> {
     bump("lazyDepResolutionCalls");
-    const entry = this.files.get(uri);
+    const normalizedUri = this.norm(uri);
+    const entry = this.files.get(normalizedUri);
     if (!entry) return false;
     if (!entry.symbolTable) return false;
 
-    // Already resolved — distinguish "resolved and found deps" from
+    // Already resolved -- distinguish "resolved and found deps" from
     // "resolved and found nothing" via the depsResolved sentinel flag.
     if (entry.depsResolved) return false;
 
     // Resolve dependencies for this entry
-    const deps = await extractDependencies(this.depCtx(), entry.symbolTable, uri, new Map());
+    const deps = await extractDependencies(this.depCtx(), entry.symbolTable, normalizedUri, new Map());
 
-    // Mark as resolved even if no deps found — avoids re-running resolution
+    // Mark as resolved even if no deps found -- avoids re-running resolution
     // for files that genuinely have no imports/inherits.
     entry.depsResolved = true;
 
     if (deps.size > 0) {
       entry.dependencies = deps;
-      this.registerReverseDeps(uri, deps);
+      this.registerReverseDeps(normalizedUri, deps);
     }
     return true;
   }
@@ -218,7 +244,7 @@ export class WorkspaceIndex {
   /**
    * Insert a file entry from persistent cache.
    *
-   * Like upsertBackgroundFile, this skips dependency resolution — cache
+   * Like upsertBackgroundFile, this skips dependency resolution -- cache
    * restoration should be fast (just deserialize + insert). Dependencies
    * are resolved lazily when cross-file queries need them.
    */
@@ -226,16 +252,17 @@ export class WorkspaceIndex {
     uri: string, version: number, symbolTable: SymbolTable, contentHash: string,
   ): FileEntry {
     startSpan("upsertCachedFile");
+    const normalizedUri = this.norm(uri);
     const entry: FileEntry = {
-      uri, version, symbolTable,
+      uri: normalizedUri, version, symbolTable,
       pikeVersion: null,
       dependencies: new Set(),
       lastModSource: ModificationSource.DidOpen, contentHash, stale: false,
     };
 
-    this.files.set(uri, entry);
+    this.files.set(normalizedUri, entry);
     this.generation++;
-    // No registerReverseDeps — dependencies are empty. Resolved lazily on demand.
+    // No registerReverseDeps -- dependencies are empty. Resolved lazily on demand.
 
     bump("indexWrites");
     bump("indexWritesCached");
@@ -245,11 +272,12 @@ export class WorkspaceIndex {
 
   /** Remove a file from the index and invalidate dependents. */
   removeFile(uri: string): void {
-    const entry = this.files.get(uri);
+    const normalizedUri = this.norm(uri);
+    const entry = this.files.get(normalizedUri);
     if (!entry) return;
     this.removeDependencies(entry);
-    this.files.delete(uri);
-    this.dependents.delete(uri);
+    this.files.delete(normalizedUri);
+    this.dependents.delete(normalizedUri);
     this.generation++;
   }
 
@@ -261,23 +289,31 @@ export class WorkspaceIndex {
    * enable M3 pruned invalidation from the first request.
    */
   restoreDependencies(uri: string, dependencies: Set<string>): void {
-    const entry = this.files.get(uri);
+    const normalizedUri = this.norm(uri);
+    const entry = this.files.get(normalizedUri);
     if (!entry) return;
 
     // Only restore if the entry has no deps yet (just cached).
     if (entry.dependencies.size > 0) return;
 
-    entry.dependencies = dependencies;
+    // Normalize dependency URIs too -- they were serialized from a previous
+    // session where the filesystem layout may have changed (symlinks added/removed).
+    const normalizedDeps = new Set<string>();
+    for (const depUri of dependencies) {
+      normalizedDeps.add(this.norm(depUri));
+    }
+
+    entry.dependencies = normalizedDeps;
     entry.depsResolved = true;
-    this.registerReverseDeps(uri, dependencies);
+    this.registerReverseDeps(normalizedUri, normalizedDeps);
   }
 
   getFile(uri: string): FileEntry | undefined {
-    return this.files.get(uri);
+    return this.files.get(this.norm(uri));
   }
 
   getSymbolTable(uri: string): SymbolTable | null {
-    const entry = this.files.get(uri);
+    const entry = this.files.get(this.norm(uri));
     if (!entry) return null;
     if (entry.stale) return null;
     return entry.symbolTable;
@@ -285,20 +321,21 @@ export class WorkspaceIndex {
 
   /** Get symbol table, triggering on-demand indexing if not yet available. */
   async getOrIndexSymbolTable(uri: string): Promise<SymbolTable | null> {
-    const existing = this.getSymbolTable(uri);
+    const normalizedUri = this.norm(uri);
+    const existing = this.getSymbolTable(normalizedUri);
     if (existing) return existing;
 
     if (this.onDemandIndex) {
       try {
-        const indexed = await this.onDemandIndex(uri);
+        const indexed = await this.onDemandIndex(normalizedUri);
         if (indexed?.symbolTable && !indexed.stale) return indexed.symbolTable;
-      } catch (err) { /* on-demand indexing failed */ console.debug(`[workspaceIndex] on-demand indexing failed for ${uri}:`, err); }
+      } catch (err) { /* on-demand indexing failed */ console.debug(`[workspaceIndex] on-demand indexing failed for ${normalizedUri}:`, err); }
     }
     return null;
   }
 
   getDependents(uri: string): Set<string> {
-    return this.dependents.get(uri) ?? new Set();
+    return this.dependents.get(this.norm(uri)) ?? new Set();
   }
 
   getAllUris(): string[] { return [...this.files.keys()]; }
@@ -307,11 +344,11 @@ export class WorkspaceIndex {
 
   get size(): number { return this.files.size; }
 
-  /** Current generation counter — incremented on every mutation. */
+  /** Current generation counter -- incremented on every mutation. */
   get currentGeneration(): number { return this.generation; }
 
   invalidate(uri: string): void {
-    const entry = this.files.get(uri);
+    const entry = this.files.get(this.norm(uri));
     if (entry) { entry.symbolTable = null; entry.stale = true; }
   }
 
@@ -322,7 +359,7 @@ export class WorkspaceIndex {
   invalidateWithDependents(uri: string): string[] {
     const invalidated: string[] = [];
     const visited = new Set<string>();
-    const queue = [uri];
+    const queue = [this.norm(uri)];
 
     while (queue.length > 0) {
       const current = queue.shift();
@@ -333,7 +370,8 @@ export class WorkspaceIndex {
       const entry = this.files.get(current);
       if (!entry) continue;
 
-      if (current === uri) entry.symbolTable = null;
+      const sourceUri = this.norm(uri);
+      if (current === sourceUri) entry.symbolTable = null;
       entry.stale = true;
       invalidated.push(current);
 
@@ -347,7 +385,7 @@ export class WorkspaceIndex {
     return invalidated;
   }
 
-  isStale(uri: string): boolean { return this.files.get(uri)?.stale ?? false; }
+  isStale(uri: string): boolean { return this.files.get(this.norm(uri))?.stale ?? false; }
 
   clear(): void {
     this.files.clear();
@@ -362,21 +400,24 @@ export class WorkspaceIndex {
   // ---------------------------------------------------------------------------
 
   async resolveModule(modulePath: string, fromUri: string): Promise<string | null> {
-    const entry = this.files.get(fromUri);
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const entry = this.files.get(normalizedFromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     const resolver = this.scopedResolver(entry);
     const result = await resolver.resolveModule(modulePath, fromPath);
     return result?.uri ?? null;
   }
 
   async resolveInherit(pathText: string, isStringLiteral: boolean, fromUri: string): Promise<string | null> {
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     const result = await this.resolver.resolveInherit(pathText, isStringLiteral, fromPath);
     return result?.uri ?? null;
   }
 
   async resolveImport(importPath: string, fromUri: string): Promise<string | null> {
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     const result = await this.resolver.resolveImport(importPath, fromPath);
     return result?.uri ?? null;
   }
@@ -399,19 +440,22 @@ export class WorkspaceIndex {
   }
 
   resolveModuleSync(modulePath: string, fromUri: string): string | null {
-    const entry = this.files.get(fromUri);
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const entry = this.files.get(normalizedFromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     const resolver = this.scopedResolver(entry);
     return resolver.getCachedModule(modulePath, fromPath)?.uri ?? null;
   }
 
   resolveInheritSync(pathText: string, isStringLiteral: boolean, fromUri: string): string | null {
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     return this.resolver.getCachedInherit(pathText, isStringLiteral, fromPath)?.uri ?? null;
   }
 
   resolveImportSync(importPath: string, fromUri: string): string | null {
-    const fromPath = this.uriToPath(fromUri);
+    const normalizedFromUri = this.norm(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
     return this.resolver.getCachedModule(importPath, fromPath)?.uri ?? null;
   }
 
@@ -426,7 +470,7 @@ export class WorkspaceIndex {
     // Ensure the source file's dependencies are resolved so cross-file
     // queries can follow import/inherit edges. Lazy per ADR 0023.
     await this.ensureDependenciesResolved(uri);
-    return resolveCrossFileDefinitionFn(this.resolutionCtx(), uri, line, character);
+    return resolveCrossFileDefinitionFn(this.resolutionCtx(), this.norm(uri), line, character);
   }
 
   /** Get all references to a declaration across the workspace. */
@@ -439,7 +483,7 @@ export class WorkspaceIndex {
     // we can only work with whatever dependency data is available right now.
     // The didOpen handler (navigationAdvanced.ts) calls ensureDependenciesResolved
     // asynchronously, so most actively-edited files will have deps resolved.
-    return getCrossFileReferencesFn(this.resolutionCtx(), uri, line, character);
+    return getCrossFileReferencesFn(this.resolutionCtx(), this.norm(uri), line, character);
   }
 
   // ---------------------------------------------------------------------------
@@ -448,18 +492,20 @@ export class WorkspaceIndex {
 
   private registerReverseDeps(uri: string, dependencies: Set<string>): void {
     for (const depUri of dependencies) {
-      let depSet = this.dependents.get(depUri);
-      if (!depSet) { depSet = new Set(); this.dependents.set(depUri, depSet); }
+      const normalizedDepUri = this.norm(depUri);
+      let depSet = this.dependents.get(normalizedDepUri);
+      if (!depSet) { depSet = new Set(); this.dependents.set(normalizedDepUri, depSet); }
       depSet.add(uri);
     }
   }
 
   private removeDependencies(entry: FileEntry): void {
     for (const depUri of entry.dependencies) {
-      const depSet = this.dependents.get(depUri);
+      const normalizedDepUri = this.norm(depUri);
+      const depSet = this.dependents.get(normalizedDepUri);
       if (depSet) {
         depSet.delete(entry.uri);
-        if (depSet.size === 0) this.dependents.delete(depUri);
+        if (depSet.size === 0) this.dependents.delete(normalizedDepUri);
       }
     }
   }
@@ -498,7 +544,7 @@ export class WorkspaceIndex {
     return { major: parseInt(match[1], 10), minor: match[2] ? parseInt(match[2], 10) : 0 };
   }
 
-  /** Content hash for cache validity — delegates to shared DJB2. */
+  /** Content hash for cache validity -- delegates to shared DJB2. */
   private hashContent(content: string): string {
     return hashContent(content);
   }
