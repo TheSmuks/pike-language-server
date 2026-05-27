@@ -53,13 +53,15 @@ Diagnostics from the Pike compiler are triggered on `textDocument/didChange` (de
 
 **Verified**: 50 rapid didChange events produce ≤ 3 diagnose invocations. Hover latency unaffected during in-flight diagnose. See `decisions/0013-verification.md`.
 
-#### Diagnostic column positions are approximate
+#### Diagnostic column positions use message-aware resolution
 
-Pike's `compile_error` handler reports line numbers but not column positions. When Pike emits a diagnostic, the `character` field was always 0, making underlines span the entire line.
+Pike's `compile_error` handler reports line numbers but not column positions.
 
-**Resolution (Phase 20b)**: Added `lineToColumn()` helper that locates the first meaningful token on the diagnostic's line using tree-sitter and returns its column offset. Both `mergeDiagnostics` call sites now pass the parsed tree.
+**Phase 20b**: Added `lineToColumn()` helper that locates the first meaningful token on the diagnostic's line using tree-sitter.
 
-**Remaining gap**: The column is approximate — it points to the first meaningful token on the line, not to the specific error token. For Pike compiler diagnostics, this is the best available signal. Parse diagnostics (tree-sitter errors) already have precise column positions.
+**Phase 20c (current)**: Added `messageAwareColumn()` in `diagnosticUtils.ts` that parses Pike error messages for identifier names (e.g., `"Undefined identifier: bark."` → `bark`) and locates the matching token on the diagnostic line. This provides column precision that points to the specific error token rather than the first token on the line.
+
+**Remaining gap**: For Pike messages that don't contain an identifiable token (e.g., `"Bad type in assignment."`), the column falls back to the first meaningful token on the line. Parse diagnostics (tree-sitter errors) already have precise column positions.
 
 #### Stdlib hover: C-level builtins not indexed
 
@@ -85,9 +87,9 @@ AutoDoc hover only works for symbols documented with `//!` comments. PikeExtract
 
 **US-008 update**: The symbol table now captures `assignedType` from simple initializer expressions. When a variable is declared as `mixed x = Dog()`, `assignedType` is set to `Dog`, enabling type resolution through the existing `resolveType()` pipeline.
 
-**Remaining gap**: Variables initialized by assignment (not declaration) are
-not covered by `assignedType`. Complex expressions that don't reduce to a
-simple constructor or ternary call still require explicit type annotations.
+**Phase 20c**: Variable alias propagation is now handled by `propagateAssignedTypes()` (pass 2.5 in symbol table build). When `Dog d2 = d1;` is encountered, `d2` gets `assignedType = "Dog"` (resolved from `d1`'s type) instead of `assignedType = "d1"`. Multi-hop chains are handled iteratively (max 5 passes).
+
+**Remaining gap**: Complex expressions beyond constructors, ternaries, and variable aliases still require explicit type annotations (e.g., method chains, array construction).
 
 **Impact**: Arrow/dot member completion and go-to-definition now work for
 variables initialized with simple constructors or ternary expressions, even when
@@ -101,8 +103,8 @@ but are not bugs. They are documented in code comments and here for completeness
 | Concern | Location | Impact | Rationale |
 |---------|----------|--------|-----------|
 | Synthetic ID counter not thread-safe | `typeResolver.ts:nextSyntheticId` | None in Node.js single-threaded runtime | Safe under event loop concurrency. Would need atomic increment only if runtime changes to shared-memory multi-threading. |
-| Name-only cross-file reference matching | `workspaceResolution.ts:getCrossFileReferences` | False positives when different classes have identically-named members | Source-file filter (dependency graph) mitigates most false positives. Type-aware matching would require full inherit graph resolution — deferred. |
-| No transitive inherit resolution | `workspaceResolution.ts:resolveUnresolvedReference`, `typeResolver.ts:resolveCrossFileType` | Members from grandparent classes not found through cross-file resolution | Direct (one-hop) inherits work correctly. Transitive chains need recursive graph traversal with cycle detection — deferred until a concrete use case surfaces. |
+| Name-only cross-file reference matching | `workspaceResolution.ts:getCrossFileReferences` | Reduced: arrow/dot access now filtered by receiver type. Bare identifier refs still name-only | Source-file filter + type-aware receiver matching for arrow/dot access. Bare identifier refs are conservative (included, user reviews in preview). |
+| ~~No transitive inherit resolution~~ | ~~Resolved~~ | ~~N/A~~ | ~~Transitive inherit resolution now follows inherit chains recursively with cycle detection (MAX_DEPTH=10). See Resolved section.~~ |
 | Scope boundary inclusion (`>=` not `>`) | `scope-helpers.ts:containsRange` | None — intentional | Tree-sitter ranges for Pike blocks include the closing `}` character. Using `>=` ensures positions on the closing brace are considered inside the scope. |
 
 ### Severity Classification
@@ -154,6 +156,45 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 ---
 
 ## Resolved Limitations
+
+### Call hierarchy outgoing calls always return empty — RESOLVED
+
+**Problem**: The call hierarchy provider searched for `call_expression` nodes in the tree-sitter AST, but tree-sitter-pike represents function calls as `postfix_expr` nodes with `(` children (and optional `argument_list` when arguments are present). `getOutgoingCalls` always returned an empty array.
+
+**Fix**: Rewrote the detection pipeline in `callHierarchy.ts`:
+- `isCallPostfixExpr()` detects `postfix_expr` with `(` child
+- `extractCalleeName()` + `extractCalleeFromChain()` walk nested `postfix_expr` chains to extract the callee identifier (handles `obj->method()`, `getDog()->bark()`, bare `helper()`)
+- `findCalleeIdentifierNode()` returns the precise AST node for accurate `fromRanges` reporting
+
+**Verified by**: `bun test tests/lsp/callHierarchy.test.ts` — 14 tests pass including new adversarial tests for nested calls, deduplication, and method chains.
+
+### Transitive inherit resolution — RESOLVED
+
+**Problem**: `resolveUnresolvedReference()` only checked direct inherit targets (one-hop). A chain like A→B→C where C references a symbol from A (grandparent) failed because resolution stopped at B.
+
+**Fix**: Made `resolveUnresolvedReference()` recursive with `visited: Set<string>` (cycle detection) and `MAX_DEPTH = 10` (depth limit). Each target's own inherits are followed transitively.
+
+**Verified by**: `bun test tests/lsp/crossFile.test.ts` — 21 tests pass including new test for grandparent resolution through 3-level chain.
+
+### Cross-file rename: scope-aware filtering — RESOLVED
+
+**Problem**: `getCrossFileReferences()` matched references by name only. Renaming `Dog.speak()` would catch `cat->speak()` references where `cat` is a `Cat`, not a `Dog`.
+
+**Fix**: Added scope-aware filtering in `getCrossFileReferences()` for arrow/dot access references. For class members, the LHS variable's type is resolved and compared against the target's owning class name. Non-matching references are excluded.
+
+**Remaining gap**: Bare identifier references (no receiver) are still name-only. This is conservative by design — false negatives (missing renames) are worse than false positives (extra renames the user can reject in preview).
+
+### Variable alias type propagation — RESOLVED
+
+**Problem**: `Dog d2 = d1;` set `assignedType = "d1"` (the variable name, not a type). Downstream type resolution would fail because `"d1"` is not a type name.
+
+**Fix**: Added `propagateAssignedTypes()` pass (2.5) in symbol table build. Builds a map of variable name → resolved type, then iteratively replaces variable-name `assignedType` values with the actual type. Handles chains: `Dog d3 = d2 = d1 = Dog()`.
+
+### Diagnostic column: message-aware precision — RESOLVED
+
+**Problem**: Diagnostic columns pointed to the first meaningful token on the line, not the specific error token. For `"Undefined identifier: bark"` on `  d->bark()`, the column pointed to `d` instead of `bark`.
+
+**Fix**: Added `messageAwareColumn()` in `diagnosticUtils.ts` that parses Pike error messages for identifier names using pattern matching (`"Undefined identifier: X"`, `"Too few arguments to X"`, etc.) and locates the matching token on the diagnostic line via source text search or tree-sitter DFS. Falls back to `lineToColumn()` when no identifier is found in the message.
 
 ### Cross-file inherited member completion — RESOLVED
 
