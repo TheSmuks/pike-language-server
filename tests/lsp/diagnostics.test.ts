@@ -231,9 +231,9 @@ describe("DiagnosticManager unit", () => {
       ].join("\n");
       const tree = parse(source);
 
-      // Verify lineToColumn finds the first token column on line 4 (1-indexed: line 4 = index 3)
-      // Line 4 in the source is "  string y = x;" — first meaningful token is "string" at column 2
-      const col = lineToColumn(tree, 4);
+      // Verify lineToColumn finds the first token column on line index 3 (1-indexed line 4)
+      // Line index 3 in the source is "  string y = x;" — first meaningful token is "string" at column 2
+      const col = lineToColumn(tree, 3);
       expect(col).toBeGreaterThan(0);
 
       // Now verify mergeDiagnostics applies this column

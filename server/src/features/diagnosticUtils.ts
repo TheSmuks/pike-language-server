@@ -232,7 +232,42 @@ export function lineToColumn(tree: Tree, line: number, lines?: string[]): number
     }
   }
 
-  // Fallback: scan the text for first non-whitespace character
+  // Fallback: the descendant node from descendantForPosition may cover the
+  // target line but start on an earlier line (e.g. a block starting at row 1
+  // that spans rows 1–5 when we need row 3). Walk down through its children
+  // to find the first named node that starts exactly on lspLine.
+  let candidate: typeof node | null = node;
+  while (candidate) {
+    let found = false;
+    for (const child of candidate.children) {
+      if (child.startPosition.row === lspLine) {
+        if (
+          child.type !== "comment" &&
+          child.type !== "preprocessor" &&
+          !child.isError &&
+          !child.isMissing
+        ) {
+          return child.startPosition.column;
+        }
+        // Keep walking down even from comment/error parents
+        candidate = child;
+        found = true;
+        break;
+      }
+      // If this child spans the target line but starts before it, descend into it
+      if (
+        child.startPosition.row < lspLine &&
+        child.endPosition.row >= lspLine
+      ) {
+        candidate = child;
+        found = true;
+        break;
+      }
+    }
+    if (!found) break;
+  }
+
+  // Last resort: scan the text for first non-whitespace character
   const lineText = lines?.[lspLine];
   if (lineText !== undefined) {
     const match = lineText.match(/\S/);

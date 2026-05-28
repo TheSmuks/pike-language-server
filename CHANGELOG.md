@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.10] — 2026-05-28
+
+### Fixed
+
+  - `lineToColumn`: walk nested nodes (not just root children) to find the
+    first token on a line. Previously only checked `tree.rootNode.children`,
+    missing tokens in deeply nested structures like function bodies.
+  - `textDocument/rename` LSP protocol tests: updated assertions to expect
+    `ResponseError` (not `null`) for error cases — empty position, rename
+    to keyword, and no-change rename. Pike LSP correctly returns descriptive
+    errors for these cases.
+  - `getRenameLocations`: corrected expected location counts in two same-file
+    tests where comments referenced wrong line numbers. These were pre-existing
+    fixture issues unrelated to the v0.8.9 release.
+  - Added test for call hierarchy outgoing calls via method chains
+    (`obj->method()`), covering the `extractCalleeFromChain` code path.
+
 ## [0.8.9] — 2026-05-28
 
 ### Fixed
