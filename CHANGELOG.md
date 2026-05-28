@@ -8,6 +8,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.12] — 2026-05-29
+
+### Added
+
+  - `builtinFunction` semantic token type: predef builtin identifiers (e.g.
+    `write`, `sizeof`) are now highlighted as `builtinFunction` instead of
+    generic `function`. Themes can use `support.function.builtin.pike` to
+    color them distinctly.
+  - `mutable` semantic token modifier: non-constant, non-parameter variables
+    emit the `mutable` modifier so themes can distinguish reassignable locals
+    from constants and parameters.
+  - Name-based reverse index for stdlib entries: O(1) lookup by unqualified
+    name replaces linear scan of 5,471 entries in call-args completion
+    (triggered on `(` after a function name).
+  - Stdlib member completion for typed variables: `Stdio.File f; f->` now
+    completes members from the stdlib index using the resolved type FQN
+    (`predef.Stdio.File`) instead of only matching the literal LHS text.
+  - Hover for qualified stdlib members: hovering over `f->open()` where `f`
+    is a stdlib-typed variable now shows the full stdlib documentation
+    (previously only showed bare signature because the FQN lookup failed).
+
+### Fixed
+
+  - Stale formatting documentation: `docs/known-limitations.md` described
+    the formatter as "shelling out to pike-fmt" but it has been imported
+    in-process since v0.8.x. Documentation now correctly describes the
+    architecture.
 
 ## [0.8.11] — 2026-05-28
 
