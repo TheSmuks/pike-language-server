@@ -22,8 +22,16 @@ export interface StdlibAutodocEntry {
   markdown: string;
 }
 
+export interface PredefAutodocEntry {
+  signature: string;
+  markdown: string;
+  params?: Array<{ name: string; type: string }>;
+  returnType?: string;
+}
+
 export type StdlibAutodocIndex = Record<string, StdlibAutodocEntry>;
 export type PredefBuiltinIndex = Record<string, string>;
+export type PredefAutodocIndex = Record<string, PredefAutodocEntry>;
 
 // ---------------------------------------------------------------------------
 // Validators
@@ -89,12 +97,44 @@ export function validatePredefBuiltinIndex(data: unknown): PredefBuiltinIndex | 
   return obj as unknown as PredefBuiltinIndex;
 }
 
+/**
+ * Validate that `data` looks like a Record<string, PredefAutodocEntry>.
+ *
+ * Checks that:
+ *  - data is a non-null object
+ *  - the first few entries have `signature` (string) and `markdown` (string)
+ *
+ * Returns the typed data if valid, or `null` if validation fails.
+ */
+export function validatePredefAutodocIndex(data: unknown): PredefAutodocIndex | null {
+  if (typeof data !== "object" || data === null || Array.isArray(data)) {
+    return null;
+  }
+
+  const obj = data as Record<string, unknown>;
+  const keys = Object.keys(obj);
+
+  const sampleSize = Math.min(keys.length, 5);
+  for (let i = 0; i < sampleSize; i++) {
+    const entry = obj[keys[i]];
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return null;
+    }
+    const rec = entry as Record<string, unknown>;
+    if (typeof rec["signature"] !== "string") return null;
+    if (typeof rec["markdown"] !== "string") return null;
+  }
+
+  return obj as unknown as PredefAutodocIndex;
+}
+
 // ---------------------------------------------------------------------------
 // Startup helpers
 // ---------------------------------------------------------------------------
 
 const EMPTY_STDLIB: StdlibAutodocIndex = {};
 const EMPTY_PREDEF: PredefBuiltinIndex = {};
+const EMPTY_PREDEF_AUTODOC: PredefAutodocIndex = {};
 
 /**
  * Validate and return the stdlib autodoc index.
@@ -130,6 +170,24 @@ export function loadPredefBuiltinIndex(
     "predef-builtin-index.json validation failed — rename protection will be incomplete",
   );
   return EMPTY_PREDEF;
+}
+
+/**
+ * Validate and return the predef autodoc index.
+ * Logs a warning and returns an empty default on failure.
+ */
+export function loadPredefAutodocIndex(
+  raw: unknown,
+  connection: Connection,
+): PredefAutodocIndex {
+  const validated = validatePredefAutodocIndex(raw);
+  if (validated !== null) return validated;
+
+  logWarn(
+    connection,
+    "predef-autodoc.json validation failed — predef documentation will be unavailable",
+  );
+  return EMPTY_PREDEF_AUTODOC;
 }
 
 /**

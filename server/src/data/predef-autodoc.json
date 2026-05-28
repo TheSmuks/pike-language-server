@@ -1,0 +1,2601 @@
+{
+  "_Static_assert": {
+    "signature": "function(int, string : void)",
+    "markdown": "Perform a compile-time assertion check.\n\nIf `constant_expression` is false, a compiler error message\n   containing `constant_message` will be generated.",
+    "params": [
+      {
+        "name": "constant_expression",
+        "type": "int"
+      },
+      {
+        "name": "constant_message",
+        "type": "string"
+      }
+    ]
+  },
+  "__automap__": {
+    "signature": "function(mixed, mixed ... : array)",
+    "markdown": "Automap execution function.",
+    "params": [
+      {
+        "name": "fun",
+        "type": "function"
+      },
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "array"
+  },
+  "__empty_program": {
+    "signature": "function(void | int, void | string : program)",
+    "markdown": "",
+    "params": [
+      {
+        "name": "line",
+        "type": "int"
+      },
+      {
+        "name": "file",
+        "type": "string"
+      }
+    ],
+    "returnType": "program"
+  },
+  "__handle_sprintf_format": {
+    "signature": "function(string, string, type(mixed), type(mixed) : type(mixed))",
+    "markdown": "Type attribute handler for `\"sprintf_format\"`.",
+    "params": [
+      {
+        "name": "attr",
+        "type": "string"
+      },
+      {
+        "name": "fmt",
+        "type": "string"
+      },
+      {
+        "name": "arg_type",
+        "type": "mixed"
+      },
+      {
+        "name": "cont_type",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "__parse_pike_type": {
+    "signature": "function(string(8bit) : string(8bit))",
+    "markdown": "",
+    "params": [
+      {
+        "name": "t",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "_exit": {
+    "signature": "function(int : void)",
+    "markdown": "This function does the same as `exit`, but doesn't bother to clean\n   up the Pike interpreter before exiting. This means that no destructors\n   will be called, caches will not be flushed, file locks might not be\n   released, and databases might not be closed properly.\n\nUse with extreme caution.",
+    "params": [
+      {
+        "name": "returncode",
+        "type": "int"
+      }
+    ]
+  },
+  "_next": {
+    "signature": "scope(0,function(string : string) | function(object : object) | function(mapping : mapping) | function(multiset : multiset) | function(program : program) | function(array : array))",
+    "markdown": "Find the next object/array/mapping/multiset/program or string.\n\nAll objects, arrays, mappings, multisets, programs and strings are\n   stored in linked lists inside Pike. This function returns the next\n   item on the corresponding list. It is mainly meant for debugging\n   the Pike runtime, but can also be used to control memory usage.",
+    "params": [
+      {
+        "name": "x",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "_prev": {
+    "signature": "scope(0,function(object : object) | function(mapping : mapping) | function(multiset : multiset) | function(program : program) | function(array : array))",
+    "markdown": "Find the previous object/array/mapping/multiset or program.\n\nAll objects, arrays, mappings, multisets and programs are\n   stored in linked lists inside Pike. This function returns the previous\n   item on the corresponding list. It is mainly meant for debugging\n   the Pike runtime, but can also be used to control memory usage.",
+    "params": [
+      {
+        "name": "x",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "_refs": {
+    "signature": "function(function | array | mapping | multiset | object | program | string : int)",
+    "markdown": "Return the number of references `o` has.\n\nIt is mainly meant for debugging the Pike runtime, but can also be\n   used to control memory usage.",
+    "params": [
+      {
+        "name": "o",
+        "type": "string | array | mapping | multiset"
+      }
+    ],
+    "returnType": "int"
+  },
+  "_typeof": {
+    "signature": "scope(0,function((0=mixed) : type(0)))",
+    "markdown": "Return the runtime type of `x`.",
+    "params": [
+      {
+        "name": "x",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`!": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Logical not.\n\nEvery expression with the `!` operator becomes a call to\n   this function, i.e. `!a` is the same as\n   `predef::`!(a)`.\n\nIt's also used when necessary to test truth on objects, i.e. in\n   a statement `if (o) ...` where `o` is an object, the\n   test becomes the equivalent of `!!o` so that any\n   ``!` the object might have gets called.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object | function"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`!=": {
+    "signature": "scope(0,function(int | float, int | float, int | float ... : int(1bit)) | function((0=array | mapping | multiset | string), 0, 0 ... : int(1bit)) | function(function | object | program, mixed, mixed ... : int(1bit)) | function(mixed, function | object | program, mixed ... : int(1bit)) | function(type(mixed), type(mixed), function | program | type(mixed) ... : int(1bit)) | function((0=array | mapping | multiset | string), !0 ... : int(1..1)))",
+    "markdown": "Inequality test.\n\nEvery expression with the `!=` operator becomes a call to\n   this function, i.e. `a!=b` is the same as\n   `predef::`!=(a,b)`.\n\nThis is the inverse of ``==`; see that function for further\n   details.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`%": {
+    "signature": "scope(0,function(mixed, object : mixed) | function(object, mixed : mixed) | function(int, int : int) | function(array((0=mixed)), int : array(0)) | function(string, int : string) | !function(!float ... : mixed) & function(int | float, int | float : float))",
+    "markdown": "Modulo.\n\nEvery expression with the `%` operator becomes a call to\n   this function, i.e. `a%b` is the same as\n   `predef::`%(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "object"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`&": {
+    "signature": "scope(0,function((0=mixed) : 0) | function(object, mixed, mixed ... : mixed) | function(mixed, object, mixed ... : mixed) | function((0=int) : 0) | function((0=array) : 0) | function((0=mapping) : 0) | function((0=multiset) : 0) | function((0=string) : 0) | function((0=program | type(mixed)) : 0) | !function(!int ... : mixed) & function((1=int), (2=int) ... : 1 | 2) | !function(!array ... : mixed) & function((1=array), (2=array) ... : 1 | 2) | !function(!mapping ... : mixed) & function((1=mapping), (2=mapping) ... : 1 | 2) | !function(!multiset ... : mixed) & function((1=multiset), (2=multiset) ... : 1 | 2) | !function(!string ... : mixed) & function((1=string), (2=string) ... : 1 | 2) | !function(!(program | type(mixed)) ... : mixed) & function((1=program | type(mixed)), (2=program | type(mixed)) ... : 1 | 2) | !function(!mapping ... : mixed) & function(array | multiset | (4=mapping) ... : 4))",
+    "markdown": "Bitwise and/intersection.\n\nEvery expression with the `&` operator becomes a call to\n   this function, i.e. `a&b` is the same as\n   `predef::`&(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`*": {
+    "signature": "scope(0,function(int, int ... : int) | function(array(array((1=mixed))), array((1=mixed)) : array(1)) | function(array(string), string : string) | function(array((0=mixed)), int : array(0)) | function(array((0=mixed)), float : array(0)) | function((0=string), int : 0) | function((0=string), float : 0) | !function(!float ... : mixed) & function(int | float, int | float ... : float) | !function(!(object | mixed) ... : mixed) & function(void | mixed ... : mixed))",
+    "markdown": "Multiplication/repetition/implosion.\n\nEvery expression with the `*` operator becomes a call to\n   this function, i.e. `a*b` is the same as\n   `predef::`*(a,b)`. Longer `*` expressions are\n   normally optimized to one call, so e.g. `a*b*c` becomes\n   `predef::`*(a,b,c)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`+": {
+    "signature": "scope(0,function(int, int ... : int) | function((0=array), (1=array) ... : 0 | 1) | function((0=mapping), (1=mapping) ... : 0 | 1) | function((0=multiset), (1=multiset) ... : 0 | 1) | !function(!(object | mixed) ... : mixed) & function(mixed ... : mixed) | !function(!float ... : mixed) & function(int | float, int | float ... : float) | !function(!string ... : mixed) & function(int | float | (0=string), int | float | (1=string) ... : 0 | 1))",
+    "markdown": "Addition/concatenation.\n\nEvery expression with the `+` operator becomes a call to\n   this function, i.e. `a+b` is the same as\n   `predef::`+(a,b)`. Longer `+` expressions are\n   normally optimized to one call, so e.g. `a+b+c` becomes\n   `predef::`+(a,b,c)`.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`-": {
+    "signature": "scope(0,function(int, int ... : int) | function(array((0=mixed)), array ... : array(0)) | function(mapping((1=mixed):(2=mixed)), array | mapping | multiset ... : mapping(1:2)) | function(multiset((3=mixed)), multiset : multiset(3)) | function((0=string), string ... : 0) | !function(!(object | mixed) ... : mixed) & function(mixed ... : mixed) | !function(!float ... : mixed) & function(int | float, int | float ... : float))",
+    "markdown": "Negation/subtraction/set difference.\n\nEvery expression with the `-` operator becomes a call to\n   this function, i.e. `-a` is the same as\n   `predef::`-(a)` and `a-b` is the same as\n   `predef::`-(a,b)`. Longer `-` expressions are\n   normally optimized to one call, so e.g. `a-b-c` becomes\n   `predef::`-(a,b,c)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`->": {
+    "signature": "scope(0,function(array(array | mapping | multiset | object), string : array) | function(mapping | multiset | object | program, string : mixed))",
+    "markdown": "Arrow indexing.\n\nEvery non-lvalue expression with the `->` operator becomes\n   a call to this function. `a->b` is the same as\n   `predef::`^(a,\"b\")` where `\"b\"` is the symbol\n   `b` in string form.\n\nThis function behaves like ``[]`, except that the index is\n   passed literally as a string instead of being evaluated.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      },
+      {
+        "name": "index",
+        "type": "string"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`->=": {
+    "signature": "scope(0,function(array(array | mapping | multiset | object), string, (0=mixed) : 0) | function(multiset | object, string, (1=mixed) : 1) | function(mapping(mixed:(2=mixed)), string, 2 : 2))",
+    "markdown": "Arrow index assignment.\n\nEvery lvalue expression with the `->` operator becomes a\n   call to this function, i.e. `a->b=c` is the same as\n   `predef::`->=(a,\"b\",c)` where `\"b\"` is the symbol\n   `b` in string form.\n\nThis function behaves like ``[]=`, except that the index is\n   passed literally as a string instead of being evaluated.\n\nIf `arg` is an object that implements ``->=`, that function\n   will be called with `index` and `val` as the arguments.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      },
+      {
+        "name": "index",
+        "type": "string"
+      },
+      {
+        "name": "val",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`/": {
+    "signature": "scope(0,function(int, int ... : int) | function(array((0=mixed)), int | float | array ... : array(array(0))) | function(string, int | float | string ... : array(string)) | !function(!(object | mixed) ... : mixed) & function(mixed ... : mixed) | !function(!float ... : mixed) & function(int | float, int | float ... : float))",
+    "markdown": "Division/split.\n\nEvery expression with the `/` operator becomes a call to\n   this function, i.e. `a/b` is the same as\n   `predef::`/(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "object"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`<": {
+    "signature": "function(int | float ... : int(1bit)) | function(string ... : int(1bit)) | function(program | type(mixed), program | type(mixed), program | type(mixed) ... : int(1bit)) | !function(!(object | mixed) ... : mixed) & function(mixed ... : int(1bit))",
+    "markdown": "Less than test.\n\nEvery expression with the `<` operator becomes a call to\n   this function, i.e. `a<b` is the same as\n   `predef::`<(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`<<": {
+    "signature": "scope(0,function(int(0..2147483647), int(0..2147483647) : int(0..2147483647)) | !function(!object ... : mixed) & (function(mixed, object : mixed) | function(object, mixed : mixed)) | !function(!int ... : mixed) & function(int, int : int))",
+    "markdown": "Left shift.\n\nEvery expression with the `<<` operator becomes a call to\n   this function, i.e. `a<<b` is the same as\n   `predef::`<<(a,b)`.\n\nIf `arg1` is an object that implements ``<<`, that\n   function will be called with `arg2` as the single argument.\n\nIf `arg2` is an object that implements ```<<`, that\n   function will be called with `arg1` as the single argument.\n\nOtherwise `arg1` will be shifted `arg2` bits left.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "int"
+      },
+      {
+        "name": "arg2",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`<=": {
+    "signature": "function(int | float ... : int(1bit)) | function(string ... : int(1bit)) | function(program | type(mixed), program | type(mixed), program | type(mixed) ... : int(1bit)) | !function(!(object | mixed) ... : mixed) & function(mixed ... : int(1bit))",
+    "markdown": "Less than or equal test.\n\nEvery expression with the `<=` operator becomes a call to\n   this function, i.e. `a<=b` is the same as\n   `predef::`<=(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`==": {
+    "signature": "scope(0,function(int | float, int | float, int | float ... : int(1bit)) | function((0=array | mapping | multiset | string), 0, 0 ... : int(1bit)) | function(function | object | program, mixed, mixed ... : int(1bit)) | function(mixed, function | object | program, mixed ... : int(1bit)) | function(type(mixed), type(mixed), function | program | type(mixed) ... : int(1bit)) | function((0=array | mapping | multiset | string), !0 ... : zero))",
+    "markdown": "Equality test.\n\nEvery expression with the `==` operator becomes a call to\n   this function, i.e. `a==b` is the same as\n   `predef::`==(a,b)`.\n\nIf more than two arguments are given, each argument is compared\n   with the following one as described below, and the test is\n   successful iff all comparisons are successful.\n\nIf the first argument is an object with an ``==`, that\n   function is called with the second as argument, unless the\n   second argument is the same as the first argument. The test is\n   successful iff its result is nonzero (according to ``!`).\n\nOtherwise, if the second argument is an object with an\n   ``==`, that function is called with the first as\n   argument, and the test is successful iff its result is nonzero\n   (according to ``!`).\n\nOtherwise, if the arguments are of different types, the test is\n   unsuccessful. Function pointers to programs are automatically\n   converted to program pointers if necessary, though.\n\nOtherwise the test depends on the type of the arguments:",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`>": {
+    "signature": "function(int | float ... : int(1bit)) | function(string ... : int(1bit)) | function(program | type(mixed), program | type(mixed), program | type(mixed) ... : int(1bit)) | !function(!(object | mixed) ... : mixed) & function(mixed ... : int(1bit))",
+    "markdown": "Greater than test.\n\nEvery expression with the `>` operator becomes a call to\n   this function, i.e. `a>b` is the same as\n   `predef::`>(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`>=": {
+    "signature": "function(int | float ... : int(1bit)) | function(string ... : int(1bit)) | function(program | type(mixed), program | type(mixed), program | type(mixed) ... : int(1bit)) | !function(!(object | mixed) ... : mixed) & function(mixed ... : int(1bit))",
+    "markdown": "Greater than or equal test.\n\nEvery expression with the `>=` operator becomes a call to\n   this function, i.e. `a>=b` is the same as\n   `predef::`>=(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      },
+      {
+        "name": "arg2",
+        "type": "mixed"
+      },
+      {
+        "name": "extras",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`>>": {
+    "signature": "scope(0,function(int(0..2147483647), int(0..2147483647) : int(0..2147483647)) | !function(!object ... : mixed) & (function(mixed, object : mixed) | function(object, mixed : mixed)) | !function(!int ... : mixed) & function(int, int : int))",
+    "markdown": "Right shift.\n\nEvery expression with the `>>` operator becomes a call to\n   this function, i.e. `a>>b` is the same as\n   `predef::`>>(a,b)`.\n\nIf `arg1` is an object that implements ``>>`, that\n   function will be called with `arg2` as the single argument.\n\nIf `arg2` is an object that implements ```>>`, that\n   function will be called with `arg1` as the single argument.\n\nOtherwise `arg1` will be shifted `arg2` bits right.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "int"
+      },
+      {
+        "name": "arg2",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "`[..]": {
+    "signature": "scope(0,function(string, int, int(0..2), int, int(0..2) : string) | function(array((0=mixed)), int, int(0..2), int, int(0..2) : array(0)) | function(object, mixed, int(0..2), mixed, int(0..2) : mixed))",
+    "markdown": "Extracts a subrange.\n\nThis is the function form of expressions with the `[..]`\n   operator. `arg` is the thing from which the subrange is to be\n   extracted. `start` is the lower bound of the subrange and\n   `end` the upper bound.\n\n`start_type` and `end_type` specifies how the `start` and\n   `end` indices, respectively, are to be interpreted. The types\n   are either `INDEX_FROM_BEG`, `INDEX_FROM_END` or\n   `OPEN_BOUND`. In the last case, the index value is\n   insignificant.\n\nThe relation between `[..]` expressions and this function\n   is therefore as follows:\n\nThe subrange is specified as follows by the two bounds:",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      },
+      {
+        "name": "start",
+        "type": "mixed"
+      },
+      {
+        "name": "start_type",
+        "type": "int"
+      },
+      {
+        "name": "end",
+        "type": "mixed"
+      },
+      {
+        "name": "end_type",
+        "type": "int"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`[]": {
+    "signature": "scope(0,function(object, mixed, void | mixed : mixed) | function(int, string : function) | function(string, int : int) | function(array((0=mixed)), mixed : 0) | function(mapping(mixed:(1=mixed)), mixed : 1) | function(multiset, mixed : int(1bit)) | function(program, string : mixed) | function(string, int, int : string) | function(array((2=mixed)), int, int : array(2)))",
+    "markdown": "Indexing.\n\nThis is the function form of expressions with the `[]`\n   operator, i.e. `a[i]` is the same as\n   `predef::`[](a,i)`.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      },
+      {
+        "name": "index",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`[]=": {
+    "signature": "scope(0,function(object, string, (0=mixed) : 0) | function(array((1=mixed)), int, 1 : 1) | function(mapping((2=mixed):(3=mixed)), 2, 3 : 3) | function(multiset((4=mixed)), 4, (5=mixed) : 5))",
+    "markdown": "Index assignment.\n\nEvery lvalue expression with the `[]` operator becomes a\n   call to this function, i.e. `a[b]=c` is the same as\n   `predef::`[]=(a,b,c)`.\n\nIf `arg` is an object that implements ``[]=`, that function\n   will be called with `index` and `val` as the arguments.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      },
+      {
+        "name": "index",
+        "type": "mixed"
+      },
+      {
+        "name": "val",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`^": {
+    "signature": "scope(0,function(int, int ... : int) | function(object, mixed ... : mixed) | function(mixed, object, mixed ... : mixed) | function((1=mapping), (2=mapping) ... : 1 | 2) | function((3=multiset), (4=multiset) ... : 3 | 4) | function((5=array), (6=array) ... : 5 | 6) | function(string, string ... : string) | function(program | type(mixed), program | type(mixed) ... : type(mixed)))",
+    "markdown": "Exclusive or.\n\nEvery expression with the `^` operator becomes a call to\n   this function, i.e. `a^b` is the same as\n   `predef::`^(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`|": {
+    "signature": "scope(0,function(int, int ... : int) | function(object, mixed ... : mixed) | function(mixed, object, mixed ... : mixed) | function((1=mapping), (2=mapping) ... : 1 | 2) | function((3=multiset), (4=multiset) ... : 3 | 4) | function((5=array), (6=array) ... : 5 | 6) | function(string, string ... : string) | function(program | type(mixed), program | type(mixed) ... : type(mixed)))",
+    "markdown": "Bitwise or/union.\n\nEvery expression with the `|` operator becomes a call to\n   this function, i.e. `a|b` is the same as\n   `predef::`|(a,b)`.",
+    "params": [
+      {
+        "name": "arg1",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "`~": {
+    "signature": "scope(0,function(object : mixed) | function(int : int) | function(string : string) | function(float : float) | function(type((0=mixed)) : type(!0)) | function(program : type(mixed)))",
+    "markdown": "Complement/inversion.\n\nEvery expression with the `~` operator becomes a call to\n   this function, i.e. `~a` is the same as\n   `predef::`~(a)`.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "object"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "abs": {
+    "signature": "scope(0,function((0=int | float | object) : 0))",
+    "markdown": "Return the absolute value for `f`. If `f` is\n an object it must implement ``<` and\n unary ``-`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "access": {
+    "signature": "function(string, void | string : int)",
+    "markdown": "access() checks if the calling process can access the file\n `path`. Symbolic links are dereferenced.",
+    "params": [
+      {
+        "name": "path",
+        "type": "string"
+      },
+      {
+        "name": "mode",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "acos": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the arcus cosine value for `f`.\n The result will be in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "acosh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the hyperbolic arcus cosine value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "add_constant": {
+    "signature": "function(string, void | mixed : void)",
+    "markdown": "Add a new predefined constant.\n\nThis function is often used to add builtin functions.\n   All programs compiled after the `add_constant` function has been\n   called can access `value` by the name `name`.\n\nIf there is a constant called `name` already, it will be replaced by\n   by the new definition. This will not affect already compiled programs.\n\nCalling `add_constant` without a value will remove that name from\n   the list of constants. As with replacing, this will not affect already\n   compiled programs.",
+    "params": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "value",
+        "type": "mixed"
+      }
+    ]
+  },
+  "aggregate": {
+    "signature": "scope(0,function((0=mixed) ... : array(0)))",
+    "markdown": "Construct an array with the arguments as indices.\n\nThis function could be written in Pike as:",
+    "params": [
+      {
+        "name": "elements",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "array"
+  },
+  "aggregate_mapping": {
+    "signature": "scope(0,function((0=mixed) ... : mapping(0:0)))",
+    "markdown": "Construct a mapping.\n\nGroups the arguments together two and two in key-index pairs and\n creates a mapping of those pairs. Generally, the mapping literal\n syntax is handier: `([ key1:val1, key2:val2, ... ])`",
+    "params": [
+      {
+        "name": "elems",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mapping"
+  },
+  "aggregate_multiset": {
+    "signature": "scope(0,function((0=mixed) ... : multiset(0)))",
+    "markdown": "Construct a multiset with the arguments as indices. The multiset\n will not contain any values. This method is most useful when\n constructing multisets with `map` or similar; generally, the\n multiset literal syntax is handier: `(<elem1, elem2, ...>)`\n With it, it's also possible to construct a multiset with values:\n `(<index1: value1, index2: value2, ...>)`",
+    "params": [
+      {
+        "name": "elems",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "multiset"
+  },
+  "alarm": {
+    "signature": "function(int : int)",
+    "markdown": "Set an alarm clock for delivery of a signal.\n\n`alarm` arranges for a SIGALRM signal to be delivered to the\n process in `seconds` seconds.\n\nIf `seconds` is `0` (zero), no new alarm will be scheduled.\n\nAny previous alarms will in any case be canceled.",
+    "params": [
+      {
+        "name": "seconds",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "all_constants": {
+    "signature": "function( : mapping(string:mixed))",
+    "markdown": "Returns a mapping containing all global constants, indexed on the name\n   of the constant, and with the value of the constant as value.",
+    "returnType": "mapping"
+  },
+  "allocate": {
+    "signature": "scope(0,function(int, void | (0=mixed) : array(0)))",
+    "markdown": "Allocate an array of `size` elements. If `init` is specified\n   then each element is initialized by copying that value\n   recursively.",
+    "params": [
+      {
+        "name": "size",
+        "type": "int"
+      }
+    ],
+    "returnType": "array"
+  },
+  "array_sscanf": {
+    "signature": "function(string, __attribute__(\"sscanf_format\", string) : array(__attribute__(\"sscanf_args\", mixed)))",
+    "markdown": "This function works just like `sscanf`, but returns the matched\n results in an array instead of assigning them to lvalues. This is often\n useful for user-defined sscanf strings.",
+    "params": [
+      {
+        "name": "data",
+        "type": "string"
+      },
+      {
+        "name": "format",
+        "type": "string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "arrayp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is an array, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "asin": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the arcus sine value for `f`.\n The result will be in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "asinh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the hyperbolic arcus sine value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "atan": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the arcus tangent value for `f`.\n The result will be in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "atan2": {
+    "signature": "function(float, float : float)",
+    "markdown": "Returns the arcus tangent value for `f1`/`f2`, and uses\n the signs of `f1` and `f2` to determine the quadrant.\n The result will be in radians.",
+    "params": [
+      {
+        "name": "f1",
+        "type": "float"
+      },
+      {
+        "name": "f2",
+        "type": "float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "atanh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the hyperbolic arcus tangent value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "atexit": {
+    "signature": "function(mixed : void)",
+    "markdown": "This function puts the `callback` in a queue of callbacks to\n call when pike exits. The call order is reversed, i.e. callbacks\n that have been added earlier are called after `callback`.",
+    "params": [
+      {
+        "name": "callback",
+        "type": "function"
+      }
+    ]
+  },
+  "backtrace": {
+    "signature": "function( : array)",
+    "markdown": "FIXME: This documentation is not up to date!\n\nGet a description of the current call stack.\n\nThe description is returned as an array with one entry for each call\n   frame on the stack.\n\nEach entry has this format:\n\nThe current call frame will be last in the array.",
+    "returnType": "array"
+  },
+  "basename": {
+    "signature": "function(string : string)",
+    "markdown": "Returns the last segment of a path.",
+    "params": [
+      {
+        "name": "x",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "basetype": {
+    "signature": "function(mixed : string)",
+    "markdown": "Same as sprintf(\"%t\",x);",
+    "params": [
+      {
+        "name": "x",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "callablep": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a callable, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "cd": {
+    "signature": "function(string : int)",
+    "markdown": "Change the current directory for the whole Pike process.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "ceil": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the closest integer value greater or equal to `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "column": {
+    "signature": "function(array, mixed : array)",
+    "markdown": "Extract a column from a two-dimensional array.\n\nThis function is exactly equivalent to:\n\nExcept of course it is a lot shorter and faster.\n That is, it indices every index in the array data on the value of\n the argument index and returns an array with the results.",
+    "params": [
+      {
+        "name": "data",
+        "type": "array"
+      },
+      {
+        "name": "index",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "array"
+  },
+  "compile": {
+    "signature": "function(string, void | object, void | int, void | int, void | program, void | object : program)",
+    "markdown": "Compile a string to a program.\n\nThis function takes a piece of Pike code as a string and\n   compiles it into a clonable program.\n\nThe optional argument `handler` is used to specify an alternative\n   error handler. If it is not specified the current master object will\n   be used.\n\nThe optional arguments `major` and `minor` are used to tell the\n   compiler to attempt to be compatible with Pike `major`.`minor`.",
+    "params": [
+      {
+        "name": "source",
+        "type": "string"
+      },
+      {
+        "name": "handler",
+        "type": "object"
+      },
+      {
+        "name": "major",
+        "type": "int"
+      },
+      {
+        "name": "minor",
+        "type": "int"
+      },
+      {
+        "name": "target",
+        "type": "program"
+      },
+      {
+        "name": "placeholder",
+        "type": "object"
+      }
+    ],
+    "returnType": "program"
+  },
+  "compile_file": {
+    "signature": "function(string, void | object, void | program, void | object : program)",
+    "markdown": "Compile the Pike code contained in the file `filename` into a program.\n\nThis function will compile the file `filename` to a Pike program that can\n later be instantiated. It is the same as doing\n ``.",
+    "params": [
+      {
+        "name": "filename",
+        "type": "string"
+      },
+      {
+        "name": "handler",
+        "type": "object"
+      },
+      {
+        "name": "p",
+        "type": "program"
+      },
+      {
+        "name": "o",
+        "type": "object"
+      }
+    ],
+    "returnType": "program"
+  },
+  "compile_string": {
+    "signature": "function(string, void | string, void | object, void | program, void | object, void | int : program)",
+    "markdown": "Compile the Pike code in the string `source` into a program.\n If `filename` is not specified, it will default to `\"-\"`.\n\nFunctionally equal to ``.",
+    "params": [
+      {
+        "name": "source",
+        "type": "string"
+      },
+      {
+        "name": "filename",
+        "type": "string"
+      },
+      {
+        "name": "handler",
+        "type": "object"
+      },
+      {
+        "name": "p",
+        "type": "program"
+      },
+      {
+        "name": "o",
+        "type": "object"
+      },
+      {
+        "name": "_show_if_constant_errors",
+        "type": "int"
+      }
+    ],
+    "returnType": "program"
+  },
+  "copy_value": {
+    "signature": "scope(0,function((1=mixed) : 1))",
+    "markdown": "Copy a value recursively.\n\nIf the result value is changed destructively (only possible for\n   multisets, arrays and mappings) the copied value will not be changed.\n\nThe resulting value will always be equal to the copied (as tested with\n   the function `equal`), but they may not the the same value (as tested\n   with ``==`).",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "cos": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the cosine value for `f`.\n `f` should be specified in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "cosh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the hyperbolic cosine value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "cpp": {
+    "signature": "function(string, void | mapping | string, void | int | string, void | object, void | int, void | int, void | int : string)",
+    "markdown": "Run a string through the preprocessor.\n\nPreprocesses the string `data` with Pike's builtin ANSI-C look-alike\n preprocessor. If the `current_file` argument has not been specified,\n it will default to `\"-\"`. `charset` defaults to `\"ISO-10646\"`.\n\nIf the second argument is a mapping, no other arguments may follow.\n Instead, they have to be given as members of the mapping (if wanted).\n The following members are recognized:",
+    "params": [
+      {
+        "name": "data",
+        "type": "string"
+      },
+      {
+        "name": "current_file",
+        "type": "mapping | string"
+      },
+      {
+        "name": "charset",
+        "type": "int | string"
+      },
+      {
+        "name": "handler",
+        "type": "object"
+      },
+      {
+        "name": "compat_major",
+        "type": "int"
+      },
+      {
+        "name": "compat_minor",
+        "type": "int"
+      },
+      {
+        "name": "picky_cpp",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "crypt": {
+    "signature": "scope(0,function(string : string(7bit)) | function(string, string : int(1bit)))",
+    "markdown": "This function crypts and verifies a short string (only the first\n   8 characters are significant).\n\nThe first syntax crypts the string `password` into something that\n   is hopefully hard to decrypt.\n\nThe second syntax is used to verify `typed_password` against\n   `crypted_password`, and returns `1` if they match, and\n   `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "password",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "ctime": {
+    "signature": "function(int : string)",
+    "markdown": "Convert the output from a previous call to `time` into a readable\n string containing the current year, month, day and time.\n\nLike `localtime`, this function might throw an error if the\n ctime(2) call failed on the system. It's platform dependent what\n time ranges that function can handle, e.g. Windows doesn't handle\n a negative `timestamp`.",
+    "params": [
+      {
+        "name": "timestamp",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "decode_value": {
+    "signature": "function(string, void | object : mixed)",
+    "markdown": "Decode a value from the string `coded_value`.\n\nThis function takes a string created with `encode_value` or\n `encode_value_canonic` and converts it back to the value that was\n coded.\n\nIf `codec` is specified, it's used as the codec for the decode.\n If none is specified, then one is instantiated through\n `master()->Decoder()`. As a compatibility fallback, the\n master itself is used if it has no `Decoder` class.",
+    "params": [
+      {
+        "name": "coded_value",
+        "type": "string"
+      },
+      {
+        "name": "codec",
+        "type": "object"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "delay": {
+    "signature": "function(int | float, void | int : void)",
+    "markdown": "This function makes the program stop for `s` seconds.\n\nOnly signal handlers can interrupt the sleep. Other callbacks are\n   not called during delay. Beware that this function uses busy-waiting\n   to achieve the highest possible accuracy.",
+    "params": [
+      {
+        "name": "s",
+        "type": "int | float"
+      }
+    ]
+  },
+  "describe_backtrace": {
+    "signature": "function(mixed, void | int : string)",
+    "markdown": "Return a readable message that describes where the backtrace\n `trace` was made (by `backtrace`).\n\nIt may also be an error object or array (typically caught by a\n `catch`), in which case the error message also is included in the\n description.\n\nPass `linewidth` -1 to disable wrapping of the output.",
+    "params": [
+      {
+        "name": "trace",
+        "type": "mixed"
+      },
+      {
+        "name": "linewidth",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "describe_error": {
+    "signature": "function(mixed : string)",
+    "markdown": "Return the error message from an error object or array (typically\n caught by a `catch`). The type of the error is checked, hence\n `err` is declared as `mixed` and not `object|array`.\n\nIf an error message couldn't be obtained, a fallback message\n describing the failure is returned. No errors due to incorrectness\n in `err` are thrown.",
+    "params": [
+      {
+        "name": "err",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "destruct": {
+    "signature": "function(void | object : void)",
+    "markdown": "Mark an object as destructed.\n\nCalls `o->destroy()`, and then clears all variables in the\n   object. If no argument is given, the current object is destructed.\n\nAll pointers and function pointers to this object will become zero.\n   The destructed object will be freed from memory as soon as possible.",
+    "params": [
+      {
+        "name": "o",
+        "type": "object"
+      }
+    ]
+  },
+  "destructedp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a destructed object, `0`\n (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "dirname": {
+    "signature": "function(string : string)",
+    "markdown": "Returns all but the last segment of a path. Some example inputs and\n outputs:\n\n**Expression****Value**\n dirname(\"/a/b\")\"/a\"\n dirname(\"/a/\")\"/a\"\n dirname(\"/a\")\"/\"\n dirname(\"/\")\"/\"\n dirname(\"\")\"\"",
+    "params": [
+      {
+        "name": "x",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "encode_value": {
+    "signature": "function(mixed, void | object : string(8bit))",
+    "markdown": "Code a value into a string.\n\nThis function takes a value, and converts it to a string. This string\n can then be saved, sent to another Pike process, packed or used in\n any way you like. When you want your value back you simply send this\n string to `decode_value` and it will return the value you encoded.\n\nAlmost any value can be coded, mappings, floats, arrays, circular\n structures etc.\n\nIf `codec` is specified, it's used as the codec for the encode.\n If none is specified, then one is instantiated through\n `master()->Encoder()`. As a compatibility fallback, the\n master itself is used if it has no `Encoder` class.\n\nIf `` returns `UNDEFINED` for an\n object, `val = o->encode_object(o)` will be called. The\n returned value will be passed to `o->decode_object(o, val)`\n when the object is decoded.",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      },
+      {
+        "name": "codec",
+        "type": "object"
+      }
+    ],
+    "returnType": "string"
+  },
+  "encode_value_canonic": {
+    "signature": "function(mixed, void | object : string(8bit))",
+    "markdown": "Code a value into a string on canonical form.\n\nTakes a value and converts it to a string on canonical form, much like\n `encode_value`. The canonical form means that if an identical value is\n encoded, it will produce exactly the same string again, even if it's\n done at a later time and/or in another Pike process. The produced\n string is compatible with `decode_value`.",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      },
+      {
+        "name": "codec",
+        "type": "object"
+      }
+    ],
+    "returnType": "string"
+  },
+  "enumerate": {
+    "signature": "scope(0,function(int(0..2147483647), float, void | int | float : array(float)) | function(int(0..2147483647) : array(int)) | function(int(0..2147483647), int : array(int)) | function(int(0..2147483647), int | float, float : array(float)) | function(int(0..2147483647), int, void | int : array(int)) | function(int(0..2147483647), mixed, object : array(1)) | function(int(0..2147483647), object, void | mixed : array(1)) | function(int(0..2147483647), mixed, mixed, function(mixed ... : (1=mixed)) : array(1)))",
+    "markdown": "Create an array with an enumeration, useful for initializing arrays\n   or as first argument to `map` or `foreach()`.\n\nThe defaults are: `step` = 1, `start` = 0, `operator` = ``+`",
+    "params": [
+      {
+        "name": "n",
+        "type": "int"
+      }
+    ],
+    "returnType": "array"
+  },
+  "equal": {
+    "signature": "function(mixed, mixed : int(1bit))",
+    "markdown": "This function checks if the values `a` and `b` are equal.\n\nFor all types but arrays, multisets and mappings, this operation is\n   the same as doing ``.\n   For arrays, mappings and multisets however, their contents are checked\n   recursively, and if all their contents are the same and in the same\n   place, they are considered equal.",
+    "params": [
+      {
+        "name": "a",
+        "type": "mixed"
+      },
+      {
+        "name": "b",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "errno": {
+    "signature": "function( : int)",
+    "markdown": "This function returns the system error from the last file operation.",
+    "returnType": "int"
+  },
+  "error": {
+    "signature": "function({ sprintf_format = __attribute__(\"sprintf_format\", object | string) }, { sprintf_args = __attribute__(\"sprintf_args\", mixed) } ... : void)",
+    "markdown": "Throws an error. A more readable version of the code\n `throw( ({ sprintf(f, @args), backtrace() }) )`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "object"
+      },
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ]
+  },
+  "exece": {
+    "signature": "function(string, array, void | mapping(string:string) : int)",
+    "markdown": "This function transforms the Pike process into a process running\n   the program specified in the argument `file` with the arguments `args`.\n\nIf the mapping `env` is present, it will completely replace all\n   environment variables before the new program is executed.",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "args",
+        "type": "array"
+      }
+    ],
+    "returnType": "int"
+  },
+  "exit": {
+    "signature": "function(int, void | string, void | mixed ... : void)",
+    "markdown": "Exit the whole Pike program with the given `returncode`.\n\nUsing `exit` with any other value than `0` (zero) indicates\n   that something went wrong during execution. See your system manuals\n   for more information about return codes.\n\nThe arguments after the `returncode` will be used for a call to\n   `werror` to output a message on stderr.",
+    "params": [
+      {
+        "name": "returncode",
+        "type": "int"
+      },
+      {
+        "name": "fmt",
+        "type": "string"
+      },
+      {
+        "name": "extra",
+        "type": "mixed"
+      }
+    ]
+  },
+  "exp": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the natural exponential of `f`.\n `log( exp( x ) ) == x` as long as exp(x) doesn't overflow an int.",
+    "params": [
+      {
+        "name": "f",
+        "type": "float | int"
+      }
+    ],
+    "returnType": "float"
+  },
+  "explode_path": {
+    "signature": "function(string : array(string))",
+    "markdown": "Split a path `p` into its components.\n\nThis function divides a path into its components. This might seem like\n it could be done by dividing the string on <tt>\"/\"</tt>, but that will\n not work on some operating systems.  To turn the components back into\n a path again, use `combine_path`.",
+    "params": [
+      {
+        "name": "p",
+        "type": "string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "file_stat": {
+    "signature": "function(string, void | int : object(is _static_modules._Stdio()->Stat))",
+    "markdown": "Stat a file.\n\nIf the argument `symlink` is `1` symlinks will not be followed.",
+    "params": [
+      {
+        "name": "path",
+        "type": "string"
+      },
+      {
+        "name": "symlink",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "object"
+  },
+  "file_truncate": {
+    "signature": "function(string, int : int)",
+    "markdown": "Truncates the file `file` to the length specified in `length`.",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "length",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "filesystem_stat": {
+    "signature": "function(string : mapping(string:int | string))",
+    "markdown": "Returns a mapping describing the properties of the filesystem\n containing the path specified by `path`.",
+    "params": [
+      {
+        "name": "path",
+        "type": "string"
+      }
+    ],
+    "returnType": "mapping"
+  },
+  "filter": {
+    "signature": "scope(0,function(object, mixed ... : mixed) | function((1=array | mapping | multiset | string), mixed ... : 1) | function(function | program, mixed ... : mapping(string:mixed)))",
+    "markdown": "Filters the elements in `arr` through `fun`.\n\n`arr` is treated as a set of elements to be filtered, as\n   follows:\n\nUnless something else is mentioned above, `fun` is used as\n   filter like this:",
+    "params": [
+      {
+        "name": "arr",
+        "type": "mixed"
+      },
+      {
+        "name": "fun",
+        "type": "mixed"
+      },
+      {
+        "name": "extra",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "floatp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a float, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "floor": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the closest integer value less or equal to `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "fork": {
+    "signature": "function(void : object)",
+    "markdown": "Fork the process in two.\n\nFork splits the process in two, and for the parent it returns a\n pid object for the child. Refer to your Unix manual for further\n details.",
+    "returnType": "object"
+  },
+  "function_name": {
+    "signature": "function(function(mixed ... : void | mixed) | program : string)",
+    "markdown": "Return the name of the function or program `f`.\n\nIf `f` is a global function defined in the runtime `0`\n (zero) will be returned.",
+    "params": [
+      {
+        "name": "f",
+        "type": "function | program"
+      }
+    ],
+    "returnType": "string"
+  },
+  "function_object": {
+    "signature": "function(function(mixed ... : void | mixed) : object)",
+    "markdown": "Return the object the function `f` is in.\n\nIf `f` is a global function defined in the runtime `0`\n   (zero) will be returned.\n\nZero will also be returned if `f` is a constant in the\n   parent class. In that case `function_program` can be\n   used to get the parent program.",
+    "params": [
+      {
+        "name": "f",
+        "type": "function"
+      }
+    ],
+    "returnType": "object"
+  },
+  "function_program": {
+    "signature": "function(function(mixed ... : void | mixed) | program : program)",
+    "markdown": "Return the program the function `f` is in.\n\nIf `f` is a global function defined in the runtime `0`\n   (zero) will be returned.",
+    "params": [
+      {
+        "name": "f",
+        "type": "function | program"
+      }
+    ],
+    "returnType": "program"
+  },
+  "functionp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a function, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "gc": {
+    "signature": "function(void | mixed : int)",
+    "markdown": "Force garbage collection.",
+    "params": [
+      {
+        "name": "quick",
+        "type": "mapping"
+      }
+    ],
+    "returnType": "int"
+  },
+  "get_active_compilation_handler": {
+    "signature": "function( : object)",
+    "markdown": "Returns the currently active compilation compatibility handler, or\n   `0` (zero) if none is active.",
+    "returnType": "object"
+  },
+  "get_active_error_handler": {
+    "signature": "function( : object)",
+    "markdown": "Returns the currently active compilation error handler\n   (second argument to `compile`), or `0` (zero) if none\n   is active.",
+    "returnType": "object"
+  },
+  "get_all_groups": {
+    "signature": "function(void : array(array(int | array(string) | string)))",
+    "markdown": "Returns an array of arrays with all groups in the system groups source.\n   Each element in the returned array has the same structure as in\n   `getgrent` function.",
+    "returnType": "array"
+  },
+  "get_all_users": {
+    "signature": "function(void : array(array(int | string)))",
+    "markdown": "Returns an array with all users in the system.",
+    "returnType": "array"
+  },
+  "get_backtrace": {
+    "signature": "function(array | object : array)",
+    "markdown": "Return the backtrace array from an error object or array\n (typically caught by a `catch`), or zero if there is none. Errors\n are thrown on if there are problems retrieving the backtrace.",
+    "params": [
+      {
+        "name": "err",
+        "type": "object | array"
+      }
+    ],
+    "returnType": "array"
+  },
+  "get_dir": {
+    "signature": "function(void | string : array(string))",
+    "markdown": "Returns an array of all filenames in the directory `dirname`, or\n `0` (zero) if the directory does not exist. When no\n `dirname` is given, current work directory is used.",
+    "params": [
+      {
+        "name": "dirname",
+        "type": "string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "get_groups_for_user": {
+    "signature": "function(int | string : array(int))",
+    "markdown": "Gets all groups which a given user is a member of.",
+    "params": [
+      {
+        "name": "user",
+        "type": "int | string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "get_iterator": {
+    "signature": "function(array | mapping | multiset | object | string : { Iterator = object(implements _static_modules.Builtin()->Iterator) })",
+    "markdown": "Creates and returns a canonical iterator for `data`.",
+    "params": [
+      {
+        "name": "data",
+        "type": "object | array | mapping | multiset"
+      }
+    ],
+    "returnType": "object"
+  },
+  "get_weak_flag": {
+    "signature": "scope(0,function(array : int) | function(mapping : int) | function(multiset : int))",
+    "markdown": "Returns the weak flag settings for `m`. It's a combination of\n `WEAK_INDICES` and `WEAK_VALUES`.",
+    "params": [
+      {
+        "name": "m",
+        "type": "array | mapping | multiset"
+      }
+    ],
+    "returnType": "int"
+  },
+  "getcwd": {
+    "signature": "function( : string)",
+    "markdown": "Returns the current working directory.",
+    "returnType": "string"
+  },
+  "getgrgid": {
+    "signature": "function(int : array(int | array(string) | string))",
+    "markdown": "Get the group entry for the group with the id `gid` using the systemfunction\n   `getgrid(3)`.",
+    "params": [
+      {
+        "name": "gid",
+        "type": "int"
+      }
+    ],
+    "returnType": "array"
+  },
+  "getgrnam": {
+    "signature": "function(string : array(int | array(string) | string))",
+    "markdown": "Get the group entry for the group with the name `str` using the\n   systemfunction `getgrnam(3)`.",
+    "params": [
+      {
+        "name": "str",
+        "type": "string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "gethrdtime": {
+    "signature": "function(void | int : int)",
+    "markdown": "Return the high resolution real time spent with threads disabled\n since the Pike interpreter was started. The time is normally\n returned in microseconds, but if the optional argument `nsec`\n is nonzero it's returned in nanoseconds.",
+    "params": [
+      {
+        "name": "nsec",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "gethrtime": {
+    "signature": "function(void | int : int)",
+    "markdown": "Return the high resolution real time since some arbitrary event in\n the past. The time is normally returned in microseconds, but if\n the optional argument `nsec` is nonzero it's returned in\n nanoseconds.\n\nIt's system dependent whether or not this time is monotonic, i.e.\n if it's unaffected by adjustments of the calendaric clock in the\n system. `REAL_TIME_IS_MONOTONIC` tells what it is. Pike\n tries to use monotonic time for this function if it's available.",
+    "params": [
+      {
+        "name": "nsec",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "gethrvtime": {
+    "signature": "function(void | int : int)",
+    "markdown": "Return the CPU time that has been consumed by this process or\n thread. -1 is returned if the system couldn't determine it. The\n time is normally returned in microseconds, but if the optional\n argument `nsec` is nonzero it's returned in nanoseconds.\n\nThe CPU time includes both user and system time, i.e. it's\n approximately the same thing you would get by adding together the\n \"utime\" and \"stime\" fields returned by `getrusage` (but\n perhaps with better accuracy).\n\nIt's however system dependent whether or not it's the time\n consumed in all threads or in the current one only;\n `CPU_TIME_IS_THREAD_LOCAL` tells which. If both types are\n available then thread local time is preferred.",
+    "params": [
+      {
+        "name": "nsec",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "getpid": {
+    "signature": "function( : int)",
+    "markdown": "Returns the process ID of this process.",
+    "returnType": "int"
+  },
+  "getpwnam": {
+    "signature": "function(string : array(int | string))",
+    "markdown": "Get the user entry for login `str` using the systemfunction `getpwnam(3)`.",
+    "params": [
+      {
+        "name": "str",
+        "type": "string"
+      }
+    ],
+    "returnType": "array"
+  },
+  "getpwuid": {
+    "signature": "function(int : array(int | string))",
+    "markdown": "Get the user entry for UID `uid` using the systemfunction `getpwuid(3)`.",
+    "params": [
+      {
+        "name": "uid",
+        "type": "int"
+      }
+    ],
+    "returnType": "array"
+  },
+  "getxattr": {
+    "signature": "function(string, string, void | int : string)",
+    "markdown": "Return the value of a specified attribute, or 0 if it does not exist.",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "attr",
+        "type": "string"
+      },
+      {
+        "name": "symlink",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "glob": {
+    "signature": "scope(0,function(array(string) | string, string : int(1bit)) | function(array(string) | string, (1=array(string)) : 1))",
+    "markdown": "Match strings against a glob pattern.",
+    "params": [
+      {
+        "name": "glob",
+        "type": "string"
+      },
+      {
+        "name": "str",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "gmtime": {
+    "signature": "function(int : mapping(string:int))",
+    "markdown": "Convert seconds since 00:00:00 UTC, Jan 1, 1970 into components.\n\nThis function works like `localtime` but the result is\n   not adjusted for the local time zone.",
+    "params": [
+      {
+        "name": "timestamp",
+        "type": "int"
+      }
+    ],
+    "returnType": "mapping"
+  },
+  "has_index": {
+    "signature": "scope(0,function(string, int(0..2147483647) : int(1bit)) | function(array, int(0..2147483647) : int(1bit)) | function(multiset((0=mixed)), 0 : int(1bit)) | function(mapping((1=mixed):mixed), 1 : int(1bit)) | function(object, mixed : int(1bit)))",
+    "markdown": "Search for `index` in `haystack`.",
+    "params": [
+      {
+        "name": "haystack",
+        "type": "string"
+      },
+      {
+        "name": "index",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "has_prefix": {
+    "signature": "function(object | string, string : int(1bit))",
+    "markdown": "Returns `1` if the string `s` starts with `prefix`,\n   returns `0` (zero) otherwise.\n\nWhen `s` is an object, it needs to implement\n   `_sizeof` and ``[]`.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string | object"
+      },
+      {
+        "name": "prefix",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "has_suffix": {
+    "signature": "function(string, string : int(1bit))",
+    "markdown": "Returns `1` if the string `s` ends with `suffix`,\n   returns `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      },
+      {
+        "name": "suffix",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "has_value": {
+    "signature": "scope(0,function(object, mixed : int(1bit)) | function(string, int | string : int(1bit)) | function(array((0=mixed)), 0 : int(1bit)) | function(multiset, int : int(1bit)) | function(mapping(mixed:(1=mixed)), 1 : int(1bit)))",
+    "markdown": "Search for `value` in `haystack`.",
+    "params": [
+      {
+        "name": "haystack",
+        "type": "string"
+      },
+      {
+        "name": "value",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "hash": {
+    "signature": "function(string, void | int : int)",
+    "markdown": "Return an integer derived from the string `s`. The same string\n   always hashes to the same value, also between processes,\n   architectures, and Pike versions (see compatibility notes below,\n   though).\n\nIf `max` is given, the result will be >= 0 and < `max`,\n   otherwise the result will be >= 0 and <= 0x7fffffff.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "hash_7_0": {
+    "signature": "function(string, void | int : int)",
+    "markdown": "Return an integer derived from the string `s`. The same string\n   always hashes to the same value, also between processes.\n\nIf `max` is given, the result will be >= 0 and < `max`,\n   otherwise the result will be >= 0 and <= 0x7fffffff.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "hash_7_4": {
+    "signature": "function(string, void | int : int)",
+    "markdown": "",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "hash_value": {
+    "signature": "function(mixed : int)",
+    "markdown": "Return a hash value for the argument. It's an integer in the\n native integer range.\n\nThe hash will be the same for the same value in the running\n process only (the memory address is typically used as the basis\n for the hash value).\n\nIf the value is an object with an `__hash`, that function\n is called and its result returned.",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "indices": {
+    "signature": "scope(0,function(array : array(int(0..2147483647))) | function(mapping((1=mixed):mixed) | multiset((1=mixed)) | string(..) : array(1)) | function(object | program : array(string)))",
+    "markdown": "Return an array of all valid indices for the value `x`.\n\nFor strings and arrays this is simply an array of ascending\n   numbers.\n\nFor mappings and multisets, the array might contain any value.\n\nFor objects which define `_indices` that return value\n   is used.\n\nFor other objects an array with all non-protected symbols is\n   returned.",
+    "params": [
+      {
+        "name": "x",
+        "type": "string | array | mapping | multiset"
+      }
+    ],
+    "returnType": "array"
+  },
+  "intp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is an int, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "is_absolute_path": {
+    "signature": "function(string : int)",
+    "markdown": "Check if a path `p` is fully qualified (ie not relative).",
+    "params": [
+      {
+        "name": "p",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "kill": {
+    "signature": "function(int | object, int : int(1bit))",
+    "markdown": "Send a signal to another process.\n\nSome signals and their supposed purpose:",
+    "params": [
+      {
+        "name": "pid",
+        "type": "int"
+      },
+      {
+        "name": "signal",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "limit": {
+    "signature": "scope(0,function((0=int | float | object), (1=int | float | object), (2=int | float | object) : 0 | 1 | 2))",
+    "markdown": "Limits the value `x` so that it's between `minval` and `maxval`.\n If `x` is an object, it must implement the ``<` method.",
+    "params": [
+      {
+        "name": "minval",
+        "type": "int | float | object"
+      },
+      {
+        "name": "x",
+        "type": "int | float | object"
+      },
+      {
+        "name": "maxval",
+        "type": "int | float | object"
+      }
+    ],
+    "returnType": "int | float | object"
+  },
+  "listxattr": {
+    "signature": "function(string, void | int : array(string))",
+    "markdown": "Return an array of all extended attributes set on the file",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "symlink",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "array"
+  },
+  "load_module": {
+    "signature": "function(string : program)",
+    "markdown": "Load a binary module.\n\nThis function loads a module written in C or some other language\n into Pike. The module is initialized and any programs or constants\n defined will immediately be available.\n\nWhen a module is loaded the C function `pike_module_init()` will\n be called to initialize it. When Pike exits `pike_module_exit()`\n will be called. These two functions **must** be available in the module.",
+    "params": [
+      {
+        "name": "module_name",
+        "type": "string"
+      }
+    ],
+    "returnType": "program"
+  },
+  "localtime": {
+    "signature": "function(int : mapping(string:int))",
+    "markdown": "Convert seconds since 00:00:00 UTC, 1 Jan 1970 into components.",
+    "params": [
+      {
+        "name": "timestamp",
+        "type": "int"
+      }
+    ],
+    "returnType": "mapping"
+  },
+  "log": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the natural logarithm of `f`.\n `exp( log(x) ) == x` for x > 0.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "lower_case": {
+    "signature": "scope(0,function(int : int) | function(string : string))",
+    "markdown": "Convert a string or character to lower case.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "m_delete": {
+    "signature": "scope(0,function(object, mixed : mixed) | function(mapping((0=mixed):(1=mixed)), 0 : 1))",
+    "markdown": "If `map` is an object that implements `_m_delete`,\n that function will be called with `index` as its single argument.\n\nOtherwise if `map` is a mapping the entry with index `index`\n will be removed from `map` destructively.\n\nIf the mapping does not have an entry with index `index`, nothing is done.",
+    "params": [
+      {
+        "name": "map",
+        "type": "object | mapping"
+      },
+      {
+        "name": "index",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "map": {
+    "signature": "scope(0,function(object, mixed ... : mixed) | function(array((1=mixed)), function(1, (0=mixed & zero) ... : (2=void | mixed)), 0 ... : array(2)) | function(array((1=mixed)), multiset, mixed ... : array(int(1bit))) | function(array((1=mixed)), mapping(mixed:(2=mixed)), mixed ... : array(2 | zero)) | function(array((1=mixed)), array, mixed ... : array(array)) | function(array((1=mixed)) : array) | function(mapping((3=mixed):(1=mixed)), function(1, (0=mixed & zero) ... : (2=void | mixed)), 0 ... : mapping(3:2)) | function(mapping((3=mixed):(1=mixed)), multiset, mixed ... : mapping(3:int(1bit))) | function(mapping((3=mixed):(1=mixed)), mapping(mixed:(2=mixed)), mixed ... : mapping(3:2 | zero)) | function(mapping((3=mixed):(1=mixed)), array, mixed ... : mapping(3:array)) | function(mapping((3=mixed):(1=mixed)) : mapping(3:mixed)) | function(multiset((1=mixed)), function(1, (0=mixed & zero) ... : (2=void | mixed)), 0 ... : multiset(2)) | function(multiset((1=mixed)), multiset, mixed ... : multiset(int(1bit))) | function(multiset((1=mixed)), mapping(mixed:(2=mixed)), mixed ... : multiset(2 | zero)) | function(multiset((1=mixed)), array, mixed ... : multiset(array)) | function(multiset((1=mixed)) : multiset) | function(!array & (function | program), function(mixed, (0=mixed & zero) ... : (2=void | mixed)), 0 ... : mapping(string:2)) | function(!array & (function | program), multiset, mixed ... : mapping(string:int(1bit))) | function(!array & (function | program), mapping(mixed:(2=mixed)), mixed ... : mapping(string:2 | zero)) | function(!array & (function | program), array, mixed ... : mapping(string:array)) | function(!array & (function | program) : mapping(string:mixed)) | function(string, function(int, mixed ... : int), mixed ... : string) | function(string, multiset, mixed ... : string) | function(string, mapping(mixed:int), mixed ... : string) | function(array(function | mapping | multiset | object | program), string, mixed ... : array) | function(mapping((3=mixed):function | mapping | multiset | object | program), string, mixed ... : mapping(3:mixed)) | function(multiset(function | mapping | multiset | object | program), string, mixed ... : multiset) | function(function | program, string, mixed ... : mapping) | !function(array((1=mixed)), !mixed ... : mixed) & function(array((1=mixed)), mixed ... : array) | !function(mapping((3=mixed):(1=mixed)), !mixed ... : mixed) & function(mapping((3=mixed):(1=mixed)), mixed ... : mapping(3:mixed)) | !function(multiset((1=mixed)), !mixed ... : mixed) & function(multiset((1=mixed)), mixed ... : multiset) | !function(!array & (function | program), !mixed ... : mixed) & function(!array & (function | program), mixed ... : mapping(string:mixed)))",
+    "markdown": "Applies `fun` to the elements in `arr` and collects the results.\n\n`arr` is treated as a set of elements, as follows:\n\n`fun` is applied in different ways depending on its type:",
+    "params": [
+      {
+        "name": "arr",
+        "type": "mixed"
+      },
+      {
+        "name": "fun",
+        "type": "mixed"
+      },
+      {
+        "name": "extra",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "mappingp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a mapping, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "master": {
+    "signature": "function( : object)",
+    "markdown": "Return the current master object.",
+    "returnType": "object"
+  },
+  "max": {
+    "signature": "scope(0,function(void : zero) | !function(!string ... : mixed) & function(string, string ... : string) | !function(!(int | float) ... : mixed) & function((0=int | float), (1=int | float) ... : 0 | 1) | !function(!(object | mixed) ... : mixed) & function(mixed, mixed ... : mixed))",
+    "markdown": "Returns the largest value among `args`. Compared objects\n must implement the ``<` method.",
+    "params": [
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int | float | object"
+  },
+  "min": {
+    "signature": "scope(0,function(void : zero) | !function(!string ... : mixed) & function(string, string ... : string) | !function(!(int | float) ... : mixed) & function((0=int | float), (1=int | float) ... : 0 | 1) | !function(!(object | mixed) ... : mixed) & function(mixed, mixed ... : mixed))",
+    "markdown": "Returns the smallest value among `args`. Compared objects\n must implement the ``<` method.",
+    "params": [
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int | float | object"
+  },
+  "mkdir": {
+    "signature": "function(string, void | int : int)",
+    "markdown": "Create a directory.\n\nIf `mode` is specified, it's will be used for the new directory after\n being `&`'ed with the current umask (on OS'es that support this).",
+    "params": [
+      {
+        "name": "dirname",
+        "type": "string"
+      },
+      {
+        "name": "mode",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "mkmapping": {
+    "signature": "scope(0,function(array((1=mixed)), array((2=mixed)) : mapping(1:2)))",
+    "markdown": "Make a mapping from two arrays.\n\nMakes a mapping `ind`:`val`, `0 <= x < sizeof(ind)`.\n\n`ind` and `val` must have the same size.\n\nThis is the inverse operation of `indices` and `values`.",
+    "params": [
+      {
+        "name": "ind",
+        "type": "array"
+      },
+      {
+        "name": "val",
+        "type": "array"
+      }
+    ],
+    "returnType": "mapping"
+  },
+  "mkmultiset": {
+    "signature": "scope(0,function(array((1=mixed)) : multiset(1)))",
+    "markdown": "This function creates a multiset from an array.",
+    "params": [
+      {
+        "name": "a",
+        "type": "array"
+      }
+    ],
+    "returnType": "multiset"
+  },
+  "mktime": {
+    "signature": "scope(0,function(int, int, int, int, int, int, void | int, void | int : int) | function(mapping | object : int))",
+    "markdown": "This function converts information about date and time into an integer\n   which contains the number of seconds since 00:00:00 UTC, Jan 1, 1970.\n\nYou can either call this function with a mapping containing the\n   following elements:\n\nOr you can just send them all on one line as the second syntax suggests.",
+    "params": [
+      {
+        "name": "tm",
+        "type": "mapping"
+      }
+    ],
+    "returnType": "int"
+  },
+  "multisetp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a multiset, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "mv": {
+    "signature": "function(string, string : int)",
+    "markdown": "Rename or move a file or directory.\n\nIf the destination already exists, it will be replaced.\n Replacement often only works if `to` is of the same type as\n `from`, i.e. a file can only be replaced by another file and so\n on. Also, a directory will commonly be replaced only if it's\n empty.\n\nOn some OSs this function can't move directories, only rename\n them.",
+    "params": [
+      {
+        "name": "from",
+        "type": "string"
+      },
+      {
+        "name": "to",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "next_object": {
+    "signature": "function(void | object : object)",
+    "markdown": "Returns the next object from the list of all objects.\n\nAll objects are stored in a linked list.",
+    "params": [
+      {
+        "name": "o",
+        "type": "object"
+      }
+    ],
+    "returnType": "object"
+  },
+  "normalize_path": {
+    "signature": "function(string : string)",
+    "markdown": "Replaces \"\\\" with \"/\" if runing on MS Windows. It is\n adviced to use `normalize_path` instead.",
+    "params": [
+      {
+        "name": "path",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "object_program": {
+    "signature": "function(mixed : function | program)",
+    "markdown": "Return the program from which `o` was instantiated. If the\n   object was instantiated from a class using parent references\n   the generating function will be returned.\n\nIf `o` is not an object or has been destructed `0` (zero)\n   will be returned.",
+    "params": [
+      {
+        "name": "o",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "program | function"
+  },
+  "object_variablep": {
+    "signature": "function(object, string : int)",
+    "markdown": "Find out if an object identifier is a variable.",
+    "params": [
+      {
+        "name": "o",
+        "type": "object"
+      },
+      {
+        "name": "var",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "objectp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is an object, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "pow": {
+    "signature": "scope(0,function(int, int : int) | function(float, float : float) | function(int, float : float) | function(float, int : float) | function(object, int | float | object : mixed))",
+    "markdown": "Return `n` raised to the power of `x`. If both `n`\n and `x` are integers the result will be an integer.\n If `n` is an object its pow method will be called with\n `x` as argument.",
+    "params": [
+      {
+        "name": "n",
+        "type": "float | int"
+      },
+      {
+        "name": "x",
+        "type": "float | int"
+      }
+    ],
+    "returnType": "int | float"
+  },
+  "programp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a program, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "query_num_arg": {
+    "signature": "function( : int)",
+    "markdown": "Returns the number of arguments given when the previous function was\n   called.\n\nThis is useful for functions that take a variable number of arguments.",
+    "returnType": "int"
+  },
+  "random": {
+    "signature": "scope(0,function(object : mixed) | function(int : int) | function(float : float) | function(array((0=mixed)) : 0) | function(multiset((1=mixed)) : 1) | function(mapping : array))",
+    "markdown": "Returns a random index-value pair from the mapping.",
+    "params": [
+      {
+        "name": "m",
+        "type": "mapping"
+      }
+    ],
+    "returnType": "array"
+  },
+  "random_seed": {
+    "signature": "function(int : void)",
+    "markdown": "This function sets the initial value for the random generator.",
+    "params": [
+      {
+        "name": "seed",
+        "type": "int"
+      }
+    ]
+  },
+  "random_string": {
+    "signature": "function(int : string(8bit))",
+    "markdown": "Returns a string of random characters 0-255 with the length `len`.",
+    "params": [
+      {
+        "name": "len",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "removexattr": {
+    "signature": "function(string, string, void | int : int)",
+    "markdown": "Remove the specified extended attribute.",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "attr",
+        "type": "string"
+      },
+      {
+        "name": "symlink",
+        "type": "mixed"
+      }
+    ]
+  },
+  "replace": {
+    "signature": "scope(0,function(string, string, string : string) | function(string, array(string), array(string) | string : string) | function(string, mapping(string:string) : string) | function((0=array), mixed, mixed : 0) | function((1=mapping), mixed, mixed : 1))",
+    "markdown": "Generic replace function.\n\nThis function can do several kinds replacement operations, the\n   different syntaxes do different things as follows:\n\nIf all the arguments are strings, a copy of `s` with every\n   occurrence of `from` replaced with `to` will be returned.\n   Special case: `to` will be inserted between every character in\n   `s` if `from` is the empty string.\n\nIf the first argument is a string, and the others array(string), a string\n   with every occurrance of `from`[*i*] in `s` replaced with\n   `to`[*i*] will be returned. Instead of the arrays `from` and `to`\n   a mapping equivalent to `` can be\n   used.\n\nIf the first argument is an array or mapping, the values of `a` which\n   are ``==` with `from` will be replaced with `to` destructively.\n   `a` will then be returned.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      },
+      {
+        "name": "from",
+        "type": "string"
+      },
+      {
+        "name": "to",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "replace_master": {
+    "signature": "function(object : void)",
+    "markdown": "Replace the master object with `o`.\n\nThis will let you control many aspects of how Pike works, but beware that\n   `master.pike` may be required to fill certain functions, so it is\n   usually a good idea to have your master inherit the original master and\n   only re-define certain functions.\n\nFIXME: Tell how to inherit the master.",
+    "params": [
+      {
+        "name": "o",
+        "type": "object"
+      }
+    ]
+  },
+  "reverse": {
+    "signature": "scope(0,function(int, void | int, void | int : int) | function(string, void | int, void | int : string) | function((0=array), void | int, void | int : 0))",
+    "markdown": "Reverses a string, array or int.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      },
+      {
+        "name": "start",
+        "type": "int"
+      },
+      {
+        "name": "end",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "rm": {
+    "signature": "function(string : int)",
+    "markdown": "Remove a file or directory.",
+    "params": [
+      {
+        "name": "f",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "round": {
+    "signature": "function(int | float : float)",
+    "markdown": "Return the closest integer value to `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "rows": {
+    "signature": "scope(0,function(mapping((0=mixed):(1=mixed)), array(0) : array(1)) | function(multiset((0=mixed)), array(0) : array(int(1bit))) | function(string, array(int) : array(int)) | function(array((0=mixed)), array(int) : array(1)) | function(array, array(!int) : array) | function(function | int | object | program, array : array))",
+    "markdown": "Select a set of rows from an array.\n\nThis function is en optimized equivalent to:\n\nThat is, it indices data on every index in the array index and\n   returns an array with the results.",
+    "params": [
+      {
+        "name": "data",
+        "type": "mixed"
+      },
+      {
+        "name": "index",
+        "type": "array"
+      }
+    ],
+    "returnType": "array"
+  },
+  "search": {
+    "signature": "scope(0,function(string, int | string, void | int : int) | function(array((0=mixed)), 0, void | int : int) | function(mapping((1=mixed):(2=mixed)), 2, 1 | void : 1) | function(object, mixed, void | (3=mixed) : 3))",
+    "markdown": "Search for `needle` in `haystack`.",
+    "params": [
+      {
+        "name": "haystack",
+        "type": "string"
+      },
+      {
+        "name": "needle",
+        "type": "string | int"
+      },
+      {
+        "name": "start",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "set_priority": {
+    "signature": "function(string, void | int : int)",
+    "markdown": "",
+    "params": [
+      {
+        "name": "level",
+        "type": "string"
+      },
+      {
+        "name": "pid",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "set_weak_flag": {
+    "signature": "scope(0,function((1=mixed), int : 1))",
+    "markdown": "Set the value `m` to use weak or normal references in its\n   indices and/or values (whatever is applicable). `state` is a\n   bitfield built by using `|` between the following flags:\n\nIf a flag is absent, the corresponding field will use normal\n   references. `state` can also be `1` as a compatibility\n   measure; it's treated like `WEAK`.",
+    "params": [
+      {
+        "name": "m",
+        "type": "array | mapping | multiset"
+      },
+      {
+        "name": "state",
+        "type": "int"
+      }
+    ],
+    "returnType": "array | mapping | multiset"
+  },
+  "setxattr": {
+    "signature": "function(string, string, string, int, void | int : int)",
+    "markdown": "Set the attribute `attr` to the value `value`.\n\nThe flags parameter can be used to refine the semantics of the operation.\n\n`XATTR_CREATE` specifies a pure create, which\n fails if the named attribute exists already.\n\n`XATTR_REPLACE` specifies a pure replace operation, which\n fails if the named attribute does not already exist.\n\nBy default (no flags), the extended attribute will be created if need be, \n or will simply replace the value if the attribute exists.",
+    "params": [
+      {
+        "name": "file",
+        "type": "string"
+      },
+      {
+        "name": "attr",
+        "type": "string"
+      },
+      {
+        "name": "value",
+        "type": "string"
+      },
+      {
+        "name": "flags",
+        "type": "int"
+      },
+      {
+        "name": "symlink",
+        "type": "mixed"
+      }
+    ]
+  },
+  "sgn": {
+    "signature": "function(mixed, void | mixed : int(-1..1))",
+    "markdown": "Check the sign of a value.",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "signal": {
+    "signature": "function(int, void | function(void | int : void) : mixed)",
+    "markdown": "Trap signals.\n\nThis function allows you to trap a signal and have a function called\n when the process receives a signal. Although it IS possible to trap\n SIGBUS, SIGSEGV etc, I advise you not to; Pike should not receive any\n such signals, and if it does, it is because of bugs in the Pike\n interpreter. And all bugs should be reported, no matter how trifle.\n\nThe callback will receive the signal number as its only argument.\n\nSee the documentation for `kill` for a list of signals.\n\nIf no second argument is given, the signal handler for that signal\n is restored to the default handler.\n\nIf the second argument is zero, the signal will be completely ignored.",
+    "params": [
+      {
+        "name": "sig",
+        "type": "int"
+      },
+      {
+        "name": "callback",
+        "type": "function"
+      }
+    ],
+    "returnType": "function"
+  },
+  "signame": {
+    "signature": "function(int : string)",
+    "markdown": "Returns a string describing the signal `sig`.",
+    "params": [
+      {
+        "name": "sig",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "signum": {
+    "signature": "function(string : int)",
+    "markdown": "Get a signal number given a descriptive string.\n\nThis function is the inverse of `signame`.",
+    "params": [
+      {
+        "name": "sig",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "sin": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the sine value for `f`.\n `f` should be specified in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "sinh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the hyperbolic sine value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "sizeof": {
+    "signature": "function(array | mapping | multiset | object | string : int(0..2147483647))",
+    "markdown": "Size query.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "string"
+      }
+    ],
+    "returnType": "int"
+  },
+  "sleep": {
+    "signature": "function(int | float, void | int : void)",
+    "markdown": "This function makes the program stop for `s` seconds.\n\nOnly signal handlers can interrupt the sleep, and only when\n   `abort_on_signal` is set. If more than one thread is running\n   the signal must be sent to the sleeping thread. Other callbacks\n   are not called during sleep.\n\nIf `s` is zero then this thread will yield to other threads but\n   not sleep otherwise. Note that Pike yields internally at regular\n   intervals so it's normally not necessary to do this.",
+    "params": [
+      {
+        "name": "s",
+        "type": "int | float"
+      },
+      {
+        "name": "abort_on_signal",
+        "type": "int"
+      }
+    ]
+  },
+  "sort": {
+    "signature": "scope(0,function(array((0=mixed)), array ... : array(0)))",
+    "markdown": "Sort arrays destructively.\n\nThis function sorts the array `index` destructively. That means\n   that the array itself is changed and returned, no copy is created.\n\nIf extra arguments are given, they are supposed to be arrays of the\n   same size as `index`. Each of these arrays will be modified in the\n   same way as `index`. I.e. if index 3 is moved to position 0 in `index`\n   index 3 will be moved to position 0 in all the other arrays as well.\n\nThe sort order is as follows:",
+    "params": [
+      {
+        "name": "index",
+        "type": "array"
+      },
+      {
+        "name": "data",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "array"
+  },
+  "sprintf": {
+    "signature": "function(__attribute__(\"strict_sprintf_format\", object | string), __attribute__(\"sprintf_args\", mixed) ... : __attribute__(\"sprintf_result\", string))",
+    "markdown": "Print formated output to string.\n\nThe `format` string is a string containing a description of how to\n   output the data in `args`. This string should generally speaking\n   have one `%` format specifier\n   (examples: `%s`, `%0d`, `%-=20s`) for each of the arguments.\n\nThe following modifiers are supported:\n\nThe following operators are supported:\n\nMost modifiers and operators are combinable in any fashion, but some\n   combinations may render strange results.\n\nIf an argument is an object that implements `_sprintf`, that\n   callback will be called with the operator as the first argument, and\n   the current modifiers as the second. The callback is expected to return\n   a string.",
+    "params": [
+      {
+        "name": "format",
+        "type": "object"
+      },
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "sqrt": {
+    "signature": "scope(0,function(object : mixed) | function(int : int) | function(float : float))",
+    "markdown": "Returns the square root of `f`, or in the integer case, the square root\n truncated to the closest lower integer. If the argument is an object,\n the lfun _sqrt in the object will be called.",
+    "params": [
+      {
+        "name": "f",
+        "type": "float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "strerror": {
+    "signature": "function(int : string)",
+    "markdown": "This function returns a description of an error code. The error\n code is usually obtained from eg `errno`.",
+    "params": [
+      {
+        "name": "errno",
+        "type": "int"
+      }
+    ],
+    "returnType": "string"
+  },
+  "string_filter_non_unicode": {
+    "signature": "function(string, void | int : string(8bit))",
+    "markdown": "Replace the most obviously non-unicode characters from `s` with\n  the unicode replacement character.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "string_to_unicode": {
+    "signature": "function(string, void | int(0..2) : string(8bit))",
+    "markdown": "Converts a string into an UTF16 compliant byte-stream.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      },
+      {
+        "name": "byteorder",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "string_to_utf8": {
+    "signature": "function(string, void | int : string(8bit))",
+    "markdown": "Convert a string into a UTF-8 compliant byte-stream.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "stringp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is a string, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "strlen": {
+    "signature": "function(string : int(0..2147483647))",
+    "markdown": "Alias for `sizeof`.",
+    "params": [
+      {
+        "name": "thing",
+        "type": "string | multiset | array | mapping"
+      }
+    ],
+    "returnType": "int"
+  },
+  "tan": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the tangent value for `f`.\n `f` should be specified in radians.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "tanh": {
+    "signature": "function(int | float : float)",
+    "markdown": "Returns the hyperbolic tangent value for `f`.",
+    "params": [
+      {
+        "name": "f",
+        "type": "int | float"
+      }
+    ],
+    "returnType": "float"
+  },
+  "this_object": {
+    "signature": "function(void | int(0..2147483647) : object)",
+    "markdown": "Returns the object we are currently evaluating in.\n\n`level` might be used to access the object of a surrounding\n   class: The object at level 0 is the current object, the object\n   at level 1 is the one belonging to the class that surrounds\n   the class that the object comes from, and so on.",
+    "params": [
+      {
+        "name": "level",
+        "type": "int"
+      }
+    ],
+    "returnType": "object"
+  },
+  "throw": {
+    "signature": "function(mixed : void | mixed)",
+    "markdown": "Throw `value` to a waiting `catch`.\n\nIf no `catch` is waiting the global error handling will send the\n   value to `master()->handle_error()`.\n\nIf you throw an array with where the first index contains an error\n   message and the second index is a backtrace, (the output from\n   `backtrace`) then it will be treated exactly like a real error\n   by overlying functions.",
+    "params": [
+      {
+        "name": "value",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "mixed"
+  },
+  "time": {
+    "signature": "scope(0,function(void | int(1bit) : int(2..2147483647)) | function(int(2..2147483647) : float))",
+    "markdown": "This function returns the number of seconds since 00:00:00 UTC, 1 Jan 1970.\n\nThe second syntax does not query the system for the current\n   time, instead the last time value used by the pike process is returned\n   again. It avoids a system call, and thus is slightly faster,\n   but can be wildly inaccurate. Pike\n   queries the time internally when a thread has waited for\n   something, typically in `sleep` or in a backend (see\n   `Backend`).\n\nThe third syntax can be used to measure time more precisely than one\n   second. It returns how many seconds have passed since `t`. The precision\n   of this function varies from system to system.",
+    "returnType": "int"
+  },
+  "trace": {
+    "signature": "function(int, void | string, void | int : int)",
+    "markdown": "This function changes the trace level for the subsystem identified\n by `facility` to `level`. If `facility` is zero or left out, it\n changes the global trace level which affects all subsystems.\n\nEnabling tracing causes messages to be printed to stderr. A higher\n trace level includes the output from all lower levels. The lowest\n level is zero which disables all trace messages.\n\nSee the `-t` command-line option for more information.",
+    "params": [
+      {
+        "name": "level",
+        "type": "int"
+      },
+      {
+        "name": "facility",
+        "type": "string"
+      },
+      {
+        "name": "all_threads",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "types": {
+    "signature": "scope(0,function(array((0=mixed)) | mapping(mixed:(0=mixed)) | string(..) : array(type(0))) | function(multiset : array(type(int(1..1)))) | function(object | program : array(type(mixed))))",
+    "markdown": "Return an array of all valid indices for the value `x`.\n\nFor strings this is simply an array with `int`\n\nFor arrays, mappings and multisets this is simply\n   an array with `mixed`.\n\nFor objects which define `_types` that return value\n   is used.\n\nFor other objects an array with type types for all non-protected\n   symbols is returned.",
+    "params": [
+      {
+        "name": "x",
+        "type": "string | array | mapping | multiset"
+      }
+    ],
+    "returnType": "array"
+  },
+  "ualarm": {
+    "signature": "function(int : int)",
+    "markdown": "Set an alarm clock for delivery of a signal.\n\n`alarm` arranges for a SIGALRM signal to be delivered to the\n process in `useconds` microseconds.\n\nIf `useconds` is `0` (zero), no new alarm will be scheduled.\n\nAny previous alarms will in any case be canceled.",
+    "params": [
+      {
+        "name": "useconds",
+        "type": "int"
+      }
+    ],
+    "returnType": "int"
+  },
+  "undefinedp": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Returns `1` if `arg` is undefined, `0` (zero) otherwise.",
+    "params": [
+      {
+        "name": "arg",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "unicode_to_string": {
+    "signature": "function(string(8bit), void | int(0..2) : string)",
+    "markdown": "Converts an UTF16 byte-stream into a string.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      },
+      {
+        "name": "byteorder",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "string"
+  },
+  "upper_case": {
+    "signature": "scope(0,function(int : int) | function(string : string))",
+    "markdown": "Convert a string or character to upper case.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "utf8_to_string": {
+    "signature": "function(string(8bit), void | int : string)",
+    "markdown": "Converts an UTF-8 byte-stream into a string.",
+    "params": [
+      {
+        "name": "s",
+        "type": "string"
+      }
+    ],
+    "returnType": "string"
+  },
+  "values": {
+    "signature": "scope(0,function(multiset | string : array(int)) | function(array((0=mixed)) | mapping(mixed:(0=mixed)) | object | program : array(0)))",
+    "markdown": "Return an array of all possible values from indexing the value\n   `x`.\n\nFor strings an array of int with the ISO10646 codes of the\n   characters in the string is returned.\n\nFor a multiset an array filled with ones (`1`) is\n   returned.\n\nFor arrays a single-level copy of `x` is returned.\n\nFor mappings the array may contain any value.\n\nFor objects which define `_values` that return value\n   is used.\n\nFor other objects an array with the values of all non-protected\n   symbols is returned.",
+    "params": [
+      {
+        "name": "x",
+        "type": "string | array | mapping | multiset"
+      }
+    ],
+    "returnType": "array"
+  },
+  "version": {
+    "signature": "function( : string)",
+    "markdown": "Report the version of Pike. Does the same as",
+    "returnType": "string"
+  },
+  "werror": {
+    "signature": "scope(0,function(string : int) | function(array(string), mixed ... : int) | function(__attribute__(\"sprintf_format\", string), __attribute__(\"sprintf_args\", mixed) ... : int))",
+    "markdown": "Writes a string on stderr. Works just like `write`\n on `stderr`.",
+    "params": [
+      {
+        "name": "fmt",
+        "type": "string"
+      },
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "write": {
+    "signature": "scope(0,function(string : int) | function(array(string), mixed ... : int) | function(__attribute__(\"sprintf_format\", string), __attribute__(\"sprintf_args\", mixed) ... : int))",
+    "markdown": "Writes a string on stdout. Works just like `write`\n on `stdout`.",
+    "params": [
+      {
+        "name": "fmt",
+        "type": "string"
+      },
+      {
+        "name": "args",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  },
+  "zero_type": {
+    "signature": "function(mixed : int(1bit))",
+    "markdown": "Return the type of zero.\n\nThere are many types of zeros out there, or at least there are two.\n   One is returned by normal functions, and one returned by mapping\n   lookups and `find_call_out` when what you looked for wasn't there.\n   The only way to separate these two kinds of zeros is `zero_type`.",
+    "params": [
+      {
+        "name": "a",
+        "type": "mixed"
+      }
+    ],
+    "returnType": "int"
+  }
+}

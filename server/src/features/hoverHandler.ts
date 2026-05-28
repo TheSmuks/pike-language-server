@@ -33,6 +33,7 @@ import {
   renderPredefSignature,
   buildPredefHoverMarkdown,
   type HoverContentContext,
+  type PredefAutodocEntry,
 } from "./hoverContent";
 import { utf16ToUtf8 } from "../util/positionConverter";
 
@@ -51,6 +52,7 @@ export interface HoverContext {
   autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
+  predefAutodoc: Record<string, PredefAutodocEntry>;
 }
 
 // ---------------------------------------------------------------------------
@@ -229,9 +231,10 @@ function resolveHoverBuiltin(
   const builtinSig = ctx.predefBuiltins[identName];
   if (builtinSig) {
     const overloads = renderPredefSignature(identName, builtinSig);
+    const autodocEntry = ctx.predefAutodoc?.[identName];
     return formatHover({
       name: identName, signature: overloads.join("\n"),
-      documentation: buildPredefHoverMarkdown(identName, overloads),
+      documentation: buildPredefHoverMarkdown(identName, overloads, autodocEntry),
       line: params.position.line, character: params.position.character, isAutodoc: true,
     });
   }

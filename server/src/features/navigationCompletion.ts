@@ -35,8 +35,9 @@ function attachPrefixTextEdits(
 }
 
 interface CompletionResolveData {
-  source: "stdlib" | "autoimport";
-  fqn: string;
+  source: "stdlib" | "autoimport" | "predef";
+  fqn?: string;
+  name?: string;
   module?: string;
   symbolName?: string;
 }
@@ -53,6 +54,7 @@ export function registerCompletionHandlers(
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
     predefBuiltins: ctx.predefBuiltins,
+    predefAutodoc: ctx.predefAutodoc,
   };
 
   // -----------------------------------------------------------------------
@@ -91,7 +93,7 @@ function buildTypeInferrerFactory(
 async function handleCompletion(
   connection: Connection,
   ctx: NavigationContext,
-  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins },
+  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins; predefAutodoc: typeof ctx.predefAutodoc },
   makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
   token: CancellationToken,
@@ -134,7 +136,12 @@ function resolveCompletionItem(
 ): CompletionItem {
   const data = item.data as CompletionResolveData | undefined;
   if (!data) return item;
-  if ((data.source === "stdlib" || data.source === "autoimport") && data.fqn) {
+  if (data.source === "predef" && data.name) {
+    const autodoc = ctx.predefAutodoc[data.name];
+    if (autodoc?.markdown) {
+      item.documentation = { kind: MarkupKind.Markdown, value: autodoc.markdown };
+    }
+  } else if ((data.source === "stdlib" || data.source === "autoimport") && data.fqn) {
     const entry = ctx.stdlibIndex[data.fqn];
     if (entry?.markdown) {
       item.documentation = { kind: MarkupKind.Markdown, value: entry.markdown };

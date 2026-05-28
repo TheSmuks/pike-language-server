@@ -186,8 +186,21 @@ function isInClassScope(decl: Declaration, table: SymbolTable): boolean {
  * before sending to the client.
  *
  * Token ordering: sorted by (line, character) ascending.
+ *
+ * @param table - Symbol table for the document.
+ * @param externalLookup - Optional lookup sets for resolving unresolved
+ *   references to predef builtins and stdlib modules. When provided,
+ *   predef builtin references get the `function` token type and stdlib
+ *   module references get the `namespace` token type instead of the
+ *   generic `variable` fallback.
  */
-export function produceSemanticTokens(table: SymbolTable): SemanticToken[] {
+export function produceSemanticTokens(
+  table: SymbolTable,
+  externalLookup?: {
+    predefBuiltins?: ReadonlySet<string>;
+    stdlibModules?: ReadonlySet<string>;
+  },
+): SemanticToken[] {
   const tokens: SemanticToken[] = [];
 
   // --- Declarations ---
@@ -238,14 +251,23 @@ export function produceSemanticTokens(table: SymbolTable): SemanticToken[] {
       continue;
     }
 
-    // Other unresolved identifiers — produce as 'variable' token
-    // This covers cases like stdlib/predef references that aren't in the symbol table.
+    // Other unresolved identifiers — classify using external lookup.
+    // Predef builtins get `function` type, stdlib modules get `namespace`.
+    // Unknown references fall back to `variable`.
     if (ref.name.length > 0) {
+      let refTypeId: TokenTypeId = 5; // 'variable'
+      if (externalLookup) {
+        if (externalLookup.predefBuiltins?.has(ref.name)) {
+          refTypeId = 3; // 'function'
+        } else if (externalLookup.stdlibModules?.has(ref.name)) {
+          refTypeId = 8; // 'namespace'
+        }
+      }
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
         length: ref.name.length,
-        typeId: 5, // 'variable'
+        typeId: refTypeId,
         modifiers: 0,
       });
     }
@@ -274,6 +296,56 @@ function resolveDeclTokenType(decl: Declaration, table: SymbolTable): TokenTypeI
   }
 
   return base;
+}
+
+// ---------------------------------------------------------------------------
+// Lazy external lookup caches
+// ---------------------------------------------------------------------------
+
+/** Cached set of predef builtin names for semantic token classification. */
+let predefBuiltinsSet: ReadonlySet<string> | null = null;
+/** Cached set of stdlib top-level module names for semantic token classification. */
+let stdlibModulesSet: ReadonlySet<string> | null = null;
+
+/**
+ * Build or return cached external lookup sets for semantic token production.
+ * These are lazy-built from the provided indices and reused across calls.
+ */
+export function getExternalLookup(
+  predefBuiltins?: Record<string, string>,
+  stdlibIndex?: Record<string, { signature: string; markdown: string }>,
+): {
+  predefBuiltins?: ReadonlySet<string>;
+  stdlibModules?: ReadonlySet<string>;
+} {
+  if (!predefBuiltins && !stdlibIndex) return {};
+
+  if (predefBuiltins && !predefBuiltinsSet) {
+    predefBuiltinsSet = new Set(Object.keys(predefBuiltins));
+  }
+  if (stdlibIndex && !stdlibModulesSet) {
+    const modules = new Set<string>();
+    for (const fqn of Object.keys(stdlibIndex)) {
+      const parts = fqn.split(".");
+      if (parts.length >= 2 && parts[0] === "predef") {
+        modules.add(parts[1]);
+      }
+    }
+    stdlibModulesSet = modules;
+  }
+
+  return {
+    predefBuiltins: predefBuiltinsSet ?? undefined,
+    stdlibModules: stdlibModulesSet ?? undefined,
+  };
+}
+
+/**
+ * Reset external lookup caches. Called when data indices change.
+ */
+export function resetExternalLookupCache(): void {
+  predefBuiltinsSet = null;
+  stdlibModulesSet = null;
 }
 
 // ---------------------------------------------------------------------------

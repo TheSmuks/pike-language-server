@@ -102,6 +102,18 @@
         "editor.detectIndentation": false
       }
     },
+    "keybindings": [
+      {
+        "key": "alt+up",
+        "command": "pike.moveLinesUp",
+        "when": "editorTextFocus && editorLangId == pike"
+      },
+      {
+        "key": "alt+down",
+        "command": "pike.moveLinesDown",
+        "when": "editorTextFocus && editorLangId == pike"
+      }
+    ],
     "configuration": {
       "title": "Pike Language Server",
       "properties": {

@@ -357,6 +357,29 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
   );
 
+  // ALT+UP/DOWN line-move wrappers: move the line, then format the document.
+  // Without this, VSCode uses regex-based indentationRules from
+  // language-configuration.json which cannot track actual nesting and
+  // produces wrong indentation when lines cross block boundaries.
+  context.subscriptions.push(
+    vscode.commands.registerTextEditorCommand("pike.moveLinesUp", async (editor) => {
+      const before = editor.document.getText();
+      await vscode.commands.executeCommand("editor.action.moveLinesUpAction");
+      if (editor.document.getText() !== before) {
+        await vscode.commands.executeCommand("editor.action.formatDocument");
+      }
+    }),
+  );
+  context.subscriptions.push(
+    vscode.commands.registerTextEditorCommand("pike.moveLinesDown", async (editor) => {
+      const before = editor.document.getText();
+      await vscode.commands.executeCommand("editor.action.moveLinesDownAction");
+      if (editor.document.getText() !== before) {
+        await vscode.commands.executeCommand("editor.action.formatDocument");
+      }
+    }),
+  );
+
   // Keep status bar updated when error count changes.
   const unsubscribeErrors = onErrorCountChange((count) => {
     updateStatusBarWithErrors(State.Running, count);

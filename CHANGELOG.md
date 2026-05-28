@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - Predef builtin documentation: 204 of 283 C-level predef functions now have
+    human-readable docs on hover and in completion detail. Extracted from
+    Pike's `core_autodoc.xml`. Completions use named params from autodoc for
+    snippet tab stops (e.g., `write(${1:fmt})`).
+  - Semantic token classification for predef builtins and stdlib modules:
+    unresolved identifiers that match predef builtins are highlighted as
+    `function`, stdlib module names as `namespace` (instead of all being
+    `variable`).
+  - Keyword snippet completions: 23 Pike keywords (`if`, `for`, `foreach`,
+    `while`, `class`, `lambda`, `catch`, `switch`, etc.) now offer structural
+    snippet expansion. Keywords sort after all symbol completions so identifiers
+    always appear first.
+
+### Fixed
+
+  - ALT+UP/DOWN line moves now reformat the document via pike-fmt instead of
+    relying on regex-based `indentationRules` which cannot track actual block
+    nesting. Wrapper commands (`pike.moveLinesUp`/`pike.moveLinesDown`) replace
+    the built-in move action for Pike files and call
+    `editor.action.formatDocument` after each successful move.
+
 ## [0.8.10] — 2026-05-28
 
 ### Fixed

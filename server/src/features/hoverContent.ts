@@ -33,11 +33,19 @@ export interface HoverInfo {
   isAutodoc?: boolean;
 }
 
+export interface PredefAutodocEntry {
+  signature: string;
+  markdown: string;
+  params?: Array<{ name: string; type: string }>;
+  returnType?: string;
+}
+
 export interface HoverContentContext {
   documents: TextDocuments<TextDocument>;
   autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
+  predefAutodoc: Record<string, PredefAutodocEntry>;
 }
 
 // ---------------------------------------------------------------------------
@@ -171,12 +179,31 @@ function parseFunctionType(sig: string): FunctionType | null {
  * Build hover markdown for a predef builtin function.
  * Shows each overload as a separate code line in a pike code block.
  */
-export function buildPredefHoverMarkdown(name: string, overloads: string[]): string {
+export function buildPredefHoverMarkdown(name: string, overloads: string[], autodocEntry?: PredefAutodocEntry): string {
   const lines: string[] = ["```pike"];
   for (const sig of overloads) {
     lines.push(sig);
   }
   lines.push("```");
+
+  if (autodocEntry?.markdown) {
+    lines.push("");
+    lines.push(autodocEntry.markdown);
+  }
+
+  if (autodocEntry?.params && autodocEntry.params.length > 0) {
+    lines.push("");
+    lines.push("**Parameters:**");
+    for (const p of autodocEntry.params) {
+      lines.push(`- \`${p.name}\` (\`${p.type}\`)`);
+    }
+  }
+
+  if (autodocEntry?.returnType) {
+    lines.push("");
+    lines.push(`**Returns:** \`${autodocEntry.returnType}\``);
+  }
+
   return lines.join("\n");
 }
 
@@ -322,10 +349,11 @@ function hoverFromStdlib(
   const builtinSig = ctx.predefBuiltins[decl.name];
   if (builtinSig) {
     const overloads = renderPredefSignature(decl.name, builtinSig);
+    const autodocEntry = ctx.predefAutodoc?.[decl.name];
     return makeHoverInfo(
       decl,
       overloads.join("\n"),
-      buildPredefHoverMarkdown(decl.name, overloads),
+      buildPredefHoverMarkdown(decl.name, overloads, autodocEntry),
       true,
     );
   }
