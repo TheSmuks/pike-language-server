@@ -508,6 +508,52 @@ describe("getOutgoingCalls", () => {
     assert(result.length === 0, `Expected 0 outgoing calls for unresolved, got ${result.length}`);
     tree.delete();
   });
+
+  // Method chain: obj->greet() should resolve to the "greet" method declaration.
+  test("finds outgoing call via method chain (obj->method())", () => {
+    const src = [
+      "class Animal {",
+      "  void greet() { }",
+      "}",
+      "void caller() {",
+      "  Animal a = Animal();",
+      "  a->greet();",
+      "}",
+    ].join("\n");
+    const tree = parser.parse(src);
+    assert(tree, "Parse failed");
+
+    const caller = makeDecl({
+      id: 1,
+      name: "caller",
+      kind: "function",
+      nameRange: { start: { line: 3, character: 5 }, end: { line: 3, character: 11 } },
+      range: { start: { line: 3, character: 0 }, end: { line: 6, character: 1 } },
+    });
+    const greet = makeDecl({
+      id: 2,
+      name: "greet",
+      kind: "method",
+      nameRange: { start: { line: 1, character: 7 }, end: { line: 1, character: 12 } },
+      range: { start: { line: 1, character: 2 }, end: { line: 1, character: 16 } },
+    });
+    const table = makeTable([caller, greet]);
+    const index = makeWorkspaceIndex({});
+
+    const item: CallHierarchyItem = {
+      name: "caller",
+      kind: 12,
+      uri: "file:///test/test.pike",
+      range: caller.range,
+      selectionRange: caller.nameRange,
+    };
+
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
+    assert(result[0].to.name === "greet", `Expected callee "greet", got "${result[0].to.name}"`);
+    assert(result[0].to.kind === 6, `Expected callee kind 6 (Method), got ${result[0].to.kind}`);
+    tree.delete();
+  });
 });
 
 function assert(condition: unknown, msg: string): asserts condition {
