@@ -34,7 +34,9 @@ import {
   buildPredefHoverMarkdown,
   type HoverContentContext,
   type PredefAutodocEntry,
+  type HoverInfo,
 } from "./hoverContent";
+import { getStdlibEntriesByName } from "./completion-stdlib";
 import { utf16ToUtf8 } from "../util/positionConverter";
 
 // Re-export for any external consumers
@@ -211,9 +213,58 @@ async function resolveHoverFallback(
     hoverResolutionCtx, table, params.textDocument.uri,
     params.position.line, params.position.character, hoverTree,
   );
-  if (accessDecl) return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
+  if (accessDecl) {
+    // Try stdlib hover with the resolved access FQN before falling through
+    // to declForHover which only checks unqualified names.
+    const stdlibHover = hoverFromStdlibAccess(accessDecl.decl, ctx);
+    if (stdlibHover) return formatHover(stdlibHover);
+
+    return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
+  }
 
   return resolveHoverBuiltin(ctx, hoverTree, doc, params);
+}
+
+/**
+ * Try to find stdlib hover info for a resolved access declaration.
+ *
+ * When hovering over `f->open()` where `f` is `Stdio.File`, the access
+ * resolver returns the Declaration for `open` from a workspace class.
+ * `declForHover` checks `predef.open` (wrong) — this function uses the
+ * reverse index to find all stdlib entries with that name and returns
+ * the first match with rich markdown documentation.
+ */
+function hoverFromStdlibAccess(
+  decl: Declaration,
+  ctx: HoverContext,
+): HoverInfo | null {
+  const matches = getStdlibEntriesByName(ctx.stdlibIndex, decl.name);
+  if (!matches || matches.length === 0) return null;
+
+  // Use the first match that has markdown docs.
+  for (const { entry } of matches) {
+    if (entry.markdown && entry.markdown.length > 0) {
+      return {
+        name: decl.name,
+        signature: entry.signature,
+        documentation: entry.markdown,
+        line: decl.nameRange.start.line,
+        character: decl.nameRange.start.character,
+        isAutodoc: true,
+      };
+    }
+  }
+
+  // Fall back to first match even without docs.
+  const first = matches[0].entry;
+  return {
+    name: decl.name,
+    signature: first.signature,
+    documentation: first.markdown,
+    line: decl.nameRange.start.line,
+    character: decl.nameRange.start.character,
+    isAutodoc: true,
+  };
 }
 
 /** Try to resolve hover from predef builtins or stdlib index. */

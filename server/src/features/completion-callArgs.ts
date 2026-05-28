@@ -19,6 +19,7 @@ import {
   extractParamsFromType,
 } from "./completion-items";
 import type { CompletionContext } from "./completionTrigger";
+import { getStdlibEntriesByName } from "./completion-stdlib";
 
 // ---------------------------------------------------------------------------
 // Call-args completion
@@ -92,17 +93,16 @@ export async function completeCallArgs(
     }
   }
 
-  // 5. Stdlib lookup — search all stdlib entries for matching function name
-  for (const [fqn, entry] of Object.entries(ctx.stdlibIndex)) {
-    // fqn is like "predef.Module.method" — check last segment
-    const parts = fqn.split(".");
-    const lastName = parts[parts.length - 1];
-    if (lastName !== calleeName) continue;
-    // Skip class/module entries (they have "inherit" signatures)
-    if (entry.signature.startsWith("inherit")) continue;
-    const params = extractParamsFromStdlibSignature(entry.signature);
-    if (params !== null) {
-      return [makeArgSnippet(calleeName, params, entry.signature)];
+  // 5. Stdlib lookup — O(1) reverse index by unqualified name
+  const stdlibMatches = getStdlibEntriesByName(ctx.stdlibIndex, calleeName);
+  if (stdlibMatches) {
+    for (const { entry } of stdlibMatches) {
+      // Skip class/module entries (they have "inherit" signatures)
+      if (entry.signature.startsWith("inherit")) continue;
+      const params = extractParamsFromStdlibSignature(entry.signature);
+      if (params !== null) {
+        return [makeArgSnippet(calleeName, params, entry.signature)];
+      }
     }
   }
 
