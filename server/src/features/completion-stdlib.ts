@@ -225,6 +225,51 @@ export function resetAutoImportCache(): void {
 export function resetStdlibCache(): void {
   stdlibChildrenMap = null;
   stdlibTopLevelNames = null;
+  stdlibNameReverseIndex = null;
+}
+
+// ---------------------------------------------------------------------------
+// Name-based reverse index for O(1) call-args lookup (C4)
+// ---------------------------------------------------------------------------
+
+/** Map from unqualified name → all stdlib entries with that last-segment name. */
+let stdlibNameReverseIndex: Map<string, Array<{ fqn: string; entry: StdlibEntry }>> | null = null;
+
+/**
+ * Build a reverse index: unqualified symbol name → stdlib entries.
+ * Used by call-args completion for O(1) lookup instead of linear scan.
+ */
+function buildNameReverseIndex(
+  stdlibIndex: Record<string, StdlibEntry>,
+): Map<string, Array<{ fqn: string; entry: StdlibEntry }>> {
+  const map = new Map<string, Array<{ fqn: string; entry: StdlibEntry }>>();
+  for (const [fqn, entry] of Object.entries(stdlibIndex)) {
+    const parts = fqn.split(".");
+    if (parts.length < 2 || parts[0] !== "predef") continue;
+    const lastName = parts[parts.length - 1];
+    const existing = map.get(lastName);
+    const record = { fqn, entry };
+    if (existing) {
+      existing.push(record);
+    } else {
+      map.set(lastName, [record]);
+    }
+  }
+  return map;
+}
+
+/**
+ * Look up stdlib entries by unqualified name (O(1)).
+ * Returns all matching entries or undefined if not found.
+ */
+export function getStdlibEntriesByName(
+  stdlibIndex: Record<string, StdlibEntry>,
+  name: string,
+): Array<{ fqn: string; entry: StdlibEntry }> | undefined {
+  if (!stdlibNameReverseIndex) {
+    stdlibNameReverseIndex = buildNameReverseIndex(stdlibIndex);
+  }
+  return stdlibNameReverseIndex.get(name);
 }
 
 // ---------------------------------------------------------------------------

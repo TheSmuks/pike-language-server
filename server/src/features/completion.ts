@@ -14,7 +14,7 @@ import {
   CompletionList,
   InsertTextFormat,
 } from "vscode-languageserver/node";
-import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
+import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt, resolveTypeName } from "./symbolTable";
 import {
   type CompletionContext,
   detectTriggerContext,
@@ -442,7 +442,28 @@ async function completeMemberAccess(
 
   await addWorkspaceModuleMembers(lhsNode.text, ctx, items, seenNames);
   addStdlibMembers(lhsNode.text, ctx, items, seenNames);
-  await addResolvedTypeMembers(lhsNode, table, line, character, ctx, items, seenNames);
+
+  // Type-resolved member access: resolves variable type → class members.
+  // Also falls back to stdlib lookup using the resolved type name when
+  // direct module-name matching fails (e.g., `Stdio.File f; f->` where
+  // lhsText is "f" but the type is "Stdio.File").
+  const resolvedDecl = await resolveChainedType(lhsNode, table, line, character, ctx);
+  if (resolvedDecl && resolvedDecl.kind !== "inherit") {
+    // Try stdlib children lookup by the resolved type's FQN.
+    // resolveTypeMembers handles workspace class scope, but stdlib types
+    // are not in the workspace — check the stdlib index explicitly.
+    const typeName = resolveTypeName(resolvedDecl);
+    if (typeName) {
+      addStdlibMembersByType(typeName, ctx, items, seenNames);
+    }
+
+    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
+    for (const item of typeMembers) {
+      if (seenNames.has(item.label)) continue;
+      seenNames.add(item.label);
+      items.push(item);
+    }
+  }
 
   // Dot access hides private members (Pike convention: __ prefix).
   // Arrow access (->) shows all members, including private.
@@ -517,23 +538,40 @@ function buildStdlibMemberItem(
   return item;
 }
 
-/** Strategy 3: Resolve LHS expression type and collect type members. */
-async function addResolvedTypeMembers(
-  lhsNode: Node,
-  table: SymbolTable,
-  line: number,
-  character: number,
+/**
+ * Strategy 3b: Look up stdlib children by resolved type name.
+ *
+ * When a variable has declared type `Stdio.File`, the stdlib index
+ * can provide members under `predef.Stdio.File`. This is the fallback
+ * for types not found in the workspace.
+ */
+function addStdlibMembersByType(
+  typeName: string,
   ctx: CompletionContext,
   items: CompletionItem[],
   seenNames: Set<string>,
-): Promise<void> {
-  const resolvedDecl = await resolveChainedType(lhsNode, table, line, character, ctx);
-  if (!resolvedDecl || resolvedDecl.kind === "inherit") return;
+): void {
+  // Try multiple FQN patterns: "predef.Stdio.File", "predef.Stdio"
+  const candidates = [
+    "predef." + typeName,
+    // Also try the first segment for module-level children
+    ...typeName.split(".").length > 1
+      ? ["predef." + typeName.split(".")[0]]
+      : [],
+  ];
 
-  const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
-  for (const item of typeMembers) {
-    if (seenNames.has(item.label)) continue;
-    seenNames.add(item.label);
-    items.push(item);
+  const childrenMap = getStdlibChildrenMap(ctx.stdlibIndex);
+  for (const prefix of candidates) {
+    const stdlibMembers = childrenMap.get(prefix);
+    if (!stdlibMembers) continue;
+
+    for (const member of stdlibMembers) {
+      if (seenNames.has(member.name)) continue;
+      seenNames.add(member.name);
+      items.push(buildStdlibMemberItem(member));
+    }
+    // First match wins — don't accumulate from multiple prefixes
+    // since longer prefixes are more specific.
+    return;
   }
 }

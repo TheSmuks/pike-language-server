@@ -27,18 +27,19 @@ import type { Declaration, SymbolTable } from "./symbolTable";
  * 'namespace' covers both `inherit` and `import` declarations.
  */
 export const TOKEN_TYPES = [
-  "class",       // 0 — class declarations
-  "enum",        // 1 — enum declarations
-  "enumMember",  // 2 — enum members
-  "function",    // 3 — top-level and nested functions
-  "method",      // 4 — class methods (functions inside a class scope)
-  "variable",    // 5 — local and top-level variables, constants (with readonly modifier)
-  "parameter",   // 6 — function/method parameters
-  "type",        // 7 — typedef declarations
-  "namespace",   // 8 — inherit and import declarations
+  "class",           // 0 — class declarations
+  "enum",            // 1 — enum declarations
+  "enumMember",      // 2 — enum members
+  "function",        // 3 — top-level and nested functions
+  "method",          // 4 — class methods (functions inside a class scope)
+  "variable",        // 5 — local and top-level variables, constants (with readonly modifier)
+  "parameter",       // 6 — function/method parameters
+  "type",            // 7 — typedef declarations
+  "namespace",       // 8 — inherit and import declarations
+  "builtinFunction", // 9 — predef/runtime built-in functions (superType: function)
 ] as const;
 
-export type TokenTypeId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export type TokenTypeId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 // ---------------------------------------------------------------------------
 // Token modifier legend
@@ -54,9 +55,10 @@ export const TOKEN_MODIFIERS = [
   "readonly",     // 2 — constant declarations
   "static",       // 3 — class-level (non-instance) declarations
   "deprecated",   // 4 — marked @deprecated in AutoDoc
+  "mutable",      // 5 — reassignable variables (non-constant, non-parameter)
 ] as const;
 
-export type TokenModifierId = 0 | 1 | 2 | 3 | 4;
+export type TokenModifierId = 0 | 1 | 2 | 3 | 4 | 5;
 
 // ---------------------------------------------------------------------------
 // DeclKind → TokenType mapping
@@ -116,6 +118,12 @@ export function tokenModifiersForDecl(
   // Constants get the readonly modifier
   if (kind === "constant") {
     modifiers |= (1 << 2); // readonly
+  }
+
+  // Non-constant, non-parameter variables get the mutable modifier.
+  // Themes can use this to distinguish reassignable locals from constants/params.
+  if (kind === "variable") {
+    modifiers |= (1 << 5); // mutable
   }
 
   // Class-level (non-instance) declarations get the static modifier
@@ -252,13 +260,13 @@ export function produceSemanticTokens(
     }
 
     // Other unresolved identifiers — classify using external lookup.
-    // Predef builtins get `function` type, stdlib modules get `namespace`.
+    // Predef builtins get `builtinFunction` type, stdlib modules get `namespace`.
     // Unknown references fall back to `variable`.
     if (ref.name.length > 0) {
       let refTypeId: TokenTypeId = 5; // 'variable'
       if (externalLookup) {
         if (externalLookup.predefBuiltins?.has(ref.name)) {
-          refTypeId = 3; // 'function'
+          refTypeId = 9; // 'builtinFunction'
         } else if (externalLookup.stdlibModules?.has(ref.name)) {
           refTypeId = 8; // 'namespace'
         }
