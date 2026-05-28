@@ -7,8 +7,8 @@
 The `textDocument/formatting` feature uses a three-layer architecture:
 
 1. **`client/language-configuration.json`** — Client-side indentation rules (Enter, Tab, auto-indent). No LSP traffic.
-2. **`pike-fmt`** — Standalone formatter tool (separate repository). Uses tree-sitter-pike.
-3. **`server/src/features/formattingHandler.ts`** — LSP thin wrapper that shells out to `pike-fmt`.
+2. **`pike-fmt`** — Standalone formatter library, imported in-process (NOT a subprocess).
+3. **`server/src/features/formattingHandler.ts`** — LSP handler that calls pike-fmt functions directly.
 
 | # | Limitation | Impact | Mitigation |
 |---|------------|--------|------------|
@@ -17,7 +17,7 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 | 3 | **No operator spacing** | Phase 1 is indentation normalization only | Future phases may add spacing |
 | 4 | **Multiline string/comment bodies preserved** | Formatter only touches leading whitespace | Intentional for Phase 1 |
 | 5 | **Range formatting not implemented** | Formatter operates on whole files | Full-document formatting only |
-| 6 | **Requires pike-fmt installed** | LSP handler shells out to `pike-fmt` | Error response if binary not found |
+| 6 | **Requires pike-fmt dependency** | Formatter is imported in-process via `pike-fmt` package | Build-time dependency, no runtime PATH requirement |
 
 ### Cross-File Resolution (Phase 4)
 
