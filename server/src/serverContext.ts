@@ -17,9 +17,11 @@ import type { SymbolTable } from "./features/symbolTable";
 import {
   loadStdlibAutodocIndex,
   loadPredefBuiltinIndex,
+  loadPredefAutodocIndex,
 } from "./util/staticDataValidation.js";
 import stdlibAutodocIndexRaw from "./data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "./data/predef-builtin-index.json";
+import predefAutodocIndexRaw from "./data/predef-autodoc.json";
 import { logError, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
@@ -57,6 +59,12 @@ export interface ServerContext {
   memoryTimer?: ReturnType<typeof setInterval>;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
+  predefAutodoc: Record<string, {
+    signature: string;
+    markdown: string;
+    params?: Array<{ name: string; type: string }>;
+    returnType?: string;
+  }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -131,6 +139,7 @@ export function createServerContext(
 
   const stdlibIndex = loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection);
   const predefBuiltins = loadPredefBuiltinIndex(predefBuiltinIndexRaw, connection);
+  const predefAutodoc = loadPredefAutodocIndex(predefAutodocIndexRaw, connection);
 
   return {
     connection,
@@ -148,6 +157,7 @@ export function createServerContext(
     clientSupportsSemanticTokensRefresh: false,
     stdlibIndex,
     predefBuiltins,
+    predefAutodoc,
   };
 }
 

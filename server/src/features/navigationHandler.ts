@@ -40,6 +40,7 @@ export interface NavigationContext {
   diagnosticManager: DiagnosticManager;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
+  predefAutodoc: Record<string, { signature: string; markdown: string; params?: Array<{ name: string; type: string }>; returnType?: string }>;
   /** Connection for logging when content is unexpectedly null. */
   connection: Connection;
 }
