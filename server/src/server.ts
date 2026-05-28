@@ -132,6 +132,7 @@ function registerFeatureHandlers(
     autodocCache: ctx.autodocCache,
     get stdlibIndex() { return ctx.stdlibIndex; },
     get predefBuiltins() { return ctx.predefBuiltins; },
+    get predefAutodoc() { return ctx.predefAutodoc; },
     diagnosticManager: ctx.diagnosticManager,
     connection: ctx.connection,
   };

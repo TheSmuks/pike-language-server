@@ -18,6 +18,7 @@ export interface CompletionContext {
   index: WorkspaceIndex;
   stdlibIndex: Record<string, StdlibEntry>;
   predefBuiltins: Record<string, string>;
+  predefAutodoc: Record<string, { signature: string; markdown: string; params?: Array<{ name: string; type: string }>; returnType?: string }>;
   uri: string;
   /** Full document text — used for line extraction in detectTriggerContext. */
   source: string;

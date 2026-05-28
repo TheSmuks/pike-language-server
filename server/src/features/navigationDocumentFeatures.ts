@@ -20,7 +20,11 @@ import {
   getDefinitionAt,
   getReferencesTo,
 } from "./symbolTable";
-import { produceSemanticTokens, deltaEncodeTokens } from "./semanticTokens";
+import {
+  produceSemanticTokens,
+  deltaEncodeTokens,
+  getExternalLookup,
+} from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
@@ -114,7 +118,8 @@ async function handleSemanticTokens(
   const table = await ctx.getSymbolTable(params.textDocument.uri);
   if (!table) return { data: [] };
 
-  const tokens = produceSemanticTokens(table);
+  const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
+  const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(tokens);
   return { data };
 }
