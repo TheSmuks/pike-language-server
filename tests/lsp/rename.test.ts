@@ -560,49 +560,58 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(edit.changes[uri]).toHaveLength(3);
   });
 
-  test("returns null for empty position", async () => {
+  test("returns error for empty position", async () => {
     const uri = server.openDoc(
       "file:///rename-empty.pike",
       "   \n",
     );
 
-    const result = await server.client.sendRequest("textDocument/rename", {
-      textDocument: { uri },
-      position: { line: 0, character: 0 },
-      newName: "foo",
-    });
-
-    expect(result).toBeNull();
+    try {
+      await server.client.sendRequest("textDocument/rename", {
+        textDocument: { uri },
+        position: { line: 0, character: 0 },
+        newName: "foo",
+      });
+      expect.unreachable("should have thrown");
+    } catch (err: any) {
+      expect(err.message).toContain("No renamable symbol at the given position");
+    }
   });
 
-  test("returns null for rename to keyword", async () => {
+  test("returns error for rename to keyword", async () => {
     const uri = server.openDoc(
       "file:///rename-keyword.pike",
       "int myVar = 1;\n",
     );
 
-    const result = await server.client.sendRequest("textDocument/rename", {
-      textDocument: { uri },
-      position: { line: 0, character: 4 }, // "myVar"
-      newName: "class",
-    });
-
-    expect(result).toBeNull();
+    try {
+      await server.client.sendRequest("textDocument/rename", {
+        textDocument: { uri },
+        position: { line: 0, character: 4 }, // "myVar"
+        newName: "class",
+      });
+      expect.unreachable("should have thrown");
+    } catch (err: any) {
+      expect(err.message).toContain('"class" is a Pike reserved word.');
+    }
   });
 
-  test("returns null when old name equals new name", async () => {
+  test("returns error when old name equals new name", async () => {
     const uri = server.openDoc(
       "file:///rename-same.pike",
       "int myVar = 1;\n",
     );
 
-    const result = await server.client.sendRequest("textDocument/rename", {
-      textDocument: { uri },
-      position: { line: 0, character: 4 },
-      newName: "myVar",
-    });
-
-    expect(result).toBeNull();
+    try {
+      await server.client.sendRequest("textDocument/rename", {
+        textDocument: { uri },
+        position: { line: 0, character: 4 },
+        newName: "myVar",
+      });
+      expect.unreachable("should have thrown");
+    } catch (err: any) {
+      expect(err.message).toContain("New name is the same as the current name");
+    }
   });
 });
 
