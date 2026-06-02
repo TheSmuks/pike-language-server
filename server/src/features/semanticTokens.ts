@@ -253,8 +253,20 @@ export function produceSemanticTokens(
       continue;
     }
 
-    // Unresolved arrow/dot access — skip (no meaningful token type)
-    if (ref.kind === 'arrow_access' || ref.kind === 'dot_access') continue;
+    // Unresolved member access still carries useful syntax-color information.
+    // The resolver can miss members when the left-hand side type is unknown or
+    // cross-file state is cold; emitting a method-shaped token keeps
+    // `something->member` visibly distinct instead of erasing the member name.
+    if (ref.kind === 'arrow_access' || ref.kind === 'dot_access') {
+      tokens.push({
+        line: ref.loc.line,
+        character: ref.loc.character,
+        length: ref.name.length,
+        typeId: METHOD_TYPE_ID,
+        modifiers: 0,
+      });
+      continue;
+    }
 
     // Unresolved scope access — skip
     if (ref.kind === 'scope_access') continue;
