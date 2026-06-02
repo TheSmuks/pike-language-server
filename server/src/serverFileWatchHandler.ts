@@ -69,6 +69,7 @@ function handleFileCreatedOrChanged(
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
+  ctx.semanticTokensCache.delete(uri);
 
   // File not open in editor — the on-demand indexer will re-index it
   // when cross-file queries need it (file watchers only provide URIs,
@@ -89,6 +90,7 @@ function handleFileDeleted(
   deleteTree(uri);
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
+  ctx.semanticTokensCache.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
 
   // Invalidate and refresh open dependents — they now have a broken dependency.
