@@ -14,7 +14,7 @@
           "character": 10
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'f' is unused"
@@ -30,7 +30,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'bytes' is unused"

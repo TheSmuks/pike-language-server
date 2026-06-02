@@ -14,7 +14,7 @@
           "character": 32
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'side_effect' is unused"
@@ -30,7 +30,7 @@
           "character": 47
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'x' is unused"
@@ -46,7 +46,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'sum' is unused"
@@ -62,7 +62,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'len' is unused"
@@ -78,7 +78,7 @@
           "character": 12
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'result' is unused"
@@ -94,7 +94,7 @@
           "character": 20
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'doubled' is unused"
@@ -110,7 +110,7 @@
           "character": 30
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'sub' is unused"

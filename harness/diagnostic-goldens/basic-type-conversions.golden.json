@@ -14,7 +14,7 @@
           "character": 12
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'parsed' is unused"

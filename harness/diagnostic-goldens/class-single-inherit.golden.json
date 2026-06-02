@@ -14,7 +14,7 @@
           "character": 13
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'desc' is unused"
@@ -30,7 +30,7 @@
           "character": 13
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'name' is unused"
@@ -46,7 +46,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'gd_desc' is unused"

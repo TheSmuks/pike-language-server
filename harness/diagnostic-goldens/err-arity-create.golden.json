@@ -14,7 +14,7 @@
           "character": 19
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'a' is unused"
@@ -30,7 +30,7 @@
           "character": 19
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'a' is unused"
@@ -46,7 +46,7 @@
           "character": 26
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'b' is unused"
@@ -62,7 +62,7 @@
           "character": 33
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'c' is unused"
@@ -78,7 +78,7 @@
           "character": 7
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'f' is unused"
@@ -94,7 +94,7 @@
           "character": 7
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'b' is unused"
@@ -110,7 +110,7 @@
           "character": 8
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'f2' is unused"
