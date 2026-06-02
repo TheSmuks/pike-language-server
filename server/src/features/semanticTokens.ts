@@ -11,6 +11,14 @@
  *
  * Token production (consuming the symbol table to emit tokens) is US-013.
  * LSP handler registration is US-014.
+ *
+ * Aggregate-literal classification (ADR-0029) is gated on resolving an
+ * upstream tree-sitter-pike issue: the grammar's `array_literal` /
+ * `multiset_literal` / `mapping_literal` node types are not emitted for
+ * the common expression-context case. See `docs/known-limitations.md`
+ * for the issue link. Once the upstream fix lands, this file will
+ * receive a `collectLiteralNodeSpans()` tree walker that the handler
+ * will invoke alongside `produceSemanticTokens()`.
  */
 
 import type { Declaration, SymbolTable } from "./symbolTable";
