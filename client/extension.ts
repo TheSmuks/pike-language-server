@@ -173,6 +173,9 @@ function getSettings(): Record<string, unknown> {
     // Formatting
     formatInsertFinalNewline: config.get<boolean>("format.insertFinalNewline", true),
     formatOperatorSpacing: config.get<boolean>("format.operatorSpacing", false),
+
+    // Debug telemetry
+    debugTelemetry: config.get<boolean>("debug.telemetry", false),
   };
 }
 
@@ -229,12 +232,29 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // step 2: language configuration
   try {
-    const langConfigPath = context.asAbsolutePath("language-configuration.json");
+    // Dev layout keeps the file under client/, packaged VSIX copies it to root.
+    const candidatePaths = [
+      context.asAbsolutePath("client/language-configuration.json"),
+      context.asAbsolutePath("language-configuration.json"),
+    ];
+
+    let langConfigPath: string | null = null;
+    for (const candidatePath of candidatePaths) {
+      if (fs.existsSync(candidatePath)) {
+        langConfigPath = candidatePath;
+        break;
+      }
+    }
+
+    if (!langConfigPath) {
+      throw new Error(`not found in any expected location: ${candidatePaths.join(", ")}`);
+    }
+
     const langConfig = JSON.parse(fs.readFileSync(langConfigPath, "utf8"));
     context.subscriptions.push(
       vscode.languages.setLanguageConfiguration("pike", langConfig),
     );
-    log("info", "EXT", "[init] step 2/6: language configuration loaded");
+    log("info", "EXT", `[init] step 2/6: language configuration loaded (${langConfigPath})`);
   } catch (err) {
     log("info", "EXT", `[init] step 2/6: language-configuration.json not loaded — ${(err as Error).message}`);
   }

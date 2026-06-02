@@ -19,6 +19,7 @@ import {
 import { resolveAccessDefinition } from "./accessResolver";
 import { findImplementations } from "./implementation";
 import { resolveIncludeTarget } from "./navigationInclude";
+import { logInfo } from "../util/errorLog.js";
 
 /**
  * Register go-to navigation handlers on the connection.
@@ -173,6 +174,47 @@ async function handleReferences(
   );
   if (crossFileRefs.length > 0) {
     return buildCrossFileRefResults(crossFileRefs, table, params, includeDeclaration);
+  }
+
+  // Fallback: for unresolved symbols in freshly-opened files, ask async cross-file
+  // definition resolution (which can trigger on-demand indexing) then re-run
+  // reference lookup anchored at the resolved declaration position.
+  const crossFileDecl = await ctx.index.resolveCrossFileDefinition(
+    params.textDocument.uri,
+    params.position.line,
+    params.position.character,
+  );
+  if (crossFileDecl) {
+    const anchoredRefs = ctx.index.getCrossFileReferences(
+      crossFileDecl.uri,
+      crossFileDecl.decl.nameRange.start.line,
+      crossFileDecl.decl.nameRange.start.character,
+    );
+    if (ctx.debugTelemetry) {
+      logInfo(
+        ctx.connection,
+        `[telemetry] references cross-file-fallback uri=${params.textDocument.uri} targetUri=${crossFileDecl.uri} refs=${anchoredRefs.length}`,
+      );
+    }
+    if (anchoredRefs.length > 0) {
+      let results = anchoredRefs.map(({ uri, ref }) => ({
+        uri,
+        range: {
+          start: { line: ref.loc.line, character: ref.loc.character },
+          end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
+        },
+      }));
+      if (includeDeclaration) {
+        const declLoc = declToLspLocation(crossFileDecl.uri, crossFileDecl.decl);
+        const duplicateDecl = results.some(
+          r => r.uri === declLoc.uri &&
+            r.range.start.line === declLoc.range.start.line &&
+            r.range.start.character === declLoc.range.start.character,
+        );
+        if (!duplicateDecl) results.unshift(declLoc);
+      }
+      return results;
+    }
   }
 
   return buildSameFileRefResults(table, params, includeDeclaration);

@@ -29,7 +29,7 @@ import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
 import { getSelectionRange } from "./selectionRange";
-import { logError, ErrorCategory } from "../util/errorLog.js";
+import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 
 /**
  * Register document analysis feature handlers on the connection.
@@ -111,16 +111,50 @@ async function handleSemanticTokens(
   params: { textDocument: { uri: string } },
   token: CancellationToken,
 ) {
-  if (token.isCancellationRequested) return { data: [] };
-  const doc = ctx.documents.get(params.textDocument.uri);
+  const uri = params.textDocument.uri;
+  const doc = ctx.documents.get(uri);
+  const docVersion = doc?.version;
+  const cached = ctx.semanticTokensCache.get(uri);
+
+  // Cancellation is often transient during rapid edits/reindex. Reuse cached
+  // tokens only when they match the current document version. Version-mismatched
+  // cached ranges can paint partial words (e.g. "funct`ion"-style splits).
+  if (token.isCancellationRequested) {
+    if (cached && docVersion !== undefined && cached.version === docVersion) {
+      if (ctx.debugTelemetry) {
+        logInfo(ctx.connection, `[telemetry] semanticTokens cache-hit-on-cancel uri=${uri} version=${docVersion} tokens=${cached.data.length}`);
+      }
+      return { data: cached.data };
+    }
+    if (ctx.debugTelemetry) {
+      logInfo(ctx.connection, `[telemetry] semanticTokens dropped-on-cancel uri=${uri} docVersion=${docVersion ?? "none"} cacheVersion=${cached?.version ?? "none"}`);
+    }
+    return { data: [] };
+  }
+
   if (!doc) return { data: [] };
 
-  const table = await ctx.getSymbolTable(params.textDocument.uri);
-  if (!table) return { data: [] };
+  const table = await ctx.getSymbolTable(uri);
+  if (!table) {
+    if (cached && cached.version === doc.version) {
+      if (ctx.debugTelemetry) {
+        logInfo(ctx.connection, `[telemetry] semanticTokens cache-hit-no-table uri=${uri} version=${doc.version} tokens=${cached.data.length}`);
+      }
+      return { data: cached.data };
+    }
+    if (ctx.debugTelemetry) {
+      logInfo(ctx.connection, `[telemetry] semanticTokens empty-no-table uri=${uri} version=${doc.version}`);
+    }
+    return { data: [] };
+  }
 
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(tokens);
+  ctx.semanticTokensCache.set(uri, { version: doc.version, data });
+  if (ctx.debugTelemetry) {
+    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length}`);
+  }
   return { data };
 }
 

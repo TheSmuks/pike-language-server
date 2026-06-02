@@ -130,6 +130,47 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Redact likely sensitive local paths and file:// URIs from log text.
+ */
+function sanitizeLogText(text: string): string {
+  let out = text;
+
+  // file:///abs/path or file://C:/path
+  out = out.replace(/file:\/\/(?:\/)?[^\s)\]"']+/g, "<file-uri>");
+
+  // Unix absolute paths (best-effort): /a/b, /home/user/project/file.pike
+  out = out.replace(/(^|[\s(\["'])\/(?:[^\s/]+\/)+[^\s)\]"']+/g, "$1<path>");
+
+  // Windows absolute paths: C:\Users\name\file
+  out = out.replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)+[^\\\s)\]"']+/g, "<path>");
+
+  return out;
+}
+
+/** Build a self-contained issue report block for copy/paste bug reports. */
+function buildIssueReportBlock(entry: LogEntry): string[] {
+  const lines: string[] = [
+    "[pike-lsp-report] --- BEGIN ---",
+    `id: ${entry.id}`,
+    `timestamp: ${entry.timestamp}`,
+    `level: ${entry.level}`,
+    `category: ${entry.category ?? "unknown"}`,
+    `context: ${sanitizeLogText(entry.context ?? "unknown")}`,
+    `message: ${sanitizeLogText(entry.message)}`,
+  ];
+
+  if (entry.stack) {
+    lines.push("stack:");
+    for (const line of entry.stack.split("\n")) {
+      lines.push(`  ${sanitizeLogText(line)}`);
+    }
+  }
+
+  lines.push("[pike-lsp-report] --- END ---");
+  return lines;
+}
+
 // ---------------------------------------------------------------------------
 // Safe connection write via custom notification
 // ---------------------------------------------------------------------------
@@ -145,9 +186,10 @@ function now(): string {
  * custom notification is not yet registered or the connection is down.
  */
 function safeWrite(connection: Connection, level: LogLevel, lines: string[]): void {
-  const text = lines.join("\n");
+  const sanitizedLines = lines.map(sanitizeLogText);
+  const text = sanitizedLines.join("\n");
   try {
-    connection.sendNotification("pike/log", { level, lines });
+    connection.sendNotification("pike/log", { level, lines: sanitizedLines });
   } catch {
     // Custom notification not registered (early startup or teardown).
     // Fall back to connection.console so the message is not lost.
@@ -201,14 +243,20 @@ export function logWarn(
   const message = isCategory ? maybeMessage : (messageOrCategory as string);
   const ctx = maybeCtx;
 
-  errorLog.push({
+  const entry = errorLog.push({
     level: "WARN",
     category,
     message: ctx ? `[${ctx}] ${message}` : message,
     stack: undefined,
     context: ctx,
   });
-  safeWrite(connection, "WARN", [message]);
+
+  const lines: string[] = [message];
+  if (category !== undefined) {
+    lines.push(...buildIssueReportBlock(entry));
+  }
+
+  safeWrite(connection, "WARN", lines);
 }
 
 /**
@@ -244,6 +292,8 @@ export function logError(
       `    stack:\n${stack.split("\n").map((l) => "      " + l).join("\n")}`,
     );
   }
+
+  lines.push(...buildIssueReportBlock(entry));
 
   safeWrite(connection, "ERROR", lines);
 

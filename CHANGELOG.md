@@ -8,6 +8,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - `debug.telemetry` VSCode setting: enables verbose server-side telemetry
+    for semantic token and diagnostic staleness debugging (off by default).
+
+### Fixed
+
+  - Stale semantic token rendering: semantic tokens cached from an older
+    document version could be misapplied after document changes. Cache is
+    now version-gated — tokens are only reused when `cache.version` matches
+    the current document version. Partial token misalignments (e.g. coloring
+    only the prefix of an identifier) are resolved.
+  - Stale diagnostics after rapid edits: async diagnostics published from a
+    prior document state could appear as "ghost" errors after a subsequent
+    edit. All `publishDiagnostics` calls are now version-gated — diagnostics
+    are only published when the document version hasn't advanced since the
+    request was initiated.
+  - `textDocument/references` fallback on newly-opened files: references
+    requests on a file opened for the first time could fail silently because
+    the symbol table hadn't been populated yet. The handler now eagerly
+    parses and indexes the document if the symbol table is empty.
+
+### Changed
+
+  - Self-contained error/report blocks: server log output now includes
+    context, message, and stack trace as a single structured block instead
+    of interleaved multi-line output, making logs easier to parse.
+  - Path anonymization in server logs: file paths and `file://` URIs are
+    now redacted in server log output. Absolute paths (Unix and Windows)
+    are replaced with `<path>`; `file://` URIs are replaced with
+    `<file-uri>`. Log readability is preserved without leaking local
+    filesystem structure.
+
 ## [0.8.12] — 2026-05-29
 
 ### Added

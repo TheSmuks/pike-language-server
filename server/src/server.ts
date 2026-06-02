@@ -134,6 +134,8 @@ function registerFeatureHandlers(
     get predefBuiltins() { return ctx.predefBuiltins; },
     get predefAutodoc() { return ctx.predefAutodoc; },
     diagnosticManager: ctx.diagnosticManager,
+    semanticTokensCache: ctx.semanticTokensCache,
+    get debugTelemetry() { return ctx.debugTelemetry; },
     connection: ctx.connection,
   };
 

@@ -65,6 +65,10 @@ export interface ServerContext {
     params?: Array<{ name: string; type: string }>;
     returnType?: string;
   }>;
+  /** Enables verbose internal telemetry logs for race/staleness debugging. */
+  debugTelemetry: boolean;
+  /** Last successful semantic token payload/version by URI (for transient-race fallback). */
+  semanticTokensCache: Map<string, { version: number; data: number[] }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,6 +139,7 @@ export function createServerContext(
     index,
     pikeCache,
     cacheSet,
+    debugTelemetry: false,
   });
 
   const stdlibIndex = loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection);
@@ -158,6 +163,8 @@ export function createServerContext(
     stdlibIndex,
     predefBuiltins,
     predefAutodoc,
+    debugTelemetry: false,
+    semanticTokensCache: new Map<string, { version: number; data: number[] }>(),
   };
 }
 
