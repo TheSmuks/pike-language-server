@@ -47,6 +47,7 @@ function collectPatterns(grammar: Record<string, unknown>): Array<Record<string,
 
 describe("pike.tmLanguage.json", () => {
   const grammarPath = resolve(__dirname, "../../client/syntaxes/pike.tmLanguage.json");
+  const packagePath = resolve(__dirname, "../../package.json");
 
   it("file exists", () => {
     expect(() => readFileSync(grammarPath, "utf8")).not.toThrow();
@@ -127,5 +128,15 @@ describe("pike.tmLanguage.json", () => {
       (p.name as string)?.includes("comment") && (p.name as string)?.includes("documentation"),
     );
     expect(docComment).toBeDefined();
+  });
+
+  it("maps semantic class and member tokens to TextMate fallback scopes", () => {
+    const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+    const pikeScopes = packageJson.contributes?.semanticTokenScopes?.find(
+      (entry: { language?: string }) => entry.language === "pike",
+    )?.scopes;
+
+    expect(pikeScopes?.class).toContain("entity.name.type.class.pike");
+    expect(pikeScopes?.method).toContain("variable.other.property.pike");
   });
 });

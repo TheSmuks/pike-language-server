@@ -218,6 +218,24 @@ describe("produceSemanticTokens", () => {
     expect(countReturnToken!.typeId).toBe(5); // variable reference
   });
 
+  test("produces fallback tokens for unresolved arrow member access", () => {
+    const src = [
+      "int main() {",
+      "  something->this_is_not_highlighted;",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    // Even when the LSP cannot resolve the left-hand type, the member name is
+    // syntactically a member access and should not become visually invisible.
+    const memberToken = findToken(tokens, 1, 13);
+    expect(memberToken).toBeDefined();
+    expect(memberToken!.typeId).toBe(METHOD_TYPE_ID);
+    expect(memberToken!.modifiers).toBe(0);
+  });
+
   test("produces tokens for inherit declarations as namespace", () => {
     const src = [
       "class Animal {",
