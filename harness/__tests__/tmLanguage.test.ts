@@ -137,6 +137,8 @@ describe("pike.tmLanguage.json", () => {
     )?.scopes;
 
     expect(pikeScopes?.class).toContain("entity.name.type.class.pike");
+    expect(pikeScopes?.function).toContain("support.function.any-method.pike");
+    expect(pikeScopes?.method).toContain("support.function.any-method.pike");
     expect(pikeScopes?.method).toContain("variable.other.property.pike");
   });
 });
