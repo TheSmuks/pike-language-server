@@ -30,7 +30,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'val' is unused"
@@ -46,7 +46,7 @@
           "character": 13
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'removed' is unused"
@@ -62,7 +62,7 @@
           "character": 20
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'keys' is unused"
@@ -78,7 +78,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'val' is unused"
@@ -94,7 +94,7 @@
           "character": 13
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'missing' is unused"
@@ -110,7 +110,7 @@
           "character": 10
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'size' is unused"
@@ -126,7 +126,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'has_x' is unused"
@@ -142,7 +142,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'has_z' is unused"
@@ -158,7 +158,7 @@
           "character": 35
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'string_map' is unused"
@@ -174,7 +174,7 @@
           "character": 29
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'obj_map' is unused"

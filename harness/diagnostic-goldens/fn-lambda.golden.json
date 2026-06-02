@@ -14,7 +14,7 @@
           "character": 32
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'add_offset' is unused"
@@ -30,7 +30,7 @@
           "character": 32
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'logger' is unused"
@@ -46,7 +46,7 @@
           "character": 20
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'squares' is unused"
@@ -62,7 +62,7 @@
           "character": 44
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'compare_len' is unused"
@@ -78,7 +78,7 @@
           "character": 12
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'msg' is unused"
@@ -94,7 +94,7 @@
           "character": 8
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'c1' is unused"
@@ -110,7 +110,7 @@
           "character": 8
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'c2' is unused"

@@ -14,7 +14,7 @@
           "character": 10
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 's' is unused"
@@ -30,7 +30,7 @@
           "character": 7
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'n' is unused"
@@ -46,7 +46,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'ok' is unused"

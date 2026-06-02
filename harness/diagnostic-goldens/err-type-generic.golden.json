@@ -14,7 +14,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'a' is unused"
@@ -30,7 +30,7 @@
           "character": 23
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'm' is unused"
@@ -46,7 +46,7 @@
           "character": 18
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'ms' is unused"
@@ -62,7 +62,7 @@
           "character": 22
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'f' is unused"
@@ -78,7 +78,7 @@
           "character": 40
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 's' is unused"

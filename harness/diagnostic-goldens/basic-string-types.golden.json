@@ -30,7 +30,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 's1' is unused"
@@ -46,7 +46,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 's2' is unused"
@@ -62,7 +62,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 's3' is unused"
@@ -78,7 +78,7 @@
           "character": 11
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 's4' is unused"
@@ -94,7 +94,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'len' is unused"
@@ -110,7 +110,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'upper' is unused"
@@ -126,7 +126,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'joined' is unused"
@@ -142,7 +142,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'result' is unused"
@@ -158,7 +158,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'trimmed' is unused"
@@ -174,7 +174,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'upper' is unused"
@@ -190,7 +190,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'lower' is unused"
@@ -206,7 +206,7 @@
           "character": 21
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'chars' is unused"
@@ -222,7 +222,7 @@
           "character": 18
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'substring' is unused"
@@ -238,7 +238,7 @@
           "character": 13
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'tail' is unused"
@@ -254,7 +254,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'middle' is unused"
@@ -270,7 +270,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'first_char' is unused"
@@ -286,7 +286,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'slice' is unused"

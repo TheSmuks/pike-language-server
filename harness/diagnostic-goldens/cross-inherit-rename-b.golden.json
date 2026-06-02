@@ -14,7 +14,7 @@
           "character": 20
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'hp' is unused"

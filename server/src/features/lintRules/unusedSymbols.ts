@@ -43,7 +43,8 @@ export interface LintOptions {
  * 2. No reference in the symbol table resolves to its declaration ID
  * 3. Its name is not prefixed with `_` (convention for intentionally unused)
  *
- * Returns diagnostics with severity Hint.
+ * Returns diagnostics with severity Warning so VSCode renders a visible squiggle
+ * instead of the subtle dotted Hint underline.
  */
 export function detectUnusedSymbols(
   table: SymbolTable,
@@ -66,7 +67,7 @@ export function detectUnusedSymbols(
         isParam
           ? `Parameter '${decl.name}' is unused`
           : `Variable '${decl.name}' is unused`,
-        DiagnosticSeverity.Hint,
+        DiagnosticSeverity.Warning,
         isParam ? CODE_UNUSED_PARAMETER : CODE_UNUSED_VARIABLE,
         "pike-lsp-lint",
       ),

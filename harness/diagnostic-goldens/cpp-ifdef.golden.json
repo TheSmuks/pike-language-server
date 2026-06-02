@@ -14,7 +14,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'feature' is unused"
@@ -30,7 +30,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'feature' is unused"
@@ -46,7 +46,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'verbosity' is unused"
@@ -62,7 +62,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'verbosity' is unused"
@@ -78,7 +78,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'verbosity' is unused"
@@ -94,7 +94,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'fallback' is unused"
@@ -110,7 +110,7 @@
           "character": 14
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'fallback' is unused"
@@ -126,7 +126,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'detail' is unused"
@@ -142,7 +142,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'detail' is unused"
@@ -158,7 +158,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'detail' is unused"

@@ -14,7 +14,7 @@
           "character": 7
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'v' is unused"

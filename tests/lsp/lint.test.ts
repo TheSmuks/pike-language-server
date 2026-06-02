@@ -19,6 +19,7 @@ import { detectUnreachableCode, CODE_UNREACHABLE } from "../../server/src/featur
 import { detectMissingReturn, CODE_MISSING_RETURN } from "../../server/src/features/lintRules/missingReturn";
 import { detectUnusedImports, CODE_UNUSED_IMPORT } from "../../server/src/features/lintRules/unusedImports";
 import { runLintRules } from "../../server/src/features/lintRules";
+import { DiagnosticSeverity } from "../../server/src/features/diagnostics";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -63,6 +64,7 @@ void foo() {
     const unusedVar = unused.find((d) => d.code === CODE_UNUSED_VARIABLE && d.message.includes("unused"));
     expect(unusedVar).toBeDefined();
     expect(unusedVar!.message).toContain("unused");
+    expect(unusedVar!.severity).toBe(DiagnosticSeverity.Warning);
   });
 
   test("does NOT flag used variables", () => {
@@ -88,13 +90,14 @@ void foo() {
     expect(underscoreDiag).toBeUndefined();
   });
 
-  test("does NOT flag file-scope variables (may be external)", () => {
+  test("flags program-scope variables", () => {
     const src = `
 string module_level = "exported";
 `;
     const { unused } = buildAndLint(src);
     const moduleDiag = unused.find((d) => d.message.includes("module_level"));
-    expect(moduleDiag).toBeUndefined();
+    expect(moduleDiag).toBeDefined();
+    expect(moduleDiag!.severity).toBe(DiagnosticSeverity.Warning);
   });
 
   test("does NOT flag class fields (may be external)", () => {

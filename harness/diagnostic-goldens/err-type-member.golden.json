@@ -14,7 +14,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'result' is unused"
@@ -30,7 +30,7 @@
           "character": 16
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'result2' is unused"
@@ -46,7 +46,7 @@
           "character": 15
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'result' is unused"
@@ -62,7 +62,7 @@
           "character": 9
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'len' is unused"
@@ -78,7 +78,7 @@
           "character": 21
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'x' is unused"
