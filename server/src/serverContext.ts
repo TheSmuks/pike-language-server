@@ -190,22 +190,33 @@ export async function getSymbolTable(
   ctx: ServerContext,
   uri: string,
 ): Promise<SymbolTable | null> {
+  const doc = ctx.documents.get(uri);
   const entry = ctx.index.getFile(uri);
-  if (entry?.symbolTable) return entry.symbolTable;
+  if (entry?.symbolTable) {
+    // Open documents are authoritative. Returning an older indexed table for
+    // the current document lets semantic token ranges from a previous edit get
+    // cached under the new version, which paints partial words after rapid edits.
+    if (!doc || entry.version === doc.version) return entry.symbolTable;
+  }
 
   const inFlight = ctx.upsertInFlight.get(uri);
   if (inFlight) {
     await inFlight;
-    return ctx.index.getSymbolTable(uri);
+    const currentDoc = ctx.documents.get(uri);
+    const currentTable = ctx.index.getSymbolTable(uri);
+    if (currentTable && (!currentDoc || currentTable.version === currentDoc.version)) {
+      return currentTable;
+    }
   }
 
-  const doc = ctx.documents.get(uri);
-  if (!doc) return null;
+  const currentDoc = ctx.documents.get(uri);
+  if (!currentDoc) return null;
 
   try {
-    const tree = parse(doc.getText(), uri);
+    const content = currentDoc.getText();
+    const tree = parse(content, uri);
     const promise = ctx.index.upsertFile(
-      uri, doc.version, tree, doc.getText(), ModificationSource.DidChange,
+      uri, currentDoc.version, tree, content, ModificationSource.DidChange,
     );
     ctx.upsertInFlight.set(uri, promise);
     try {
@@ -217,7 +228,9 @@ export async function getSymbolTable(
         ctx.upsertInFlight.delete(uri);
       }
     }
-    return ctx.index.getSymbolTable(uri);
+    const updatedTable = ctx.index.getSymbolTable(uri);
+    if (updatedTable?.version !== currentDoc.version) return null;
+    return updatedTable;
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Index, `getSymbolTable(${uri})`, err);
     return null;
