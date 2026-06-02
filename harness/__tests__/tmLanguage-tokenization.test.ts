@@ -158,12 +158,36 @@ describe("pike.tmLanguage.json tokenization rules", () => {
     }
   });
 
-  it("matches Pike 8.0 BNF literal aggregate delimiters", () => {
+  it("does not classify aggregate literal delimiters as a TextMate scope", () => {
+    // Per ADR-0029, aggregate-literal delimiters ({, }, <, >, [, ] in
+    // aggregate contexts) are classified by the tree-sitter semantic-token
+    // layer, not the TextMate grammar. PR #95's `literal-delimiters` rule
+    // produced false positives like `])` in `foo(arr[i])` because regex has
+    // no parse context. The rule has been removed; this test enforces that
+    // it does not reappear.
     const grammar = loadGrammar();
-    const delimiters = repositoryPatterns(grammar, "literal-delimiters");
+    const repo = grammar.repository ?? {};
+    expect(repo).not.toHaveProperty("literal-delimiters");
 
-    for (const delimiter of ["({", "})", "(<", ">)", "([", "])"]) {
-      expect(delimiters.some((pattern) => new RegExp(pattern.match!, "u").test(delimiter))).toBe(true);
+    const allPatterns: { name?: string; match?: string }[] = [];
+    for (const entry of Object.values(repo)) {
+      const patterns = Array.isArray(entry) ? entry : entry.patterns ?? [];
+      for (const p of patterns) allPatterns.push(p as { name?: string; match?: string });
+    }
+    // No rule should match the `([` / `])` / `({` / `})` / `(<` / `>)` token
+    // pairs at the start of an aggregate literal. None of these should be
+    // a single TextMate match.
+    for (const sample of ["foo(arr[i])", "f(g(x[i]))", "({ 1, 2 })", "([ \"k\": v ])", "({})", "([])"]) {
+      for (const pat of allPatterns) {
+        if (!pat.match) continue;
+        const re = new RegExp(pat.match, "gu");
+        const matches = [...sample.matchAll(re)].map(m => m[0]);
+        // `])` and `])` and `]))` and similar substrings must not be a
+        // match. The `])` from `foo(arr[i])` is the canonical PR #95
+        // regression.
+        expect(matches).not.toContain("])");
+        expect(matches).not.toContain("])");
+      }
     }
   });
 
