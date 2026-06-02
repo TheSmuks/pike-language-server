@@ -18,15 +18,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `object->member` from disappearing when type resolution is unavailable.
   - TextMate syntax highlighting now covers additional Pike 8.0.1116 BNF forms:
     full documented string/character escapes, operator-name identifiers such as
-    `` `+ `` and `` `[]=``, aggregate literal delimiters `({ })`, `(< >)`, and
-    `([ ])`, and compound assignment/splice/range operators such as `&=`, `|=`,
-    `^=`, `@`, `..`, and `...`.
+    `` `+ `` and `` `[]= ``, and compound assignment/splice/range operators
+    such as `&=`, `|=`, `^=`, `@`, `..`, and `...`.
   - Path redaction in Pike language server logs is now controlled by the
     `pike.languageServer.log.redactPaths` VSCode setting. Redaction remains
     enabled by default; disabling it preserves full paths for local debugging.
   - Unused-variable and unused-parameter diagnostics now use warning severity
     instead of hint severity, making them render with a visible warning squiggle
     in VSCode instead of a barely noticeable dotted underline.
+  - Syntax-color responsibility split is now governed by ADR-0029: TextMate
+    paints the instant coarse baseline, tree-sitter semantic tokens own
+    context-dependent classification keyed on grammar nodes, and the Pike
+    oracle enriches the token stream with type-derived modifiers when
+    available. The TextMate grammar no longer attempts to color aggregate
+    literal delimiters; that classification is routed to the tree-sitter
+    layer (currently gated on
+    [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20)).
+
+### Fixed
+
+  - Removed the PR #95 `punctuation.definition.aggregate.pike` TextMate rule
+    that miscolored the trailing `])` in `foo(arr[i])` and `f(g(x[i]))` as a
+    mapping-literal delimiter. The regex had no parse context and could not
+    disambiguate aggregate literals from array-indexing expressions. The
+    TextMate grammar no longer asserts a false-positive scope; aggregate
+    literals are classified by the tree-sitter parse tree instead. See
+    [ADR-0029](decisions/0029-syntax-color-three-layer.md) and
+    [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20).
 
 ## [0.8.17] — 2026-06-02
 
