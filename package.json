@@ -90,6 +90,10 @@
       {
         "language": "pike",
         "scopes": {
+          "class": ["entity.name.type.class.pike"],
+          "method": ["variable.other.property.pike", "entity.name.function.member.pike"],
+          "type": ["entity.name.type.pike", "storage.type.pike"],
+          "namespace": ["entity.other.inherited-class.pike"],
           "builtinFunction": ["support.function.builtin.pike"],
           "variable.mutable": ["variable.other.mutable.pike"]
         }
