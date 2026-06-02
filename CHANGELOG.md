@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+  - Path redaction in Pike language server logs is now controlled by the
+    `pike.languageServer.log.redactPaths` VSCode setting. Redaction remains
+    enabled by default; disabling it preserves full paths for local debugging.
   - Unused-variable and unused-parameter diagnostics now use warning severity
     instead of hint severity, making them render with a visible warning squiggle
     in VSCode instead of a barely noticeable dotted underline.

@@ -176,6 +176,12 @@
           "default": 100,
           "description": "Maximum number of diagnostic problems reported per file.",
           "minimum": 1
+        },
+        "pike.languageServer.log.redactPaths": {
+          "type": "boolean",
+          "default": true,
+          "description": "Redact absolute file paths and file:// URIs in Pike language server log output.",
+          "scope": "window"
         }
       }
     }

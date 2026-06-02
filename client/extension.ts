@@ -176,6 +176,9 @@ function getSettings(): Record<string, unknown> {
 
     // Debug telemetry
     debugTelemetry: config.get<boolean>("debug.telemetry", false),
+
+    // Logging
+    logPathRedactionEnabled: config.get<boolean>("log.redactPaths", true),
   };
 }
 
