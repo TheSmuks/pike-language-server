@@ -69,6 +69,7 @@ const DECL_KIND_TO_TOKEN_TYPE: Record<string, TokenTypeId> = {
   enum:       1,  // "enum"
   enum_member: 2, // "enumMember"
   function:   3,  // "function" — may be promoted to "method" based on scope
+  method:     4,  // "method" — synthetic/member declarations
   variable:   5,  // "variable"
   constant:   5,  // "variable" + readonly modifier
   typedef:    7,  // "type"
@@ -235,11 +236,24 @@ export function produceSemanticTokens(
 
   // --- References ---
   for (const ref of table.references) {
-    // Skip references that resolve to declarations — those are
-    // redundant with declaration tokens. Only produce tokens for
-    // unresolved references that still carry useful type info.
-    // (LSP clients handle reference highlighting separately.)
-    if (ref.resolvesTo !== null) continue;
+    if (ref.resolvesTo !== null) {
+      const decl = table.declById.get(ref.resolvesTo);
+      if (!decl) continue;
+
+      const typeId = resolveDeclTokenType(decl, table);
+      if (typeId === undefined) continue;
+
+      if (ref.name.length <= 0) continue;
+
+      tokens.push({
+        line: ref.loc.line,
+        character: ref.loc.character,
+        length: ref.name.length,
+        typeId,
+        modifiers: tokenModifiersForReference(decl),
+      });
+      continue;
+    }
 
     // Unresolved arrow/dot access — skip (no meaningful token type)
     if (ref.kind === 'arrow_access' || ref.kind === 'dot_access') continue;
@@ -304,6 +318,21 @@ function resolveDeclTokenType(decl: Declaration, table: SymbolTable): TokenTypeI
   }
 
   return base;
+}
+
+/**
+ * Compute modifiers for reference tokens.
+ *
+ * Reference tokens must not carry declaration/definition bits, because those
+ * bits tell themes that the occurrence is the defining site. Keep stable
+ * semantic qualifiers such as readonly so references to constants can still be
+ * distinguished from mutable variables.
+ */
+function tokenModifiersForReference(decl: Declaration): number {
+  if (decl.kind === "constant") {
+    return 1 << 2; // readonly
+  }
+  return 0;
 }
 
 // ---------------------------------------------------------------------------

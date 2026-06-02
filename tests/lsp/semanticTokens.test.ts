@@ -36,7 +36,7 @@ afterAll(() => {
 function parseAndBuild(src: string): SymbolTable {
   const tree = parser.parse(src);
   assert(tree, "Parse failed");
-  return buildSymbolTable(tree, src, "file:///test.pike");
+  return buildSymbolTable(tree, "file:///test.pike", 1);
 }
 
 function assert(condition: unknown, msg: string): asserts condition {
@@ -54,11 +54,11 @@ function findToken(tokens: SemanticToken[], line: number, character: number): Se
 
 describe("Semantic token legend", () => {
   test("legend has correct number of token types", () => {
-    expect(SEMANTIC_TOKENS_LEGEND.tokenTypes.length).toBe(9);
+    expect(SEMANTIC_TOKENS_LEGEND.tokenTypes.length).toBe(10);
   });
 
   test("legend has correct number of token modifiers", () => {
-    expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers.length).toBe(5);
+    expect(SEMANTIC_TOKENS_LEGEND.tokenModifiers.length).toBe(6);
   });
 
   test("token types include class, function, variable, method", () => {
@@ -94,6 +94,10 @@ describe("DeclKind to TokenType mapping", () => {
 
   test("parameter maps to parameter (index 6)", () => {
     expect(tokenTypeForDeclKind("parameter")).toBe(6);
+  });
+
+  test("method maps to method (index 4)", () => {
+    expect(tokenTypeForDeclKind("method")).toBe(4);
   });
 
   test("inherit maps to namespace (index 8)", () => {
@@ -182,6 +186,31 @@ describe("produceSemanticTokens", () => {
     const nameToken = findToken(tokens, 2, 9);
     expect(nameToken).toBeDefined();
     expect(nameToken!.typeId).toBe(5); // variable
+  });
+
+  test("produces tokens for resolved variable and function references", () => {
+    const src = [
+      "void helper(int value) { write(value); }",
+      "int main() {",
+      "  int count = 42;",
+      "  helper(count);",
+      "  return count;",
+      "}",
+    ].join("\n");
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    const helperCallToken = findToken(tokens, 3, 2);
+    expect(helperCallToken).toBeDefined();
+    expect(helperCallToken!.typeId).toBe(3); // function reference
+
+    const countArgToken = findToken(tokens, 3, 9);
+    expect(countArgToken).toBeDefined();
+    expect(countArgToken!.typeId).toBe(5); // variable reference
+
+    const countReturnToken = findToken(tokens, 4, 9);
+    expect(countReturnToken).toBeDefined();
+    expect(countReturnToken!.typeId).toBe(5); // variable reference
   });
 
   test("produces tokens for inherit declarations as namespace", () => {
