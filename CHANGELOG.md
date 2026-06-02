@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     LSP semantic token pass is available. Semantic highlighting also emits a
     fallback member token for unresolved arrow/dot access, preventing
     `object->member` from disappearing when type resolution is unavailable.
+  - TextMate syntax highlighting now covers additional Pike 8.0.1116 BNF forms:
+    full documented string/character escapes, operator-name identifiers such as
+    `` `+ `` and `` `[]=``, aggregate literal delimiters `({ })`, `(< >)`, and
+    `([ ])`, and compound assignment/splice/range operators such as `&=`, `|=`,
+    `^=`, `@`, `..`, and `...`.
   - Path redaction in Pike language server logs is now controlled by the
     `pike.languageServer.log.redactPaths` VSCode setting. Redaction remains
     enabled by default; disabling it preserves full paths for local debugging.
