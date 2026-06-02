@@ -19,6 +19,7 @@ import { getParseDiagnostics } from "./diagnostics";
 import {
   getDefinitionAt,
   getReferencesTo,
+  buildSymbolTable,
 } from "./symbolTable";
 import {
   produceSemanticTokens,
@@ -28,6 +29,7 @@ import {
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
+import { runLintRules } from "./lintRules";
 import { getSelectionRange } from "./selectionRange";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 
@@ -172,7 +174,10 @@ async function handleDiagnostic(
   try {
     const source = doc.getText();
     const tree = parse(source, params.textDocument.uri);
-    const diagnostics = getParseDiagnostics(tree, source.split('\n'));
+    const parseDiagnostics = getParseDiagnostics(tree, source.split('\n'));
+    const table = buildSymbolTable(tree, params.textDocument.uri, doc.version);
+    const lintDiagnostics = runLintRules(tree, table, source);
+    const diagnostics = [...parseDiagnostics, ...lintDiagnostics];
     return { kind: "full", items: diagnostics };
   } catch (err) {
     logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleDiagnostics", err);

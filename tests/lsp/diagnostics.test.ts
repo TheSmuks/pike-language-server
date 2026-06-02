@@ -182,6 +182,33 @@ async function createDiagnosticTestServer(debounceMs = DEBOUNCE_MS): Promise<Tes
 }
 
 // ---------------------------------------------------------------------------
+// Pull diagnostics: textDocument/diagnostic
+// ---------------------------------------------------------------------------
+
+describe("textDocument/diagnostic pull", () => {
+  test("includes lint diagnostics for unused local variables", async () => {
+    const ctx = await createDiagnosticTestServer();
+    try {
+      const uri = ctx.openDoc("pull-unused.pike", [
+        "void foo() {",
+        "  int unused = 1;",
+        "}",
+      ].join("\n"));
+
+      const result = await ctx.client.sendRequest("textDocument/diagnostic", {
+        textDocument: { uri },
+      }) as { kind: string; items: Array<{ code?: string; message?: string }> };
+
+      const unused = result.items.find((diag) => diag.code === "P3001");
+      expect(unused).toBeDefined();
+      expect(unused!.message).toContain("unused");
+    } finally {
+      await ctx.teardown();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Unit tests: DiagnosticManager core logic
 // ---------------------------------------------------------------------------
 
