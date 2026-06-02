@@ -8,10 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Semantic token requests now refuse stale indexed symbol tables for open
+    documents. This prevents old token ranges from being cached under a newer
+    document version, which caused partial-word coloring such as only `th` in
+    `throw` remaining highlighted after rapid edits.
+
+## [0.8.13] — 2026-06-02
+
 ### Added
 
   - `debug.telemetry` VSCode setting: enables verbose server-side telemetry
     for semantic token and diagnostic staleness debugging (off by default).
+
+### Changed
+
+  - Self-contained error/report blocks: server log output now includes
+    context, message, and stack trace as a single structured block instead
+    of interleaved multi-line output, making logs easier to parse.
+  - Path anonymization in server logs: file paths and `file://` URIs are
+    now redacted in server log output. Absolute paths (Unix and Windows)
+    are replaced with `<path>`; `file://` URIs are replaced with
+    `<file-uri>`. Log readability is preserved without leaking local
+    filesystem structure.
 
 ### Fixed
 
@@ -29,17 +49,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     requests on a file opened for the first time could fail silently because
     the symbol table hadn't been populated yet. The handler now eagerly
     parses and indexes the document if the symbol table is empty.
-
-### Changed
-
-  - Self-contained error/report blocks: server log output now includes
-    context, message, and stack trace as a single structured block instead
-    of interleaved multi-line output, making logs easier to parse.
-  - Path anonymization in server logs: file paths and `file://` URIs are
-    now redacted in server log output. Absolute paths (Unix and Windows)
-    are replaced with `<path>`; `file://` URIs are replaced with
-    `<file-uri>`. Log readability is preserved without leaking local
-    filesystem structure.
 
 ## [0.8.12] — 2026-05-29
 
