@@ -1,8 +1,24 @@
 {
   "file": "corpus/files/fn-types.pike",
   "parseCount": 0,
-  "lintCount": 6,
+  "lintCount": 7,
   "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 20,
+          "character": 21
+        },
+        "end": {
+          "line": 20,
+          "character": 32
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'side_effect' is unused"
+    },
     {
       "range": {
         "start": {

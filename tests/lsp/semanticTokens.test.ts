@@ -182,10 +182,15 @@ describe("produceSemanticTokens", () => {
     expect(countToken).toBeDefined();
     expect(countToken!.typeId).toBe(5); // variable
 
+    // Custom semantic modifiers with no common theme mapping can erase color
+    // in VSCode. Variables should use the standard variable token selector.
+    expect(countToken!.modifiers & (1 << 5)).toBeFalsy();
+
     // 'name' at line 2, char 9
     const nameToken = findToken(tokens, 2, 9);
     expect(nameToken).toBeDefined();
     expect(nameToken!.typeId).toBe(5); // variable
+    expect(nameToken!.modifiers & (1 << 5)).toBeFalsy();
   });
 
   test("produces tokens for resolved variable and function references", () => {
