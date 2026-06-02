@@ -42,6 +42,7 @@ export type LogLevel = "INFO" | "WARN" | "ERROR";
 
 /** Pre-computed set of ErrorCategory values for fast lookup in logWarn. */
 const ERROR_CATEGORY_VALUES = new Set<string>(Object.values(ErrorCategory));
+let logPathRedactionEnabled = true;
 
 export interface LogEntry {
   /** Monotonically incrementing ID across the process lifetime. */
@@ -134,6 +135,8 @@ function now(): string {
  * Redact likely sensitive local paths and file:// URIs from log text.
  */
 function sanitizeLogText(text: string): string {
+  if (!logPathRedactionEnabled) return text;
+
   let out = text;
 
   // file:///abs/path or file://C:/path
@@ -146,6 +149,17 @@ function sanitizeLogText(text: string): string {
   out = out.replace(/\b[A-Za-z]:\\(?:[^\\\s]+\\)+[^\\\s)\]"']+/g, "<path>");
 
   return out;
+}
+
+/**
+ * Toggle best-effort path redaction for logs written after this call.
+ *
+ * The raw ErrorLog ring buffer keeps original messages so developers can
+ * opt into full paths locally without losing context. Copy/paste report
+ * blocks and output-channel notifications honor the current setting.
+ */
+export function setLogPathRedactionEnabled(enabled: boolean): void {
+  logPathRedactionEnabled = enabled;
 }
 
 /** Build a self-contained issue report block for copy/paste bug reports. */

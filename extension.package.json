@@ -161,6 +161,12 @@
           "maximum": 1000,
           "scope": "window"
         },
+        "pike.languageServer.log.redactPaths": {
+          "type": "boolean",
+          "default": true,
+          "description": "Redact absolute file paths and file:// URIs in Pike language server log output.",
+          "scope": "window"
+        },
         "pike.languageServer.backgroundIndex.enabled": {
           "type": "boolean",
           "default": true,
