@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.17] — 2026-06-02
+
 ### Changed
 
   - TextMate syntax highlighting now gives uppercase class-like identifiers and
@@ -37,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+  - TextMate syntax highlighting now assigns function-call scope to ordinary
+    calls and constructor-style calls before the generic identifier fallback, so
+    call names such as `write()` and `Foo()` are not left as plain variables.
   - Removed the PR #95 `punctuation.definition.aggregate.pike` TextMate rule
     that miscolored the trailing `])` in `foo(arr[i])` and `f(g(x[i]))` as a
     mapping-literal delimiter. The regex had no parse context and could not
@@ -45,14 +50,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     literals are classified by the tree-sitter parse tree instead. See
     [ADR-0029](decisions/0029-syntax-color-three-layer.md) and
     [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20).
-
-## [0.8.17] — 2026-06-02
-
-### Fixed
-
-  - TextMate syntax highlighting now assigns function-call scope to ordinary
-    calls and constructor-style calls before the generic identifier fallback, so
-    call names such as `write()` and `Foo()` are not left as plain variables.
 
 ## [0.8.16] — 2026-06-02
 
