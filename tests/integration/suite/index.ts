@@ -33,6 +33,7 @@ import Mocha = require("mocha");
 // The extension ID may include publisher prefix (e.g., thesmuks.pike-language-server)
 // or be undefined_publisher.pike-language-server in development mode
 const EXTENSION_ID_PATTERN = "pike-language-server";
+let pikeOutputChannelCreateCount = 0;
 
 // Configure Mocha programmatically
 const mocha = new Mocha({
@@ -74,7 +75,24 @@ describe("Pike Language Server — Extension Wiring", function () {
       );
     }
     if (!ext.isActive) {
-      await ext.activate();
+      const createOutputChannelOriginal = vscode.window.createOutputChannel;
+      Object.defineProperty(vscode.window, "createOutputChannel", {
+        configurable: true,
+        value(name: string, options?: { log: boolean }) {
+          if (name === "Pike Language Server") {
+            pikeOutputChannelCreateCount += 1;
+          }
+          return createOutputChannelOriginal.call(vscode.window, name, options);
+        },
+      });
+      try {
+        await ext.activate();
+      } finally {
+        Object.defineProperty(vscode.window, "createOutputChannel", {
+          configurable: true,
+          value: createOutputChannelOriginal,
+        });
+      }
     }
   });
 
@@ -188,20 +206,16 @@ describe("Pike Language Server — Extension Wiring", function () {
 describe("Client-side bug fix regressions", function () {
   this.timeout(10_000);
 
-  // Skipped: requires VSCode extension host runtime to inspect output channels.
-  // Tracked as manual smoke test — see MANUAL_SMOKE_TESTS.md.
-  // Tracking issue: https://github.com/TheSmuks/pike-language-server/issues/81
-  it.skip("only one 'Pike Language Server' output channel appears", async function () {
-    // Bug fix: extension.ts passed the output channel to LanguageClient so that
-    // duplicate log messages from the underlying transport are suppressed.
-    // Before the fix, messages were duplicated in the Output panel.
-    // Verification: open a Pike file and inspect vscode.window.outputChannels.
-    // Only one channel with the name "Pike Language Server" should exist.
-    const channels = vscode.window.tabGroups.all
-      .flatMap((tg) => tg.tabs)
-      .map((t) => t.label);
-    // Placeholder assertion — actual implementation needs outputChannel inspection
-    expect(channels).toBeDefined();
+  it("only one 'Pike Language Server' output channel appears", function () {
+    // VSCode does not expose the Output panel channel registry as public API.
+    // The extension host equivalent is to spy on createOutputChannel before
+    // activation and verify that both the extension and LanguageClient share
+    // the same channel instead of creating duplicate channels with the same name.
+    if (pikeOutputChannelCreateCount !== 1) {
+      throw new Error(
+        `Expected one Pike output channel, created ${pikeOutputChannelCreateCount}`,
+      );
+    }
   });
 
   // Tree-sitter semantic tokens via client-side provider were removed.
@@ -212,10 +226,14 @@ describe("Client-side bug fix regressions", function () {
 
 
 // Named export required by VSCode test runner
-export function run() {
-  return mocha.run((failures) => {
-    if (failures > 0) {
-      throw new Error(`${failures} tests failed.`);
-    }
+export function run(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    mocha.run((failures) => {
+      if (failures > 0) {
+        reject(new Error(`${failures} tests failed.`));
+        return;
+      }
+      resolve();
+    });
   });
 }
