@@ -14,7 +14,7 @@
           "character": 49
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'unused_param' is unused"
@@ -30,7 +30,7 @@
           "character": 21
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'unused_local' is unused"
@@ -46,7 +46,7 @@
           "character": 18
         }
       },
-      "severity": 4,
+      "severity": 2,
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'inner_unused' is unused"

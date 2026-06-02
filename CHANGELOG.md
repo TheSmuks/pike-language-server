@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+  - Unused-variable and unused-parameter diagnostics now use warning severity
+    instead of hint severity, making them render with a visible warning squiggle
+    in VSCode instead of a barely noticeable dotted underline.
+
 ## [0.8.17] — 2026-06-02
 
 ### Fixed
