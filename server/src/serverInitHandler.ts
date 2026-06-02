@@ -12,7 +12,7 @@ import { buildServerCapabilities } from "./serverCapabilities";
 import { uriToPath } from "./util/uri";
 import { parse } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
-import { logInfo, logWarn, logError, ErrorCategory } from "./util/errorLog.js";
+import { logInfo, logWarn, logError, ErrorCategory, setLogPathRedactionEnabled } from "./util/errorLog.js";
 import { getPikePaths } from "./features/pikeDetection.js";
 import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
@@ -37,6 +37,7 @@ interface InitOptions {
   formatInsertFinalNewline?: boolean;
   formatOperatorSpacing?: boolean;
   debugTelemetry?: boolean;
+  logPathRedactionEnabled?: boolean;
   // Path overrides — when set, bypass auto-detection
   pikeHome?: string;
   modulePaths?: string[];
@@ -76,9 +77,10 @@ async function handleInitialize(
   ctx.clientSupportsSemanticTokensRefresh =
     params.capabilities?.workspace?.semanticTokens?.refreshSupport === true;
 
-  logInfo(ctx.connection, `[init] step 6a: workspace root = ${rootPath || "(none)"}`);
-
   const initOpts = params.initializationOptions as InitOptions | undefined;
+  applyLogOptions(initOpts);
+
+  logInfo(ctx.connection, `[init] step 6a: workspace root = ${rootPath || "(none)"}`);
 
   await applyWorkspaceIndex(ctx, rootPath, initOpts);
   applyDiagnosticOptions(ctx, initOpts);
@@ -240,5 +242,12 @@ function applyDebugOptions(
   if (typeof initOpts.debugTelemetry === "boolean") {
     ctx.debugTelemetry = initOpts.debugTelemetry;
     ctx.diagnosticManager.setDebugTelemetry(initOpts.debugTelemetry);
+  }
+}
+
+function applyLogOptions(initOpts?: InitOptions): void {
+  if (!initOpts) return;
+  if (typeof initOpts.logPathRedactionEnabled === "boolean") {
+    setLogPathRedactionEnabled(initOpts.logPathRedactionEnabled);
   }
 }
