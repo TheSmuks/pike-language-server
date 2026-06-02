@@ -36,6 +36,7 @@ interface InitOptions {
   workerLdLibraryPath?: string;
   formatInsertFinalNewline?: boolean;
   formatOperatorSpacing?: boolean;
+  debugTelemetry?: boolean;
   // Path overrides — when set, bypass auto-detection
   pikeHome?: string;
   modulePaths?: string[];
@@ -84,6 +85,7 @@ async function handleInitialize(
   await applyWorkerOptions(ctx, rootPath, initOpts);
   applyBackgroundIndexOptions(ctx, initOpts);
   applyFormattingOptions(ctx, initOpts);
+  applyDebugOptions(ctx, initOpts);
 
   return buildServerCapabilities();
 }
@@ -227,5 +229,16 @@ function applyFormattingOptions(
   }
   if (initOpts.formatOperatorSpacing != null) {
     ctx.formattingConfig.operatorSpacing = initOpts.formatOperatorSpacing;
+  }
+}
+
+function applyDebugOptions(
+  ctx: ServerContext,
+  initOpts?: InitOptions,
+): void {
+  if (!initOpts) return;
+  if (typeof initOpts.debugTelemetry === "boolean") {
+    ctx.debugTelemetry = initOpts.debugTelemetry;
+    ctx.diagnosticManager.setDebugTelemetry(initOpts.debugTelemetry);
   }
 }

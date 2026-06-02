@@ -112,5 +112,6 @@ function handleDidClose(
   deleteTree(uri);
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
+  ctx.semanticTokensCache.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
 }

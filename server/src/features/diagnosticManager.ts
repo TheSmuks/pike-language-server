@@ -26,7 +26,7 @@ import { runLintRules } from "./lintRules";
 import { parse, type Tree } from "../parser";
 import { buildSymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-import { logError, ErrorCategory } from "../util/errorLog.js";
+import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
 import { computeContentHash, mergeDiagnostics } from "./diagnosticUtils";
 
@@ -60,6 +60,8 @@ export interface DiagnosticManagerOptions {
   mode?: DiagnosticMode;
   /** Maximum number of diagnostics to publish per file. Default: 100. */
   maxNumberOfProblems?: number;
+  /** Enables verbose internal telemetry logs for race/staleness debugging. */
+  debugTelemetry?: boolean;
 }
 
 export interface PikeCacheEntry {
@@ -102,6 +104,7 @@ export class DiagnosticManager {
   private readonly staleMs: number;
   private mode: DiagnosticMode;
   private maxProblems: number;
+  private debugTelemetry: boolean;
   private disposed = false;
 
   private readonly fileStates = new Map<string, FileDiagnosticState>();
@@ -117,6 +120,11 @@ export class DiagnosticManager {
     this.staleMs = options.staleMs ?? 2000;
     this.mode = options.mode ?? "realtime";
     this.maxProblems = options.maxNumberOfProblems ?? 100;
+    this.debugTelemetry = options.debugTelemetry ?? false;
+  }
+
+  setDebugTelemetry(enabled: boolean): void {
+    this.debugTelemetry = enabled;
   }
 
   // -----------------------------------------------------------------------
@@ -284,6 +292,7 @@ export class DiagnosticManager {
 
     const source = doc.getText();
     const contentHash = computeContentHash(source);
+    const requestedVersion = doc.version;
 
     // Check cache
     const cached = this.pikeCache.get(uri);
@@ -291,7 +300,7 @@ export class DiagnosticManager {
       const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
       const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
       const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, parseTree ?? undefined, lintDiags, lines);
-      this.publishDiagnostics(uri, lspDiagnostics);
+      this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
       return;
     }
 
@@ -312,7 +321,7 @@ export class DiagnosticManager {
         source: "pike-lsp",
         message: "Diagnostics are being updated\u2026",
       };
-      this.publishDiagnostics(uri, [...state.lastDiagnostics, staleDiag]);
+      this.publishDiagnostics(uri, [...state.lastDiagnostics, staleDiag], requestedVersion);
     }, this.staleMs);
     if (state.staleTimer.unref) state.staleTimer.unref();
 
@@ -334,7 +343,7 @@ export class DiagnosticManager {
           source: "pike-lsp",
           message: "Compilation timed out, will retry on next save.",
         };
-        this.publishDiagnostics(uri, [...parseDiags, timeoutDiag]);
+        this.publishDiagnostics(uri, [...parseDiags, timeoutDiag], requestedVersion);
         return;
       }
 
@@ -349,7 +358,7 @@ export class DiagnosticManager {
       const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
       const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
       const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, parseTree ?? undefined, lintDiags, lines);
-      this.publishDiagnostics(uri, lspDiagnostics);
+      this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
 
       // Cross-file propagation: schedule re-diagnosis of dependents
       this.propagateToDependents(uri);
@@ -366,7 +375,7 @@ export class DiagnosticManager {
       // Keep only parse diagnostics
       const { diagnostics: parseDiags } = this.safeParse(source, uri);
       if (!this.disposed) {
-        this.publishDiagnostics(uri, parseDiags);
+        this.publishDiagnostics(uri, parseDiags, requestedVersion);
       }
     } finally {
       state.inFlight = false;
@@ -446,8 +455,29 @@ export class DiagnosticManager {
   }
 
   /** Publish diagnostics and cache them for staleness overlay. */
-  private publishDiagnostics(uri: string, diagnostics: Diagnostic[]): void {
+  private publishDiagnostics(
+    uri: string,
+    diagnostics: Diagnostic[],
+    expectedVersion?: number,
+  ): void {
     if (this.disposed) return;
+
+    if (expectedVersion !== undefined) {
+      const liveDoc = this.documents.get(uri);
+      if (!liveDoc) {
+        if (this.debugTelemetry) {
+          logInfo(this.connection, `[telemetry] diagnostics drop-no-live-doc uri=${uri} expectedVersion=${expectedVersion}`);
+        }
+        return;
+      }
+      if (liveDoc.version !== expectedVersion) {
+        if (this.debugTelemetry) {
+          logInfo(this.connection, `[telemetry] diagnostics drop-version-mismatch uri=${uri} expectedVersion=${expectedVersion} liveVersion=${liveDoc.version}`);
+        }
+        return;
+      }
+    }
+
     const truncated = diagnostics.length > this.maxProblems
       ? diagnostics.slice(0, this.maxProblems)
       : diagnostics;
@@ -457,6 +487,9 @@ export class DiagnosticManager {
     }
     try {
       this.connection.sendDiagnostics({ uri, diagnostics: truncated });
+      if (this.debugTelemetry) {
+        logInfo(this.connection, `[telemetry] diagnostics published uri=${uri} count=${truncated.length}${expectedVersion !== undefined ? ` version=${expectedVersion}` : ""}`);
+      }
     } catch {
       // Connection may be closed during teardown — not an error
     }
