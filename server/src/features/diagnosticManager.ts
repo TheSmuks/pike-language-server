@@ -372,10 +372,14 @@ export class DiagnosticManager {
           logError(this.connection, ErrorCategory.Diagnostics, `diagnosticManager.dispatchDiagnose(${uri})`, err);
         }
       }
-      // Keep only parse diagnostics
-      const { diagnostics: parseDiags } = this.safeParse(source, uri);
+      // Keep fast tree-sitter diagnostics even when the Pike oracle is unavailable.
+      // Unused-symbol lint is local analysis; dropping it here made editor
+      // diagnostics depend on an external binary even though the rule does not.
+      const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
+      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
+      const lspDiagnostics = mergeDiagnostics(parseDiags, [], parseTree ?? undefined, lintDiags, lines);
       if (!this.disposed) {
-        this.publishDiagnostics(uri, parseDiags, requestedVersion);
+        this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
       }
     } finally {
       state.inFlight = false;

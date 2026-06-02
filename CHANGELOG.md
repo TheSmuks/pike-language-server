@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Semantic highlighting now emits tokens for resolved references, not only
+    declaration sites, so uses of local variables, parameters, functions, and
+    methods receive semantic colorization.
+  - Pull diagnostics (`textDocument/diagnostic`) now include fast tree-sitter
+    lint diagnostics such as unused local variables. Push diagnostics also keep
+    those lint diagnostics when the Pike compiler oracle is unavailable.
+
 ## [0.8.14] — 2026-06-02
 
 ### Fixed
