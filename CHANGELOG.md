@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - TextMate syntax highlighting now assigns function-call scope to ordinary
+    calls and constructor-style calls before the generic identifier fallback, so
+    call names such as `write()` and `Foo()` are not left as plain variables.
+
 ## [0.8.16] — 2026-06-02
 
 ### Fixed
