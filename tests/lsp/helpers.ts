@@ -120,6 +120,12 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
     new StreamMessageReader(s2c),
     new StreamMessageWriter(c2s),
   );
+  // The in-process client must model enough VSCode client behavior for
+  // asynchronous server notifications to stay truthful in CI. When Pike is
+  // unavailable the server asks VSCode to show a warning message; without this
+  // handler, the JSON-RPC test client rejects the request and turns unrelated
+  // tests red.
+  client.onRequest("window/showMessageRequest", () => null);
   client.listen();
 
   // Perform LSP initialization handshake
