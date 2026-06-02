@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.15] — 2026-06-02
+
 ### Fixed
 
   - Semantic highlighting now emits tokens for resolved references, not only
