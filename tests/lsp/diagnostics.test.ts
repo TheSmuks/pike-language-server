@@ -206,6 +206,28 @@ describe("textDocument/diagnostic pull", () => {
       await ctx.teardown();
     }
   });
+
+  test("includes lint diagnostics for unused program-scope variables", async () => {
+    const ctx = await createDiagnosticTestServer();
+    try {
+      const uri = ctx.openDoc("pull-unused-program-scope.pike", [
+        "int topUnused = 1;",
+        "int topUsed = 2;",
+        "int main() { return topUsed; }",
+      ].join("\n"));
+
+      const result = await ctx.client.sendRequest("textDocument/diagnostic", {
+        textDocument: { uri },
+      }) as { kind: string; items: Array<{ code?: string; message?: string }> };
+
+      const unusedTop = result.items.find((diag) => diag.code === "P3001" && diag.message?.includes("topUnused"));
+      const usedTop = result.items.find((diag) => diag.code === "P3001" && diag.message?.includes("topUsed"));
+      expect(unusedTop).toBeDefined();
+      expect(usedTop).toBeUndefined();
+    } finally {
+      await ctx.teardown();
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -508,7 +530,7 @@ describe.skipIf(!pikeAvailable)("Diagnostic caching", () => {
   });
 
   test("identical content reuses cached diagnostics on save", async () => {
-    const source = "int x = 1;\n";
+    const source = "int main() { return 0; }\n";
     const uri = ctx.openDoc("cache-hit.pike", source);
     await ctx.waitForDiagnostics(uri);
 

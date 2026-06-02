@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Unused-variable diagnostics now report unused program-scope variables in
+    Pike's implicit program scope, while still suppressing variables that are
+    actually referenced.
+  - Variable semantic tokens now use the standard `variable` selector without
+    the custom `mutable` modifier, restoring color in VSCode themes that do not
+    style custom Pike semantic modifiers.
+
 ## [0.8.15] — 2026-06-02
 
 ### Fixed

@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/basic-types.pike",
   "parseCount": 0,
-  "lintCount": 12,
+  "lintCount": 14,
   "diagnostics": [
     {
       "range": {
@@ -194,6 +194,38 @@
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'flag' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 46,
+          "character": 8
+        },
+        "end": {
+          "line": 46,
+          "character": 9
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'p' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 49,
+          "character": 7
+        },
+        "end": {
+          "line": 49,
+          "character": 10
+        }
+      },
+      "severity": 4,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'obj' is unused"
     }
   ]
 }

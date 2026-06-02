@@ -5,14 +5,12 @@
  * table for local variables and parameters that are declared but never
  * referenced. It runs synchronously on every parse (<1ms).
  *
- * Scope: local variables (DeclKind.Variable) and parameters (DeclKind.Parameter)
- * in function/method/class scopes. File-scope declarations are excluded — they
- * may be used externally.
+ * Scope: variables (DeclKind.Variable) and parameters (DeclKind.Parameter)
+ * in program, function/method, block, and class scopes.
  *
  * Exclusions:
  * - Variables/params prefixed with `_` (Pike convention for intentionally unused)
  * - The bare `_` identifier (wildcard)
- * - File-scope declarations (scopeId pointing to a 'file' scope)
  */
 
 import {
@@ -97,10 +95,11 @@ function isLintable(
   // Skip `_`-prefixed names (Pike convention for intentionally unused).
   if (decl.name.startsWith("_")) return false;
 
-  // Skip file-scope declarations — they may be used externally.
+  // Program-scope variables are lintable in Pike: a file is an implicit
+  // program, not an external module export list. Missing diagnostics here made
+  // top-level unused state invisible while locals were reported correctly.
   const scope = table.scopeById.get(decl.scopeId);
   if (!scope) return false;
-  if (scope.kind === "file") return false;
 
   return true;
 }

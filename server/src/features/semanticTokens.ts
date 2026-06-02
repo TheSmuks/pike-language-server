@@ -121,11 +121,9 @@ export function tokenModifiersForDecl(
     modifiers |= (1 << 2); // readonly
   }
 
-  // Non-constant, non-parameter variables get the mutable modifier.
-  // Themes can use this to distinguish reassignable locals from constants/params.
-  if (kind === "variable") {
-    modifiers |= (1 << 5); // mutable
-  }
+  // Keep variable declarations on the standard `variable` semantic selector.
+  // A custom mutable modifier has no common theme mapping and can make normal
+  // Pike variables look uncolored in VSCode themes that do not style it.
 
   // Class-level (non-instance) declarations get the static modifier
   if (options?.isClassScope) {
