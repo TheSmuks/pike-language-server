@@ -7,6 +7,7 @@ interface GrammarPattern {
   name?: string;
   match?: string;
   captures?: Record<string, { name?: string }>;
+  patterns?: GrammarPattern[];
 }
 
 interface GrammarRepositoryEntry {
@@ -44,6 +45,18 @@ function repositoryPatterns(grammar: Grammar, name: string): GrammarPattern[] {
   const patterns = grammar.repository?.[name]?.patterns;
   if (!patterns) return [];
   return patterns;
+}
+
+function patternByName(grammar: Grammar, repositoryName: string, patternName: string): GrammarPattern | undefined {
+  return repositoryPatterns(grammar, repositoryName).find((pattern) => pattern.name === patternName);
+}
+
+function patternByCommentPrefix(
+  grammar: Grammar,
+  repositoryName: string,
+  commentPrefix: string,
+): GrammarPattern | undefined {
+  return repositoryPatterns(grammar, repositoryName).find((pattern) => pattern.comment?.startsWith(commentPrefix));
 }
 
 describe("pike.tmLanguage.json tokenization rules", () => {
@@ -96,5 +109,72 @@ describe("pike.tmLanguage.json tokenization rules", () => {
 
     expect(arrowPattern?.captures?.["1"]?.name).toBe("punctuation.accessor.arrow.pike");
     expect(arrowPattern?.captures?.["2"]?.name).toBe("variable.other.property.pike");
+  });
+
+  it("matches Pike 8.0 BNF numeric literal forms", () => {
+    const grammar = loadGrammar();
+    const numericPatterns = repositoryPatterns(grammar, "numbers").filter(
+      (pattern) => pattern.name === "constant.numeric.pike",
+    );
+    const floatPattern = patternByName(grammar, "numbers", "constant.numeric.float.pike");
+
+    expect(numericPatterns.length).toBeGreaterThan(0);
+    expect(floatPattern?.match).toBeDefined();
+
+    const numericRegexes = numericPatterns.map((pattern) => new RegExp(pattern.match!, "u"));
+    const floatRegex = new RegExp(floatPattern!.match!, "u");
+
+    for (const literal of ["42", "0x2a", "0X2A", "0b101010", "0B101010", "0755"]) {
+      expect(numericRegexes.some((regex) => literal.match(regex)?.[0] === literal)).toBe(true);
+    }
+    for (const literal of ["1.5", "1.5e-2", ".5", "5e10"]) {
+      expect(literal.match(floatRegex)?.[0]).toBe(literal);
+    }
+  });
+
+  it("matches Pike 8.0 BNF string and character escape forms", () => {
+    const grammar = loadGrammar();
+    const doubleQuoted = patternByName(grammar, "strings", "string.quoted.double.pike");
+    const singleQuoted = patternByName(grammar, "strings", "string.quoted.single.pike");
+
+    const doubleEscapes = doubleQuoted?.patterns ?? [];
+    const singleEscapes = singleQuoted?.patterns ?? [];
+
+    const escapedSamples = ["\\a", "\\b", "\\t", "\\n", "\\v", "\\f", "\\r", "\\\"", "\\\\", "\\123", "\\x2a", "\\d42", "\\u0041", "\\U00000041"];
+    for (const escaped of escapedSamples) {
+      expect(doubleEscapes.some((pattern) => new RegExp(pattern.match!, "u").test(escaped))).toBe(true);
+      expect(singleEscapes.some((pattern) => new RegExp(pattern.match!, "u").test(escaped))).toBe(true);
+    }
+  });
+
+  it("matches Pike 8.0 BNF operator-name identifiers", () => {
+    const grammar = loadGrammar();
+    const backtickPattern = patternByName(grammar, "identifiers", "entity.name.function.operator.pike");
+    expect(backtickPattern?.match).toBeDefined();
+
+    const regex = new RegExp(backtickPattern!.match!, "u");
+    for (const identifier of ["`+", "`/", "`%", "`*", "`&", "`|", "`^", "`~", "`<", "`<<", "`<=", "`>", "`>>", "`>=", "`==", "`!=", "`!", "`()", "`-", "`->", "`->=", "`[]", "`[]="]) {
+      expect(identifier.match(regex)?.[0]).toBe(identifier);
+    }
+  });
+
+  it("matches Pike 8.0 BNF literal aggregate delimiters", () => {
+    const grammar = loadGrammar();
+    const delimiters = repositoryPatterns(grammar, "literal-delimiters");
+
+    for (const delimiter of ["({", "})", "(<", ">)", "([", "])"]) {
+      expect(delimiters.some((pattern) => new RegExp(pattern.match!, "u").test(delimiter))).toBe(true);
+    }
+  });
+
+  it("matches Pike 8.0 BNF assignment, spread, splice, and range operators", () => {
+    const grammar = loadGrammar();
+    const operatorPattern = patternByCommentPrefix(grammar, "operators", "Operators");
+    expect(operatorPattern?.match).toBeDefined();
+
+    const regex = new RegExp(operatorPattern!.match!, "u");
+    for (const operator of ["=", "+=", "*=", "/=", "&=", "|=", "^=", "<<=", ">>=", "%=", "..", "...", "@", "->"] ) {
+      expect(operator.match(regex)?.[0]).toBe(operator);
+    }
   });
 });
