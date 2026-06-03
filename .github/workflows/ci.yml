@@ -28,8 +28,13 @@ jobs:
       - run: bash scripts/check-adr-prefixes.sh
 
   typecheck:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
+    name: typecheck (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
@@ -58,6 +63,100 @@ jobs:
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
       - run: bun run fmt:check
+
+  unit-tests:
+    name: unit-tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bun test
+
+  quality-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - run: bash scripts/quality-gates.sh --all
+
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bash scripts/smoke-test.sh
+
+  vscode-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+      - name: Cache bun install
+        uses: actions/cache@v5
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: Install VSCode test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb libgtk-3-0 libgbm1 libasound2t64
+      - name: Cache pike install
+        id: cache-pike
+        uses: actions/cache@v5
+        with:
+          path: ~/.pike
+          key: pike-${{ env.PIKE_VERSION }}-${{ runner.os }}
+      - name: Install Pike build dependencies
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            make gcc g++ libgmp-dev nettle-dev bison \
+            libreadline-dev zlib1g-dev
+      - name: Build Pike
+        if: steps.cache-pike.outputs.cache-hit != 'true'
+        run: |
+          curl -sL "https://pike.lysator.liu.se/pub/pike/all/${PIKE_VERSION}/Pike-v${PIKE_VERSION}.tar.gz" \
+            | tar xz
+          mkdir -p "Pike-v${PIKE_VERSION}/build"
+          cd "Pike-v${PIKE_VERSION}/build"
+          ../src/configure \
+            --prefix="$HOME/.pike" \
+            --without-debug \
+            --without-mysql
+          make -j$(nproc) || make
+          make install
+      - name: Set Pike binary
+        run: |
+          echo "PIKE_BINARY=$HOME/.pike/pike/$PIKE_VERSION/bin/pike" >> "$GITHUB_ENV"
+          "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
+      - run: bash scripts/test-vscode.sh
 
   test:
     runs-on: ubuntu-latest
@@ -100,17 +199,14 @@ jobs:
             --without-mysql
           make -j$(nproc) || make
           make install
-      - name: Verify pike binary
+      - name: Set and verify Pike binary
         run: |
-          "$HOME/.pike/pike/${PIKE_VERSION}/bin/pike" --version
+          echo "PIKE_BINARY=$HOME/.pike/pike/$PIKE_VERSION/bin/pike" >> "$GITHUB_ENV"
+          "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
 
-      - run: bun test
-        env:
-          PIKE_BINARY: ${{ env.HOME }}/.pike/pike/${{ env.PIKE_VERSION }}/bin/pike
+      - name: Run Bun tests with real Pike oracle
+        run: bun test
 
-      # PATH is set after `bun test` because the PIKE_BINARY env var (used by
-      # the basic TypeScript test suite) points directly at the binary, while
-      # PATH is only needed for `test:pike` (which invokes `pike` and `pmp`).
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
 

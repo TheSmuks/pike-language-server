@@ -55,6 +55,15 @@ if ! echo "$NEW_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$'; 
   exit 1
 fi
 
+# ── Pre-tag lineage guard ───────────────────────────────────────────────────
+# release.yml also checks this after a GitHub release is published, but that is
+# too late: a divergent tag would already exist. Run the same guard locally
+# before this script prepares release artifacts and prints tag commands.
+if ! bash "$ROOT/scripts/check-release-lineage.sh" "origin/main" "HEAD"; then
+  echo "FAIL: release lineage check failed; refusing to prepare v$NEW_VERSION" >&2
+  exit 1
+fi
+
 if [[ "$OLD_VERSION" == "$NEW_VERSION" ]]; then
   echo "FAIL: OLD_VERSION and NEW_VERSION are identical ('$OLD_VERSION')"
   exit 1

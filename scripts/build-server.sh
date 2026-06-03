@@ -15,3 +15,13 @@ esbuild "$ROOT/server/src/main.ts" \
   --sourcemap \
   --loader:.wasm=file \
   --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url)"
+
+# The bundled parser resolves WASM assets relative to server.mjs at runtime.
+# esbuild does not copy these assets unless they are imported directly, so keep
+# the runtime contract explicit for VSIX and headless integration tests.
+install -m 0644 \
+  "$ROOT/server/tree-sitter-pike.wasm" \
+  "$ROOT/server/dist/tree-sitter-pike.wasm"
+install -m 0644 \
+  "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" \
+  "$ROOT/server/dist/web-tree-sitter.wasm"
