@@ -38,6 +38,8 @@ export class WorkspaceIndex {
   private generation = 0;
   /** Cache of version-scoped resolvers to avoid creating a new ModuleResolver per call. */
   private readonly versionResolvers = new Map<string, ModuleResolver>();
+  /** Pike version directives are finite in practice; cap the cache to fail-safe. */
+  private static readonly VERSION_RESOLVER_MAX = 16;
 
   readonly resolver: ModuleResolver;
   readonly workspaceRoot: string;
@@ -364,6 +366,7 @@ export class WorkspaceIndex {
     this.files.clear();
     this.dependents.clear();
     this.moduleMap.clear();
+    this.versionResolvers.clear();
     this.generation++;
     this.resolver.clearCache();
   }
@@ -456,6 +459,7 @@ export class WorkspaceIndex {
       const versionKey = `${entry.pikeVersion.major}.${entry.pikeVersion.minor}`;
       const cached = this.versionResolvers.get(versionKey);
       if (cached) return cached;
+      this.evictVersionResolverIfNeeded();
       const scoped = new ModuleResolver({
         workspaceRoot: pathToUri(this.workspaceRoot),
         pikePaths: this.pikePaths,
@@ -465,6 +469,12 @@ export class WorkspaceIndex {
       return scoped;
     }
     return this.resolver;
+  }
+
+  private evictVersionResolverIfNeeded(): void {
+    if (this.versionResolvers.size < WorkspaceIndex.VERSION_RESOLVER_MAX) return;
+    const oldestKey = this.versionResolvers.keys().next().value;
+    if (oldestKey) this.versionResolvers.delete(oldestKey);
   }
 
   private uriToPath(uri: string): string { return uriToPathUtil(uri); }
