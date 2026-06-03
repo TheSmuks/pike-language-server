@@ -9,16 +9,10 @@
  * these indices are a wire contract — they MUST NOT change without a
  * capability renegotiation.
  *
- * Token production (consuming the symbol table to emit tokens) is US-013.
- * LSP handler registration is US-014.
- *
- * Aggregate-literal classification (ADR-0029) is gated on resolving an
- * upstream tree-sitter-pike issue: the grammar's `array_literal` /
- * `multiset_literal` / `mapping_literal` node types are not emitted for
- * the common expression-context case. See `docs/known-limitations.md`
- * for the issue link. Once the upstream fix lands, this file will
- * receive a `collectLiteralNodeSpans()` tree walker that the handler
- * will invoke alongside `produceSemanticTokens()`.
+ * Token production consumes the symbol table. Per the syntax-color split ADR,
+ * aggregate literal delimiters deliberately keep default punctuation color;
+ * tree-sitter still exposes array_literal/mapping_literal/multiset_literal
+ * nodes for structural consumers and regression tests.
  */
 
 import type { Declaration, SymbolTable } from "./symbolTable";
@@ -431,4 +425,32 @@ export function deltaEncodeTokens(tokens: SemanticToken[]): number[] {
   }
 
   return result;
+}
+
+export interface SemanticTokenRange {
+  start: { line: number; character: number };
+  end: { line: number; character: number };
+}
+
+/** Return the sorted tokens whose spans intersect the requested LSP range. */
+export function sliceSemanticTokens(tokens: SemanticToken[], range: SemanticTokenRange): SemanticToken[] {
+  const sliced: SemanticToken[] = [];
+  for (const token of tokens) {
+    if (tokenEndsBeforeRange(token, range)) continue;
+    if (tokenStartsAfterRange(token, range)) break;
+    sliced.push(token);
+  }
+  return sliced;
+}
+
+function tokenEndsBeforeRange(token: SemanticToken, range: SemanticTokenRange): boolean {
+  if (token.line < range.start.line) return true;
+  if (token.line > range.start.line) return false;
+  return token.character + token.length <= range.start.character;
+}
+
+function tokenStartsAfterRange(token: SemanticToken, range: SemanticTokenRange): boolean {
+  if (token.line > range.end.line) return true;
+  if (token.line < range.end.line) return false;
+  return token.character >= range.end.character;
 }

@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify release lineage
+        run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
+
       - name: Build extension
         run: bun run build:extension
 

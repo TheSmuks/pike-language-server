@@ -12,6 +12,7 @@ import { createTestServer, type TestServer } from "./helpers";
 import {
   produceSemanticTokens,
   deltaEncodeTokens,
+  sliceSemanticTokens,
   tokenTypeForDeclKind,
   tokenModifiersForDecl,
   METHOD_TYPE_ID,
@@ -46,6 +47,20 @@ function assert(condition: unknown, msg: string): asserts condition {
 // Helper to find a token by name
 function findToken(tokens: SemanticToken[], line: number, character: number): SemanticToken | undefined {
   return tokens.find(t => t.line === line && t.character === character);
+}
+
+
+function containsNodeType(node: any, type: string): boolean {
+  if (node.type === type) return true;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    if (child && containsNodeType(child, type)) return true;
+  }
+  return false;
+}
+
+function containsAnyNodeType(node: any, types: string[]): boolean {
+  return types.some((type) => containsNodeType(node, type));
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +356,46 @@ describe("deltaEncodeTokens", () => {
   test("returns empty array for empty input", () => {
     expect(deltaEncodeTokens([])).toEqual([]);
   });
+
+  test("sliceSemanticTokens returns only tokens intersecting requested range", () => {
+    const tokens: SemanticToken[] = [
+      { line: 0, character: 4, length: 3, typeId: 3, modifiers: 0 },
+      { line: 2, character: 2, length: 5, typeId: 5, modifiers: 0 },
+      { line: 4, character: 2, length: 5, typeId: 5, modifiers: 0 },
+    ];
+    const sliced = sliceSemanticTokens(tokens, {
+      start: { line: 1, character: 0 },
+      end: { line: 3, character: 0 },
+    });
+    expect(sliced).toEqual([tokens[1]]);
+  });
+
+  test("aggregate literal node types exist in expression contexts", () => {
+    const cases = [
+      ["int x = ({ 1, 2 });", "array_literal"],
+      ["({ 1, 2 }) + ({ 3, 4 });", "array_literal"],
+      ["void f() { ({ 1, 2 }); }", "array_literal"],
+      ["mapping m = ([ \"k\": 1 ]);", "mapping_literal"],
+      ["multiset s = (< 1, 2 >);", "multiset_literal"],
+      ["void f() { foo(({ 1, 2 }), ([ \"k\": 1 ]), (< 1, 2 >)); }", "multiset_literal"],
+    ];
+    for (const [source, type] of cases) {
+      const tree = parser.parse(source);
+      expect(containsNodeType(tree.rootNode, type)).toBe(true);
+      tree.delete();
+    }
+  });
+
+  test("indexing calls do not produce aggregate literal nodes", () => {
+    for (const source of ["foo(arr[i]);", "f(g(x[i]));"]) {
+      const tree = parser.parse(source);
+      expect(containsAnyNodeType(tree.rootNode, [
+        "array_literal", "mapping_literal", "multiset_literal",
+      ])).toBe(false);
+      tree.delete();
+    }
+  });
+
 });
 
 
@@ -397,6 +452,26 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
     expect(result.data).toBeDefined();
     // Should have add (function), a (parameter), b (parameter), result (variable)
     expect(result.data.length).toBeGreaterThanOrEqual(15);
+  });
+
+  test("returns range tokens for requested lines only", async () => {
+    const src = [
+      'int first = 1;',
+      'int second = first;',
+      'int third = second;',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/semantic-range.pike", src);
+
+    const full = await server.client.sendRequest("textDocument/semanticTokens/full", {
+      textDocument: { uri },
+    });
+    const range = await server.client.sendRequest("textDocument/semanticTokens/range", {
+      textDocument: { uri },
+      range: { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } },
+    });
+
+    expect(range.data.length).toBeGreaterThan(0);
+    expect(range.data.length).toBeLessThan(full.data.length);
   });
 
   test("returns empty data for unknown document", async () => {

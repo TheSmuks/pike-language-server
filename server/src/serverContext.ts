@@ -69,6 +69,9 @@ export interface ServerContext {
   debugTelemetry: boolean;
   /** Last successful semantic token payload/version by URI (for transient-race fallback). */
   semanticTokensCache: Map<string, { version: number; data: number[] }>;
+  /** Latest document version dropped while parser initialization was pending. */
+  pendingParserDocuments: Map<string, TextDocument>;
+  semanticTokensRefreshTimer?: ReturnType<typeof setTimeout>;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +168,7 @@ export function createServerContext(
     predefAutodoc,
     debugTelemetry: false,
     semanticTokensCache: new Map<string, { version: number; data: number[] }>(),
+    pendingParserDocuments: new Map<string, TextDocument>(),
   };
 }
 

@@ -1,4 +1,4 @@
-# Decision 0024: PikeWorker Priority Queue
+# Decision 0034: PikeWorker Priority Queue
 
 **Date**: 2026-05-12
 **Status**: Accepted

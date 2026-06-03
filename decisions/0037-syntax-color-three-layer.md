@@ -1,4 +1,4 @@
-# 0029 — Three-Layer Syntax Color Responsibility Split
+# 0037 — Three-Layer Syntax Color Responsibility Split
 
 **Date:** 2026-06-02
 **Status:** Accepted

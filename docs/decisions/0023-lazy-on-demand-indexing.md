@@ -1,4 +1,4 @@
-# 0023: Lazy, On-Demand Indexing
+# 0033: Lazy, On-Demand Indexing
 
 **Status**: Accepted
 **Date**: 2026-05-18

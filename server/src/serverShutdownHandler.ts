@@ -28,10 +28,15 @@ export function registerShutdownHandler(
     ctx.backgroundIndexCts?.cancel();
     ctx.backgroundIndexCts?.dispose();
 
-    // Clear the periodic memory monitor.
+    // Clear timers before the connection closes so no delayed notification
+    // fires against a disposed JSON-RPC stream.
     if (ctx.memoryTimer) {
       clearInterval(ctx.memoryTimer);
       ctx.memoryTimer = undefined;
+    }
+    if (ctx.semanticTokensRefreshTimer) {
+      clearTimeout(ctx.semanticTokensRefreshTimer);
+      ctx.semanticTokensRefreshTimer = undefined;
     }
 
     ctx.diagnosticManager.dispose();
