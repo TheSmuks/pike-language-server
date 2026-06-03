@@ -1,4 +1,4 @@
-# 0014: Type Resolution Architecture
+# 0032: Type Resolution Architecture
 
 **Status**: Accepted
 **Date**: 2026-04-28

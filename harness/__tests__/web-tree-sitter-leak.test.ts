@@ -1,6 +1,5 @@
 /**
- * Regression test for the web-tree-sitter / tree-sitter-pike node-text
- * leak observed during ADR-0029 implementation.
+ * Regression test for aggregate node text across repeated web-tree-sitter parses.
  *
  * Symptom: when a `Parser` instance is reused to parse two disjoint
  * source strings back-to-back (no oldTree), nodes in the second tree
@@ -9,14 +8,8 @@
  * derived from the node's offsets against the source it was parsed
  * from; the observed behavior violates that contract.
  *
- * Filed upstream: see ADR-0029 and the known-limitations entry pointing
- * at the tree-sitter-pike issue tracker. This test pins the current
- * behavior so the bug cannot silently regress to "silently works" in a
- * future web-tree-sitter release without us noticing.
- *
- * The test asserts the BUG exists today. When the upstream fix lands,
- * this test will start failing — flip its polarity at that point and
- * delete the bug-observed assertion.
+ * This test asserts the desired behavior: repeated parses must report node
+ * text from the source that produced each tree.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -75,16 +68,9 @@ describe("web-tree-sitter / tree-sitter-pike node-text leak", () => {
     expect(a1!.text).toBe("({ 1, 2 })");
 
     const a2 = findAggregator(second.rootNode);
-    // The second source `int y = (< "a" >);` should NOT contain an
-    // aggregate-literal node (per tree-sitter-pike#20, the grammar
-    // does not emit them in expression context). If the web-tree-sitter
-    // reuse bug is present, a spurious `array_literal` node may be
-    // found, and its text may be the first source's `({ 1, 2 })`.
-    if (a2 !== null) {
-      // Spurious aggregate found. Its text must be from the second
-      // source, not the first.
-      expect(a2.text).not.toBe("({ 1, 2 })");
-    }
+    expect(a2).not.toBeNull();
+    expect(a2!.type).toBe("multiset_literal");
+    expect(a2!.text).toBe("(< \"a\" >)");
 
     first.delete();
     second.delete();

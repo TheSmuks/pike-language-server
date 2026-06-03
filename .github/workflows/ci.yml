@@ -17,6 +17,16 @@ env:
   PIKE_VERSION: "8.0.1116"
 
 jobs:
+
+  repository-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - run: bash scripts/check-adr-prefixes.sh
+
   typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 5

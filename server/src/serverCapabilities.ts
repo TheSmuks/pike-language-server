@@ -34,12 +34,13 @@ export function buildServerCapabilities(): InitializeResult {
       renameProvider: { prepareProvider: true },
       hoverProvider: true,
       completionProvider: {
-        triggerCharacters: ['.', '>', ':', '('],
+        triggerCharacters: ['.'],
         resolveProvider: true,
       },
       semanticTokensProvider: {
         legend: SEMANTIC_TOKENS_LEGEND,
         full: true,
+        range: true,
       },
       documentHighlightProvider: true,
       foldingRangeProvider: true,
@@ -67,10 +68,6 @@ export function buildServerCapabilities(): InitializeResult {
       typeHierarchyProvider: true,
       codeLensProvider: { resolveProvider: false },
       implementationProvider: true,
-      diagnosticProvider: {
-        interFileDependencies: false,
-        workspaceDiagnostics: false,
-      },
       workspace: {
         fileOperations: {
           didRename: { filters: [{ pattern: { glob: '**/*.pike' } }, { pattern: { glob: '**/*.pmod' } }] },

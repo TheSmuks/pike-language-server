@@ -1,4 +1,4 @@
-# Decision 0025: Phase B — Editing Quality Improvements
+# Decision 0035: Phase B — Editing Quality Improvements
 
 **Date**: 2026-05-12
 **Status**: Accepted

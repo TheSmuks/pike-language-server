@@ -1,6 +1,6 @@
 /**
  * Document feature handlers — documentSymbol, selectionRange, semanticTokens,
- * diagnostic (pull), documentHighlight, foldingRange, signatureHelp, inlayHint.
+ * documentHighlight, foldingRange, signatureHelp, inlayHint.
  *
  * Extracted from navigationHandler.ts to keep file sizes under 500 lines.
  */
@@ -15,21 +15,20 @@ import {
 import type { NavigationContext } from "./navigationHandler";
 import { parse } from "../parser";
 import { getDocumentSymbols } from "./documentSymbol";
-import { getParseDiagnostics } from "./diagnostics";
 import {
   getDefinitionAt,
   getReferencesTo,
-  buildSymbolTable,
 } from "./symbolTable";
 import {
   produceSemanticTokens,
   deltaEncodeTokens,
   getExternalLookup,
+  sliceSemanticTokens,
+  type SemanticTokenRange,
 } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
-import { runLintRules } from "./lintRules";
 import { getSelectionRange } from "./selectionRange";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 
@@ -47,10 +46,10 @@ export function registerDocumentFeatureHandlers(
     handleSelectionRange(ctx, params, token));
 
   connection.onRequest("textDocument/semanticTokens/full", (params, token) =>
-    handleSemanticTokens(ctx, params, token));
+    handleSemanticTokensFull(ctx, params, token));
 
-  connection.onRequest("textDocument/diagnostic", (params, token) =>
-    handleDiagnostic(connection, ctx, params, token));
+  connection.onRequest("textDocument/semanticTokens/range", (params, token) =>
+    handleSemanticTokensRange(ctx, params, token));
 
   connection.onDocumentHighlight((params, token) =>
     handleDocumentHighlight(ctx, params, token));
@@ -108,81 +107,58 @@ async function handleSelectionRange(
 }
 
 /** Handle textDocument/semanticTokens/full requests. */
-async function handleSemanticTokens(
+async function handleSemanticTokensFull(
   ctx: NavigationContext,
   params: { textDocument: { uri: string } },
   token: CancellationToken,
 ) {
-  const uri = params.textDocument.uri;
+  const data = await buildSemanticTokenData(ctx, params.textDocument.uri, token);
+  return { data };
+}
+
+/** Handle textDocument/semanticTokens/range requests. */
+async function handleSemanticTokensRange(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; range: SemanticTokenRange },
+  token: CancellationToken,
+) {
+  const data = await buildSemanticTokenData(ctx, params.textDocument.uri, token, params.range);
+  return { data };
+}
+
+async function buildSemanticTokenData(
+  ctx: NavigationContext,
+  uri: string,
+  token: CancellationToken,
+  range?: SemanticTokenRange,
+): Promise<number[]> {
   const doc = ctx.documents.get(uri);
   const docVersion = doc?.version;
   const cached = ctx.semanticTokensCache.get(uri);
 
-  // Cancellation is often transient during rapid edits/reindex. Reuse cached
-  // tokens only when they match the current document version. Version-mismatched
-  // cached ranges can paint partial words (e.g. "funct`ion"-style splits).
   if (token.isCancellationRequested) {
-    if (cached && docVersion !== undefined && cached.version === docVersion) {
-      if (ctx.debugTelemetry) {
-        logInfo(ctx.connection, `[telemetry] semanticTokens cache-hit-on-cancel uri=${uri} version=${docVersion} tokens=${cached.data.length}`);
-      }
-      return { data: cached.data };
+    if (!range && cached && docVersion !== undefined && cached.version === docVersion) {
+      return cached.data;
     }
-    if (ctx.debugTelemetry) {
-      logInfo(ctx.connection, `[telemetry] semanticTokens dropped-on-cancel uri=${uri} docVersion=${docVersion ?? "none"} cacheVersion=${cached?.version ?? "none"}`);
-    }
-    return { data: [] };
+    return [];
   }
 
-  if (!doc) return { data: [] };
+  if (!doc) return [];
 
   const table = await ctx.getSymbolTable(uri);
   if (!table) {
-    if (cached && cached.version === doc.version) {
-      if (ctx.debugTelemetry) {
-        logInfo(ctx.connection, `[telemetry] semanticTokens cache-hit-no-table uri=${uri} version=${doc.version} tokens=${cached.data.length}`);
-      }
-      return { data: cached.data };
-    }
-    if (ctx.debugTelemetry) {
-      logInfo(ctx.connection, `[telemetry] semanticTokens empty-no-table uri=${uri} version=${doc.version}`);
-    }
-    return { data: [] };
+    if (!range && cached && cached.version === doc.version) return cached.data;
+    return [];
   }
 
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
-  const data = deltaEncodeTokens(tokens);
-  ctx.semanticTokensCache.set(uri, { version: doc.version, data });
+  const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
+  if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data });
   if (ctx.debugTelemetry) {
-    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length}`);
+    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length} range=${range ? "yes" : "no"}`);
   }
-  return { data };
-}
-
-/** Handle textDocument/diagnostic (pull diagnostics) requests. */
-async function handleDiagnostic(
-  connection: Connection,
-  ctx: NavigationContext,
-  params: { textDocument: { uri: string } },
-  token: CancellationToken,
-) {
-  if (token.isCancellationRequested) return { kind: "full", items: [] };
-  const doc = ctx.documents.get(params.textDocument.uri);
-  if (!doc) return { kind: "full", items: [] };
-
-  try {
-    const source = doc.getText();
-    const tree = parse(source, params.textDocument.uri);
-    const parseDiagnostics = getParseDiagnostics(tree, source.split('\n'));
-    const table = buildSymbolTable(tree, params.textDocument.uri, doc.version);
-    const lintDiagnostics = runLintRules(tree, table, source);
-    const diagnostics = [...parseDiagnostics, ...lintDiagnostics];
-    return { kind: "full", items: diagnostics };
-  } catch (err) {
-    logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleDiagnostics", err);
-    return { kind: "full", items: [] };
-  }
+  return data;
 }
 
 /** Handle textDocument/documentHighlight requests. */

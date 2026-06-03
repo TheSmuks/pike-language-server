@@ -1,4 +1,4 @@
-# Decision 0023: Incremental Text Document Sync
+# Decision 0033: Incremental Text Document Sync
 
 **Date**: 2026-05-12
 **Status**: Accepted
