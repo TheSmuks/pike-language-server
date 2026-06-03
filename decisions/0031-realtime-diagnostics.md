@@ -1,4 +1,4 @@
-# 0013: Real-Time Diagnostics with Debouncing
+# 0031: Real-Time Diagnostics with Debouncing
 
 **Status:** Approved (Phase 6 P2)
 **Date:** 2026-04-27

@@ -8,6 +8,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - Semantic tokens now advertise and handle range requests, allowing clients to
+    request only the visible/edit-affected slice instead of always receiving a
+    full-file token payload.
+  - CI now checks for unique ADR filename prefixes, and release packaging verifies
+    that the release tag is ancestor-or-equal with the default branch and has the
+    same tree as `origin/main`.
+
+### Changed
+
+  - Diagnostics now use a single push model. The server no longer advertises LSP
+    pull diagnostics because real-time diagnostics are published through the
+    existing debounced `publishDiagnostics` pipeline.
+  - Completion auto-triggering is narrowed to dot access only; signature help owns
+    `(` and `,`, and broad `:`/`>` triggers no longer fire in unrelated contexts.
+  - Semantic token refresh notifications are coalesced, and pending document
+    changes received before parser readiness are replayed after initialization.
+
+### Fixed
+
+  - ADR filename prefixes are unique; the syntax-color ADR was renumbered to
+    ADR-0037 and references were updated.
+
 ## [0.8.17] — 2026-06-02
 
 ### Changed
@@ -28,14 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Unused-variable and unused-parameter diagnostics now use warning severity
     instead of hint severity, making them render with a visible warning squiggle
     in VSCode instead of a barely noticeable dotted underline.
-  - Syntax-color responsibility split is now governed by ADR-0029: TextMate
+  - Syntax-color responsibility split is now governed by ADR-0037: TextMate
     paints the instant coarse baseline, tree-sitter semantic tokens own
     context-dependent classification keyed on grammar nodes, and the Pike
     oracle enriches the token stream with type-derived modifiers when
     available. The TextMate grammar no longer attempts to color aggregate
-    literal delimiters; that classification is routed to the tree-sitter
-    layer (currently gated on
-    [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20)).
+    literal delimiters; they intentionally remain default punctuation because
+    broad themes do not style a portable aggregate-delimiter semantic token.
 
 ### Fixed
 
@@ -47,9 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     mapping-literal delimiter. The regex had no parse context and could not
     disambiguate aggregate literals from array-indexing expressions. The
     TextMate grammar no longer asserts a false-positive scope; aggregate
-    literals are classified by the tree-sitter parse tree instead. See
-    [ADR-0029](decisions/0029-syntax-color-three-layer.md) and
-    [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20).
+    literal node presence is covered by tree-sitter regression tests instead.
+    See [ADR-0037](decisions/0037-syntax-color-three-layer.md).
 
 ## [0.8.16] — 2026-06-02
 

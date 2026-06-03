@@ -159,7 +159,7 @@ describe("pike.tmLanguage.json tokenization rules", () => {
   });
 
   it("does not classify aggregate literal delimiters as a TextMate scope", () => {
-    // Per ADR-0029, aggregate-literal delimiters ({, }, <, >, [, ] in
+    // Per ADR-0037, aggregate-literal delimiters ({, }, <, >, [, ] in
     // aggregate contexts) are classified by the tree-sitter semantic-token
     // layer, not the TextMate grammar. PR #95's `literal-delimiters` rule
     // produced false positives like `])` in `foo(arr[i])` because regex has

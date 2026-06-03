@@ -9,6 +9,7 @@ import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { createTestServer, createSilentStream, type TestServer } from "./helpers";
+import { buildServerCapabilities } from "../../server/src/serverCapabilities";
 import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +17,13 @@ import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
 // ---------------------------------------------------------------------------
 
 describe("lifecycle: capabilities", () => {
+  test("capability advertisement matches implemented protocol model", () => {
+    const caps = buildServerCapabilities().capabilities;
+    expect(caps.diagnosticProvider).toBeUndefined();
+    expect(caps.semanticTokensProvider).toMatchObject({ full: true, range: true });
+    expect(caps.completionProvider?.triggerCharacters).toEqual(['.']);
+  });
+
   test("initialize returns documentSymbolProvider and textDocumentSync", async () => {
     const { client, teardown } = await createTestServer();
 
