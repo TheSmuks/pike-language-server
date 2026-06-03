@@ -217,6 +217,35 @@ function handleClientStateChange(label: string): (event: StateChangeEvent) => vo
   };
 }
 
+async function stopClientForRestart(activeClient: LanguageClient): Promise<void> {
+  if (activeClient.state === State.Stopped) return;
+  if (activeClient.state === State.Starting) {
+    await waitForClientStateSettled(activeClient);
+    const settledState = getClientState(activeClient);
+    if (settledState !== State.Running) return;
+  }
+  await activeClient.stop();
+}
+
+function getClientState(activeClient: LanguageClient): State {
+  return activeClient.state as State;
+}
+
+function waitForClientStateSettled(activeClient: LanguageClient): Promise<void> {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      disposable.dispose();
+      resolve();
+    }, 10_000);
+    const disposable = activeClient.onDidChangeState((event) => {
+      if (event.newState === State.Starting) return;
+      clearTimeout(timeout);
+      disposable.dispose();
+      resolve();
+    });
+  });
+}
+
 export function activate(context: vscode.ExtensionContext): void {
   // Clear stale output from previous activations (OutputChannel content
   // survives window reloads, which makes it look like multiple versions
@@ -418,7 +447,9 @@ export function activate(context: vscode.ExtensionContext): void {
         if (restarting) return;
         restarting = true;
         log("info", "EXT", "Settings changed — restarting server...");
-        client?.stop().then(() => {
+        const oldClient = client;
+        const stopPromise = oldClient ? stopClientForRestart(oldClient) : Promise.resolve();
+        stopPromise.then(() => {
           client = new LanguageClient(
             "pikeLanguageServer",
             "Pike Language Server",

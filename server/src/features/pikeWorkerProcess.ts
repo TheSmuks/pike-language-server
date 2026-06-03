@@ -8,13 +8,8 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { resolve, join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { existsSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
-import {
-  validatePikeResponse,
-} from "../util/jsonValidation.js";
 import type {
   PikeWorkerConfig,
   PikeResponse,
@@ -26,69 +21,9 @@ import {
   clampPriority,
 } from "./pikeWorkerTypes.js";
 import { shouldEvictIdle, shouldForceRestart as checkForceRestart } from "./pikeWorkerLifecycle.js";
-
-// ---------------------------------------------------------------------------
-// Path resolution helpers
-// ---------------------------------------------------------------------------
-
-const _thisDir = typeof __dirname !== 'undefined'
-  ? __dirname
-  : dirname(fileURLToPath(import.meta.url));
-
-/**
- * Resolve a directory by trying multiple candidate paths.
- * Returns the first path that exists and is a directory, or undefined.
- *
- * Supports both dev layout and VSIX layout:
- * - Dev:       server/dist/ → 3 levels up → repo root
- * - VSIX:      server/dist/ → 2 levels up → extension root
- */
-function resolveDir(...candidates: string[]): string | undefined {
-  for (const candidate of candidates) {
-    try {
-      if (existsSync(candidate) && statSync(candidate).isDirectory()) {
-        return candidate;
-      }
-    } catch {
-      // Permission or access errors — treat as non-existent.
-    }
-  }
-  return undefined;
-}
-
-/**
- * Resolve a file by trying multiple candidate paths.
- * Returns the first path that exists and is a file, or undefined.
- */
-function resolveFile(...candidates: string[]): string | undefined {
-  for (const candidate of candidates) {
-    try {
-      if (existsSync(candidate) && statSync(candidate).isFile()) {
-        return candidate;
-      }
-    } catch {
-      // Permission or access errors — treat as non-existent.
-    }
-  }
-  return undefined;
-}
-
-// Dev layout: _thisDir = server/dist/; 3× ".." = repo root
-const DEV_ROOT = resolve(_thisDir, "..", "..", "..");
-// VSIX layout: _thisDir = server/dist/; 2× ".." = extension root
-const VSIX_ROOT = resolve(_thisDir, "..", "..");
-
-const HARNESS_DIR = resolveDir(
-  join(DEV_ROOT, "harness"),
-  join(VSIX_ROOT, "harness"),
-);
-const WORKER_SCRIPT = resolveFile(
-  join(DEV_ROOT, "harness", "worker.pike"),
-  join(VSIX_ROOT, "harness", "worker.pike"),
-);
-const INTROSPECT_PATH = resolveDir(
-  join(DEV_ROOT, "modules", "Introspect", "src"),
-);
+import { processResponseBuffer } from "./pikeWorkerResponseParser.js";
+import { handlePikeStderr } from "./pikeWorkerStderr.js";
+import { HARNESS_DIR, WORKER_SCRIPT, INTROSPECT_PATH, VSIX_ROOT, DEV_ROOT } from "./pikeWorkerPaths.js";
 
 // ---------------------------------------------------------------------------
 // PikeWorkerProcess — base class for subprocess lifecycle
@@ -256,61 +191,15 @@ export abstract class PikeWorkerProcess {
     });
 
     stderr.on("data", (data: Buffer) => {
-      const msg = data.toString().trim();
-      if (!msg) return;
-
-      // Suppress stderr logging once Pike is known to be unavailable.
-      if (this.pikeAvailable === false) return;
-
-      // Detect the specific Nettle/libhogweed missing-library warning.
-      // Pike prints this to stderr but continues running — it is not fatal.
-      // Show the user a one-time actionable message instead of spamming
-      // every stderr line as a critical error.
-      // Use exec() instead of RegExp.$1 — the static property is deprecated
-      // and unsafe under async concurrency (any intervening regex overwrites it).
-      const libMatch = /Failed to load library: (lib[\w-]+\.so[\d.]*)/.exec(msg);
-      if (
-        !this.warnedAboutMissingLibs &&
-        libMatch
-      ) {
-        const libName = libMatch[1];
-        this.warnedAboutMissingLibs = true;
-        if (this.config.libraryPath) {
-          this.onWarning?.(
-            "worker.missingLibrary",
-            `Failed to load ${libName} — the configured ` +
-            `pike.languageServer.worker.ldLibraryPath ` +
-            `("${this.config.libraryPath}") may not contain it.`,
-          );
-        } else {
-          this.onWarning?.(
-            "worker.missingLibrary",
-            `Failed to load ${libName}. ` +
-            `Set pike.languageServer.worker.ldLibraryPath to the directory ` +
-            `containing this library (e.g. /usr/lib/x86_64-linux-gnu).`,
-          );
-        }
-        return;
-      }
-
-      // Detect Pike internal fatal errors (e.g. "pike_types.c:707: Fatal error:
-      // Type mark stack underflow"). These indicate bugs in Pike itself, not in
-      // the LSP. Log as a warning (not error) since the crash-loop backoff
-      // mechanism handles the recovery.
-      const isFatalPikeError = /Fatal error:/i.test(msg);
-      if (isFatalPikeError) {
-        // Suppress duplicate fatal errors during crash loops — the backoff
-        // mechanism already warned the user.
-        if (this.consecutiveCrashes >= PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD) {
-          return;
-        }
-        this.onWarning?.("worker.pikeFatal", `[pike-worker stderr] ${msg}`);
-        return;
-      }
-
-      // Other stderr output — route as a critical error (but only once Pike
-      // is confirmed available; during startup pikeAvailable is null).
-      this.onCriticalError?.("worker.stderr", new Error(`[pike-worker stderr] ${msg}`));
+      this.warnedAboutMissingLibs = handlePikeStderr(data.toString().trim(), {
+        pikeAvailable: this.pikeAvailable,
+        warnedAboutMissingLibs: this.warnedAboutMissingLibs,
+        consecutiveCrashes: this.consecutiveCrashes,
+        config: this.config,
+        onCriticalError: this.onCriticalError,
+        onWarning: this.onWarning,
+        crashBackoffThreshold: PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD,
+      });
     });
 
     const exitingProc = this.proc;
@@ -549,49 +438,41 @@ export abstract class PikeWorkerProcess {
   // ---------------------------------------------------------------------------
 
   protected processBuffer(): void {
-    while (true) {
-      const newlineIdx = this.buffer.indexOf("\n");
-      if (newlineIdx === -1) break;
-
-      const line = this.buffer.slice(0, newlineIdx);
-      this.buffer = this.buffer.slice(newlineIdx + 1);
-
-      if (!line.trim()) continue;
-
-      try {
-        const raw: unknown = JSON.parse(line);
-        const response = validatePikeResponse(raw);
-        this.consecutiveMalformed = 0;
-        // Successful response means the worker is healthy — reset crash counter.
-        this.consecutiveCrashes = 0;
-        const pending = this.pending.get(response.id);
-        if (pending) {
-          clearTimeout(pending.timeout);
-          this.pending.delete(response.id);
-          pending.resolve(response);
-        } else {
-          // Response arrived after timeout — log and discard. Uses console.debug
-          // because this class doesn't hold a connection reference; the message
-          // appears in the server's stderr output.
-          console.debug(`[pike-worker] Discarding response for timed-out request id=${response.id}`);
-        }
-      } catch (err) {
-        // Malformed response — could be debug output or protocol corruption.
-        // Count consecutive failures and restart if threshold exceeded.
-        this.consecutiveMalformed++;
-        this.onCriticalError?.(
-          "worker.malformedResponse",
-          new Error(`Malformed response (${this.consecutiveMalformed}/${PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD}): ${String(err).slice(0, 200)} | line=${line.slice(0, 200)}`),
-        );
-        if (this.consecutiveMalformed >= PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD) {
-          this.onCriticalError?.("worker.malformedThreshold", new Error("Too many malformed responses"));
+    this.buffer = processResponseBuffer(
+      this.buffer,
+      this.pending,
+      {
+        malformedRestartThreshold: PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD,
+        onCriticalError: this.onCriticalError,
+        onResponse: (response: PikeResponse) => {
           this.consecutiveMalformed = 0;
-          this.restart().catch((err) => {
-            this.onCriticalError?.('worker.autoRestart', err);
-          });
-        }
-      }
-    }
+          // Successful response means the worker is healthy — reset crash counter.
+          this.consecutiveCrashes = 0;
+          const pending = this.pending.get(response.id);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            this.pending.delete(response.id);
+            pending.resolve(response);
+          } else {
+            console.debug(`[pike-worker] Discarding response for timed-out request id=${response.id}`);
+          }
+        },
+        onMalformed: (err, line, consecutiveMalformed) => {
+          this.consecutiveMalformed = consecutiveMalformed;
+          this.onCriticalError?.(
+            "worker.malformedResponse",
+            new Error(`Malformed response (${consecutiveMalformed}/${PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD}): ${String(err).slice(0, 200)} | line=${line.slice(0, 200)}`),
+          );
+          if (consecutiveMalformed >= PikeWorkerProcess.MALFORMED_RESTART_THRESHOLD) {
+            this.onCriticalError?.("worker.malformedThreshold", new Error("Too many malformed responses"));
+            this.consecutiveMalformed = 0;
+            this.restart().catch((restartErr) => {
+              this.onCriticalError?.('worker.autoRestart', restartErr);
+            });
+          }
+        },
+      },
+    );
   }
 
   // Abstract method: subclass (PikeWorker) provides restart with its enqueue/ping logic

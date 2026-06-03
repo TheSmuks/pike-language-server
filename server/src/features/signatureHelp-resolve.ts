@@ -243,69 +243,48 @@ export function findDeclarationForName(table: SymbolTable, name: string): Declar
 // ---------------------------------------------------------------------------
 
 /**
+ * Collect parameter labels from a scope's parameter declarations.
+ */
+function collectParamLabels(table: SymbolTable, scopeId: number): ParameterInfo[] {
+  const scope = table.scopes.find(s => s.id === scopeId);
+  if (!scope) return [];
+  const params: ParameterInfo[] = [];
+  for (const declId of scope.declarations) {
+    const param = table.declById.get(declId);
+    if (param && param.kind === "parameter") {
+      const label = param.declaredType ? `${param.declaredType} ${param.name}` : param.name;
+      params.push({ label });
+    }
+  }
+  return params;
+}
+
+/**
  * Build a SignatureInfo from a local function declaration.
  */
 export function buildSignatureFromDecl(decl: Declaration, table: SymbolTable): SignatureInfo | null {
-  // Find the scope that contains this declaration.
-  const containingScope = table.scopes.find(s =>
-    s.declarations.includes(decl.id),
-  );
-
+  const containingScope = table.scopes.find(s => s.declarations.includes(decl.id));
   if (!containingScope) {
-    return {
-      label: `${decl.declaredType ?? "mixed"} ${decl.name}(...)`,
-      parameters: [],
-    };
+    return { label: `${decl.declaredType ?? "mixed"} ${decl.name}(...)`, parameters: [] };
   }
 
-  // Find the function's own scope — a child of containingScope with kind
-  // "function" whose range overlaps with the declaration range.
+  // Find the function's own scope — child of containingScope with kind "function"
+  // whose range overlaps with the declaration range.
   let funcScopeId: number | null = null;
   for (const scope of table.scopes) {
-    if (
-      scope.parentId === containingScope.id &&
-      scope.kind === "function" &&
-      scope.range.start.line <= decl.range.end.line &&
-      scope.range.end.line >= decl.range.start.line
-    ) {
+    if (scope.parentId === containingScope.id && scope.kind === "function" &&
+        scope.range.start.line <= decl.range.end.line && scope.range.end.line >= decl.range.start.line) {
       funcScopeId = scope.id;
       break;
     }
   }
 
-  // Collect parameters from the function scope.
-  const params: ParameterInfo[] = [];
-  if (funcScopeId !== null) {
-    const funcScope = table.scopes.find(s => s.id === funcScopeId);
-    if (funcScope) {
-      for (const declId of funcScope.declarations) {
-        const param = table.declById.get(declId);
-        if (param && param.kind === "parameter") {
-          const label = param.declaredType
-            ? `${param.declaredType} ${param.name}`
-            : param.name;
-          params.push({ label });
-        }
-      }
-    }
-  } else {
-    // Top-level function: parameters are directly in the containing scope.
-    for (const declId of containingScope.declarations) {
-      const param = table.declById.get(declId);
-      if (param && param.kind === "parameter") {
-        const label = param.declaredType
-          ? `${param.declaredType} ${param.name}`
-          : param.name;
-        params.push({ label });
-      }
-    }
-  }
+  const params = funcScopeId !== null
+    ? collectParamLabels(table, funcScopeId)
+    : collectParamLabels(table, containingScope.id);
 
   const retType = decl.declaredType ?? "mixed";
-  const paramStr = params.map(p => p.label).join(", ");
-  const label = `${retType} ${decl.name}(${paramStr})`;
-
-  return { label, parameters: params };
+  return { label: `${retType} ${decl.name}(${params.map(p => p.label).join(", ")})`, parameters: params };
 }
 
 /**

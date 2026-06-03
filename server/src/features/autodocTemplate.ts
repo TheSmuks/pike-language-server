@@ -39,48 +39,47 @@ export function produceAutodocTemplateActions(
   const tree = parse(text, uri);
   if (!tree) return [];
 
-  const table = buildSymbolTable(tree, uri, 0);
+  const table = buildSymbolTable(tree, uri, 0, undefined, text);
 
   const actions: CodeAction[] = [];
 
   for (let lineIdx = startLine; lineIdx <= Math.min(endLine, lines.length - 1); lineIdx++) {
-    const line = lines[lineIdx].trim();
-
-    // Match the //!! trigger — exact match, possibly with trailing whitespace
-    if (line !== "//!!") continue;
-
-    // Look at the next line for a declaration
-    if (lineIdx + 1 >= lines.length) continue;
-    const nextLineNum = lineIdx + 1;
-
-    const decl = findDeclarationAtLine(table, nextLineNum);
-    if (!decl) continue;
-
-    const indent = lines[lineIdx].match(/^(\s*)/)?.[1] ?? "";
-    const template = generateAutodocTemplate(decl, table, indent);
-    if (!template) continue;
-
-    // Replace the //!! line with the template
-    const edit: TextEdit = {
-      range: {
-        start: { line: lineIdx, character: 0 },
-        end: { line: lineIdx, character: lines[lineIdx].length },
-      },
-      newText: template,
-    };
-
-    actions.push({
-      title: `Generate autodoc for ${decl.kind} "${decl.name}"`,
-      kind: CodeActionKindRefactorRewrite,
-      edit: {
-        changes: {
-          [uri]: [edit],
-        },
-      },
-    });
+    const action = tryBuildAutodocAction(lines, lineIdx, table, uri);
+    if (action) actions.push(action);
   }
 
   return actions;
+}
+
+function tryBuildAutodocAction(
+  lines: string[],
+  lineIdx: number,
+  table: SymbolTable,
+  uri: string,
+): CodeAction | null {
+  const line = lines[lineIdx].trim();
+  if (line !== "//!!") return null;
+  if (lineIdx + 1 >= lines.length) return null;
+
+  const decl = findDeclarationAtLine(table, lineIdx + 1);
+  if (!decl) return null;
+
+  const template = buildAutodocTemplate(decl, table, lines[lineIdx]);
+  if (!template) return null;
+
+  const edit: TextEdit = {
+    range: {
+      start: { line: lineIdx, character: 0 },
+      end: { line: lineIdx, character: lines[lineIdx].length },
+    },
+    newText: template,
+  };
+
+  return {
+    title: `Generate autodoc for ${decl.kind} "${decl.name}"`,
+    kind: CodeActionKindRefactorRewrite,
+    edit: { changes: { [uri]: [edit] } },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -101,14 +100,12 @@ function findDeclarationAtLine(table: SymbolTable, line: number): Declaration | 
   return null;
 }
 
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 // Internal: template generation
-// ---------------------------------------------------------------------------
+// -----------------------------------------------------------------------
 
-/**
- * Generate a //! autodoc template for a declaration.
- */
-function generateAutodocTemplate(decl: Declaration, table: SymbolTable, indent: string): string | null {
+function buildAutodocTemplate(decl: Declaration, table: SymbolTable, triggerLine: string): string | null {
+  const indent = triggerLine.match(/^(\s*)/)?.[1] ?? "";
   const prefix = `${indent}//! `;
 
   switch (decl.kind) {
@@ -116,7 +113,6 @@ function generateAutodocTemplate(decl: Declaration, table: SymbolTable, indent: 
     case "method":
       return generateFunctionTemplate(decl, table, prefix);
     case "class":
-      return `${prefix}${decl.name} — description.\n${prefix}`;
     case "variable":
       return `${prefix}${decl.name} — description.\n${prefix}`;
     default:
@@ -124,52 +120,29 @@ function generateAutodocTemplate(decl: Declaration, table: SymbolTable, indent: 
   }
 }
 
-/**
- * Generate autodoc template for a function or method declaration.
- *
- * Finds parameters by looking for `parameter` declarations in the same scope
- * as the function, then generates @param and @returns sections.
- */
 function generateFunctionTemplate(decl: Declaration, table: SymbolTable, prefix: string): string {
-  const lines: string[] = [];
-
-  // Brief description
-  lines.push(`${prefix}${decl.name} — description.`);
-
-  // Find parameters: they are declarations with kind="parameter" whose scopeId
-  // matches a scope whose parent declaration is this function.
-  // Parameters live in the function's inner scope, which has this decl's
-  // ID as the sole declaration... actually, parameters have scopeId pointing
-  // to the function's inner scope. Find that scope.
-  const funcScope = table.scopes.find(
-    s => (s.kind === "function" || s.kind === "block")
-      && containsRange(s.range, decl.range),
-  );
-
-  if (funcScope) {
-    const params = table.declarations.filter(
-      d => d.kind === "parameter" && d.scopeId === funcScope.id,
-    );
-
-    for (const param of params) {
-      lines.push(`${prefix}@param ${param.name}`);
-      lines.push(`${prefix}Description.`);
-    }
-  }
-
-  // Returns section — only for non-void functions
+  const lines: string[] = [`${prefix}${decl.name} — description.`];
+  appendParamLines(lines, decl, table, prefix);
   if (decl.declaredType && decl.declaredType !== "void") {
-    lines.push(`${prefix}@returns`);
-    lines.push(`${prefix}Description.`);
+    lines.push(`${prefix}@returns`, `${prefix}Description.`);
   }
-
   return lines.join("\n");
 }
 
-/**
- * Check if range b is contained within range a.
- */
-function containsRange(a: { start: { line: number; character: number }; end: { line: number; character: number } }, b: { start: { line: number; character: number }; end: { line: number; character: number } }): boolean {
+function appendParamLines(lines: string[], decl: Declaration, table: SymbolTable, prefix: string): void {
+  const funcScope = table.scopes.find(
+    s => (s.kind === "function" || s.kind === "block") && containsRange(s.range, decl.range),
+  );
+  if (!funcScope) return;
+  for (const param of table.declarations.filter(d => d.kind === "parameter" && d.scopeId === funcScope.id)) {
+    lines.push(`${prefix}@param ${param.name}`, `${prefix}Description.`);
+  }
+}
+
+function containsRange(
+  a: { start: { line: number; character: number }; end: { line: number; character: number } },
+  b: { start: { line: number; character: number }; end: { line: number; character: number } },
+): boolean {
   if (b.start.line < a.start.line || b.end.line > a.end.line) return false;
   if (b.start.line === a.start.line && b.start.character < a.start.character) return false;
   if (b.end.line === a.end.line && b.end.character > a.end.character) return false;

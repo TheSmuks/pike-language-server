@@ -204,31 +204,10 @@ export function validateResolveResult(raw: unknown): ResolveResult {
     assertNumber(raw["source_line"], "ResolveResult.source_line");
   }
 
-  // Optional array fields with typed elements
-  const arrayFields = [
-    "methods",
-    "constants",
-    "inherits",
-  ] as const;
-
-  for (const field of arrayFields) {
-    if (field in raw && raw[field] !== undefined) {
-      const arr = raw[field];
-      if (!Array.isArray(arr)) {
-        throw new Error(`Validation failed: ResolveResult.${field} — expected array, got ${typeof arr}`);
-      }
-      for (let i = 0; i < arr.length; i++) {
-        assertObject(arr[i], `ResolveResult.${field}[${i}]`);
-        assertString(arr[i]["name"], `ResolveResult.${field}[${i}].name`);
-        if ("source_file" in arr[i] && arr[i]["source_file"] !== undefined) {
-          assertString(arr[i]["source_file"], `ResolveResult.${field}[${i}].source_file`);
-        }
-        if ("source_line" in arr[i] && arr[i]["source_line"] !== undefined) {
-          assertNumber(arr[i]["source_line"], `ResolveResult.${field}[${i}].source_line`);
-        }
-      }
-    }
-  }
+  // Validate typed array fields: methods, constants, inherits
+  validateTypedArrayField(raw, "methods");
+  validateTypedArrayField(raw, "constants");
+  validateTypedArrayField(raw, "inherits");
 
   // Optional string array fields
   const stringArrayFields = [
@@ -249,6 +228,24 @@ export function validateResolveResult(raw: unknown): ResolveResult {
   }
 
   return raw as unknown as ResolveResult;
+}
+
+function validateTypedArrayField(raw: Record<string, unknown>, field: "methods" | "constants" | "inherits"): void {
+  if (!(field in raw) || raw[field] === undefined) return;
+  const arr = raw[field];
+  if (!Array.isArray(arr)) {
+    throw new Error(`Validation failed: ResolveResult.${field} — expected array, got ${typeof arr}`);
+  }
+  for (let i = 0; i < arr.length; i++) {
+    assertObject(arr[i], `ResolveResult.${field}[${i}]`);
+    assertString(arr[i]["name"], `ResolveResult.${field}[${i}].name`);
+    if ("source_file" in arr[i] && arr[i]["source_file"] !== undefined) {
+      assertString(arr[i]["source_file"], `ResolveResult.${field}[${i}].source_file`);
+    }
+    if ("source_line" in arr[i] && arr[i]["source_line"] !== undefined) {
+      assertNumber(arr[i]["source_line"], `ResolveResult.${field}[${i}].source_line`);
+    }
+  }
 }
 
 /**

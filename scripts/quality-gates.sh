@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # quality-gates.sh — Run pre-commit quality gate checks
-# Wraps the detect.sh from the pike-lsp-quality-gates skill
+#
+# Source of truth: the project-local vendored detector at
+# .omp/skills/quality-gates/scripts/detect.sh is authoritative for this repository
+# and CI. The Hermes pike-lsp-quality-gates skill is the upstream copy for agents;
+# whenever thresholds or heuristics change, update both copies in the same change
+# and verify with:
+#   diff -u ~/.hermes/skills/pike-lsp/pike-lsp-quality-gates/scripts/detect.sh .omp/skills/quality-gates/scripts/detect.sh
+#
 # Usage: bash scripts/quality-gates.sh [--all|--functions|--nonnull|--catch|--roottext|--unbounded|--importmeta|--filelen]
 
 set -euo pipefail

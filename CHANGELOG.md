@@ -13,9 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Semantic tokens now advertise and handle range requests, allowing clients to
     request only the visible/edit-affected slice instead of always receiving a
     full-file token payload.
-  - CI now checks for unique ADR filename prefixes, and release packaging verifies
+  - CI now checks for unique ADR filename prefixes, release packaging verifies
     that the release tag is ancestor-or-equal with the default branch and has the
-    same tree as `origin/main`.
+    same tree as `origin/main`, and local release preparation runs the same
+    lineage guard before printing tag/publish commands.
+  - The VS Code integration lab now runs in CI and exercises diagnostics, hover,
+    semantic tokens, navigation, completion/signature help, parser edge cases,
+    and Pike-oracle degradation against the built extension.
+  - CI now runs smoke-test and quality-gates jobs, plus macOS and Windows matrix
+    coverage for typecheck and the non-Pike Bun test suite.
 
 ### Changed
 

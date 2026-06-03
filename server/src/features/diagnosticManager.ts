@@ -20,7 +20,8 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
-import { PikeWorker, PikeUnavailableError, type PikeDiagnostic } from "./pikeWorker";
+import { PikeWorker, PikeUnavailableError } from "./pikeWorker.js";
+import type { PikeDiagnostic } from "./pikeWorkerTypes.js";
 import { getParseDiagnostics } from "./diagnostics";
 import { runLintRules } from "./lintRules";
 import { parse, type Tree } from "../parser";
@@ -29,6 +30,8 @@ import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
 import { computeContentHash, mergeDiagnostics } from "./diagnosticUtils";
+import { type FileDiagnosticState } from "./diagnosticTypes";
+import { propagateToDependents } from "./diagnosticPropagation";
 
 // Re-export utilities for backward compatibility
 export {
@@ -70,28 +73,9 @@ export interface PikeCacheEntry {
   timestamp: number;
 }
 
-// ---------------------------------------------------------------------------
-// Per-file state
-// ---------------------------------------------------------------------------
-
-interface FileDiagnosticState {
-  /** Active debounce timer. */
-  timer: ReturnType<typeof setTimeout> | null;
-  /** Document version when timer was set (for supersession). */
-  version: number;
-  /** Content hash when timer was set (for cache check). */
-  contentHash: string;
-  /** True when a diagnose request is in flight for this file. */
-  inFlight: boolean;
-  /** Staleness timer for long-running diagnose. */
-  staleTimer: ReturnType<typeof setTimeout> | null;
-  /** Last published diagnostics (for staleness overlay). */
-  lastDiagnostics: Diagnostic[];
-}
-
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 // DiagnosticManager
-// ---------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 
 export class DiagnosticManager {
   private readonly worker: PikeWorker;
@@ -282,6 +266,31 @@ export class DiagnosticManager {
     this.runDiagnose(uri);
   }
 
+  private buildStaleDiagnostic(): Diagnostic {
+    return {
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      severity: DiagnosticSeverity.Information,
+      source: "pike-lsp",
+      message: "Diagnostics are being updated\u2026",
+    };
+  }
+
+  private buildTimeoutDiagnostic(): Diagnostic {
+    return {
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+      severity: DiagnosticSeverity.Warning,
+      source: "pike-lsp",
+      message: "Compilation timed out, will retry on next save.",
+    };
+  }
+
+  private publishParseAndLintDiagnostics(uri: string, source: string, doc: { version: number }, pikeDiagnostics: PikeDiagnostic[] = []): void {
+    const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
+    const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
+    const lspDiagnostics = mergeDiagnostics(parseDiags, pikeDiagnostics, parseTree ?? undefined, lintDiags, lines);
+    this.publishDiagnostics(uri, lspDiagnostics, doc.version);
+  }
+
   /**
    * Run diagnose for a URI. Handles caching, timeout, staleness.
    */
@@ -289,98 +298,48 @@ export class DiagnosticManager {
     if (this.disposed) return;
     const doc = this.documents.get(uri);
     if (!doc) return;
-
     const source = doc.getText();
     const contentHash = computeContentHash(source);
-    const requestedVersion = doc.version;
 
-    // Check cache
     const cached = this.pikeCache.get(uri);
     if (cached && cached.contentHash === contentHash) {
-      const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
-      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, cached.diagnostics, parseTree ?? undefined, lintDiags, lines);
-      this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
+      this.publishParseAndLintDiagnostics(uri, source, doc, cached.diagnostics);
       return;
     }
 
-    // Mark as in-flight
     const state = this.getOrCreateState(uri);
     state.inFlight = true;
     state.lastDiagnostics = [];
 
-    // Start staleness timer
     state.staleTimer = setTimeout(() => {
-      // Publish staleness warning alongside previous diagnostics
-      const staleDiag: Diagnostic = {
-        range: {
-          start: { line: 0, character: 0 },
-          end: { line: 0, character: 0 },
-        },
-        severity: DiagnosticSeverity.Information,
-        source: "pike-lsp",
-        message: "Diagnostics are being updated\u2026",
-      };
-      this.publishDiagnostics(uri, [...state.lastDiagnostics, staleDiag], requestedVersion);
+      this.publishDiagnostics(uri, [...state.lastDiagnostics, this.buildStaleDiagnostic()], doc.version);
     }, this.staleMs);
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
       const filepath = uriToPath(uri);
       const result = await this.worker.diagnose(source, filepath);
-
-      // Clear staleness timer
       this.clearStaleTimer(state);
 
       if (result.timedOut) {
         const { diagnostics: parseDiags } = this.safeParse(source, uri);
-        const timeoutDiag: Diagnostic = {
-          range: {
-            start: { line: 0, character: 0 },
-            end: { line: 0, character: 0 },
-          },
-          severity: DiagnosticSeverity.Warning,
-          source: "pike-lsp",
-          message: "Compilation timed out, will retry on next save.",
-        };
-        this.publishDiagnostics(uri, [...parseDiags, timeoutDiag], requestedVersion);
+        this.publishDiagnostics(uri, [...parseDiags, this.buildTimeoutDiagnostic()], doc.version);
         return;
       }
 
-      // Update cache
-      this.cacheSet(uri, {
-        contentHash,
-        diagnostics: result.diagnostics,
-        timestamp: Date.now(),
-      });
-
-      // Merge and publish
-      const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
-      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, result.diagnostics, parseTree ?? undefined, lintDiags, lines);
-      this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
-
-      // Cross-file propagation: schedule re-diagnosis of dependents
+      this.cacheSet(uri, { contentHash, diagnostics: result.diagnostics, timestamp: Date.now() });
+      this.publishParseAndLintDiagnostics(uri, source, doc, result.diagnostics);
       this.propagateToDependents(uri);
 
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
-        const isPikeUnavailable = err instanceof Error
-          && err.name === "PikeUnavailableError";
+        const isPikeUnavailable = err instanceof Error && err.name === "PikeUnavailableError";
         if (!isPikeUnavailable) {
           logError(this.connection, ErrorCategory.Diagnostics, `diagnosticManager.dispatchDiagnose(${uri})`, err);
         }
       }
-      // Keep fast tree-sitter diagnostics even when the Pike oracle is unavailable.
-      // Unused-symbol lint is local analysis; dropping it here made editor
-      // diagnostics depend on an external binary even though the rule does not.
-      const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
-      const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
-      const lspDiagnostics = mergeDiagnostics(parseDiags, [], parseTree ?? undefined, lintDiags, lines);
-      if (!this.disposed) {
-        this.publishDiagnostics(uri, lspDiagnostics, requestedVersion);
-      }
+      this.publishParseAndLintDiagnostics(uri, source, doc);
     } finally {
       state.inFlight = false;
     }
@@ -395,28 +354,14 @@ export class DiagnosticManager {
    * Uses a short debounce so dependent files batch together.
    */
   private propagateToDependents(editedUri: string): void {
-    const dependents = this.index.getDependents(editedUri);
-    if (dependents.size === 0) return;
-
-    for (const depUri of dependents) {
-      // Only propagate to open files
-      const depDoc = this.documents.get(depUri);
-      if (!depDoc) continue;
-
-      // Schedule a debounced diagnose for the dependent file
-      const depState = this.getOrCreateState(depUri);
-      this.clearDebounceTimer(depState);
-
-      depState.version = depDoc.version;
-      depState.contentHash = computeContentHash(depDoc.getText());
-
-      depState.timer = setTimeout(() => {
-        depState.timer = null;
-        this.dispatchDiagnose(depUri);
-      }, this.debounceMs);
-
-      if (depState.timer.unref) depState.timer.unref();
-    }
+    propagateToDependents(editedUri, {
+      index: this.index,
+      documents: this.documents,
+      debounceMs: this.debounceMs,
+      getOrCreateState: this.getOrCreateState.bind(this),
+      clearDebounceTimer: this.clearDebounceTimer.bind(this),
+      dispatchDiagnose: this.dispatchDiagnose.bind(this),
+    }, this.fileStates);
   }
 
   // -----------------------------------------------------------------------
@@ -516,7 +461,7 @@ export class DiagnosticManager {
   private safeLintDiagnostics(tree: Tree | null, uri: string, version: number, source: string): Diagnostic[] {
     if (tree === null) return [];
     try {
-      const table = buildSymbolTable(tree, uri, version);
+      const table = buildSymbolTable(tree, uri, version, undefined, source);
       return runLintRules(tree, table, source);
     } catch (err) {
       logError(this.connection, ErrorCategory.Diagnostics, `safeLintDiagnostics(${uri})`, err);

@@ -14,6 +14,9 @@ permissions:
 jobs:
   check-blob-sizes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BLOB_SIZE_LIMIT: ${{ vars.BLOB_SIZE_LIMIT }}
     steps:
       - uses: actions/checkout@v6
         with:

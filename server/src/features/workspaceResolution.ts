@@ -128,9 +128,43 @@ function findOwningClassName(decl: Declaration, table: SymbolTable): string | nu
 }
 
 /**
- * Get all references to a declaration across the workspace.
- * Extends single-file references with cross-file references.
+ * Collect references in a dependent file that match the target name and
+ * are unresolved (inherited/imported symbols have resolvesTo=null).
  */
+function findMatchingRefs(
+  table: SymbolTable,
+  targetName: string,
+): Reference[] {
+  return table.references.filter(
+    ref => ref.name === targetName && ref.resolvesTo === null,
+  );
+}
+
+/**
+ * Check if a reference should be filtered out because the target is a
+ * class member and the reference's receiver type doesn't match the
+ * target's owning class.
+ */
+function shouldFilterClassMemberRef(
+  ref: Reference,
+  target: Declaration,
+  table: SymbolTable,
+): boolean {
+  if (ref.kind !== 'arrow_access' && ref.kind !== 'dot_access') return false;
+  if (!ref.lhsName) return false;
+
+  const lhsDecl = table.declarations.find(
+    d => d.name === ref.lhsName && (d.kind === 'variable' || d.kind === 'parameter'),
+  );
+  if (!lhsDecl) return false;
+
+  const lhsType = resolveTypeName(lhsDecl);
+  if (!lhsType) return false;
+
+  const owningClass = findOwningClassName(target, table);
+  return owningClass !== null && lhsType !== owningClass;
+}
+
 export function getCrossFileReferences(
   ctx: ResolutionContext,
   uri: string,
@@ -143,68 +177,25 @@ export function getCrossFileReferences(
   const entry = getFile(ctx, uri);
   if (!entry?.symbolTable) return results;
 
-  // First, get same-file references
-  const sameFileRefs = getReferencesTo(entry.symbolTable, line, character);
-  for (const ref of sameFileRefs) {
+  // Same-file references
+  for (const ref of getReferencesTo(entry.symbolTable, line, character)) {
     results.push({ uri, ref });
   }
 
-  // Find the target declaration
-  let targetDecl = getDefinitionAt(entry.symbolTable, line, character);
-  if (!targetDecl) return results;
+  const target = getDefinitionAt(entry.symbolTable, line, character);
+  if (!target) return results;
 
-  // Local alias so TypeScript narrows the type (avoid non-null assertion).
-  const target = targetDecl;
+  const targetIsMember = isClassMember(target, entry.symbolTable);
 
-  // Search other files for references to the same symbol.
-  // Source-file filter: only consider dependents that have the source file
-  // in their direct dependency set. This prevents matching same-name symbols
-  // from unrelated files (e.g., two independent files each defining 'process').
-  const dependents = ctx.getDependents(uri);
-  for (const depUri of dependents) {
+  for (const depUri of ctx.getDependents(uri)) {
     const depEntry = getFile(ctx, depUri);
     if (!depEntry?.symbolTable) continue;
-
-    // Source-file filter: the dependent must actually depend on this file.
-    // While the reverse-dependency graph already implies this, checking
-    // explicitly guards against stale or inconsistently updated graph entries.
     if (!depEntry.dependencies.has(uri)) continue;
 
-    // Collect all references matching by name in the dependent file.
-    // Then apply scope-aware filtering for inherited member symbols.
     const depTable = depEntry.symbolTable;
-    const matchingRefs: Reference[] = [];
-    for (const ref of depTable.references) {
-      // Name match + must be unresolved (inherited/imported symbols have
-      // resolvesTo=null because single-file analysis can't resolve them).
-      // Locally-resolved references point to a different declaration in the
-      // dependent file, not the inherited one.
-      if (ref.name === target.name && ref.resolvesTo === null) {
-        matchingRefs.push(ref);
-      }
-    }
-
-    // For class members (methods, variables in class scope): apply
-    // scope-aware filtering. If the target is a class member and the
-    // reference uses arrow/dot access, check that the receiver's type
-    // matches the target's owning class. This prevents renaming Dog.speak
-    // from catching cat->speak references when both Dog and Cat define speak.
-    const targetIsMember = isClassMember(target, entry.symbolTable);
-    for (const ref of matchingRefs) {
-      if (targetIsMember && (ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName) {
-        // Look up the LHS variable in the dependent's symbol table.
-        const lhsDecl = depTable.declarations.find(
-          d => d.name === ref.lhsName && (d.kind === 'variable' || d.kind === 'parameter'),
-        );
-        if (lhsDecl) {
-          const lhsType = resolveTypeName(lhsDecl);
-          if (lhsType) {
-            // Find the owning class of the target member.
-            const owningClass = findOwningClassName(target, entry.symbolTable);
-            // If we can determine both types and they don't match, skip.
-            if (owningClass && lhsType !== owningClass) continue;
-          }
-        }
+    for (const ref of findMatchingRefs(depTable, target.name)) {
+      if (targetIsMember && shouldFilterClassMemberRef(ref, target, entry.symbolTable)) {
+        continue;
       }
       results.push({ uri: depUri, ref });
     }
@@ -335,27 +326,14 @@ async function indexOnDemand(
   }
 }
 
-async function resolveUnresolvedReference(
+async function searchInheritChainForSymbol(
   ctx: ResolutionContext,
   ref: Reference,
   table: SymbolTable,
   uri: string,
-  visited?: Set<string>,
-  depth?: number,
+  seen: Set<string>,
+  currentDepth: number,
 ): Promise<{ uri: string; decl: Declaration } | null> {
-  const MAX_DEPTH = 10;
-  const seen = visited ?? new Set<string>();
-  const currentDepth = depth ?? 0;
-
-  // Cycle detection: don't revisit files already on the resolution path.
-  if (seen.has(uri)) return null;
-  seen.add(uri);
-
-  // Depth limit: prevent unbounded recursion on deeply nested inherit chains.
-  if (currentDepth > MAX_DEPTH) return null;
-
-  // Try to find the name through explicit inheritance/import chains,
-  // recursively following transitive inherits.
   for (const decl of table.declarations) {
     if (decl.kind === "inherit" || decl.kind === "import") {
       const target = await resolveInheritTarget(ctx, decl, uri);
@@ -377,6 +355,31 @@ async function resolveUnresolvedReference(
       }
     }
   }
+  return null;
+}
+
+async function resolveUnresolvedReference(
+  ctx: ResolutionContext,
+  ref: Reference,
+  table: SymbolTable,
+  uri: string,
+  visited?: Set<string>,
+  depth?: number,
+): Promise<{ uri: string; decl: Declaration } | null> {
+  const MAX_DEPTH = 10;
+  const seen = visited ?? new Set<string>();
+  const currentDepth = depth ?? 0;
+
+  // Cycle detection: don't revisit files already on the resolution path.
+  if (seen.has(uri)) return null;
+  seen.add(uri);
+
+  // Depth limit: prevent unbounded recursion on deeply nested inherit chains.
+  if (currentDepth > MAX_DEPTH) return null;
+
+  // Try explicit inherit chain
+  const fromInherit = await searchInheritChainForSymbol(ctx, ref, table, uri, seen, currentDepth);
+  if (fromInherit) return fromInherit;
 
   // Try the implicit directory module.pmod: files inside Foo.pmod/
   // automatically see symbols from Foo.pmod/module.pmod.

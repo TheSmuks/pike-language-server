@@ -240,63 +240,51 @@ export async function getRenameLocations(
     length: oldName.length,
   });
 
-  // Cross-file references
-  if (index) {
-    const crossFileRefs = index.getCrossFileReferences(uri, line, character);
-    for (const { uri: refUri, ref } of crossFileRefs) {
-      // Skip the declaration site (already added)
-      if (refUri === uri && ref.loc.line === decl.nameRange.start.line &&
-          ref.loc.character === decl.nameRange.start.character) {
-        continue;
-      }
-
-      // Type-aware filtering for arrow/dot access:
-      // If we're renaming a member on class Dog, exclude cat->bark
-      // where cat's type resolves to Cat, not Dog.
-      if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName) {
-        const refTable = index.getSymbolTable(refUri);
-        if (refTable) {
-          if (!await isReceiverTypeMatch(refTable, refUri, ref.lhsName, decl, table, index)) {
-            continue;
-          }
-        }
-        // If refTable is null (file not indexed), include conservatively
-      }
-
-      locations.push({
-        uri: refUri,
-        line: ref.loc.line,
-        character: ref.loc.character,
-        length: ref.name.length,
-      });
-    }
-  }
-
-  // Same-file references
-  const refs = getReferencesTo(table, line, character);
-  for (const ref of refs) {
-    // Skip any ref that coincides with the declaration
-    if (ref.loc.line === decl.nameRange.start.line &&
-        ref.loc.character === decl.nameRange.start.character) {
-      continue;
-    }
-
-    // Type-aware filtering for arrow/dot access:
-    if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName && index) {
-      if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, table, index)) {
-        continue;
-      }
-    }
-
-    locations.push({
-      uri,
-      line: ref.loc.line,
-      character: ref.loc.character,
-      length: ref.name.length,
-    });
-  }
+  // Collect cross-file and same-file references
+  if (index) await collectCrossFileReferences(locations, decl, table, uri, index);
+  await collectSameFileReferences(locations, decl, table, uri, index);
 
   return { locations, oldName };
+}
+
+async function collectCrossFileReferences(
+  locations: RenameLocation[],
+  decl: Declaration,
+  table: SymbolTable,
+  uri: string,
+  index: WorkspaceIndex,
+): Promise<void> {
+  const crossFileRefs = index.getCrossFileReferences(uri, decl.nameRange.start.line, decl.nameRange.start.character);
+  for (const { uri: refUri, ref } of crossFileRefs) {
+    if (refUri === uri && ref.loc.line === decl.nameRange.start.line &&
+        ref.loc.character === decl.nameRange.start.character) continue;
+
+    if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName) {
+      const refTable = index.getSymbolTable(refUri);
+      if (refTable && !await isReceiverTypeMatch(refTable, refUri, ref.lhsName, decl, table, index)) continue;
+    }
+
+    locations.push({ uri: refUri, line: ref.loc.line, character: ref.loc.character, length: ref.name.length });
+  }
+}
+
+async function collectSameFileReferences(
+  locations: RenameLocation[],
+  decl: Declaration,
+  table: SymbolTable,
+  uri: string,
+  index: WorkspaceIndex | null,
+): Promise<void> {
+  const refs = getReferencesTo(table, decl.nameRange.start.line, decl.nameRange.start.character);
+  for (const ref of refs) {
+    if (ref.loc.line === decl.nameRange.start.line && ref.loc.character === decl.nameRange.start.character) continue;
+
+    if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName && index) {
+      if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, table, index)) continue;
+    }
+
+    locations.push({ uri, line: ref.loc.line, character: ref.loc.character, length: ref.name.length });
+  }
 }
 
 /**

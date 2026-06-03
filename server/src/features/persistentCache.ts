@@ -80,6 +80,7 @@ const CACHE_DIR = ".pike-lsp";
 const CACHE_SUBDIR = "cache";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
 const FORMAT_VERSION = 2; // Per-file entries (was 1: monolithic)
+const MAX_ENTRIES = 100_000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -117,12 +118,11 @@ export async function saveCache(
   try {
     await mkdir(cacheDir, { recursive: true });
   } catch {
-    // Non-critical: cache write fails silently.
     stopSpan("saveCache");
     return;
   }
 
-  // Collect entries with their forward dependencies.
+  // Collect and serialize entries with forward dependencies.
   const entries: CachedFileEntry[] = [];
   for (const fileEntry of index.getAllEntries()) {
     if (!fileEntry.symbolTable) continue;
@@ -135,32 +135,9 @@ export async function saveCache(
     });
   }
 
-  startSpan("serializeCache");
-  stopSpan("serializeCache");
-
-  // Write entries in parallel batches of 50.
-  const BATCH = 50;
-  for (let i = 0; i < entries.length; i += BATCH) {
-    const batch = entries.slice(i, i + BATCH);
-    await Promise.all(batch.map((entry) => saveEntry(cacheDir, entry)));
-    bump("cacheDiskWrites");
-  }
-
-  // Write the cache index atomically — this marks the save as complete.
-  startSpan("serializeCacheIndex");
-  const indexData = JSON.stringify({
-    formatVersion: FORMAT_VERSION,
-    wasmHash,
-    entryCount: entries.length,
-  });
-  stopSpan("serializeCacheIndex");
-
-  await writeFileAtomic(
-    join(workspaceRoot, CACHE_DIR, CACHE_INDEX_FILENAME),
-    indexData,
-  );
-  bump("cacheDiskWrites");
-
+  // Write all entries in parallel batches, then write the index atomically.
+  await writeEntriesBatched(cacheDir, entries);
+  await writeCacheIndexAtomically(workspaceRoot, wasmHash, entries.length);
   stopSpan("saveCache");
 }
 
@@ -189,80 +166,14 @@ export async function loadCache(
     return null;
   }
 
-  try {
-    startSpan("cacheRead");
-    const raw = await readFile(indexPath, "utf-8");
-    bump("cacheDiskReads");
-    stopSpan("cacheRead");
+  // Validate index hash/version; delete cache and return null on mismatch.
+  const cacheIndex = await readAndValidateCacheIndex(cacheDir, indexPath, currentWasmHash);
+  if (!cacheIndex) return null;
 
-    startSpan("deserializeCache");
-    const cacheIndex: CacheIndex = JSON.parse(raw);
-
-    if (cacheIndex.formatVersion !== FORMAT_VERSION) {
-      stopSpan("deserializeCache");
-      stopSpan("loadCache");
-      await deleteCache(workspaceRoot);
-      return null;
-    }
-
-    if (cacheIndex.wasmHash !== currentWasmHash) {
-      stopSpan("deserializeCache");
-      stopSpan("loadCache");
-      await deleteCache(workspaceRoot);
-      return null;
-    }
-    stopSpan("deserializeCache");
-
-    // Scan the cache directory and load each entry.
-    const cacheSubdir = join(cacheDir, CACHE_SUBDIR);
-    if (!existsSync(cacheSubdir)) {
-      stopSpan("loadCache");
-      return null;
-    }
-
-    let cacheFiles: string[];
-    try {
-      cacheFiles = await readdir(cacheSubdir);
-    } catch {
-      stopSpan("loadCache");
-      return null;
-    }
-
-    const results: CachedFileEntry[] = [];
-
-    // Load all cache entries in parallel.
-    // Filter out non-JSON files and temp files.
-    const jsonFiles = cacheFiles.filter(
-      (f) => f.endsWith(".json") && !f.includes(".tmp."),
-    );
-    await Promise.all(
-      jsonFiles.map(async (file) => {
-        try {
-          const entryPath = join(cacheSubdir, file);
-          startSpan("cacheRead");
-          const entryRaw = await readFile(entryPath, "utf-8");
-          bump("cacheDiskReads");
-          stopSpan("cacheRead");
-
-          const entry: CachedFileEntry = JSON.parse(entryRaw);
-          // Basic validation: must have required fields.
-          if (!entry.uri || !entry.contentHash || !("symbolTable" in entry)) return;
-          // Ensure dependencies field exists (backward compat with v2.0 entries).
-          if (!Array.isArray(entry.dependencies)) entry.dependencies = [];
-          results.push(entry);
-        } catch {
-          // Skip corrupt entries — they will be rebuilt on next save.
-        }
-      }),
-    );
-
-    stopSpan("loadCache");
-    return results;
-  } catch {
-    stopSpan("loadCache");
-    await deleteCache(workspaceRoot);
-    return null;
-  }
+  // Scan and load all cache entries in parallel.
+  const results = await loadCacheEntries(cacheDir, CACHE_SUBDIR);
+  stopSpan("loadCache");
+  return results.length > 0 ? results : null;
 }
 
 /**
@@ -281,6 +192,8 @@ export async function deleteCache(workspaceRoot: string): Promise<void> {
  * Deserialize a cached symbol table back into a SymbolTable with Map fields.
  */
 export function deserializeSymbolTable(serialized: SerializedSymbolTable): SymbolTable {
+  assertSerializedSymbolTableBounds(serialized);
+
   const declById = new Map<number, Declaration>();
   for (const decl of serialized.declarations) {
     declById.set(decl.id, decl);
@@ -311,7 +224,6 @@ export function computeWasmHash(wasmPath: string): string {
       const content = readFileSync(wasmPath);
       return createHash("sha256").update(content).digest("hex").slice(0, 16);
     } catch {
-      // WASM file unreadable — use fallback hash so cache is invalidated.
       return "unknown";
     }
   });
@@ -321,6 +233,15 @@ export function computeWasmHash(wasmPath: string): string {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+function assertSerializedSymbolTableBounds(serialized: SerializedSymbolTable): void {
+  if (serialized.declarations.length > MAX_ENTRIES) {
+    throw new Error(`Cached symbol table has too many declarations: ${serialized.declarations.length}`);
+  }
+  if (serialized.scopes.length > MAX_ENTRIES) {
+    throw new Error(`Cached symbol table has too many scopes: ${serialized.scopes.length}`);
+  }
+}
+
 function serializeSymbolTable(table: SymbolTable): SerializedSymbolTable {
   return {
     uri: table.uri,
@@ -329,6 +250,85 @@ function serializeSymbolTable(table: SymbolTable): SerializedSymbolTable {
     references: table.references,
     scopes: table.scopes,
   };
+}
+
+async function writeEntriesBatched(cacheDir: string, entries: CachedFileEntry[]): Promise<void> {
+  const BATCH = 50;
+  for (let i = 0; i < entries.length; i += BATCH) {
+    await Promise.all(entries.slice(i, i + BATCH).map(e => saveEntry(cacheDir, e)));
+    bump("cacheDiskWrites");
+  }
+}
+
+async function writeCacheIndexAtomically(workspaceRoot: string, wasmHash: string, entryCount: number): Promise<void> {
+  startSpan("serializeCacheIndex");
+  const indexData = JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount });
+  stopSpan("serializeCacheIndex");
+  await writeFileAtomic(join(workspaceRoot, CACHE_DIR, CACHE_INDEX_FILENAME), indexData);
+  bump("cacheDiskWrites");
+}
+
+async function readAndValidateCacheIndex(
+  cacheDir: string,
+  indexPath: string,
+  currentWasmHash: string,
+): Promise<CacheIndex | null> {
+  startSpan("cacheRead");
+  const raw = await readFile(indexPath, "utf-8");
+  bump("cacheDiskReads");
+  stopSpan("cacheRead");
+
+  startSpan("deserializeCache");
+  let cacheIndex: CacheIndex;
+  try {
+    cacheIndex = JSON.parse(raw);
+  } catch {
+    stopSpan("deserializeCache");
+    await deleteCache(cacheDir);
+    return null;
+  }
+
+  if (cacheIndex.formatVersion !== FORMAT_VERSION || cacheIndex.wasmHash !== currentWasmHash) {
+    stopSpan("deserializeCache");
+    await deleteCache(cacheDir);
+    return null;
+  }
+  stopSpan("deserializeCache");
+  return cacheIndex;
+}
+
+async function loadCacheEntries(cacheDir: string, subdir: string): Promise<CachedFileEntry[]> {
+  const cacheSubdir = join(cacheDir, subdir);
+  if (!existsSync(cacheSubdir)) return [];
+
+  let cacheFiles: string[];
+  try {
+    cacheFiles = await readdir(cacheSubdir);
+  } catch {
+    return [];
+  }
+
+  const results: CachedFileEntry[] = [];
+  const jsonFiles = cacheFiles.filter(f => f.endsWith(".json") && !f.includes(".tmp."));
+
+  await Promise.all(jsonFiles.map(async (file) => {
+    try {
+      const entryPath = join(cacheSubdir, file);
+      startSpan("cacheRead");
+      const entryRaw = await readFile(entryPath, "utf-8");
+      bump("cacheDiskReads");
+      stopSpan("cacheRead");
+
+      const entry: CachedFileEntry = JSON.parse(entryRaw);
+      if (!entry.uri || !entry.contentHash || !("symbolTable" in entry)) return;
+      if (!Array.isArray(entry.dependencies)) entry.dependencies = [];
+      results.push(entry);
+    } catch {
+      // Skip corrupt entries — they will be rebuilt on next save.
+    }
+  }));
+
+  return results;
 }
 
 /**
@@ -343,7 +343,6 @@ async function saveEntry(cacheDir: string, entry: CachedFileEntry): Promise<void
     await writeFile(tempPath, JSON.stringify(entry), "utf-8");
     await rename(tempPath, targetPath);
   } catch {
-    // Best-effort: if the write fails, skip this entry.
     try { await rm(tempPath, { force: true }); } catch { /* ignore */ }
   }
 }

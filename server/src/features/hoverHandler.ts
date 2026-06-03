@@ -62,12 +62,12 @@ export interface HoverContext {
 // ---------------------------------------------------------------------------
 
 /** Convert a cross-file resolved declaration to hover info. */
-function crossFileHover(
+async function crossFileHover(
   crossFile: { uri: string; decl: Declaration },
   ctx: HoverContext,
   /** Original hover request position — used for the response range. */
   requestPosition?: { line: number; character: number },
-): Hover | null {
+): Promise<Hover | null> {
   const decl = crossFile.decl;
 
   // Synthesized implicit-class declarations (scopeId === -1) point at the

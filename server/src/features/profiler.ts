@@ -169,118 +169,39 @@ export function bump(_counter: keyof ProfilerCounters, _delta?: number): void {
   counters[_counter] += (_delta ?? 1);
 }
 
-/**
- * Generate the profiling report as a human-readable string.
- *
- * Breaks down wall-clock time by sub-phase, grouped into the two main
- * phases (symbol table building and index upsert). Counters are printed
- * at the end.
- */
-export function generateReport(): string {
-  if (!ENABLED) return "[profiler] not active — set PIKE_LSP_PROFILE=1";
-
-  const totalMs = performance.now() - startTime;
-  const lines: string[] = [];
-
-  lines.push("════════════════════════════════════════════════════════");
-  lines.push("  PIKE LSP PROFILING REPORT");
-  lines.push(`  Total wall-clock: ${fmtMs(totalMs)}`);
-  lines.push("════════════════════════════════════════════════════════");
-  lines.push("");
-
-  // Group spans by category
-  const categories: Record<string, string[]> = {
-    "FILE DISCOVERY": ["discoverFiles"],
-    "FILE I/O": ["readFile", "cacheRead", "cacheWrite", "cacheWasmHash"],
-    "PARSING": ["parse", "parserInit"],
-    "SYMBOL TABLE BUILD": [
-      "buildSymbolTable", "declarationPass", "referencePass",
-      "wireInheritance", "buildTable", "propagateAssignedTypes",
-    ],
-    "INDEX UPSERT": [
-      "upsertFile", "upsertBackgroundFile", "upsertCachedFile",
-      "warmResolverCache", "extractDependencies", "ensureDependenciesResolved",
-    ],
-    "BACKGROUND INDEXING": [
-      "backgroundIndex", "batchParse", "batchUpsert",
-    ],
-    "CACHE PERSISTENCE": [
-      "saveCache", "loadCache", "serializeCache", "deserializeCache",
-    ],
-  };
-
-  for (const [category, spanNames] of Object.entries(categories)) {
-    const matched = spans.filter(s => spanNames.includes(s.name));
-    if (matched.length === 0) continue;
-
-    const total = matched.reduce((sum, s) => sum + s.durationMs, 0);
-    lines.push(`── ${category} (${fmtMs(total)}) ──`);
-
-    // Aggregate spans with the same name
-    const byName = new Map<string, { count: number; totalMs: number; maxMs: number; minMs: number }>();
-    for (const span of matched) {
-      const existing = byName.get(span.name);
-      if (existing) {
-        existing.count++;
-        existing.totalMs += span.durationMs;
-        existing.maxMs = Math.max(existing.maxMs, span.durationMs);
-        existing.minMs = Math.min(existing.minMs, span.durationMs);
-      } else {
-        byName.set(span.name, {
-          count: 1,
-          totalMs: span.durationMs,
-          maxMs: span.durationMs,
-          minMs: span.durationMs,
-        });
-      }
-    }
-
-    // Sort by total time descending
-    const sorted = [...byName.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs);
-    for (const [name, stats] of sorted) {
-      const avg = stats.totalMs / stats.count;
-      if (stats.count === 1) {
-        lines.push(`  ${name}: ${fmtMs(stats.totalMs)}`);
-      } else {
-        lines.push(
-          `  ${name}: ${fmtMs(stats.totalMs)} (${stats.count}x, avg ${fmtMs(avg)}, min ${fmtMs(stats.minMs)}, max ${fmtMs(stats.maxMs)})`,
-        );
-      }
-    }
-    lines.push("");
-  }
-
-  // Print uncategorized spans
-  const allCategorized = new Set(Object.values(categories).flat());
-  const uncategorized = spans.filter(s => !allCategorized.has(s.name));
-  if (uncategorized.length > 0) {
-    lines.push("── OTHER ──");
-    for (const span of uncategorized) {
-      lines.push(`  ${span.name}: ${fmtMs(span.durationMs)}`);
-    }
-    lines.push("");
-  }
-
-  // Counters
-  lines.push("── COUNTERS ──");
-  const counterEntries = Object.entries(counters) as [keyof ProfilerCounters, number][];
-  const maxKeyLen = Math.max(...counterEntries.map(([k]) => k.length));
-  for (const [key, value] of counterEntries) {
-    if (value > 0) {
-      lines.push(`  ${key.padEnd(maxKeyLen)}  ${value}`);
+/** Aggregate matched spans into byName map. */
+function aggregateSpans(matched: TimingSpan[]): Map<string, { count: number; totalMs: number; maxMs: number; minMs: number }> {
+  const byName = new Map<string, { count: number; totalMs: number; maxMs: number; minMs: number }>();
+  for (const span of matched) {
+    const existing = byName.get(span.name);
+    if (existing) {
+      existing.count++;
+      existing.totalMs += span.durationMs;
+      existing.maxMs = Math.max(existing.maxMs, span.durationMs);
+      existing.minMs = Math.min(existing.minMs, span.durationMs);
+    } else {
+      byName.set(span.name, { count: 1, totalMs: span.durationMs, maxMs: span.durationMs, minMs: span.durationMs });
     }
   }
-  lines.push("");
+  return byName;
+}
 
-  // Summary
-  const indexWrites = counters.indexWrites;
-  const parseTime = spans
-    .filter(s => s.name === "parse")
-    .reduce((sum, s) => sum + s.durationMs, 0);
-  const buildTime = spans
-    .filter(s => s.name === "buildSymbolTable")
-    .reduce((sum, s) => sum + s.durationMs, 0);
+/** Emit category lines for a group of matched spans. */
+function emitCategoryLines(lines: string[], matched: TimingSpan[]): void {
+  const byName = aggregateSpans(matched);
+  const sorted = [...byName.entries()].sort((a, b) => b[1].totalMs - a[1].totalMs);
+  for (const [name, stats] of sorted) {
+    const avg = stats.totalMs / stats.count;
+    lines.push(
+      stats.count === 1
+        ? `  ${name}: ${fmtMs(stats.totalMs)}`
+        : `  ${name}: ${fmtMs(stats.totalMs)} (${stats.count}x, avg ${fmtMs(avg)}, min ${fmtMs(stats.minMs)}, max ${fmtMs(stats.maxMs)})`,
+    );
+  }
+}
 
+/** Build the SUMMARY section of the report. */
+function buildReportSummary(lines: string[], parseTime: number, buildTime: number, totalMs: number, indexWrites: number): void {
   lines.push("── SUMMARY ──");
   lines.push(`  Files indexed:    ${indexWrites}`);
   if (indexWrites > 0) {
@@ -288,6 +209,66 @@ export function generateReport(): string {
     lines.push(`  Avg build time:   ${fmtMs(buildTime / Math.max(counters.symbolTablesBuilt, 1))}/file`);
   }
   lines.push(`  Throughput:       ${indexWrites > 0 ? fmtMs(totalMs / indexWrites) : "N/A"}/file`);
+}
+
+function emitReportHeader(lines: string[], totalMs: number): void {
+  lines.push("════════════════════════════════════════════════════════");
+  lines.push("  PIKE LSP PROFILING REPORT");
+  lines.push(`  Total wall-clock: ${fmtMs(totalMs)}`);
+  lines.push("════════════════════════════════════════════════════════");
+  lines.push("");
+}
+
+/**
+ * Generate the profiling report as a human-readable string.
+ * Breaks down wall-clock time by sub-phase, grouped into the two main
+ * phases (symbol table building and index upsert). Counters are printed at the end.
+ */
+export function generateReport(): string {
+  if (!ENABLED) return "[profiler] not active — set PIKE_LSP_PROFILE=1";
+
+  const totalMs = performance.now() - startTime;
+  const lines: string[] = [];
+  emitReportHeader(lines, totalMs);
+
+  const categories: Record<string, string[]> = {
+    "FILE DISCOVERY": ["discoverFiles"],
+    "FILE I/O": ["readFile", "cacheRead", "cacheWrite", "cacheWasmHash"],
+    "PARSING": ["parse", "parserInit"],
+    "SYMBOL TABLE BUILD": ["buildSymbolTable", "declarationPass", "referencePass", "wireInheritance", "buildTable", "propagateAssignedTypes"],
+    "INDEX UPSERT": ["upsertFile", "upsertBackgroundFile", "upsertCachedFile", "warmResolverCache", "extractDependencies", "ensureDependenciesResolved"],
+    "BACKGROUND INDEXING": ["backgroundIndex", "batchParse", "batchUpsert"],
+    "CACHE PERSISTENCE": ["saveCache", "loadCache", "serializeCache", "deserializeCache"],
+  };
+
+  for (const [category, spanNames] of Object.entries(categories)) {
+    const matched = spans.filter(s => spanNames.includes(s.name));
+    if (matched.length === 0) continue;
+    const total = matched.reduce((sum, s) => sum + s.durationMs, 0);
+    lines.push(`── ${category} (${fmtMs(total)}) ──`);
+    emitCategoryLines(lines, matched);
+    lines.push("");
+  }
+
+  const allCategorized = new Set(Object.values(categories).flat());
+  const uncategorized = spans.filter(s => !allCategorized.has(s.name));
+  if (uncategorized.length > 0) {
+    lines.push("── OTHER ──");
+    for (const span of uncategorized) lines.push(`  ${span.name}: ${fmtMs(span.durationMs)}`);
+    lines.push("");
+  }
+
+  lines.push("── COUNTERS ──");
+  const counterEntries = Object.entries(counters) as [keyof ProfilerCounters, number][];
+  const maxKeyLen = Math.max(...counterEntries.map(([k]) => k.length));
+  counterEntries.forEach(([key, value]) => { if (value > 0) lines.push(`  ${key.padEnd(maxKeyLen)}  ${value}`); });
+  lines.push("");
+
+  const indexWrites = counters.indexWrites;
+  buildReportSummary(lines,
+    spans.filter(s => s.name === "parse").reduce((sum, s) => sum + s.durationMs, 0),
+    spans.filter(s => s.name === "buildSymbolTable").reduce((sum, s) => sum + s.durationMs, 0),
+    totalMs, indexWrites);
   lines.push("════════════════════════════════════════════════════════");
 
   return lines.join("\n");

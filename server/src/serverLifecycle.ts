@@ -60,6 +60,37 @@ function restoreCachedEntries(
 }
 
 /**
+ * Check if a single cached entry's content hash matches disk.
+ * Returns the disk content string if stale, undefined if up-to-date.
+ */
+async function checkEntryStaleness(
+  entry: CachedFileEntry,
+  index: WorkspaceIndex,
+): Promise<string | undefined> {
+  const { readFile: readFileAsync } = await import("node:fs/promises");
+  const current = index.getFile(entry.uri);
+  if (!current) return undefined;
+  if (
+    current.lastModSource !== ModificationSource.DidOpen &&
+    current.lastModSource !== ModificationSource.BackgroundIndex
+  ) {
+    // Entry was restored from cache — check staleness
+  } else {
+    return undefined; // Already re-indexed
+  }
+
+  try {
+    const filePath = fileURLToPath(entry.uri);
+    const diskContent = await readFileAsync(filePath, "utf-8");
+    const diskHash = hashContent(diskContent);
+    if (diskHash === entry.contentHash) return undefined;
+    return diskContent;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Background refresh of cached entries whose content has changed on disk.
  *
  * After the cache is restored (phase 1), this function reads each cached
@@ -77,50 +108,20 @@ async function refreshStaleCacheEntries(
 ): Promise<number> {
   if (!isParserReady()) return 0;
 
-  const { readFile: readFileAsync } = await import("node:fs/promises");
   let reindexed = 0;
 
   for (const entry of cached) {
     if (!entry.symbolTable) continue;
 
-    // Skip files already re-indexed by background indexing or didOpen.
-    const current = index.getFile(entry.uri);
-    if (!current) continue;
-    if (current.lastModSource !== ModificationSource.DidOpen &&
-        current.lastModSource !== ModificationSource.BackgroundIndex) {
-      // This entry was restored from cache — check if stale.
-    } else {
-      // Already re-indexed by a later step — skip.
-      continue;
-    }
+    const diskContent = await checkEntryStaleness(entry, index);
+    if (!diskContent) continue;
 
-    let diskContent: string;
-    try {
-      const filePath = fileURLToPath(entry.uri);
-      diskContent = await readFileAsync(filePath, "utf-8");
-    } catch {
-      // File deleted or unreadable — invalidate entry.
-      index.invalidateWithDependents(entry.uri);
-      reindexed++;
-      continue;
-    }
-
-    const diskHash = hashContent(diskContent);
-    if (diskHash === entry.contentHash) continue;
-
-    // Invalidate dependents BEFORE re-indexing so that the re-indexed file
-    // is immediately available (stale=false) and can serve requests.
-    // Order matters: invalidateWithDependents sets stale=true on the file
-    // itself; upsertBackgroundFile then sets stale=false and installs the
-    // new symbol table. Reversing the order would null the symbol table
-    // immediately after building it (ADR 0026 consequence).
     index.invalidateWithDependents(entry.uri);
     try {
       const tree = parse(diskContent, entry.uri);
       index.upsertBackgroundFile(entry.uri, 0, tree, diskContent);
       reindexed++;
     } catch {
-      // Parse failure — already invalidated, just count it.
       reindexed++;
     }
   }
@@ -147,20 +148,23 @@ export interface InitializedContext {
   memoryTimer?: ReturnType<typeof setInterval>;
 }
 
-export async function handleInitialized(ctx: InitializedContext): Promise<void> {
-  const {
-    connection,
-    documents,
-    index,
-    worker,
-    clientSupportsWatchedFiles,
-    backgroundIndexEnabled,
-    backgroundIndexBatchSize,
-  } = ctx;
+// ---------------------------------------------------------------------------
+// Post-initialization handler (registered via connection.onInitialized)
+// ---------------------------------------------------------------------------
 
-  logInfo(connection, "[init] step 7: onInitialized — starting post-init");
+export interface InitializedContext {
+  connection: Connection;
+  documents: TextDocuments<TextDocument>;
+  index: WorkspaceIndex;
+  worker: PikeWorker;
+  clientSupportsWatchedFiles: boolean;
+  backgroundIndexEnabled: boolean;
+  backgroundIndexBatchSize: number;
+  backgroundIndexCts?: import("vscode-languageserver-protocol").CancellationTokenSource;
+  memoryTimer?: ReturnType<typeof setInterval>;
+}
 
-  // step 7a: parser (tree-sitter WASM + grammar)
+async function initParserStep(connection: Connection): Promise<void> {
   try {
     logInfo(connection, "[init] step 7a: initializing tree-sitter parser");
     await initParser();
@@ -168,11 +172,13 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   } catch (err) {
     logError(connection, ErrorCategory.System, "[init] step 7a FAILED: parser init", err);
   }
+}
 
-  // step 7b: index open documents immediately (typically 0-5 files).
-  // This gives full feature availability for the files the user is looking
-  // at before any background work starts. Full resolution includes dependency
-  // resolution so cross-file features work from the first request.
+async function indexOpenDocumentsStep(
+  connection: Connection,
+  documents: TextDocuments<TextDocument>,
+  index: WorkspaceIndex,
+): Promise<void> {
   const openDocs = documents.all();
   if (openDocs.length > 0) {
     logInfo(connection, `[init] step 7b: indexing ${openDocs.length} open document(s)`);
@@ -187,12 +193,13 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
         logError(connection, ErrorCategory.Index, `[init] step 7b: failed to index ${doc.uri}`, err);
       }
     }
-    logInfo(connection, `[init] step 7b: open documents indexed`);
+    logInfo(connection, "[init] step 7b: open documents indexed");
   } else {
     logInfo(connection, "[init] step 7b: no open documents to index");
   }
+}
 
-  // step 7c: pike binary probe (fire-and-forget)
+function probePikeBinaryStep(connection: Connection, worker: PikeWorker): void {
   logInfo(connection, "[init] step 7c: probing Pike binary");
   worker.ping().catch((err: unknown) => {
     if (err instanceof PikeUnavailableError) {
@@ -209,8 +216,9 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
       logError(connection, ErrorCategory.Worker, "[init] step 7c: Pike ping failed", err);
     }
   });
+}
 
-  // step 7d: file watchers
+function registerFileWatchersStep(connection: Connection, clientSupportsWatchedFiles: boolean): void {
   if (clientSupportsWatchedFiles) {
     logInfo(connection, "[init] step 7d: registering file watchers");
     connection.client.register(
@@ -227,108 +235,50 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   } else {
     logInfo(connection, "[init] step 7d: skipped — client does not support file watchers");
   }
+}
 
-  // step 7e: load persistent cache, then start background indexing.
-  // Cache load must complete before background indexing so that:
-  //   1. Cached entries are available for immediate feature queries
-  //   2. Background indexing skips already-cached files (no double work)
-  // Open documents (step 7b) are already fully indexed and take precedence.
-  logInfo(connection, "[init] step 7e: loading persistent cache");
-  const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
-  const currentWasmHash = computeWasmHash(wasmPath);
-
-  const cacheLoadPromise = loadCache(index.workspaceRoot, currentWasmHash)
-    .catch((err) => {
-      logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
-      return null;
-    });
-
-  // Pre-warm the Pike worker during initialization so the first user
-  // interaction doesn't pay the cold-start cost (~200ms to spawn Pike).
-  if (backgroundIndexEnabled) {
-    worker.warmUp().then((ready) => {
-      if (ready) {
-        const version = worker.pikeVersion ?? "unknown";
-        logInfo(connection, `[init] Pike worker pre-warmed successfully (Pike ${version})`);
-        if (version && !version.startsWith("8.")) {
-          logWarn(connection, `[init] Pike version ${version} predates 8.0 — some features may not work correctly`);
-        }
-      } else {
-        logInfo(connection, "[init] Pike worker warm-up skipped (Pike unavailable)");
-      }
-    });
-  }
-
-  // Cache restore + stale refresh + background indexing, chained sequentially.
-  // The .catch() prevents an unhandled rejection if the synchronous wrapper
-  // throws (e.g., restoreCachedEntries fails) before reaching the inner async
-  // chains that have their own .catch() handlers.
-  cacheLoadPromise.then((cached) => {
-    if (!cached) {
-      logInfo(connection, "[init] step 7e: no cache found — fresh start");
-
-      // Phase 3 (no cache): background-index everything.
-      if (backgroundIndexEnabled) {
-        ctx.backgroundIndexCts = new CancellationTokenSource();
-        logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
-        indexWorkspaceFiles({
-          connection,
-          index,
-          workspaceRoot: index.workspaceRoot,
-          batchSize: backgroundIndexBatchSize,
-          cancellationToken: ctx.backgroundIndexCts.token,
-        }).then(() => {
-          logInfo(connection, "[init] step 7f: background indexing complete");
-        }).catch((err) => {
-          logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
-        });
-      } else {
-        logInfo(connection, "[init] step 7f: background indexing disabled by settings");
+function warmUpPikeWorker(connection: Connection, worker: PikeWorker, backgroundIndexEnabled: boolean): void {
+  if (!backgroundIndexEnabled) return;
+  worker.warmUp().then((ready) => {
+    if (ready) {
+      const version = worker.pikeVersion ?? "unknown";
+      logInfo(connection, `[init] Pike worker pre-warmed successfully (Pike ${version})`);
+      if (version && !version.startsWith("8.")) {
+        logWarn(connection, `[init] Pike version ${version} predates 8.0 — some features may not work correctly`);
       }
     } else {
-      const restored = restoreCachedEntries(index, cached);
-      const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
-      logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
-
-      // Phase 2: Re-validate stale entries (content hash mismatch).
-      // Phase 3 (background indexing) is chained after Phase 2 so that
-      // already-reindexed files are skipped, avoiding double work.
-      refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
-        if (reindexed > 0) {
-          logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
-        }
-
-        // Phase 3: Background-index remaining unindexed files.
-        if (backgroundIndexEnabled) {
-          ctx.backgroundIndexCts = new CancellationTokenSource();
-          logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
-          indexWorkspaceFiles({
-            connection,
-            index,
-            workspaceRoot: index.workspaceRoot,
-            batchSize: backgroundIndexBatchSize,
-            cancellationToken: ctx.backgroundIndexCts.token,
-          }).then(() => {
-            logInfo(connection, "[init] step 7f: background indexing complete");
-          }).catch((err) => {
-            logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
-          });
-        } else {
-          logInfo(connection, "[init] step 7f: background indexing disabled by settings");
-        }
-      }).catch((err) => {
-        logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
-      });
+      logInfo(connection, "[init] Pike worker warm-up skipped (Pike unavailable)");
     }
-  }).catch((err) => {
-    logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
   });
+}
 
-  logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
+function startBackgroundIndexing(
+  connection: Connection,
+  index: WorkspaceIndex,
+  backgroundIndexEnabled: boolean,
+  backgroundIndexBatchSize: number,
+  ctx: InitializedContext,
+): void {
+  if (!backgroundIndexEnabled) {
+    logInfo(connection, "[init] step 7f: background indexing disabled by settings");
+    return;
+  }
+  ctx.backgroundIndexCts = new CancellationTokenSource();
+  logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+  indexWorkspaceFiles({
+    connection,
+    index,
+    workspaceRoot: index.workspaceRoot,
+    batchSize: backgroundIndexBatchSize,
+    cancellationToken: ctx.backgroundIndexCts.token,
+  }).then(() => {
+    logInfo(connection, "[init] step 7f: background indexing complete");
+  }).catch((err) => {
+    logError(connection, ErrorCategory.Index, "[init] step 7f FAILED: background index", err);
+  });
+}
 
-  // step 7g: periodic memory monitor — log warnings and trigger eviction
-  // when heap usage is high. Checks every 60 seconds. Timer is unreffed
-  // so it doesn't prevent the process from exiting.
+function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection): void {
   const MEMORY_CHECK_INTERVAL_MS = 60_000;
   const HEAP_USAGE_WARNING_RATIO = 0.80;
 
@@ -339,9 +289,6 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     if (heapRatio > HEAP_USAGE_WARNING_RATIO) {
       const treeStats = getTreeCacheStats();
 
-      // Only warn when eviction could actually help. If the tree cache is
-      // small, the heap pressure is from other sources (WASM runtime,
-      // stdlib-autodoc.json, V8 internals) and reducing batchSize won't help.
       if (treeStats.size > 5) {
         logWarn(connection,
           `Memory pressure: heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / `
@@ -351,7 +298,6 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
           + `Evicting ${Math.ceil(treeStats.size / 2)} entries.`
         );
 
-        // Aggressively evict half the tree cache under memory pressure.
         const evictCount = Math.ceil(treeStats.size / 2);
         const evicted = evictTreeCacheOldest(evictCount);
         logWarn(connection, `Evicted ${evicted} tree cache entries due to memory pressure`);
@@ -359,6 +305,61 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
     }
   }, MEMORY_CHECK_INTERVAL_MS);
   if (ctx.memoryTimer.unref) ctx.memoryTimer.unref();
+}
+
+export async function handleInitialized(ctx: InitializedContext): Promise<void> {
+  const {
+    connection,
+    documents,
+    index,
+    worker,
+    clientSupportsWatchedFiles,
+    backgroundIndexEnabled,
+    backgroundIndexBatchSize,
+  } = ctx;
+
+  logInfo(connection, "[init] step 7: onInitialized — starting post-init");
+
+  await initParserStep(connection);
+  await indexOpenDocumentsStep(connection, documents, index);
+  probePikeBinaryStep(connection, worker);
+  registerFileWatchersStep(connection, clientSupportsWatchedFiles);
+
+  const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
+  const currentWasmHash = computeWasmHash(wasmPath);
+
+  const cacheLoadPromise = loadCache(index.workspaceRoot, currentWasmHash)
+    .catch((err) => {
+      logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
+      return null;
+    });
+
+  warmUpPikeWorker(connection, worker, backgroundIndexEnabled);
+
+  cacheLoadPromise.then((cached) => {
+    if (!cached) {
+      logInfo(connection, "[init] step 7e: no cache found — fresh start");
+      startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
+    } else {
+      const restored = restoreCachedEntries(index, cached);
+      const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
+      logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
+
+      refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
+        if (reindexed > 0) {
+          logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
+        }
+        startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
+      }).catch((err) => {
+        logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
+      });
+    }
+  }).catch((err) => {
+    logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
+  });
+
+  logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
+  startMemoryMonitorStep(ctx, connection);
 }
 
 // ---------------------------------------------------------------------------
@@ -379,24 +380,47 @@ export function handleConfigurationChange(
   const config = settings.settings?.pike?.languageServer;
   if (!config) return;
 
-  const { worker, diagnosticManager, formattingConfig } = ctx;
+  applyDiagnosticConfig(config, ctx.diagnosticManager);
+  applyWorkerConfig(config, ctx.worker);
+  applyFormattingConfig(config, ctx.formattingConfig);
+}
 
+interface DiagnosticConfig {
+  diagnosticMode?: string;
+  diagnosticDebounceMs?: number;
+  maxNumberOfProblems?: number;
+  pikeBinaryPath?: string;
+  workerRequestTimeoutMs?: number;
+  workerIdleTimeoutMs?: number;
+  workerMaxRequestsBeforeRestart?: number;
+  workerMaxActiveMinutes?: number;
+  workerNiceValue?: number;
+  formatInsertFinalNewline?: boolean;
+  formatOperatorSpacing?: boolean;
+}
+
+function applyDiagnosticConfig(
+  config: DiagnosticConfig,
+  diagnosticManager: DiagnosticManager,
+): void {
   if (config.diagnosticMode) {
     const mode = config.diagnosticMode;
     if (mode === "realtime" || mode === "saveOnly" || mode === "off") {
       diagnosticManager.setDiagnosticMode(mode);
     }
   }
-
   if (config.diagnosticDebounceMs && config.diagnosticDebounceMs > 0) {
     diagnosticManager.setDebounceMs(config.diagnosticDebounceMs);
   }
-
   if (config.maxNumberOfProblems && config.maxNumberOfProblems > 0) {
     diagnosticManager.setMaxNumberOfProblems(config.maxNumberOfProblems);
   }
+}
 
-  // Worker lifecycle config
+function applyWorkerConfig(
+  config: DiagnosticConfig,
+  worker: PikeWorker,
+): void {
   const workerUpdate: Partial<{
     pikeBinaryPath: string;
     requestTimeoutMs: number;
@@ -426,8 +450,12 @@ export function handleConfigurationChange(
   if (Object.keys(workerUpdate).length > 0) {
     worker.updateConfig(workerUpdate);
   }
+}
 
-  // Formatting config
+function applyFormattingConfig(
+  config: DiagnosticConfig,
+  formattingConfig: { insertFinalNewline: boolean; operatorSpacing: boolean },
+): void {
   if (config.formatInsertFinalNewline != null) {
     formattingConfig.insertFinalNewline = config.formatInsertFinalNewline;
   }

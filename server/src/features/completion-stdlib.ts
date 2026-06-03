@@ -37,6 +37,7 @@ let stdlibTopLevelNames: { name: string; kind: CompletionItemKind }[] | null = n
 function buildStdlibChildrenMap(
   stdlibIndex: Record<string, StdlibEntry>,
 ): Map<string, StdlibMember[]> {
+  // Bounded by stdlib session lifetime (evict-eligible on stdlib rebuild).
   const map = new Map<string, StdlibMember[]>();
 
   for (const [fqn, entry] of Object.entries(stdlibIndex)) {
@@ -82,6 +83,7 @@ export function getStdlibTopLevel(
   stdlibIndex: Record<string, StdlibEntry>,
 ): { name: string; kind: CompletionItemKind }[] {
   if (!stdlibTopLevelNames) {
+    // Bounded by stdlib session lifetime (evict-eligible on stdlib rebuild).
     const names = new Map<string, CompletionItemKind>();
     for (const fqn of Object.keys(stdlibIndex)) {
       const parts = fqn.split(".");
@@ -126,6 +128,7 @@ let autoImportSortedKeys: string[] | null = null;
 function buildAutoImportMap(
   stdlibIndex: Record<string, StdlibEntry>,
 ): Map<string, AutoImportEntry[]> {
+  // Bounded by stdlib session lifetime (evict-eligible on stdlib rebuild).
   const map = new Map<string, AutoImportEntry[]>();
 
   for (const [fqn, entry] of Object.entries(stdlibIndex)) {
@@ -242,6 +245,7 @@ let stdlibNameReverseIndex: Map<string, Array<{ fqn: string; entry: StdlibEntry 
 function buildNameReverseIndex(
   stdlibIndex: Record<string, StdlibEntry>,
 ): Map<string, Array<{ fqn: string; entry: StdlibEntry }>> {
+  // Bounded by stdlib session lifetime (evict-eligible on stdlib rebuild).
   const map = new Map<string, Array<{ fqn: string; entry: StdlibEntry }>>();
   for (const [fqn, entry] of Object.entries(stdlibIndex)) {
     const parts = fqn.split(".");
