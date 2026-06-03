@@ -81,14 +81,19 @@ const MEANINGFUL_TYPES = new Set([
 /**
  * Get the selection range at a given position.
  * Returns a linked list of SelectionRange objects, from innermost to outermost.
+ *
+ * @param tree Parse tree
+ * @param line Cursor line (0-based)
+ * @param character Cursor character (0-based UTF-16)
+ * @param lines Pre-split source lines.
  */
 export function getSelectionRange(
   tree: Tree,
   line: number,
   character: number,
+  lines: string[],
 ): SelectionRange | null {
   const root = tree.rootNode;
-  const lines = root.text.split('\n');
   // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
   const pos = { row: line, column: utf8Col };
@@ -97,45 +102,8 @@ export function getSelectionRange(
   let node: Node | null = root.descendantForPosition(pos);
   if (!node) return null;
 
-  // Walk up the tree, collecting ranges for meaningful node types
-  const ranges: SelectionRange[] = [];
-  let current: Node | null = node;
-
-  while (current) {
-    if (MEANINGFUL_TYPES.has(current.type)) {
-      const range = {
-        start: {
-          line: current.startPosition.row,
-          character: utf8ToUtf16(lines[current.startPosition.row] ?? '', current.startPosition.column),
-        },
-        end: {
-          line: current.endPosition.row,
-          character: utf8ToUtf16(lines[current.endPosition.row] ?? '', current.endPosition.column),
-        },
-      };
-
-      // Deduplicate: skip if same range as last added
-      const lastRange = ranges.length > 0 ? ranges[ranges.length - 1] : null;
-      if (!lastRange ||
-          lastRange.range.start.line !== range.start.line ||
-          lastRange.range.start.character !== range.start.character ||
-          lastRange.range.end.line !== range.end.line ||
-          lastRange.range.end.character !== range.end.character) {
-        ranges.push({ range });
-      }
-    }
-    current = current.parent;
-  }
-
-  if (ranges.length === 0) {
-    // Fallback: return the root range
-    return {
-      range: {
-        start: { line: root.startPosition.row, character: utf8ToUtf16(lines[root.startPosition.row] ?? '', root.startPosition.column) },
-        end: { line: root.endPosition.row, character: utf8ToUtf16(lines[root.endPosition.row] ?? '', root.endPosition.column) },
-      },
-    };
-  }
+  const ranges = collectRangesUp(node, lines);
+  if (ranges.length === 0) return makeRootRange(root, lines);
 
   // Build linked list from outermost to innermost.
   // ranges[] is innermost-first; we need to chain parent → child.
@@ -145,4 +113,52 @@ export function getSelectionRange(
 
   // Return the outermost range (last in the array, which is now the head of the chain)
   return ranges[ranges.length - 1];
+}
+
+/**
+ * Walk from node up to root, collecting meaningful selection ranges.
+ * Returns innermost-first order.
+ */
+function collectRangesUp(node: Node | null, lines: string[]): SelectionRange[] {
+  const ranges: SelectionRange[] = [];
+  while (node) {
+    if (MEANINGFUL_TYPES.has(node.type)) {
+      const range = nodeToRange(node, ranges[ranges.length - 1], lines);
+      if (range) ranges.push(range);
+    }
+    node = node.parent;
+  }
+  return ranges;
+}
+
+function nodeToRange(node: Node, lastRange: SelectionRange | null, lines: string[]): SelectionRange | null {
+  const range: SelectionRange = {
+    range: {
+      start: {
+        line: node.startPosition.row,
+        character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
+      },
+      end: {
+        line: node.endPosition.row,
+        character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column),
+      },
+    },
+  };
+  if (lastRange &&
+      lastRange.range.start.line === range.range.start.line &&
+      lastRange.range.start.character === range.range.start.character &&
+      lastRange.range.end.line === range.range.end.line &&
+      lastRange.range.end.character === range.range.end.character) {
+    return null; // deduplicate
+  }
+  return range;
+}
+
+function makeRootRange(root: Node, lines: string[]): SelectionRange {
+  return {
+    range: {
+      start: { line: root.startPosition.row, character: utf8ToUtf16(lines[root.startPosition.row] ?? '', root.startPosition.column) },
+      end: { line: root.endPosition.row, character: utf8ToUtf16(lines[root.endPosition.row] ?? '', root.endPosition.column) },
+    },
+  };
 }

@@ -21,6 +21,12 @@ import type { OffsetMap } from '../util/offsetMap';
 import { lookupUtf16 } from '../util/offsetMap';
 import { utf8ToUtf16 } from '../util/positionConverter';
 
+// Import from the extracted lookup module
+import { findScopeForNode, rangeSize } from './scope-helpers-lookup';
+
+// Re-export for callers
+export { findScopeForNode, rangeSize } from './scope-helpers-lookup';
+
 // ---------------------------------------------------------------------------
 // Geometry helpers
 // ---------------------------------------------------------------------------
@@ -36,9 +42,6 @@ export function toRange(node: Node): Range {
 /**
  * Convert a tree-sitter Point (UTF-8 byte column) to an LSP Location
  * with UTF-16 character offset, using pre-split source lines.
- *
- * When offsetMap is provided, uses O(1) array lookup.
- * When omitted, falls back to the per-character utf8ToUtf16 scan.
  */
 export function toLocUtf16(
   point: Point,
@@ -56,11 +59,7 @@ export function toLocUtf16(
 }
 
 /**
- * Convert a tree-sitter Node to an LSP Range with UTF-16 character offsets,
- * using pre-split source lines.
- *
- * When offsetMap is provided, uses O(1) array lookup.
- * When omitted, falls back to the per-character utf8ToUtf16 scan.
+ * Convert a tree-sitter Node to an LSP Range with UTF-16 character offsets.
  */
 export function toRangeUtf16(node: Node, lines: string[], offsetMap?: OffsetMap): Range {
   return {
@@ -71,7 +70,6 @@ export function toRangeUtf16(node: Node, lines: string[], offsetMap?: OffsetMap)
 
 /**
  * Primitive type names that can never have members.
- * Shared with typeResolver.ts — kept as a set for O(1) lookup.
  */
 export const PRIMITIVE_TYPES = new Set([
   'void', 'mixed', 'zero', 'int', 'float', 'string',
@@ -81,9 +79,6 @@ export const PRIMITIVE_TYPES = new Set([
 
 /**
  * Check whether a range contains the position spanned by (start, end).
- *
- * When offsetMap is provided, converts tree-sitter byte columns to UTF-16
- * using O(1) array lookups. When omitted, uses the original utf8ToUtf16 scan.
  */
 export function containsPosition(
   range: Range,
@@ -112,19 +107,8 @@ export function containsPosition(
   );
 }
 
-export function rangeSize(range: Range): number {
-  return (range.end.line - range.start.line) * 10000 +
-         (range.end.character - range.start.character);
-}
-
 /**
  * Check whether `outer` range fully contains `inner` range.
- *
- * Boundary inclusion: uses `<=` and `>=` (not `<` and `>`) so that the
- * closing brace character of a Pike scope is considered part of the scope.
- * Tree-sitter ranges for blocks include the closing `}`, so a node ending
- * at the brace position should still be considered inside the scope.
- * This is intentional — do NOT change to strict inequality.
  */
 export function containsRange(outer: Range, inner: Range): boolean {
   return (
@@ -145,14 +129,13 @@ export function getNameText(node: Node): string | null {
   return nameNode?.text ?? null;
 }
 
-/** Get all identifier nodes from the `name` field (multi-name variable/constant decls). */
+/** Get all identifier nodes from the `name` field. */
 export function getNameNodes(node: Node): Node[] {
   return node.childrenForFieldName('name');
 }
 
 /** Extract the declared type text from a variable_decl or parameter node. */
 export function extractTypeText(node: Node): string | undefined {
-  // constant_decl has no type field; childForFieldName returns undefined, which is correct.
   if (node.type === 'constant_decl') return undefined;
   const typeNode = node.childForFieldName('type');
   return typeNode?.text;
@@ -160,10 +143,6 @@ export function extractTypeText(node: Node): string | undefined {
 
 /**
  * Resolve the effective type name for a declaration.
- *
- * Priority: declaredType (if present and not primitive) > assignedType > null.
- * Primitives (int, float, mixed, etc.) have no members, so we skip them
- * and fall through to assignedType or null.
  */
 export function resolveTypeName(decl: { declaredType?: string; assignedType?: string }): string | null {
   if (decl.declaredType && !PRIMITIVE_TYPES.has(decl.declaredType)) {
@@ -175,15 +154,10 @@ export function resolveTypeName(decl: { declaredType?: string; assignedType?: st
   return null;
 }
 
-
 /**
- * Drill through expression wrappers (postfix_expr, identifier_expr, primary_expr,
- * single-child wrappers) to find the innermost identifier Node.
- * Returns null if the drill path ends without reaching an identifier.
- * Does NOT descend into cond_expr — callers must handle that separately.
+ * Drill through expression wrappers to find the innermost identifier Node.
  */
 export function drillForIdentifier(node: Node): Node | null {
-  // Returns identifier or cond_expr nodes (for nested ternary handling)
   let inner: Node | null = node;
   while (inner !== null) {
     if (inner.type === 'postfix_expr') {
@@ -207,56 +181,35 @@ export function drillForIdentifier(node: Node): Node | null {
   const t = inner?.type;
   return (t === 'identifier' || t === 'cond_expr') ? inner : null;
 }
+
 /**
- * Extract the type name from a variable initializer, if the RHS is a simple
- * identifier that could be a class name (e.g., Dog d = makeDog() → makeDog).
- *
- * Drills through expression wrappers (comma_expr, assign_expr, cond_expr,
- * postfix_expr) to find the innermost identifier. Returns undefined for
- * literals, complex expressions, or call expressions whose callee is not
- * a simple identifier.
+ * Extract the type name from a variable initializer.
  */
 export function extractInitializerType(node: Node): string | undefined {
-  // Bare cond_expr (no variable_decl/local_declaration wrapper): handle it directly
   if (node.type === 'cond_expr') {
     return extractCondExprType(node);
   }
-
-  // Only variable_decl or local_declaration has a 'value' field with an initializer
   if (node.type !== 'variable_decl' && node.type !== 'local_declaration') return undefined;
-
   const valueNode = node.childForFieldName('value');
   if (!valueNode) return undefined;
-
   return extractInitializerExprType(valueNode);
 }
 
-/**
- * Extract the type name from a bare cond_expr node.
- * Handles consequence and alternate branches, including nested ternaries.
- */
 function extractCondExprType(node: Node): string | undefined {
   if (node.childCount === 1) return undefined;
-
   const consequence = node.child(2);
   if (consequence) {
     const result = drillCondExprBranch(consequence);
     if (result) return result;
   }
-
   const alternate = node.child(4);
   if (alternate) {
     const id = drillForIdentifier(alternate);
     if (id && !PRIMITIVE_TYPES.has(id.text)) return id.text;
   }
-
   return undefined;
 }
 
-/**
- * Drill through wrappers in a cond_expr branch to find the type.
- * Returns undefined for primitives or complex expressions.
- */
 function drillCondExprBranch(expr: Node): string | undefined {
   let current: Node | undefined = expr;
   while (current && current.type !== 'cond_expr' && current.type !== 'identifier') {
@@ -280,10 +233,6 @@ function drillCondExprBranch(expr: Node): string | undefined {
   return undefined;
 }
 
-/**
- * Extract the type name from an initializer expression node.
- * Drills through wrappers and handles cond_expr branches.
- */
 function extractInitializerExprType(valueNode: Node): string | undefined {
   let inner: Node | null = valueNode;
   while (inner !== null) {
@@ -304,25 +253,17 @@ function extractInitializerExprType(valueNode: Node): string | undefined {
     }
     break;
   }
-
   if (!inner || inner.type !== 'identifier') return undefined;
   if (PRIMITIVE_TYPES.has(inner.text)) return undefined;
   return inner.text;
 }
 
-/**
- * Extract the type from a cond_expr encountered during initializer drilling.
- * Checks consequence and alternate branches.
- */
 function extractCondExprBranchType(condNode: Node): string | undefined {
-  // Single-child cond_expr is just an expression-precedence wrapper,
-  // not a real ternary — fall through to normal drilling.
   if (condNode.childCount === 1) {
     const single = condNode.namedChild(0);
     if (single) return extractInitializerExprType(single);
     return undefined;
   }
-
   const consequence = condNode.child(2);
   if (consequence) {
     const id = drillForIdentifier(consequence);
@@ -333,7 +274,6 @@ function extractCondExprBranchType(condNode: Node): string | undefined {
       return id.text;
     }
   }
-
   const alternate = condNode.child(4);
   if (alternate) {
     const id = drillForIdentifier(alternate);
@@ -344,7 +284,6 @@ function extractCondExprBranchType(condNode: Node): string | undefined {
       return id.text;
     }
   }
-
   return undefined;
 }
 
@@ -379,7 +318,6 @@ export function addDeclaration(state: BuildState, decl: Omit<Declaration, 'id'>)
   const full: Declaration = { ...decl, id };
   state.declarations.push(full);
   state.declMap.set(id, full);
-  // Register in scope
   const scope = state.scopeMap.get(decl.scopeId);
   if (scope) scope.declarations.push(id);
   return id;
@@ -390,111 +328,11 @@ export function addDeclaration(state: BuildState, decl: Omit<Declaration, 'id'>)
 // ---------------------------------------------------------------------------
 
 /**
- * Find the scope ID that contains a given node.
- *
- * Uses binary search on sortedScopes (sorted by start position) to find
- * candidate scopes in O(log S) instead of O(S). For each candidate, verifies
- * containment using the pre-computed offset map for O(1) position conversion.
- *
- * Overall complexity: O(R × log S) for the reference pass instead of O(R × S).
- */
-export function findScopeForNode(node: Node, state: BuildState): number | null {
-  const nodeStartRow = node.startPosition.row;
-  const nodeStartCol = node.startPosition.column;
-  const nodeEndRow = node.endPosition.row;
-  const nodeEndCol = node.endPosition.column;
-
-  const sorted = state.sortedScopes;
-  if (sorted.length === 0) return null;
-
-  // Convert node positions to UTF-16 once for all containment checks.
-  const nodeStartChar = lookupUtf16(state.offsetMap, nodeStartRow, nodeStartCol);
-  const nodeEndChar = lookupUtf16(state.offsetMap, nodeEndRow, nodeEndCol);
-
-  // Binary search: find the rightmost scope whose start is ≤ the node's start.
-  // sorted is sorted by (startLine, startChar) ascending.
-  let lo = 0;
-  let hi = sorted.length - 1;
-  let bestScopeId: number | null = null;
-  let bestSize = Infinity;
-
-  // Find the index of the last scope whose start is ≤ node start position.
-  // We want all scopes that could possibly contain this node.
-  let lastCandidateIdx = -1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >>> 1;
-    const scope = sorted[mid]!;
-    const cmp = comparePositionToRangeStart(
-      nodeStartRow, nodeStartChar,
-      scope.range.start.line, scope.range.start.character,
-    );
-    if (cmp >= 0) {
-      // Scope starts at or before node — this is a candidate.
-      lastCandidateIdx = mid;
-      lo = mid + 1;
-    } else {
-      hi = mid - 1;
-    }
-  }
-
-  if (lastCandidateIdx === -1) return null;
-
-  // Walk backward from the rightmost candidate to find the innermost containing scope.
-  // Scopes are sorted by start position, so later scopes with same-or-later start
-  // positions are more deeply nested (smaller range). We check all candidates that
-  // start at or before the node, picking the one with the smallest range (innermost).
-  for (let i = lastCandidateIdx; i >= 0; i--) {
-    const scope = sorted[i]!;
-    // Stop early: if this scope starts after the node, no more candidates can contain it.
-    if (scope.range.start.line > nodeStartRow ||
-        (scope.range.start.line === nodeStartRow &&
-         scope.range.start.character > nodeStartChar)) {
-      break;
-    }
-
-    // Check containment: scope.start ≤ node.start AND scope.end ≥ node.end
-    if (scopeEndsAfterOrAt(scope, nodeEndRow, nodeEndChar)) {
-      const size = rangeSize(scope.range);
-      if (size < bestSize || (size === bestSize && scope.id > bestScopeId!)) {
-        bestSize = size;
-        bestScopeId = scope.id;
-      }
-    }
-  }
-
-  return bestScopeId;
-}
-
-/**
- * Compare a position (line, char) to a range start (line, char).
- * Returns negative if pos < rangeStart, 0 if equal, positive if pos > rangeStart.
- */
-function comparePositionToRangeStart(
-  posLine: number, posChar: number,
-  rangeLine: number, rangeChar: number,
-): number {
-  const lineDiff = posLine - rangeLine;
-  if (lineDiff !== 0) return lineDiff;
-  return posChar - rangeChar;
-}
-
-/**
- * Check whether a scope's end position is at or after the given position.
- */
-function scopeEndsAfterOrAt(scope: Scope, endRow: number, endChar: number): boolean {
-  return (
-    scope.range.end.line > endRow ||
-    (scope.range.end.line === endRow && scope.range.end.character >= endChar)
-  );
-}
-
-/**
  * Find the enclosing class scope for a node.
  */
 export function findEnclosingClassScopeId(node: Node, state: BuildState): number | null {
   const scopeId = findScopeForNode(node, state);
   if (scopeId === null) return null;
-
   let current: number | null = scopeId;
   while (current !== null) {
     const scope = state.scopeMap.get(current);
@@ -508,18 +346,14 @@ export function findEnclosingClassScopeId(node: Node, state: BuildState): number
 export function findEnclosingClassDecl(node: Node, state: BuildState): number | null {
   const classScopeId = findEnclosingClassScopeId(node, state);
   if (classScopeId === null) return null;
-
   const classScope = state.scopeMap.get(classScopeId);
   if (!classScope) return null;
-  // The class declaration is in the parent scope
   if (classScope.parentId !== null) {
     const parentScope = state.scopeMap.get(classScope.parentId);
     if (!parentScope) return null;
     for (const declId of parentScope.declarations) {
       const decl = state.declMap.get(declId);
       if (decl && decl.kind === 'class') {
-        // Check that this class's scope matches
-        // (the class scope should be created by this class decl)
         return declId;
       }
     }
@@ -533,27 +367,19 @@ export function findEnclosingClassDecl(node: Node, state: BuildState): number | 
 export function findDeclInScope(name: string, scopeId: number, state: BuildState): number | null {
   const scope = state.scopeMap.get(scopeId);
   if (!scope) return null;
-
   for (const declId of scope.declarations) {
     const decl = state.declMap.get(declId);
     if (decl && decl.name === name) return declId;
   }
-
-  // Check inherited scopes
   for (const inheritedId of scope.inheritedScopes) {
     const match = findDeclInScope(name, inheritedId, state);
     if (match !== null) return match;
   }
-
   return null;
 }
-// ---------------------------------------------------------------------------
-// Position-based scope lookup
-// ---------------------------------------------------------------------------
 
 /**
  * Find the scope ID that contains a given line/character position.
- * Returns the innermost scope containing the position.
  */
 export function findScopeAtPosition(
   table: { scopes: { id: number; range: Range }[] },
@@ -562,7 +388,6 @@ export function findScopeAtPosition(
 ): number | null {
   let bestScopeId: number | null = null;
   let bestSize = Infinity;
-
   for (const scope of table.scopes) {
     const r = scope.range;
     if ((
@@ -579,6 +404,5 @@ export function findScopeAtPosition(
       }
     }
   }
-
   return bestScopeId;
 }

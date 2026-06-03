@@ -116,45 +116,51 @@ export function getIncomingCalls(
   const calls: CallHierarchyIncomingCall[] = [];
 
   for (const { uri: refUri, ref } of refs) {
-    // Get the symbol table for the referencing file
-    const entry = workspaceIndex.getFile(refUri);
-    if (!entry?.symbolTable) continue;
-
-    // Find the function that contains this reference
-    const caller = findEnclosingFunction(
-      entry.symbolTable,
-      ref.loc.line,
-      ref.loc.character,
-    );
+    const caller = findCallerForRef(refUri, ref, uri, line, workspaceIndex);
     if (!caller) continue;
 
-    // Don't include self-references
-    if (refUri === uri && caller.nameRange.start.line === line) continue;
-
     const callerItem = declToCallHierarchyItem(caller, refUri);
-
-    // Check if we already have this caller
-    const existing = calls.find(
-      c => c.from.uri === callerItem.uri &&
-           c.from.range.start.line === callerItem.range.start.line,
-    );
-    if (existing) {
-      existing.fromRanges.push({
-        start: { line: ref.loc.line, character: ref.loc.character },
-        end: { line: ref.loc.line, character: ref.loc.character + (item.name?.length ?? 0) },
-      });
-    } else {
-      calls.push({
-        from: callerItem,
-        fromRanges: [{
-          start: { line: ref.loc.line, character: ref.loc.character },
-          end: { line: ref.loc.line, character: ref.loc.character + (item.name?.length ?? 0) },
-        }],
-      });
-    }
+    addIncomingCallToGroup(calls, callerItem, ref, item);
   }
 
   return calls;
+}
+
+function findCallerForRef(
+  refUri: string,
+  ref: Reference,
+  selfUri: string,
+  selfLine: number,
+  workspaceIndex: WorkspaceIndex,
+): Declaration | null {
+  const entry = workspaceIndex.getFile(refUri);
+  if (!entry?.symbolTable) return null;
+
+  const caller = findEnclosingFunction(entry.symbolTable, ref.loc.line, ref.loc.character);
+  if (!caller) return null;
+  if (refUri === selfUri && caller.nameRange.start.line === selfLine) return null; // skip self
+  return caller;
+}
+
+function addIncomingCallToGroup(
+  calls: CallHierarchyIncomingCall[],
+  callerItem: CallHierarchyItem,
+  ref: Reference,
+  item: CallHierarchyItem,
+): void {
+  const existing = calls.find(
+    c => c.from.uri === callerItem.uri &&
+         c.from.range.start.line === callerItem.range.start.line,
+  );
+  const nameLen = item.name?.length ?? 0;
+  const range = { start: { line: ref.loc.line, character: ref.loc.character },
+                  end: { line: ref.loc.line, character: ref.loc.character + nameLen } };
+
+  if (existing) {
+    existing.fromRanges.push(range);
+  } else {
+    calls.push({ from: callerItem, fromRanges: [range] });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -164,6 +170,8 @@ export function getIncomingCalls(
 /**
  * Get outgoing calls from a call hierarchy item.
  * Parses the function body and finds all call expressions.
+ *
+ * @param lines Pre-split source lines.
  */
 export function getOutgoingCalls(
   item: CallHierarchyItem,
@@ -171,6 +179,7 @@ export function getOutgoingCalls(
   table: SymbolTable,
   uri: string,
   workspaceIndex: WorkspaceIndex,
+  lines: string[],
 ): CallHierarchyOutgoingCall[] {
   const startLine = item.range.start.line;
   const endLine = item.range.end.line;
@@ -179,7 +188,6 @@ export function getOutgoingCalls(
   const root = tree.rootNode;
   const calls: CallHierarchyOutgoingCall[] = [];
   const seen = new Set<string>();
-  const lines = root.text.split('\n');
 
   collectCallExpressions(
     root,
@@ -218,54 +226,50 @@ function collectCallExpressions(
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
-
-    // Skip nodes outside the target range.
     if (child.endPosition.row < startLine) continue;
     if (child.startPosition.row > endLine) break;
 
-    // Detect function calls: postfix_expr with "(" child.
     if (child.type === "postfix_expr" && isCallPostfixExpr(child)) {
-      const calleeName = extractCalleeName(child);
-      if (calleeName) {
-        const calleeDecl = resolveCallee(
-          calleeName,
-          table,
-          uri,
-          child.startPosition.row,
-          workspaceIndex,
-        );
-        if (calleeDecl) {
-          const key = `${calleeDecl.uri}:${calleeDecl.decl.nameRange.start.line}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            // The callee name's start position within the postfix_expr.
-            const calleeNode = findCalleeIdentifierNode(child);
-            const fromLine = calleeNode?.startPosition.row ?? child.startPosition.row;
-            const fromCol = calleeNode?.startPosition.column ?? child.startPosition.column;
-            const nameLength = calleeNode?.text.length ?? calleeName.length;
-            results.push({
-              to: calleeDecl.item,
-              fromRanges: [{
-                start: {
-                  line: fromLine,
-                  character: utf8ToUtf16(lines[fromLine] ?? '', fromCol),
-                },
-                end: {
-                  line: fromLine,
-                  character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) + nameLength,
-                },
-              }],
-            });
-          }
-        }
-      }
+      tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen, lines);
     }
 
-    // Recurse into children.
     collectCallExpressions(
       child, startLine, endLine, table, uri, workspaceIndex, results, seen, lines,
     );
   }
+}
+
+function tryPushOutgoingCall(
+  node: Node,
+  table: SymbolTable,
+  uri: string,
+  workspaceIndex: WorkspaceIndex,
+  results: CallHierarchyOutgoingCall[],
+  seen: Set<string>,
+  lines: string[],
+): void {
+  const calleeName = extractCalleeName(node);
+  if (!calleeName) return;
+
+  const calleeDecl = resolveCallee(calleeName, table, uri, node.startPosition.row, workspaceIndex);
+  if (!calleeDecl) return;
+
+  const key = `${calleeDecl.uri}:${calleeDecl.decl.nameRange.start.line}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+
+  const calleeNode = findCalleeIdentifierNode(node);
+  const fromLine = calleeNode?.startPosition.row ?? node.startPosition.row;
+  const fromCol = calleeNode?.startPosition.column ?? node.startPosition.column;
+  const nameLength = calleeNode?.text.length ?? calleeName.length;
+
+  results.push({
+    to: calleeDecl.item,
+    fromRanges: [{
+      start: { line: fromLine, character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) },
+      end: { line: fromLine, character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) + nameLength },
+    }],
+  });
 }
 
 /**

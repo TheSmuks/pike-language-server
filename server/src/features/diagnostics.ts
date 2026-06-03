@@ -86,70 +86,53 @@ function narrowErrorRange(node: Node, lines: string[]): Range {
 }
 
 /**
+ * Check parent context for common structural errors (missing braces).
+ */
+function describeErrorFromContext(node: Node): string | undefined {
+  const parent = node.parent;
+  if (!parent) return;
+
+  const parentType = parent.type;
+  if (parentType === 'class_declaration' || parentType === 'class_body') {
+    const classKeyword = parent.childForFieldName('class');
+    if (classKeyword && classKeyword.endPosition.row === node.startPosition.row) {
+      return `Expected '{' after class declaration`;
+    }
+  }
+  if (parentType === 'block') {
+    return `Expected '}' to close block`;
+  }
+  if (parentType === 'function_definition' || parentType === 'function_declaration') {
+    const nameNode = parent.childForFieldName('name');
+    if (nameNode && nameNode.endPosition.row === node.startPosition.row) {
+      return `Expected '{' after function declaration`;
+    }
+  }
+}
+
+/**
  * Generate a descriptive error message based on the ERROR node's context.
  *
  * Examines the ERROR node's children and parent to infer what went wrong.
  * Falls back to a generic message for unrecognized patterns.
  */
 function describeError(node: Node, unexpected: string): string {
-  const parent = node.parent;
-
-  // Check for common patterns based on parent context.
-  if (parent) {
-    const parentType = parent.type;
-
-    // Class/body context: missing opening brace.
-    if (parentType === 'class_declaration' || parentType === 'class_body') {
-      // Look for class name before the error.
-      const classKeyword = parent.childForFieldName('class');
-      if (classKeyword && classKeyword.endPosition.row === node.startPosition.row) {
-        return `Expected '{' after class declaration`;
-      }
-    }
-
-    // Block context: missing closing brace.
-    if (parentType === 'block') {
-      // Error at the end of a block usually means missing '}'.
-      return `Expected '}' to close block`;
-    }
-
-    // Function body: missing opening brace.
-    if (parentType === 'function_definition' || parentType === 'function_declaration') {
-      const nameNode = parent.childForFieldName('name');
-      if (nameNode && nameNode.endPosition.row === node.startPosition.row) {
-        return `Expected '{' after function declaration`;
-      }
-    }
-  }
+  const ctxMsg = describeErrorFromContext(node);
+  if (ctxMsg) return ctxMsg;
 
   // Specific token-based messages.
   switch (unexpected) {
     case ')':
-      // Check if we had a matching '(' in the error node.
       const hasOpenParen = node.children.some((c) => c.type === '(' || c.type === 'expression_list');
-      if (!hasOpenParen) {
-        return `Unexpected ')', no matching open parenthesis`;
-      }
-      return `Parse error: unexpected ')'`;
-
-    case '}':
-      return `Parse error: unexpected '}'`;
-
+      return hasOpenParen ? `Parse error: unexpected ')'` : `Unexpected ')', no matching open parenthesis`;
+    case '}': return `Parse error: unexpected '}'`;
     case ';':
-      // Semicolon in unexpected position - check context.
-      if (node.childCount > 0 && node.children[0].type === ';') {
-        return `Unexpected ';', expected expression or declaration`;
-      }
-      return `Parse error: unexpected ';'`;
-
-    case '(':
-      return `Unexpected '(', expected expression`;
-
-    case ']':
-      return `Unexpected ']', expected expression`;
-
-    default:
-      return `Parse error: unexpected '${unexpected}'`;
+      return node.childCount > 0 && node.children[0].type === ';'
+        ? `Unexpected ';', expected expression or declaration`
+        : `Parse error: unexpected ';'`;
+    case '(': return `Unexpected '(', expected expression`;
+    case ']': return `Unexpected ']', expected expression`;
+    default:  return `Parse error: unexpected '${unexpected}'`;
   }
 }
 

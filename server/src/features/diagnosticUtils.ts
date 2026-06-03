@@ -142,37 +142,30 @@ export function messageAwareColumn(
   lines?: string[],
 ): number {
   const lspLine = Math.max(0, line);
-
-  // Extract candidate identifier from the message.
-  let identifier: string | null = null;
-  for (const { re, group } of PIKE_MSG_PATTERNS) {
-    const match = message.match(re);
-    if (match && match[group]) {
-      identifier = match[group];
-      break;
-    }
-  }
-
+  const identifier = extractIdentifier(message);
   if (!identifier) return lineToColumn(tree, line, lines);
 
-  // Search the source line text for the identifier occurrence.
-  const lineText = lines?.[lspLine];
-  if (lineText !== undefined) {
-    const idx = lineText.indexOf(identifier);
-    if (idx >= 0) return idx;
+  const idx = lines?.[lspLine]?.indexOf(identifier);
+  if (idx !== undefined && idx >= 0) return idx;
+
+  const result = findIdentifierColumn(tree, lspLine, identifier);
+  return result >= 0 ? result : lineToColumn(tree, line, lines);
+}
+
+function extractIdentifier(message: string): string | null {
+  for (const { re, group } of PIKE_MSG_PATTERNS) {
+    const match = message.match(re);
+    if (match && match[group]) return match[group];
   }
+  return null;
+}
 
-  // Fallback: use tree-sitter to walk nodes on this line and find the
-  // first node whose text matches the identifier.
+function findIdentifierColumn(tree: Tree, lspLine: number, identifier: string): number {
   const root = tree.rootNode;
-  const cursor = root.walk();
-  let result = -1;
-
-  // Depth-first search for a node on the target line matching the identifier.
-  const stack: number[] = [0]; // child index stack for DFS
+  const stack: number[] = [0];
   const nodeStack: any[] = [root];
 
-  while (nodeStack.length > 0 && result < 0) {
+  while (nodeStack.length > 0) {
     const node = nodeStack[nodeStack.length - 1];
     const childIdx = stack[stack.length - 1] ?? 0;
 
@@ -180,17 +173,13 @@ export function messageAwareColumn(
       stack[stack.length - 1] = childIdx + 1;
       const child = node.child(childIdx);
 
-      // Skip nodes that don't overlap with the target line
       if (child.startPosition.row > lspLine) continue;
       if (child.endPosition.row < lspLine) continue;
 
-      // Check if this node matches
       if (child.startPosition.row === lspLine && child.text === identifier) {
-        result = child.startPosition.column;
-        break;
+        return child.startPosition.column;
       }
 
-      // Recurse into children
       nodeStack.push(child);
       stack.push(0);
     } else {
@@ -199,9 +188,7 @@ export function messageAwareColumn(
     }
   }
 
-  cursor.delete();
-
-  return result >= 0 ? result : lineToColumn(tree, line, lines);
+  return -1;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,26 +203,29 @@ export function messageAwareColumn(
  * report line numbers (Pike compile_error provides no column data).
  */
 export function lineToColumn(tree: Tree, line: number, lines?: string[]): number {
-  // line is 0-based in tree-sitter; Pike diagnostics are 1-based
   const lspLine = Math.max(0, line);
-  const node = tree.rootNode.descendantForPosition({ row: lspLine, column: 0 });
-  if (!node) return 0;
+  const first = firstMeaningfulChild(tree.rootNode, lspLine);
+  if (first >= 0) return first;
 
-  // Walk through root children to find the first named node starting on this line.
-  // We want the first meaningful token, skipping whitespace, comments, and ERROR nodes.
-  for (const child of tree.rootNode.children) {
-    const startRow = child.startPosition.row;
-    if (startRow !== lspLine) continue;
+  const fallback = walkToMeaningfulNode(tree, lspLine);
+  if (fallback >= 0) return fallback;
+
+  return lastResortColumn(lines, lspLine);
+}
+
+function firstMeaningfulChild(root: any, lspLine: number): number {
+  for (const child of root.children) {
+    if (child.startPosition.row !== lspLine) continue;
     if (child.type === "comment" || child.type === "preprocessor") continue;
-    if (!child.isError && !child.isMissing) {
-      return child.startPosition.column;
-    }
+    if (!child.isError && !child.isMissing) return child.startPosition.column;
   }
+  return -1;
+}
 
-  // Fallback: the descendant node from descendantForPosition may cover the
-  // target line but start on an earlier line (e.g. a block starting at row 1
-  // that spans rows 1–5 when we need row 3). Walk down through its children
-  // to find the first named node that starts exactly on lspLine.
+function walkToMeaningfulNode(tree: Tree, lspLine: number): number {
+  const node = tree.rootNode.descendantForPosition({ row: lspLine, column: 0 });
+  if (!node) return -1;
+
   let candidate: typeof node | null = node;
   while (candidate) {
     let found = false;
@@ -249,16 +239,11 @@ export function lineToColumn(tree: Tree, line: number, lines?: string[]): number
         ) {
           return child.startPosition.column;
         }
-        // Keep walking down even from comment/error parents
         candidate = child;
         found = true;
         break;
       }
-      // If this child spans the target line but starts before it, descend into it
-      if (
-        child.startPosition.row < lspLine &&
-        child.endPosition.row >= lspLine
-      ) {
+      if (child.startPosition.row < lspLine && child.endPosition.row >= lspLine) {
         candidate = child;
         found = true;
         break;
@@ -266,13 +251,14 @@ export function lineToColumn(tree: Tree, line: number, lines?: string[]): number
     }
     if (!found) break;
   }
+  return -1;
+}
 
-  // Last resort: scan the text for first non-whitespace character
+function lastResortColumn(lines: string[] | undefined, lspLine: number): number {
   const lineText = lines?.[lspLine];
   if (lineText !== undefined) {
     const match = lineText.match(/\S/);
     if (match) return match.index ?? 0;
   }
-
   return 0;
 }

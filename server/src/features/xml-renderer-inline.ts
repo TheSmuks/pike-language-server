@@ -10,72 +10,73 @@ import type { XmlNode } from './xmlParser';
 
 /** Render inline text content (inside <p>, <text>, etc.) to markdown. */
 export function renderInline(nodes: XmlNode[]): string {
-  const parts: string[] = [];
+  return nodes.map(renderInlineNode).join("");
+}
 
-  for (const node of nodes) {
-    if (node.type === "text") {
-      const t = node.text ?? "";
-      // Do NOT collapse whitespace here — whitespace is significant in <pre> contexts
-      // and preserving line structure is necessary for proper paragraph handling.
-      // Entities are already decoded by the XML parser.
-      parts.push(t);
-      continue;
-    }
-
-    switch (node.tag) {
-      // Inline formatting
-      case "b":
-        parts.push(`**${renderInline(node.children ?? [])}**`);
-        break;
-      case "i":
-        parts.push(`*${renderInline(node.children ?? [])}*`);
-        break;
-      case "tt":
-      case "code":
-        parts.push(`\`${renderInline(node.children ?? [])}\``);
-        break;
-      case "pre":
-        parts.push(renderInline(node.children ?? []));
-        break;
-
-      case "ref":
-        parts.push(renderInline(node.children ?? []));
-        break;
-
-      case "expr":
-        parts.push(`\`${renderInline(node.children ?? [])}\``);
-        break;
-
-      case "u":
-        parts.push(`__${renderInline(node.children ?? [])}__`);
-        break;
-
-      case "sup":
-        parts.push(`**${renderInline(node.children ?? [])}**^`);
-        break;
-
-      case "sub":
-        parts.push(`_${renderInline(node.children ?? [])}_`);
-        break;
-
-      case "url": {
-        const url = (node.attrs?.["href"] ?? "").trim();
-        const label = node.children?.length
-          ? renderInline(node.children)
-          : url;
-        parts.push(label);
-        break;
-      }
-
-      case "rfc":
-        parts.push(`RFC ${renderInline(node.children ?? [])}`);
-        break;
-
-      default:
-        parts.push(renderInline(node.children ?? []));
-        break;
-    }
+function renderInlineNode(node: XmlNode): string {
+  if (node.type === "text") {
+    return node.text ?? "";
   }
 
-  return parts.join("");
+  switch (node.tag) {
+    case "b":
+      return bold(node);
+    case "i":
+      return italic(node);
+    case "tt":
+    case "code":
+      return inlineCode(node);
+    case "pre":
+      return renderInline(node.children ?? []);
+    case "ref":
+      return renderInline(node.children ?? []);
+    case "expr":
+      return inlineCode(node);
+    case "u":
+      return underline(node);
+    case "sup":
+      return superscript(node);
+    case "sub":
+      return subscript(node);
+    case "url":
+      return renderUrl(node);
+    case "rfc":
+      return rfc(node);
+    default:
+      return renderInline(node.children ?? []);
+  }
+}
+
+function bold(node: XmlNode): string {
+  return `**${renderInline(node.children ?? [])}**`;
+}
+
+function italic(node: XmlNode): string {
+  return `*${renderInline(node.children ?? [])}*`;
+}
+
+function inlineCode(node: XmlNode): string {
+  return `\`${renderInline(node.children ?? [])}\``;
+}
+
+function underline(node: XmlNode): string {
+  return `__${renderInline(node.children ?? [])}__`;
+}
+
+function superscript(node: XmlNode): string {
+  return `**${renderInline(node.children ?? [])}**^`;
+}
+
+function subscript(node: XmlNode): string {
+  return `_${renderInline(node.children ?? [])}_`;
+}
+
+function renderUrl(node: XmlNode): string {
+  const url = (node.attrs?.["href"] ?? "").trim();
+  const label = node.children?.length ? renderInline(node.children) : url;
+  return label;
+}
+
+function rfc(node: XmlNode): string {
+  return `RFC ${renderInline(node.children ?? [])}`;
 }

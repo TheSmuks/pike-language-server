@@ -17,11 +17,11 @@ import type { LRUCache } from "../util/lruCache";
 import { stripScopeWrapper } from "../util/stripScope";
 import { readFileSync } from "node:fs";
 import { uriToPath } from "../util/uri";
+import { fileLevelHover } from "./hoverContent-file";
 import { renderAutodocLines } from "./autodocLineRenderer";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+// Re-export for backward compatibility
+export { fileLevelHover };
 
 export interface HoverInfo {
   name: string;
@@ -472,82 +472,4 @@ export function declForHover(
   return makeHoverInfo(decl, signature, "");
 }
 
-/**
- * Build hover info for an implicit-class .pike file.
- * Reads the source, finds the first autodoc_comment, and renders it.
- */
-export function fileLevelHover(uri: string, name: string, ctx: HoverContentContext): Hover | null {
-  // Tier 1: check autodoc XML cache
-  const cachedAutodoc = ctx.autodocCache.get(uri);
-  if (cachedAutodoc?.xml) {
-    const rendered = renderAutodoc(cachedAutodoc.xml, name, `class ${name}`);
-    if (rendered) {
-      return formatHover({
-        name,
-        signature: rendered.signature || `class ${name}`,
-        documentation: rendered.markdown,
-        line: 0,
-        character: 0,
-        isAutodoc: true,
-      });
-    }
-  }
-
-  // Tier 2: extract autodoc_comment from tree-sitter parse.
-  // getSource() already falls back to disk reads for non-open documents.
-  const source = getSource(uri, ctx.documents);
-  if (!source) {
-    return formatHover({
-      name,
-      signature: `class ${name}`,
-      documentation: "",
-      line: 0,
-      character: 0,
-    });
-  }
-
-  const tree = parse(source, uri);
-  if (tree) {
-    // Collect consecutive autodoc_comment nodes from the top of the file.
-    // Each //! line is a separate node. Blank //! lines separate paragraphs.
-    const collectFileAutodoc = (root: Node): string[] => {
-      const fileLines: string[] = [];
-      for (const child of root.children) {
-        if (child.type === "autodoc_comment") {
-          // Strip //! prefix, keep empty lines as paragraph separators
-          const text = child.text.replace(/^\/\/!\s?/, "");
-          fileLines.push(text);
-        } else if (child.type === "comment") {
-          // Skip regular comments but keep going
-          continue;
-        } else {
-          // Stop at first non-comment, non-whitespace node
-          break;
-        }
-      }
-      return fileLines;
-    };
-    const autodocLines = collectFileAutodoc(tree.rootNode);
-    const nonEmpty = autodocLines.filter(l => l.length > 0);
-    if (nonEmpty.length > 0) {
-      const rendered = renderAutodocLines(autodocLines);
-      if (rendered) {
-        return formatHover({
-          name,
-          signature: `class ${name}`,
-          documentation: rendered,
-          line: 0,
-          character: 0,
-        });
-      }
-    }
-  }
-
-  return formatHover({
-    name,
-    signature: `class ${name}`,
-    documentation: "",
-    line: 0,
-    character: 0,
-  });
-}
+// fileLevelHover moved to hoverContent-file.ts (see re-export above)

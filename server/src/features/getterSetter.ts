@@ -43,7 +43,7 @@ export function produceGetterSetterActions(
   const tree = parse(text, uri);
   if (!tree) return [];
 
-  const table = buildSymbolTable(tree, uri, 0);
+  const table = buildSymbolTable(tree, uri, 0, undefined, text);
   const varDecl = findVariableAtPosition(table, params.range.start.line, params.range.start.character);
   if (!varDecl) return [];
 

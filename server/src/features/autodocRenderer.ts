@@ -28,6 +28,55 @@ export interface RenderedAutodoc {
   signature: string;
 }
 
+/** Build the signature header block (fenced pike code). */
+function buildSignatureBlock(signatures: string[]): string[] {
+  if (signatures.length === 0) return [];
+  const lines: string[] = ["```pike"];
+  lines.push(...signatures);
+  lines.push("```");
+  return lines;
+}
+
+/** Collect all signatures from a docGroup's non-doc children. */
+function collectSignatures(
+  docGroup: import("./xmlParser").XmlNode,
+  fallbackSignature: string | undefined,
+): string[] {
+  const signatures: string[] = [];
+
+  for (const child of docGroup.children ?? []) {
+    if (child.type === "element" && child.tag !== "doc" && child.tag !== "source-position") {
+      const sig = renderSignature(child);
+      if (sig) signatures.push(sig);
+    }
+  }
+
+  if (signatures.length === 0 && fallbackSignature) {
+    signatures.push(fallbackSignature);
+  }
+  return signatures;
+}
+
+/** Build the markdown parts array from signatures and doc element. */
+function buildMarkdownParts(
+  signatures: string[],
+  docEl: import("./xmlParser").XmlNode | undefined,
+): string[] {
+  const parts: string[] = [];
+  const sigBlock = buildSignatureBlock(signatures);
+  parts.push(...sigBlock);
+
+  if (docEl) {
+    const docLines = renderBlocks([docEl]);
+    if (docLines.length > 0) {
+      parts.push("");
+      parts.push(...docLines);
+    }
+  }
+
+  return parts;
+}
+
 /**
  * Render AutoDoc XML for a specific symbol to markdown.
  *
@@ -45,62 +94,23 @@ export function renderAutodoc(
 
   const root = parseXml(xml);
 
-  // Try to find a <docgroup> for this symbol
   let docGroup = findDocGroup(root, symbolName);
-
-  // If not found as docgroup, try as <class>
   if (!docGroup) {
     docGroup = findClass(root, symbolName);
   }
 
   if (!docGroup) return null;
 
-  // Extract signature from the <method>, <variable>, <class>, etc. element
-  const signatures: string[] = [];
   const docEl = (docGroup.children ?? []).find(
     (c) => c.type === "element" && c.tag === "doc",
   );
 
-  for (const child of docGroup.children ?? []) {
-    if (child.type === "element" && child.tag !== "doc" && child.tag !== "source-position") {
-      const sig = renderSignature(child);
-      if (sig) {
-        signatures.push(sig);
-      }
-    }
-  }
+  const signatures = collectSignatures(docGroup, fallbackSignature);
+  if (signatures.length === 0) return null;
 
-  // Use first signature as primary; show all overloads in header
-  if (signatures.length === 0 && fallbackSignature) {
-    signatures.push(fallbackSignature);
-  }
-  const signature = signatures[0] ?? "";
-
-  // Render documentation
-  const parts: string[] = [];
-
-  // Signature header — show all overloads
-  if (signatures.length > 0) {
-    parts.push("```pike");
-    for (const sig of signatures) {
-      parts.push(sig);
-    }
-    parts.push("```");
-  }
-
-  // Documentation content
-  if (docEl) {
-    const docLines = renderBlocks([docEl]);
-    if (docLines.length > 0) {
-      parts.push("");
-      parts.push(...docLines);
-    }
-  }
-
-  if (parts.length === 0) return null;
-
+  const parts = buildMarkdownParts(signatures, docEl);
   return {
     markdown: parts.join("\n"),
-    signature,
+    signature: signatures[0],
   };
 }

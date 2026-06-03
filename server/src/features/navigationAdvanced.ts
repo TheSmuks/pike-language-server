@@ -86,9 +86,11 @@ function registerCallHierarchyHandlers(
       if (!table) return [];
       const doc = ctx.documents.get(uri);
       if (!doc) return [];
-      const tree = parse(doc.getText(), uri);
+      const source = doc.getText();
+      const tree = parse(source, uri);
       if (!ctx.index) return [];
-      return getOutgoingCalls(item, tree, table, uri, ctx.index);
+      const lines = source.split('\n');
+      return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
     },
   );
 }

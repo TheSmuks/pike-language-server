@@ -105,6 +105,62 @@ function createCaches(): {
 // Factory
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Worker setup helper
+// ---------------------------------------------------------------------------
+
+function setupWorker(connection: Connection): PikeWorker {
+  const worker = new PikeWorker();
+  worker.setErrorHandler((ctx, err) => {
+    logError(connection, ErrorCategory.Worker, ctx, err);
+  });
+  worker.setWarningHandler((ctx, msg) => {
+    logWarn(connection, `[${ctx}] ${msg}`);
+  });
+  return worker;
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic manager factory
+// ---------------------------------------------------------------------------
+
+function createDiagnosticManager(
+  worker: PikeWorker,
+  documents: TextDocuments<TextDocument>,
+  connection: Connection,
+  index: WorkspaceIndex,
+  pikeCache: LRUCache<PikeCacheEntry>,
+): DiagnosticManager {
+  const cacheSet = (uri: string, entry: PikeCacheEntry): void => {
+    pikeCache.set(uri, entry);
+  };
+  return new DiagnosticManager({
+    worker,
+    documents,
+    connection,
+    index,
+    pikeCache,
+    cacheSet,
+    debugTelemetry: false,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Static data loading helper
+// ---------------------------------------------------------------------------
+
+function loadStaticIndices(connection: Connection) {
+  return {
+    stdlibIndex: loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection),
+    predefBuiltins: loadPredefBuiltinIndex(predefBuiltinIndexRaw, connection),
+    predefAutodoc: loadPredefAutodocIndex(predefAutodocIndexRaw, connection),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
 /**
  * Create the shared mutable server context (documents, caches, index, etc.).
  * Called once at the top of createPikeServer.
@@ -118,36 +174,14 @@ export function createServerContext(
   // warning — the same promise is re-awaitable via initParser() after the
   // retry logic in parser.ts clears it on failure.
   initParser().catch(() => {});
-  const worker = new PikeWorker();
 
-  worker.setErrorHandler((ctx, err) => {
-    logError(connection, ErrorCategory.Worker, ctx, err);
-  });
-
-  worker.setWarningHandler((ctx, msg) => {
-    logWarn(connection, `[${ctx}] ${msg}`);
-  });
-
+  const worker = setupWorker(connection);
   const { autodocCache, pikeCache } = createCaches();
   const index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
-
-  const cacheSet = (uri: string, entry: PikeCacheEntry): void => {
-    pikeCache.set(uri, entry);
-  };
-
-  const diagnosticManager = new DiagnosticManager({
-    worker,
-    documents,
-    connection,
-    index,
-    pikeCache,
-    cacheSet,
-    debugTelemetry: false,
-  });
-
-  const stdlibIndex = loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection);
-  const predefBuiltins = loadPredefBuiltinIndex(predefBuiltinIndexRaw, connection);
-  const predefAutodoc = loadPredefAutodocIndex(predefAutodocIndexRaw, connection);
+  const diagnosticManager = createDiagnosticManager(
+    worker, documents, connection, index, pikeCache,
+  );
+  const { stdlibIndex, predefBuiltins, predefAutodoc } = loadStaticIndices(connection);
 
   return {
     connection,

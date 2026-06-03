@@ -73,6 +73,7 @@ export async function warmResolverCache(
 
   walk(tree.rootNode);
 
+  // Bounded by function execution scope (evict-eligible on GC after return).
   const resolved = new Map<string, string | null>();
   const results = await Promise.all(promises.map(p => p.promise));
   for (let i = 0; i < promises.length; i++) {

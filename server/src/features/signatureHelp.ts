@@ -67,11 +67,10 @@ export function produceSignatureHelp(
   character: number,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
   ctx?: SignatureContext,
-  source?: string,
+  source = "",
 ): SignatureHelpResult | null {
   // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const src = source ?? tree.rootNode.text;
-  const lines = src.split('\n');
+  const lines = source.split('\n');
   const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
 
   // Find the node at the cursor
@@ -107,6 +106,47 @@ export function produceSignatureHelp(
 // ---------------------------------------------------------------------------
 
 /**
+ * Find the open and close paren nodes among the children of a postfix_expr.
+ * Returns [openParen, closeParen] (closeParen may be null).
+ */
+function findCallParens(children: Node[]): [Node, Node | null] {
+  let openParen: Node | null = null;
+  let closeParen: Node | null = null;
+  for (let i = 1; i < children.length; i++) {
+    if (children[i].type === "(" && !openParen) openParen = children[i];
+    if (children[i].type === ")") closeParen = children[i];
+  }
+  return [openParen!, closeParen];
+}
+
+/**
+ * Check if a cursor position falls within an open/close paren range.
+ * Returns true if the cursor is after openParen and (if closeParen exists)
+ * before closeParen.
+ */
+function isCursorInParenRange(
+  openParen: Node,
+  closeParen: Node | null,
+  line: number,
+  character: number,
+  lines?: string[],
+): boolean {
+  const openStart = openParen.startPosition;
+  const openUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
+  if (line < openStart.row || (line === openStart.row && character < openUtf16)) {
+    return false;
+  }
+  if (closeParen) {
+    const closeStart = closeParen.startPosition;
+    const closeUtf16 = lines ? utf8ToUtf16(lines[closeStart.row] ?? '', closeStart.column) : closeStart.column;
+    if (line > closeStart.row || (line === closeStart.row && character >= closeUtf16)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
  * Walk up from the cursor node to find an enclosing call expression.
  *
  * In tree-sitter-pike, calls are represented as postfix_expr nodes
@@ -116,69 +156,27 @@ function findEnclosingCall(node: Node, line?: number, character?: number, lines?
   let current: Node | null = node;
   while (current) {
     if (current.type === "postfix_expr") {
-      const children = current.children;
-      let openParen: Node | null = null;
-      let closeParen: Node | null = null;
-      for (let i = 1; i < children.length; i++) {
-        if (children[i].type === "(" && !openParen) {
-          openParen = children[i];
-        }
-        if (children[i].type === ")") {
-          closeParen = children[i];
-        }
+      const [openParen, closeParen] = findCallParens(current.children);
+      if (!openParen) { current = current.parent; continue; }
+      if (line === undefined || character === undefined || isCursorInParenRange(openParen, closeParen, line, character, lines)) {
+        return current;
       }
-      if (!openParen) {
-        current = current.parent;
-        continue;
-      }
-
-      if (line !== undefined && character !== undefined) {
-        const openStart = openParen.startPosition;
-        const openStartUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
-        // Cursor must be at or after the open paren.
-        const cursorBeforeOpen =
-          line < openStart.row || (line === openStart.row && character < openStartUtf16);
-        if (cursorBeforeOpen) {
-          current = current.parent;
-          continue;
-        }
-        // If there is a close paren, cursor must be before it.
-        if (closeParen) {
-          const closeStart = closeParen.startPosition;
-          const closeStartUtf16 = lines ? utf8ToUtf16(lines[closeStart.row] ?? '', closeStart.column) : closeStart.column;
-          const cursorAtOrAfterClose =
-            line > closeStart.row || (line === closeStart.row && character >= closeStartUtf16);
-          if (cursorAtOrAfterClose) {
-            current = current.parent;
-            continue;
-          }
-        }
-        // No close paren: the user is actively typing arguments.
-        // Accept this as the enclosing call as long as the cursor is
-        // after the open paren (checked above).
-      }
-      return current;
+      current = current.parent;
+      continue;
     }
-    // For ERROR nodes (common while typing), check if there's an
-    // incomplete call pattern: identifier followed by '('.
+    // For ERROR nodes (common while typing), check for identifier + '(' pattern.
     if (current.type === "ERROR" && line !== undefined && character !== undefined) {
       const errChildren = current.children;
       let errIdent: Node | null = null;
       let errOpen: Node | null = null;
       for (const child of errChildren) {
-        if (child.type === "identifier" && !errIdent) {
-          errIdent = child;
-        }
-        if (child.type === "(" && !errOpen) {
-          errOpen = child;
-        }
+        if (child.type === "identifier" && !errIdent) errIdent = child;
+        if (child.type === "(" && !errOpen) errOpen = child;
       }
       if (errIdent && errOpen) {
         const openStart = errOpen.startPosition;
-        const openStartUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
-        const cursorBeforeOpen =
-          line < openStart.row || (line === openStart.row && character < openStartUtf16);
-        if (!cursorBeforeOpen) {
+        const openUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
+        if (!(line < openStart.row || (line === openStart.row && character < openUtf16))) {
           return current;
         }
       }
@@ -236,44 +234,38 @@ function extractCalleeInfo(callExpr: Node): CalleeInfo | null {
   if (!calleeNode || !openParen) return null;
 
   // Extract the function/method name and object name.
-  let name = calleeNode.text;
-  let objectName: string | null = null;
+  const parsed = parseCalleeNameAndObject(calleeNode.text);
+  if (!parsed) return null;
+  return { ...parsed, argsNode: openParen };
+}
 
-  const arrowIdx = name.lastIndexOf("->");
+function parseCalleeNameAndObject(name: string): { calleeName: string; objectName: string | null } {
+  let objName: string | null = null;
+  let calleeName = name;
+
+  const arrowIdx = calleeName.lastIndexOf("->");
   if (arrowIdx !== -1) {
-    // obj->method: object is everything before ->, method is after
-    objectName = name.slice(0, arrowIdx);
-    name = name.slice(arrowIdx + 2);
+    objName = calleeName.slice(0, arrowIdx);
+    calleeName = calleeName.slice(arrowIdx + 2);
   }
-  const dotIdx = name.lastIndexOf(".");
+  const dotIdx = calleeName.lastIndexOf(".");
   if (dotIdx !== -1) {
-    // Module.func: object is everything before ., method is after
-    objectName = name.slice(0, dotIdx);
-    name = name.slice(dotIdx + 1);
+    objName = calleeName.slice(0, dotIdx);
+    calleeName = calleeName.slice(dotIdx + 1);
   }
 
-  // For object names like "this" or nested expressions, extract just the
-  // trailing identifier to use for type resolution.
-  if (objectName) {
-    // Handle chained calls: extract the first identifier for type lookup.
-    // E.g., "getContainer()->getItem" → objectName = "getContainer()"
-    // For now, take the first identifier segment.
-    const firstArrow = objectName.indexOf("->");
-    const firstDot = objectName.indexOf(".");
+  if (objName) {
+    const firstArrow = objName.indexOf("->");
+    const firstDot = objName.indexOf(".");
     if (firstArrow !== -1 || firstDot !== -1) {
-      // Chained call — extract the first identifier
       const cutAt = firstArrow !== -1 && firstDot !== -1
         ? Math.min(firstArrow, firstDot)
         : firstArrow !== -1 ? firstArrow : firstDot;
-      objectName = objectName.slice(0, cutAt);
+      objName = objName.slice(0, cutAt);
     }
   }
 
-  return {
-    calleeName: name,
-    objectName,
-    argsNode: openParen,
-  };
+  return { calleeName, objectName: objName };
 }
 
 // ---------------------------------------------------------------------------
@@ -338,22 +330,4 @@ function countCommasInNode(node: Node, line: number, character: number, lines?: 
     }
   }
   return count;
-}
-
-// ---------------------------------------------------------------------------
-// Test export
-// ---------------------------------------------------------------------------
-
-/**
-/**
- * Find the enclosing function call for a position.
- * Exported for direct unit testing.
- */
-function findEnclosingCallExport(tree: Tree, line: number, character: number, source?: string): Node | null {
-  const src = source ?? tree.rootNode.text;
-  const lines = src.split('\n');
-  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
-  const node = tree.rootNode.descendantForPosition({ row: line, column: utf8Col });
-  if (!node) return null;
-  return findEnclosingCall(node, line, character, lines);
 }

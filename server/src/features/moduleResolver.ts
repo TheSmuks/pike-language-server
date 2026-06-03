@@ -226,64 +226,64 @@ export class ModuleResolver {
   private async resolveInheritString(rawPath: string, currentFile: string): Promise<ResolveResult | null> {
     const currentDir = dirname(currentFile);
 
-    let candidate: string;
     if (rawPath.startsWith("/")) {
       // Absolute path — normalize and check boundary
-      const checked = this.normalizeAndCheck(rawPath);
-      if (!checked) return null;
-      candidate = checked;
-    } else if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
+      return this.tryInheritCandidate(this.normalizeAndCheck(rawPath));
+    }
+    if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
       // Relative to current file — normalize and check boundary
       const resolved = resolve(currentDir, rawPath);
-      const checked = this.normalizeAndCheck(resolved);
-      if (!checked) return null;
-      candidate = checked;
-    } else {
-      // Pike's cast_to_program: search current dir first, then program paths
-      const relativeToDir = resolve(currentDir, rawPath);
-      const checkedRelative = this.normalizeAndCheck(relativeToDir);
-      if (checkedRelative) {
-        if (await pathExists(checkedRelative)) {
-          return { uri: pathToFileURL(checkedRelative).href, source: "relative" };
-        }
-        const withExtDir = await this.findWithExtension(checkedRelative);
-        if (withExtDir) {
-          return { uri: pathToFileURL(withExtDir).href, source: "relative" };
-        }
-      }
-
-      // Then search program paths
-      for (const progPath of this.pikePaths.programPaths) {
-        const full = resolve(progPath, rawPath);
-        const checked = this.normalizeAndCheck(full);
-        if (!checked) continue;
-        if (await pathExists(checked)) {
-          return { uri: pathToFileURL(checked).href, source: "workspace_program" };
-        }
-      }
-      // Try with extensions
-      for (const progPath of this.pikePaths.programPaths) {
-        const full = resolve(progPath, rawPath);
-        const checked = this.normalizeAndCheck(full);
-        if (!checked) continue;
-        const found = await this.findWithExtension(checked);
-        if (found) {
-          return { uri: pathToFileURL(found).href, source: "workspace_program" };
-        }
-      }
-      return null;
+      return this.tryInheritCandidate(this.normalizeAndCheck(resolved));
     }
+    // Pike's cast_to_program: search current dir first, then program paths
+    return this.searchInheritProgramPaths(rawPath, currentDir);
+  }
 
+  private async tryInheritCandidate(candidate: string | null): Promise<ResolveResult | null> {
+    if (!candidate) return null;
     if (await pathExists(candidate)) {
       return { uri: pathToFileURL(candidate).href, source: "relative" };
     }
-
-    // Try adding extension
     const withExt = await this.findWithExtension(candidate);
     if (withExt) {
       return { uri: pathToFileURL(withExt).href, source: "relative" };
     }
+    return null;
+  }
 
+  private async searchInheritProgramPaths(rawPath: string, currentDir: string): Promise<ResolveResult | null> {
+    // Search current dir first
+    const relativeToDir = resolve(currentDir, rawPath);
+    const checkedRelative = this.normalizeAndCheck(relativeToDir);
+    if (checkedRelative) {
+      if (await pathExists(checkedRelative)) {
+        return { uri: pathToFileURL(checkedRelative).href, source: "relative" };
+      }
+      const withExtDir = await this.findWithExtension(checkedRelative);
+      if (withExtDir) {
+        return { uri: pathToFileURL(withExtDir).href, source: "relative" };
+      }
+    }
+
+    // Then search program paths
+    for (const progPath of this.pikePaths.programPaths) {
+      const full = resolve(progPath, rawPath);
+      const checked = this.normalizeAndCheck(full);
+      if (!checked) continue;
+      if (await pathExists(checked)) {
+        return { uri: pathToFileURL(checked).href, source: "workspace_program" };
+      }
+    }
+    // Try with extensions
+    for (const progPath of this.pikePaths.programPaths) {
+      const full = resolve(progPath, rawPath);
+      const checked = this.normalizeAndCheck(full);
+      if (!checked) continue;
+      const found = await this.findWithExtension(checked);
+      if (found) {
+        return { uri: pathToFileURL(found).href, source: "workspace_program" };
+      }
+    }
     return null;
   }
 
