@@ -228,6 +228,76 @@ export function getSubtypes(
 }
 
 /**
+ * Check inheritedScopes chain in a class scope for the target class.
+ * Returns a TypeHierarchyItem if found.
+ */
+function checkInheritedScopesForTarget(
+  table: SymbolTable,
+  tableUri: string,
+  targetName: string,
+  targetUri: string,
+  seen: Set<string>,
+  scope: Scope,
+): TypeHierarchyItem | null {
+  for (const inheritedScopeId of scope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedScopeId);
+    if (!inheritedScope) continue;
+
+    const parentScope = inheritedScope.parentId !== null
+      ? table.scopeById.get(inheritedScope.parentId)
+      : null;
+    if (!parentScope) continue;
+
+    for (const declId of parentScope.declarations) {
+      const decl = table.declById.get(declId);
+      if (!decl || decl.kind !== "class") continue;
+      if (decl.name !== targetName) continue;
+
+      const declUri = decl.sourceUri ?? tableUri;
+      if (declUri !== targetUri && tableUri !== targetUri) continue;
+
+      const childDecl = findClassDeclForScope(table, scope);
+      if (!childDecl) continue;
+
+      const key = `${tableUri}:${childDecl.nameRange.start.line}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      return declToTypeHierarchyItem(childDecl, tableUri);
+    }
+  }
+  return null;
+}
+
+/**
+ * Check inherit declarations by name as a fallback.
+ * Returns a TypeHierarchyItem if found.
+ */
+function checkInheritDeclarationsForTarget(
+  table: SymbolTable,
+  tableUri: string,
+  targetName: string,
+  seen: Set<string>,
+  scope: Scope,
+): TypeHierarchyItem | null {
+  const inheritDecls = scope.declarations
+    .map(id => table.declById.get(id))
+    .filter(d => d?.kind === "inherit");
+
+  for (const inheritDecl of inheritDecls) {
+    if (!inheritDecl || inheritDecl.name !== targetName) continue;
+
+    const childDecl = findClassDeclForScope(table, scope);
+    if (!childDecl) continue;
+
+    const key = `${tableUri}:${childDecl.nameRange.start.line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    return declToTypeHierarchyItem(childDecl, tableUri);
+  }
+  return null;
+}
+
+/**
  * Search a single symbol table for classes inheriting from the target.
  */
 function findSubtypeInTable(
@@ -240,53 +310,15 @@ function findSubtypeInTable(
   for (const scope of table.scopes) {
     if (scope.kind !== "class") continue;
 
-    // Check if any inherited scope corresponds to our target class
-    for (const inheritedScopeId of scope.inheritedScopes) {
-      const inheritedScope = table.scopeById.get(inheritedScopeId);
-      if (!inheritedScope) continue;
+    let result = checkInheritedScopesForTarget(
+      table, tableUri, targetName, targetUri, seen, scope,
+    );
+    if (result) return result;
 
-      // Find the class declaration for the inherited scope
-      const parentScope = inheritedScope.parentId !== null
-        ? table.scopeById.get(inheritedScope.parentId)
-        : null;
-      if (!parentScope) continue;
-
-      for (const declId of parentScope.declarations) {
-        const decl = table.declById.get(declId);
-        if (!decl || decl.kind !== "class") continue;
-        if (decl.name !== targetName) continue;
-
-        // Check URI match — must be same class
-        const declUri = decl.sourceUri ?? tableUri;
-        if (declUri !== targetUri && tableUri !== targetUri) continue;
-
-        // This scope inherits from our target. Find the child class decl.
-        const childDecl = findClassDeclForScope(table, scope);
-        if (!childDecl) continue;
-
-        const key = `${tableUri}:${childDecl.nameRange.start.line}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        return declToTypeHierarchyItem(childDecl, tableUri);
-      }
-    }
-
-    // Also check inherit declarations by name as a fallback
-    const inheritDecls = scope.declarations
-      .map(id => table.declById.get(id))
-      .filter(d => d?.kind === "inherit");
-
-    for (const inheritDecl of inheritDecls) {
-      if (!inheritDecl || inheritDecl.name !== targetName) continue;
-
-      const childDecl = findClassDeclForScope(table, scope);
-      if (!childDecl) continue;
-
-      const key = `${tableUri}:${childDecl.nameRange.start.line}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      return declToTypeHierarchyItem(childDecl, tableUri);
-    }
+    result = checkInheritDeclarationsForTarget(
+      table, tableUri, targetName, seen, scope,
+    );
+    if (result) return result;
   }
 
   return null;

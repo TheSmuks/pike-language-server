@@ -79,7 +79,39 @@ export function extractVariable(
   text: string,
 ): { edits: TextEdit[]; varName: string } | null {
   const range = params.range;
-  // Need a non-empty selection
+  const validation = validateExtractSelection(range, text);
+  if (!validation) return null;
+
+  const { line, lineText, startChar, endChar, selectedText } = validation;
+
+  const varName = generateVarName(selectedText);
+  const statementStart = findStatementStart(lineText, startChar);
+  const indent = lineText.match(/^\s*/)?.[0] ?? "";
+
+  const edits: TextEdit[] = [
+    {
+      range: {
+        start: { line, character: statementStart },
+        end: { line, character: statementStart },
+      },
+      newText: `${indent}${declKeyword(selectedText)} ${varName} = ${selectedText};\n`,
+    },
+    {
+      range: {
+        start: { line, character: startChar },
+        end: { line, character: endChar },
+      },
+      newText: varName,
+    },
+  ];
+
+  return { edits, varName };
+}
+
+function validateExtractSelection(
+  range: { start: { line: number; character: number }; end: { line: number; character: number } },
+  text: string,
+): { line: number; lineText: string; startChar: number; endChar: number; selectedText: string } | null {
   if (range.start.line !== range.end.line) return null;
   if (range.start.character === range.end.character) return null;
 
@@ -95,16 +127,13 @@ export function extractVariable(
   const selectedText = lineText.slice(startChar, endChar).trim();
   if (!selectedText) return null;
 
-  // Don't extract if it's a full statement (ends with ;)
   if (selectedText.endsWith(";")) return null;
-  // Don't extract identifiers (too simple to be useful)
   if (/^[a-zA-Z_]\w*$/.test(selectedText)) return null;
 
-  // Generate a variable name from the expression
-  const varName = generateVarName(selectedText);
+  return { line, lineText, startChar, endChar, selectedText };
+}
 
-  // Find the enclosing statement start (for insertion point)
-  // Walk backward to find the beginning of the statement
+function findStatementStart(lineText: string, startChar: number): number {
   let statementStart = startChar;
   for (let c = startChar - 1; c >= 0; c--) {
     if (lineText[c] === ";") {
@@ -113,31 +142,7 @@ export function extractVariable(
     }
     if (c === 0) statementStart = 0;
   }
-
-  // Compute indentation of the current line
-  const indent = lineText.match(/^\s*/)?.[0] ?? "";
-
-  const edits: TextEdit[] = [];
-
-  // Insert the variable declaration before the statement
-  edits.push({
-    range: {
-      start: { line, character: statementStart },
-      end: { line, character: statementStart },
-    },
-    newText: `${indent}${declKeyword(selectedText)} ${varName} = ${selectedText};\n`,
-  });
-
-  // Replace the selected expression with the variable name
-  edits.push({
-    range: {
-      start: { line, character: startChar },
-      end: { line, character: endChar },
-    },
-    newText: varName,
-  });
-
-  return { edits, varName };
+  return statementStart;
 }
 
 /**

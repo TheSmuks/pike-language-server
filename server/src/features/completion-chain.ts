@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 import { Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
+import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveMemberAccess } from "./typeResolver";
 import type { CompletionContext } from "./completionTrigger";
 import { findDeclarationForName } from "./completion-items";
@@ -84,13 +85,19 @@ export async function resolveChainedType(
     typeInferrer: ctx.typeInferrer,
   };
 
+  currentDecl = await walkChainSteps(steps, currentDecl, typeCtx);
+  return currentDecl;
+}
+
+async function walkChainSteps(
+  steps: ChainStep[],
+  currentDecl: Declaration,
+  typeCtx: { table: SymbolTable; uri: string; index: WorkspaceIndex; stdlibIndex: Record<string, import("./completion-stdlib").StdlibEntry>; typeInferrer?: (varName: string) => Promise<string | null> },
+): Promise<Declaration | null> {
   for (let i = 0; i < steps.length && i < MAX_CHAIN_DEPTH; i++) {
     const step = steps[i];
     if (!step.memberName) continue;
 
-    // Resolve the current type through the member access.
-    // For each step, use that step's baseName (the identifier before the ->)
-    // as the lookup name for the member access resolution.
     const member = await resolveMemberAccess(
       step.baseName,
       step.memberName,
@@ -98,12 +105,8 @@ export async function resolveChainedType(
       typeCtx,
     );
     if (!member) return null;
-
-    // The member becomes the new "current declaration" for the next step.
-    // If the member is a method/function, its declaredType is the return type.
     currentDecl = member;
   }
-
   return currentDecl;
 }
 

@@ -165,10 +165,6 @@ function findAccessInParentPostfix(current: Node): TriggerContext | null {
   return null;
 }
 
-/**
- * Resolve trigger context from raw line text when tree-sitter hasn't
- * updated yet or produces ERROR nodes.
- */
 function resolveTriggerFromLineText(
   character: number,
   lineText: string,
@@ -180,42 +176,19 @@ function resolveTriggerFromLineText(
   const oneBefore = lineText[character - 1];
   const rootNode = tree.rootNode;
 
-  // A lone ':' (not '::') never triggers meaningful completions in Pike.
-  // It appears in case labels, goto labels, and ternary expressions —
-  // none of which should show completions.
   if (oneBefore === ":" && (character < 2 || lineText[character - 2] !== ":")) {
     return { type: "none" };
   }
 
-  // Dot access: 'Foo.' → find 'Foo' before the dot
-  if (oneBefore === ".") {
-    const lhs = findLhsBeforePosition(rootNode, line, character - 1, lineText);
-    if (lhs) return { type: "dot", lhsNode: lhs };
-  }
-
-  // Arrow access: '->' — check if preceding char is '-'
-  if (oneBefore === ">" && character >= 2 && lineText[character - 2] === "-") {
-    const lhs = findLhsBeforePosition(rootNode, line, character - 2, lineText);
-    if (lhs) return { type: "arrow", lhsNode: lhs };
-  }
+  const dotCtx = tryDotOrArrowFromChar(oneBefore, character, lineText, rootNode, line);
+  if (dotCtx) return dotCtx;
 
   if (character >= 2) {
     const twoBefore = lineText.substring(character - 2, character);
-
-    // Arrow access: 'obj->'
-    if (twoBefore === "->") {
-      const lhs = findLhsBeforePosition(rootNode, line, character - 2, lineText);
-      if (lhs) return { type: "arrow", lhsNode: lhs };
-    }
-
-    // Scope access: 'Foo::'
-    if (twoBefore === "::") {
-      const lhs = findLhsBeforePosition(rootNode, line, character - 2, lineText);
-      if (lhs) return { type: "scope", scopeNode: lhs };
-    }
+    const twoCharCtx = tryTwoCharTrigger(twoBefore, rootNode, line, character - 2, lineText);
+    if (twoCharCtx) return twoCharCtx;
   }
 
-  // Call-args trigger: cursor right after '(' typed after an identifier.
   if (lineText[character - 1] === "(") {
     const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1, lineText);
     if (callee) {
@@ -224,6 +197,46 @@ function resolveTriggerFromLineText(
   }
 
   return { type: "unqualified" };
+}
+
+function tryDotOrArrowFromChar(
+  oneBefore: string,
+  character: number,
+  lineText: string,
+  rootNode: Node,
+  line: number,
+): TriggerContext | null {
+  if (oneBefore === ".") {
+    const lhs = findLhsBeforePosition(rootNode, line, character - 1, lineText);
+    if (lhs) return { type: "dot", lhsNode: lhs };
+  }
+
+  if (oneBefore === ">" && character >= 2 && lineText[character - 2] === "-") {
+    const lhs = findLhsBeforePosition(rootNode, line, character - 2, lineText);
+    if (lhs) return { type: "arrow", lhsNode: lhs };
+  }
+
+  return null;
+}
+
+function tryTwoCharTrigger(
+  twoBefore: string,
+  rootNode: Node,
+  line: number,
+  pos: number,
+  lineText: string,
+): TriggerContext | null {
+  if (twoBefore === "->") {
+    const lhs = findLhsBeforePosition(rootNode, line, pos, lineText);
+    if (lhs) return { type: "arrow", lhsNode: lhs };
+  }
+
+  if (twoBefore === "::") {
+    const lhs = findLhsBeforePosition(rootNode, line, pos, lineText);
+    if (lhs) return { type: "scope", scopeNode: lhs };
+  }
+
+  return null;
 }
 
 import { findLhsBeforePosition, findCalleeBeforeOpenParen } from "./completionTriggerResolve.js";

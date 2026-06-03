@@ -55,71 +55,45 @@ export function collectDeclarations(node: Node, state: BuildState): void {
   // Skip ERROR / missing nodes
   if (node.isError || node.isMissing) return;
 
+  // Dispatch by node type
+  dispatchCollectDeclarations(node, state);
+}
+
+/** Handle block-scoped statements — returns true if node was handled. */
+function dispatchBlockStatement(node: Node, state: BuildState): boolean {
+  switch (node.type) {
+    case 'for_statement':       collectForStatement(node, state); return true;
+    case 'foreach_statement':   collectForeachStatement(node, state); return true;
+    case 'if_statement':        collectIfStatement(node, state); return true;
+    case 'while_statement':      collectWhileStatement(node, state); return true;
+    case 'do_while_statement':   collectDoWhileStatement(node, state); return true;
+    case 'catch_expr':          collectCatchExpr(node, state); return true;
+    case 'switch_statement':    collectSwitchStatement(node, state); return true;
+  }
+  return false;
+}
+
+/** Dispatch collectDeclarations to the appropriate handler based on node type. */
+function dispatchCollectDeclarations(node: Node, state: BuildState): void {
   // Handle scope introducers
-  if (node.type === 'class_decl') {
-    collectClassDecl(node, state);
-    return;
-  }
-
+  if (node.type === 'class_decl') { collectClassDecl(node, state); return; }
   if (node.type === 'function_decl' || node.type === 'local_function_decl') {
-    collectFunctionDecl(node, state);
-    return;
+    collectFunctionDecl(node, state); return;
   }
-
-  if (node.type === 'lambda_expr') {
-    collectLambda(node, state);
-    return;
-  }
+  if (node.type === 'lambda_expr') { collectLambda(node, state); return; }
 
   // Handle block-scoped constructs
-  if (node.type === 'for_statement') {
-    collectForStatement(node, state);
-    return;
-  }
-
-  if (node.type === 'foreach_statement') {
-    collectForeachStatement(node, state);
-    return;
-  }
-
-  if (node.type === 'if_statement') {
-    collectIfStatement(node, state);
-    return;
-  }
-
-  if (node.type === 'while_statement') {
-    collectWhileStatement(node, state);
-    return;
-  }
-
-  if (node.type === 'do_while_statement') {
-    collectDoWhileStatement(node, state);
-    return;
-  }
-
-  if (node.type === 'catch_expr') {
-    collectCatchExpr(node, state);
-    return;
-  }
-  if (node.type === 'switch_statement') {
-    collectSwitchStatement(node, state);
-    return;
-  }
+  if (dispatchBlockStatement(node, state)) return;
 
   // Handle declarations in current scope
   if (DECL_KIND_MAP[node.type]) {
     collectSimpleDecl(node, state);
-    // Still recurse into children to find nested lambdas in initializers
-    for (const child of node.children) {
-      collectDeclarations(child, state);
-    }
+    for (const child of node.children) collectDeclarations(child, state);
     return;
   }
 
   // Recurse into children
-  for (const child of node.children) {
-    collectDeclarations(child, state);
-  }
+  for (const child of node.children) collectDeclarations(child, state);
 }
 
 function collectClassDecl(node: Node, state: BuildState): void {

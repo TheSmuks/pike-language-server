@@ -80,65 +80,53 @@ export function collectForeachStatement(node: Node, state: BuildState): void {
   popScope(state);
 }
 
+/**
+ * Add a parameter declaration from an identifier node.
+ */
+function addParamDecl(state: BuildState, idNode: Node, scopeId: number): void {
+  addDeclaration(state, {
+    name: idNode.text,
+    kind: 'parameter',
+    nameRange: toRangeUtf16(idNode, state.lines, state.offsetMap),
+    range: toRangeUtf16(idNode, state.lines, state.offsetMap),
+    scopeId,
+  });
+}
+
+/**
+ * Recursively collect identifier nodes from a container node
+ * (comma_expr or array_destructure) and add them as parameter declarations.
+ */
+function collectIdsFromContainer(node: Node, state: BuildState, scopeId: number): void {
+  for (const child of node.children) {
+    if (child.type === 'identifier') {
+      addParamDecl(state, child, scopeId);
+    }
+  }
+}
+
 function collectForeachLvalues(node: Node, state: BuildState): void {
   const scopeId = currentScopeId(state);
 
-  // foreach_lvalues grammar defines field('key', ...) and field('value', ...).
-  // _foreach_lvalue is: choice($._expr, seq($.type, $.identifier), $.array_destructure)
-  //
-  // When tree-sitter flattens seq($.type, $.identifier), both the type and identifier
-  // nodes get tagged with the same field name. So childrenForFieldName('key') may
-  // return [type_node, identifier_node]. We extract identifiers from the field children.
+  /**
+   * Extract identifiers from a 'key' or 'value' field and add them as
+   * parameter declarations. Handles typed form [type, identifier],
+   * expression form [comma_expr], and array_destructure form.
+   */
   const extractIdentifiersFromField = (fieldName: string): void => {
     const nodes = node.childrenForFieldName(fieldName);
     if (nodes.length === 0) return;
 
-    // Find identifier nodes among the field children.
-    // Typed form: [type, identifier] — take the identifier.
-    // Expression form: [comma_expr] — may contain bare identifier children.
+    // First pass: direct identifier children (typed form).
     for (const n of nodes) {
-      if (n.type === 'identifier') {
-        addDeclaration(state, {
-          name: n.text,
-          kind: 'parameter',
-          nameRange: toRangeUtf16(n, state.lines, state.offsetMap),
-          range: toRangeUtf16(n, state.lines, state.offsetMap),
-          scopeId,
-        });
-      }
+      if (n.type === 'identifier') addParamDecl(state, n, scopeId);
     }
 
-    // If no direct identifier was found, the field captured a compound expression.
-    // Walk its children for identifiers (handles comma_expr and array_destructure).
-    const identifiers = nodes.filter(n => n.type === 'identifier');
-    if (identifiers.length === 0) {
+    // Second pass: compound expressions (bare form, comma_expr, array_destructure).
+    if (!nodes.some(n => n.type === 'identifier')) {
       for (const n of nodes) {
-        if (n.type === 'comma_expr') {
-          // Bare identifier in untyped foreach: foreach(x; key; val)
-          // The comma_expr may contain identifier_expr children
-          for (const child of n.children) {
-            if (child.type === 'identifier') {
-              addDeclaration(state, {
-                name: child.text,
-                kind: 'parameter',
-                nameRange: toRangeUtf16(child, state.lines, state.offsetMap),
-                range: toRangeUtf16(child, state.lines, state.offsetMap),
-                scopeId,
-              });
-            }
-          }
-        } else if (n.type === 'array_destructure') {
-          for (const child of n.children) {
-            if (child.type === 'identifier') {
-              addDeclaration(state, {
-                name: child.text,
-                kind: 'parameter',
-                nameRange: toRangeUtf16(child, state.lines, state.offsetMap),
-                range: toRangeUtf16(child, state.lines, state.offsetMap),
-                scopeId,
-              });
-            }
-          }
+        if (n.type === 'comma_expr' || n.type === 'array_destructure') {
+          collectIdsFromContainer(n, state, scopeId);
         }
       }
     }
@@ -277,55 +265,36 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
 
   const actualKind = DECL_KIND_MAP[decl.type];
   if (!actualKind) {
-    // Recurse into children of the wrapper
-    for (const child of node.children) {
-      collectDeclarations(child, state);
-    }
+    for (const child of node.children) collectDeclarations(child, state);
     return;
   }
 
-  if (decl.type === 'enum_decl') {
-    collectEnumDecl(decl, state);
-    return;
-  }
-
-  if (decl.type === 'inherit_decl' || decl.type === 'import_decl') {
-    collectInheritDecl(decl, state);
-    return;
-  }
+  if (decl.type === 'enum_decl') { collectEnumDecl(decl, state); return; }
+  if (decl.type === 'inherit_decl' || decl.type === 'import_decl') { collectInheritDecl(decl, state); return; }
 
   // Multi-name declarations (variable, constant)
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
-  // Only extract assignedType for variable declarations without a useful declared type
   const assignedType = (actualKind === 'variable' && (!typeText || typeText === 'mixed'))
-    ? extractInitializerType(decl)
-    : undefined;
+    ? extractInitializerType(decl) : undefined;
 
   if (nameNodes.length > 0) {
     for (const nameNode of nameNodes) {
       addDeclaration(state, {
-        name: nameNode.text,
-        kind: actualKind,
+        name: nameNode.text, kind: actualKind,
         nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
         range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId,
-        declaredType: typeText,
-        assignedType,
+        scopeId, declaredType: typeText, assignedType,
       });
     }
   } else {
-    // Single name or no name field
     const nameNode = decl.childForFieldName('name');
     if (nameNode) {
       addDeclaration(state, {
-        name: nameNode.text,
-        kind: actualKind,
+        name: nameNode.text, kind: actualKind,
         nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
         range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId,
-        declaredType: typeText,
-        assignedType,
+        scopeId, declaredType: typeText, assignedType,
       });
     }
   }

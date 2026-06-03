@@ -32,6 +32,62 @@ function collectScopeDecls(scopeId: number, table: SymbolTable, seen: Set<number
 }
 
 /**
+ * Determine whether a declaration should be visible at the cursor position.
+ * Non-class/non-file scopes only show declarations that precede the cursor.
+ */
+function declIsVisibleAtPosition(decl: Declaration, scopeKind: string, line: number, character: number): boolean {
+  if (scopeKind === 'class' || scopeKind === 'file' || decl.kind === 'parameter') return true;
+  return decl.range.start.line < line ||
+    (decl.range.start.line === line && decl.range.start.character <= character);
+}
+
+/**
+ * Add direct declarations from a scope into results, checking visibility and deduplication.
+ */
+function collectDeclarationsFromScope(
+  scope: { declarations: number[]; kind: string },
+  table: SymbolTable,
+  line: number,
+  character: number,
+  seenNames: Set<string>,
+  results: Declaration[],
+): void {
+  for (const declId of scope.declarations) {
+    const decl = table.declById.get(declId);
+    if (!decl) continue;
+    if (decl.kind === 'inherit' || decl.kind === 'import') continue;
+    if (!declIsVisibleAtPosition(decl, scope.kind, line, character)) continue;
+    if (!seenNames.has(decl.name)) {
+      seenNames.add(decl.name);
+      results.push(decl);
+    }
+  }
+}
+
+/**
+ * Add inherited declarations into results, checking deduplication by name.
+ */
+function collectInheritedDeclarations(
+  scope: { inheritedScopes: number[] },
+  table: SymbolTable,
+  seenNames: Set<string>,
+  results: Declaration[],
+): void {
+  for (const inheritedId of scope.inheritedScopes) {
+    const inheritedScope = table.scopeById.get(inheritedId);
+    if (!inheritedScope) continue;
+    for (const declId of inheritedScope.declarations) {
+      const decl = table.declById.get(declId);
+      if (!decl || decl.kind === 'inherit' || decl.kind === 'import') continue;
+      if (!seenNames.has(decl.name)) {
+        seenNames.add(decl.name);
+        results.push(decl);
+      }
+    }
+  }
+}
+
+/**
  * Enumerate all declarations visible at a given position.
  * Walks the scope chain from innermost to file scope.
  * Returns declarations ordered by proximity (innermost scope first).
@@ -53,43 +109,10 @@ export function getSymbolsInScope(
     const scope = table.scopeById.get(current);
     if (!scope) break;
 
-    // Collect direct declarations in this scope
-    for (const declId of scope.declarations) {
-      const decl = table.declById.get(declId);
-      if (!decl) continue;
+    collectDeclarationsFromScope(scope, table, line, character, seenNames, results);
 
-      // Skip inherit declarations
-      if (decl.kind === 'inherit' || decl.kind === 'import') continue;
-
-      // For block/function scopes, only include declarations before the cursor
-      if (scope.kind !== 'class' && scope.kind !== 'file' && decl.kind !== 'parameter') {
-        if (decl.range.start.line > line ||
-            (decl.range.start.line === line && decl.range.start.character > character)) {
-          continue;
-        }
-      }
-
-      // Deduplicate by name (inner scope shadows outer)
-      if (!seenNames.has(decl.name)) {
-        seenNames.add(decl.name);
-        results.push(decl);
-      }
-    }
-
-    // For class scopes, collect inherited members
     if (scope.kind === 'class') {
-      for (const inheritedId of scope.inheritedScopes) {
-        const inheritedScope = table.scopeById.get(inheritedId);
-        if (!inheritedScope) continue;
-        for (const declId of inheritedScope.declarations) {
-          const decl = table.declById.get(declId);
-          if (!decl || decl.kind === 'inherit' || decl.kind === 'import') continue;
-          if (!seenNames.has(decl.name)) {
-            seenNames.add(decl.name);
-            results.push(decl);
-          }
-        }
-      }
+      collectInheritedDeclarations(scope, table, seenNames, results);
     }
 
     current = scope.parentId;
