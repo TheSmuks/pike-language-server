@@ -19,24 +19,25 @@ fi
 echo "✓ Extension built"
 echo ""
 
-# Step 2: Compile integration tests
-echo "Step 2: Compiling integration tests..."
+# Step 2: Install and compile integration tests
+echo "Step 2: Installing and compiling integration tests..."
 cd "$ROOT/tests/integration"
+if ! bun install --frozen-lockfile 2>&1; then
+    echo "FAILED: Integration dependency install failed"
+    exit 1
+fi
 rm -rf dist
-if ! npx tsc 2>&1; then
+if ! bun run compile 2>&1; then
     echo "FAILED: TypeScript compilation failed"
     exit 1
 fi
-
-# Rename .js to .cjs for CommonJS explicit format
-find dist -name "*.js" -exec sh -c 'f="$1"; mv "$f" "${f%.js}.cjs"' _ {} \; 2>/dev/null || true
-echo "✓ Tests compiled to CommonJS format"
+echo "✓ Tests compiled"
 echo ""
 
 # Step 3: Run integration tests with xvfb
 echo "Step 3: Running integration tests with xvfb-run..."
 cd "$ROOT"
-xvfb-run -a bun run test:integration 2>&1 || {
+bun run test:integration 2>&1 || {
     echo "FAILED: Integration tests failed"
     exit 1
 }

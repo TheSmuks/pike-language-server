@@ -19,7 +19,7 @@
     "test": "bun test tests/ harness/",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
-    "test:integration": "cd tests/integration && npm test",
+    "test:integration": "cd tests/integration && bun run test",
     "test:pike": "bash scripts/test-pike.sh",
     "test:pike:verbose": "bash scripts/test-pike.sh -v",
     "test:all": "bun test tests/ harness/ && bash scripts/test-pike.sh",
