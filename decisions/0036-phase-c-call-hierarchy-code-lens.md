@@ -1,4 +1,4 @@
-# Decision 0026: Phase C — Call Hierarchy and Code Lens
+# Decision 0036: Phase C — Call Hierarchy and Code Lens
 
 **Date**: 2026-05-12
 **Status**: Accepted

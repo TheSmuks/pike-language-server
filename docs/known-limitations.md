@@ -153,16 +153,6 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
 
-#### tree-sitter-pike: aggregate-literal node types not emitted in expression context
-
-**Upstream issue**: [TheSmuks/tree-sitter-pike#20](https://github.com/TheSmuks/tree-sitter-pike/issues/20)
-
-The `array_literal`, `multiset_literal`, and `mapping_literal` node types exist in the grammar but are emitted only when an aggregate literal is the entire program (an invalid Pike program in real usage). The common case — an aggregate literal in any expression context (`int x = ({ 1, 2 });`, `({ 1, 2 }) + ({ 3, 4 });`, `f(({ 1, 2 }))`, an aggregate in argument position, a literal as a `return` value, etc.) — parses the literal as a parenthesized expression and produces no typed literal node.
-
-**LSP impact**: The aggregate-literal classification layer is the AST walker that ADR-0029 documents for the tree-sitter semantic-token pipeline; it is currently absent from `semanticTokens.ts` because implementing it requires a parse tree where the literal nodes actually exist. Classification therefore does not yet work in real code. The TextMate grammar (which used a context-free regex for these delimiters and produced false positives like `])` in `foo(arr[i])`) was correctly removed in this same commit to eliminate the false positives; the AST-layer replacement is gated on this upstream fix.
-
-**Workaround**: None. The aggregate-literal classification layer is in place but the grammar doesn't reach it. Downstream consumers that want aggregate-aware coloring must wait for the upstream fix.
-
 ---
 
 ## Resolved Limitations

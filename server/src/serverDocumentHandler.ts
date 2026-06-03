@@ -8,7 +8,7 @@
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Connection } from "vscode-languageserver/node";
-import { isParserReady, parse, deleteTree } from "./parser";
+import { initParser, isParserReady, parse, deleteTree } from "./parser";
 import { ModificationSource } from "./features/workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
 import type { ServerContext } from "./serverContext";
@@ -29,6 +29,12 @@ export function registerDocumentHandlers(
   documents.onDidClose((event) => {
     handleDidClose(ctx, event.document.uri);
   });
+
+  initParser().then(() => {
+    void flushPendingParserDocuments(ctx);
+  }).catch((err) => {
+    logError(ctx.connection, ErrorCategory.Parse, "initParser.flushPending", err);
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -39,10 +45,10 @@ async function handleDidChangeContent(
   ctx: ServerContext,
   doc: TextDocument,
 ): Promise<void> {
-  // If the parser is not yet ready, skip processing entirely.
-  // The document will be re-processed on the next didChange.
-  // rust-analyzer pattern: non-blocking readiness check, no data loss.
-  if (!isParserReady()) return;
+  if (!isParserReady()) {
+    ctx.pendingParserDocuments.set(doc.uri, doc);
+    return;
+  }
 
   try {
     const content = doc.getText();
@@ -92,14 +98,7 @@ async function handleDidChangeContent(
   try {
     ctx.diagnosticManager.onDidChange(doc.uri);
 
-    // Request VSCode to re-fetch semantic tokens. Without this, VSCode only
-    // re-requests tokens on tab switch. The token data is produced from the
-    // symbol table which was just rebuilt above.
-    // Note: semanticTokens.refresh() is fire-and-forget on the server side —
-    // it sends a notification to the client and returns void.
-    if (ctx.clientSupportsSemanticTokensRefresh) {
-      ctx.connection.languages.semanticTokens.refresh();
-    }
+    scheduleSemanticTokensRefresh(ctx);
   } catch (err) {
     logError(ctx.connection, ErrorCategory.System, `post-didChange(${doc.uri})`, err);
   }
@@ -113,5 +112,23 @@ function handleDidClose(
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
   ctx.semanticTokensCache.delete(uri);
+  ctx.pendingParserDocuments.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
+}
+
+async function flushPendingParserDocuments(ctx: ServerContext): Promise<void> {
+  const pending = [...ctx.pendingParserDocuments.values()];
+  ctx.pendingParserDocuments.clear();
+  for (const doc of pending) {
+    await handleDidChangeContent(ctx, doc);
+  }
+}
+
+function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
+  if (!ctx.clientSupportsSemanticTokensRefresh) return;
+  if (ctx.semanticTokensRefreshTimer) return;
+  ctx.semanticTokensRefreshTimer = setTimeout(() => {
+    ctx.semanticTokensRefreshTimer = undefined;
+    ctx.connection.languages.semanticTokens.refresh();
+  }, 50);
 }
