@@ -99,8 +99,10 @@ async function handleSelectionRange(
   const results = [];
   for (const pos of params.positions) {
     if (token.isCancellationRequested) return results;
-    const tree = parse(doc.getText(), doc.uri);
-    const range = getSelectionRange(tree, pos.line, pos.character);
+    const source = doc.getText();
+    const tree = parse(source, doc.uri);
+    const lines = source.split('\n');
+    const range = getSelectionRange(tree, pos.line, pos.character, lines);
     results.push(range);
   }
   return results;

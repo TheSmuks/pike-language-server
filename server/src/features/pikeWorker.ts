@@ -76,90 +76,68 @@ export class PikeWorker extends PikeWorkerProcess {
    * the Pike worker's response.
    */
 
-  private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken, priority: number = PikePriority.normal): Promise<PikeResponse> {
-    // Fast path: if Pike is known to be unavailable, reject immediately.
-    // This avoids spamming stderr with "nice: pike: No such file" on every request.
-    if (this.pikeAvailable === false) {
-      return Promise.reject(new PikeUnavailableError());
-    }
-
-    // Crash-loop backoff: if Pike has been crashing repeatedly, reject
-    // requests until the backoff period expires. This prevents infinite
-    // restart loops when Pike hits an internal fatal error on a specific file.
+  private checkBackoff(): boolean {
     if (this.crashBackoffUntil > 0 && Date.now() < this.crashBackoffUntil) {
-      return Promise.reject(
-        new Error(`Pike worker is in crash-loop backoff until ${new Date(this.crashBackoffUntil).toISOString()}`),
-      );
+      return false; // still in backoff
     }
     // Backoff expired — reset crash counter so a fresh start is possible.
-    if (this.crashBackoffUntil > 0 && Date.now() >= this.crashBackoffUntil) {
+    if (this.crashBackoffUntil > 0) {
       this.consecutiveCrashes = 0;
       this.crashBackoffUntil = 0;
     }
+    return true;
+  }
 
-    // Check if forced restart is needed before queuing
+  private prepareRestart(): void {
     if (this.shouldForceRestart()) {
       this.restarting = true;
       try {
         this.stop();
         this.start();
       } catch {
-        // stop() may throw if worker is already dead — ensure we still start
         this.start();
       }
       this.restarting = false;
     }
+  }
 
-    this.start(); // Lazy start (no-op if already running)
+  private enqueue(method: string, params: Record<string, unknown> = {}, token?: CancellationToken, priority: number = PikePriority.normal): Promise<PikeResponse> {
+    if (this.pikeAvailable === false) {
+      return Promise.reject(new PikeUnavailableError());
+    }
+    if (!this.checkBackoff()) {
+      return Promise.reject(
+        new Error(`Pike worker is in crash-loop backoff until ${new Date(this.crashBackoffUntil).toISOString()}`),
+      );
+    }
+
+    this.prepareRestart();
+    this.start();
 
     const id = ++this.requestId;
     this.requestCount++;
     const request: PikeRequest = { id, method, params };
     const payload = JSON.stringify(request) + "\n";
 
-    // Reset idle timer
     this.resetIdleTimer();
     this.lastRequestTime = Date.now();
 
+    return this.enqueuePromise(id, payload, priority, token);
+  }
+
+  private enqueuePromise(id: number, payload: string, priority: number, token?: CancellationToken): Promise<PikeResponse> {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        // Remove from pending map (may already be resolved)
         this.pending.delete(id);
-        // Also remove from queue if not yet sent
         for (const q of this.queues) {
-          const queueIdx = q.findIndex(item =>
-            item.payload === payload
-          );
-          if (queueIdx !== -1) {
-            q.splice(queueIdx, 1);
-            break;
-          }
+          const queueIdx = q.findIndex(item => item.payload === payload);
+          if (queueIdx !== -1) { q.splice(queueIdx, 1); break; }
         }
-        reject(new Error(`TIMEOUT: Pike worker timeout for ${method} (id=${id})`));
+        reject(new Error(`TIMEOUT: Pike worker timeout for id=${id}`));
       }, this.config.requestTimeoutMs);
 
-      const item = {
-        payload,
-        resolve: (response: PikeResponse) => {
-          clearTimeout(timeout);
-          resolve(response);
-        },
-        reject: (error: Error) => {
-          clearTimeout(timeout);
-          reject(error);
-        },
-        timeout,
-        token,
-        priority,
-      };
-
-      // Register in pending map so processBuffer can resolve it
-      this.pending.set(id, {
-        resolve: item.resolve,
-        reject: item.reject,
-        timeout: item.timeout,
-      });
-
+      const item = { payload, resolve, reject, timeout, token, priority };
+      this.pending.set(id, { resolve: item.resolve, reject: item.reject, timeout: item.timeout });
       this.queues[clampPriority(item.priority)].push(item);
       this.drainQueue();
     });

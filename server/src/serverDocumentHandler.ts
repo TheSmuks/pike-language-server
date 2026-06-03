@@ -38,6 +38,98 @@ export function registerDocumentHandlers(
 }
 
 // ---------------------------------------------------------------------------
+// Queue management
+// ---------------------------------------------------------------------------
+
+/** Queue a document for processing once the parser is ready. */
+function queuePendingDocument(ctx: ServerContext, doc: TextDocument): void {
+  ctx.pendingParserDocuments.set(doc.uri, doc);
+}
+
+// ---------------------------------------------------------------------------
+// Content validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that document content is non-null.
+ * Returns the content string or null if invalid.
+ */
+function validateDocumentContent(
+  connection: Connection,
+  doc: TextDocument,
+): string | null {
+  const content = doc.getText();
+  if (content === undefined || content === null) {
+    logError(
+      connection, ErrorCategory.System,
+      `onDidChangeContent(${doc.uri})`,
+      new Error("unexpected null content"),
+    );
+    return null;
+  }
+  return content;
+}
+
+// ---------------------------------------------------------------------------
+// Index upsert helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a document and upsert it into the workspace index.
+ * Returns the invalidated file count on success, or -1 on parse failure.
+ */
+async function parseAndIndexDocument(
+  ctx: ServerContext,
+  doc: TextDocument,
+  content: string,
+): Promise<number> {
+  const tree = parse(content, doc.uri);
+  const invalidated = ctx.index.invalidateWithDependents(doc.uri);
+  const promise = ctx.index.upsertFile(
+    doc.uri, doc.version, tree, content, ModificationSource.DidChange,
+  );
+  ctx.upsertInFlight.set(doc.uri, promise);
+  try {
+    await promise;
+  } finally {
+    if (ctx.upsertInFlight.get(doc.uri) === promise) {
+      ctx.upsertInFlight.delete(doc.uri);
+    }
+  }
+  return invalidated.length;
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostics trigger
+// ---------------------------------------------------------------------------
+
+/**
+ * Trigger real-time diagnostics for a document.
+ * Errors are swallowed since sendDiagnostics crosses the LSP boundary
+ * and the client may have disconnected.
+ */
+function triggerDiagnostics(ctx: ServerContext, uri: string): void {
+  try {
+    ctx.diagnosticManager.onDidChange(uri);
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.System, `post-didChange(${uri})`, err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Semantic tokens refresh scheduler
+// ---------------------------------------------------------------------------
+
+function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
+  if (!ctx.clientSupportsSemanticTokensRefresh) return;
+  if (ctx.semanticTokensRefreshTimer) return;
+  ctx.semanticTokensRefreshTimer = setTimeout(() => {
+    ctx.semanticTokensRefreshTimer = undefined;
+    ctx.connection.languages.semanticTokens.refresh();
+  }, 50);
+}
+
+// ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
@@ -46,62 +138,27 @@ async function handleDidChangeContent(
   doc: TextDocument,
 ): Promise<void> {
   if (!isParserReady()) {
-    ctx.pendingParserDocuments.set(doc.uri, doc);
+    queuePendingDocument(ctx, doc);
     return;
   }
 
+  const content = validateDocumentContent(ctx.connection, doc);
+  if (content === null) return;
+
+  let invalidatedCount: number;
   try {
-    const content = doc.getText();
-    if (content === undefined || content === null) {
-      logError(
-        ctx.connection, ErrorCategory.System,
-        `onDidChangeContent(${doc.uri})`,
-        new Error("unexpected null content"),
-      );
-      return;
-    }
-
-    const tree = parse(content, doc.uri);
-
-    // Update workspace index, invalidating dependents
-    const invalidated = ctx.index.invalidateWithDependents(doc.uri);
-    const promise = ctx.index.upsertFile(
-      doc.uri, doc.version, tree, content, ModificationSource.DidChange,
-    );
-    ctx.upsertInFlight.set(doc.uri, promise);
-    try {
-      await promise;
-    } finally {
-      // Guard: only delete if this promise is still the in-flight one.
-      // A concurrent didChange for the same URI may have overwritten it.
-      if (ctx.upsertInFlight.get(doc.uri) === promise) {
-        ctx.upsertInFlight.delete(doc.uri);
-      }
-    }
-
-    if (invalidated.length > 1) {
-      logInfo(
-        ctx.connection,
-        `Invalidated ${invalidated.length} files (change in ${doc.uri})`,
-      );
-    }
+    invalidatedCount = await parseAndIndexDocument(ctx, doc, content);
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, `onDidChangeContent(${doc.uri})`, err);
     return;
   }
 
-  // Delegate real-time diagnostics to DiagnosticManager.
-  // These run after the index upsert succeeds — diagnostics depend on the
-  // updated symbol table. Wrapped in try/catch because sendDiagnostics and
-  // semanticTokens.refresh() both cross the LSP connection boundary where
-  // the client may have disconnected.
-  try {
-    ctx.diagnosticManager.onDidChange(doc.uri);
-
-    scheduleSemanticTokensRefresh(ctx);
-  } catch (err) {
-    logError(ctx.connection, ErrorCategory.System, `post-didChange(${doc.uri})`, err);
+  if (invalidatedCount > 1) {
+    logInfo(ctx.connection, `Invalidated ${invalidatedCount} files (change in ${doc.uri})`);
   }
+
+  triggerDiagnostics(ctx, doc.uri);
+  scheduleSemanticTokensRefresh(ctx);
 }
 
 function handleDidClose(
@@ -122,13 +179,4 @@ async function flushPendingParserDocuments(ctx: ServerContext): Promise<void> {
   for (const doc of pending) {
     await handleDidChangeContent(ctx, doc);
   }
-}
-
-function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
-  if (!ctx.clientSupportsSemanticTokensRefresh) return;
-  if (ctx.semanticTokensRefreshTimer) return;
-  ctx.semanticTokensRefreshTimer = setTimeout(() => {
-    ctx.semanticTokensRefreshTimer = undefined;
-    ctx.connection.languages.semanticTokens.refresh();
-  }, 50);
 }

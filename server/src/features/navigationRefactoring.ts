@@ -100,57 +100,32 @@ export function registerRefactoringHandlers(
   // textDocument/codeAction (US-018)
   // -----------------------------------------------------------------------
 
+  // Handlers
+  // -----------------------------------------------------------------------
+
   connection.onCodeAction(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
     if (!doc) return [];
-
     const text = doc.getText();
-    const diagnosticActions = produceCodeActions(params, text, { stdlibModules });
-    const autodocActions = produceAutodocTemplateActions(params, text);
-    const getterSetterActions = produceGetterSetterActions(params, text, { stdlibModules });
-    return [...diagnosticActions, ...autodocActions, ...getterSetterActions];
+    return [...produceCodeActions(params, text, { stdlibModules }),
+      ...produceAutodocTemplateActions(params, text),
+      ...produceGetterSetterActions(params, text, { stdlibModules })];
   });
-
-  // -----------------------------------------------------------------------
-  // workspace/symbol (US-020)
-  // -----------------------------------------------------------------------
 
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
-    const query = params.query ?? "";
-    const results = searchWorkspaceSymbols(query, ctx.index);
-    return results;
+    return searchWorkspaceSymbols(params.query ?? "", ctx.index);
   });
-
-  // -----------------------------------------------------------------------
-  // textDocument/rename (decision 0016)
-  // -----------------------------------------------------------------------
 
   connection.onPrepareRename(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return null;
-
-    const result = prepareRename(
-      table,
-      params.position.line,
-      params.position.character,
-      protectedNames,
-    );
+    const result = prepareRename(table, params.position.line, params.position.character, protectedNames);
     if (!result) return null;
-
     return {
-      range: {
-        start: {
-          line: result.line,
-          character: result.character,
-        },
-        end: {
-          line: result.line,
-          character: result.character + result.length,
-        },
-      },
+      range: { start: { line: result.line, character: result.character }, end: { line: result.line, character: result.character + result.length } },
       placeholder: result.name,
     };
   });
@@ -159,37 +134,11 @@ export function registerRefactoringHandlers(
     if (token.isCancellationRequested) return null;
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return null;
-
-    // Validate new name — return a descriptive error, not silent null.
     const validationError = validateRenameName(params.newName);
-    if (validationError) {
-      return new ResponseError(ErrorCodes.InvalidRequest, validationError);
-    }
-
-    const renameResult = await getRenameLocations(
-      table,
-      params.textDocument.uri,
-      params.position.line,
-      params.position.character,
-      ctx.index,
-      protectedNames,
-    );
-
-    if (!renameResult) {
-      return new ResponseError(
-        ErrorCodes.InvalidRequest,
-        "No renamable symbol at the given position",
-      );
-    }
-
-    // Don't rename if old name equals new name
-    if (renameResult.oldName === params.newName) {
-      return new ResponseError(
-        ErrorCodes.InvalidRequest,
-        "New name is the same as the current name",
-      );
-    }
-
+    if (validationError) return new ResponseError(ErrorCodes.InvalidRequest, validationError);
+    const renameResult = await getRenameLocations(table, params.textDocument.uri, params.position.line, params.position.character, ctx.index, protectedNames);
+    if (!renameResult) return new ResponseError(ErrorCodes.InvalidRequest, "No renamable symbol at the given position");
+    if (renameResult.oldName === params.newName) return new ResponseError(ErrorCodes.InvalidRequest, "New name is the same as the current name");
     return buildWorkspaceEdit(renameResult.locations, params.newName);
   });
 }

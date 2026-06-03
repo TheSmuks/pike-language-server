@@ -265,16 +265,22 @@ export async function resolveTypeMembers(
  *
  * Returns null if no identifier prefix is found (e.g., completion
  * triggered right after a dot with nothing typed yet).
+ *
+ * @param tree Parse tree
+ * @param line Cursor line (0-based)
+ * @param character Cursor character (0-based UTF-16)
+ * @param lines Pre-split source lines.
  */
 export function findIdentifierPrefixRange(
   tree: Tree,
   line: number,
   character: number,
+  lines: string[],
 ): { start: { line: number; character: number }; end: { line: number; character: number } } | null {
   const root = tree.rootNode;
   if (!root) return null;
   const pos = { row: line, column: character };
-  const lines = root.text.split('\n');
+  const srcLines = lines;
 
   // Try to find a node at this position. Use namedDescendantForPosition
   // to skip anonymous nodes (punctuation, whitespace).
@@ -287,7 +293,7 @@ export function findIdentifierPrefixRange(
     return {
       start: {
         line: node.startPosition.row,
-        character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
+        character: utf8ToUtf16(srcLines[node.startPosition.row] ?? '', node.startPosition.column),
       },
       end: { line, character },
     };
@@ -303,7 +309,7 @@ export function findIdentifierPrefixRange(
           return {
             start: {
               line: child.startPosition.row,
-              character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column),
+              character: utf8ToUtf16(srcLines[child.startPosition.row] ?? '', child.startPosition.column),
             },
             end: { line, character },
           };

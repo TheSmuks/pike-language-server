@@ -111,79 +111,73 @@ function renderParagraph(lines: string[]): string {
     return "";
   }
 
-  // @seealso — render as "See also:" with the rest as content
-  if (/^@seealso\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@seealso\s*/, "");
-    return `**See also:** ${renderInline(content)}`;
-  }
-
-  // @deprecated
-  if (/^@deprecated\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@deprecated\s*/, "");
-    return `**Deprecated:** ${renderInline(content || "No longer recommended.")}`;
-  }
-
-  // @note
-  if (/^@note\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@note\s*/, "");
-    return `**Note:** ${renderInline(content)}`;
-  }
-
-  // @bugs
-  if (/^@bugs\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@bugs\s*/, "");
-    return `**Bugs:** ${renderInline(content)}`;
-  }
-
-  // @returns
-  if (/^@returns?\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@returns?\s*/, "");
-    return `**Returns:** ${renderInline(content)}`;
-  }
-
-  // @throws
-  if (/^@throws?\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@throws?\s*/, "");
-    return `**Throws:** ${renderInline(content)}`;
-  }
-
-  // @param — render as parameter list item
-  if (/^@param\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join(" ")
-      .replace(/^@param\s+/, "");
-    const spaceIdx = content.indexOf(" ");
-    if (spaceIdx > 0) {
-      const name = content.slice(0, spaceIdx);
-      const desc = content.slice(spaceIdx + 1);
-      return `- \`${name}\` — ${renderInline(desc)}`;
-    }
-    return `- \`${content}\``;
-  }
-
-  // @decl — skip (signature information already shown in code fence)
-  if (/^@decl\b/.test(first)) {
-    return "";
-  }
-
-  // @example — render as code block
-  if (/^@example\b/.test(first)) {
-    const content = lines.map(l => l.trim()).join("\n")
-      .replace(/^@example\s*/, "");
-    // Code blocks are inherently safe — VSCode renders them as-is.
-    // But strip any trailing backtick triple to avoid breaking the fence.
-    const safe = content.replace(/```/g, "`` ");
-    return `\`\`\`pike\n${safe}\n\`\`\``;
-  }
+  // Directive-specific renderers
+  if (/^@seealso\b/.test(first)) return renderSeealso(lines);
+  if (/^@deprecated\b/.test(first)) return renderDeprecated(lines);
+  if (/^@note\b/.test(first)) return renderNote(lines);
+  if (/^@bugs\b/.test(first)) return renderBugs(lines);
+  if (/^@returns?\b/.test(first)) return renderReturns(lines);
+  if (/^@throws?\b/.test(first)) return renderThrows(lines);
+  if (/^@param\b/.test(first)) return renderParam(lines);
+  if (/^@decl\b/.test(first)) return "";
+  if (/^@example\b/.test(first)) return renderExample(lines);
 
   // Default: join lines, render inline markup
-  const text = lines.join(" ");
-  return renderInline(text);
+  return renderInline(lines.join(" "));
+}
+
+function paragraphContent(lines: string[]): string {
+  return lines.map(l => l.trim()).join(" ");
+}
+
+function renderSeealso(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@seealso\s*/, "");
+  return `**See also:** ${renderInline(content)}`;
+}
+
+function renderDeprecated(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@deprecated\s*/, "");
+  return `**Deprecated:** ${renderInline(content || "No longer recommended.")}`;
+}
+
+function renderNote(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@note\s*/, "");
+  return `**Note:** ${renderInline(content)}`;
+}
+
+function renderBugs(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@bugs\s*/, "");
+  return `**Bugs:** ${renderInline(content)}`;
+}
+
+function renderReturns(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@returns?\s*/, "");
+  return `**Returns:** ${renderInline(content)}`;
+}
+
+function renderThrows(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@throws?\s*/, "");
+  return `**Throws:** ${renderInline(content)}`;
+}
+
+function renderParam(lines: string[]): string {
+  const content = paragraphContent(lines).replace(/^@param\s+/, "");
+  const spaceIdx = content.indexOf(" ");
+  if (spaceIdx > 0) {
+    const name = content.slice(0, spaceIdx);
+    const desc = content.slice(spaceIdx + 1);
+    return `- \`${name}\` — ${renderInline(desc)}`;
+  }
+  return `- \`${content}\``;
+}
+
+function renderExample(lines: string[]): string {
+  const content = lines.map(l => l.trim()).join("\n")
+    .replace(/^@example\s*/, "");
+  // Code blocks are inherently safe — VSCode renders them as-is.
+  // But strip any trailing backtick triple to avoid breaking the fence.
+  const safe = content.replace(/```/g, "`` ");
+  return `\`\`\`pike\n${safe}\n\`\`\``;
 }
 
 // ---------------------------------------------------------------------------

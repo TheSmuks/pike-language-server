@@ -67,31 +67,8 @@ export async function completeCallArgs(
   }
 
   // 4. Cross-file: check imports for the function
-  const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
-  for (const importDecl of importDecls) {
-    const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
-    if (!targetUri) continue;
-    const targetTable = ctx.index.getSymbolTable(targetUri);
-    if (!targetTable) continue;
-    const fileScope = targetTable.scopes.find(s => s.kind === "file");
-    if (!fileScope) continue;
-    const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
-    const funcDecl = importedDecls.find(d => d.name === calleeName && (d.kind === "function" || d.kind === "method"));
-    if (funcDecl && funcDecl.declaredType) {
-      const params = extractParamsFromType(funcDecl.declaredType);
-      if (params !== null) {
-        return [makeArgSnippet(calleeName, params, funcDecl.declaredType)];
-      }
-    }
-    // Also check class constructors in imported modules
-    const classDecl = importedDecls.find(d => d.name === calleeName && d.kind === "class");
-    if (classDecl) {
-      const createParams = extractConstructorParams(classDecl, targetTable);
-      if (createParams !== null) {
-        return [makeArgSnippet(calleeName, createParams, "constructor")];
-      }
-    }
-  }
+  const importResult = await lookupImportedCallable(table, ctx, calleeName);
+  if (importResult) return importResult;
 
   // 5. Stdlib lookup — O(1) reverse index by unqualified name
   const stdlibMatches = getStdlibEntriesByName(ctx.stdlibIndex, calleeName);
@@ -108,6 +85,41 @@ export async function completeCallArgs(
 
   // No resolution found — return empty so no completion dropdown appears.
   return [];
+}
+
+// -----------------------------------------------------------------------
+// Internal helpers
+// -----------------------------------------------------------------------
+
+/** Look up a callable (function/method/class constructor) in imported modules. */
+async function lookupImportedCallable(
+  table: SymbolTable,
+  ctx: CompletionContext,
+  calleeName: string,
+): Promise<CompletionItem[] | null> {
+  const importDecls = table.declarations.filter(d => d.kind === "inherit" || d.kind === "import");
+  for (const importDecl of importDecls) {
+    const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
+    if (!targetUri) continue;
+    const targetTable = ctx.index.getSymbolTable(targetUri);
+    if (!targetTable) continue;
+    const fileScope = targetTable.scopes.find(s => s.kind === "file");
+    if (!fileScope) continue;
+    const importedDecls = getDeclarationsInScope(targetTable, fileScope.id);
+
+    // Single pass: check function/method AND class constructor
+    const funcDecl = importedDecls.find(d => d.name === calleeName && (d.kind === "function" || d.kind === "method"));
+    if (funcDecl && funcDecl.declaredType) {
+      const params = extractParamsFromType(funcDecl.declaredType);
+      if (params !== null) return [makeArgSnippet(calleeName, params, funcDecl.declaredType)];
+    }
+    const classDecl = importedDecls.find(d => d.name === calleeName && d.kind === "class");
+    if (classDecl) {
+      const createParams = extractConstructorParams(classDecl, targetTable);
+      if (createParams !== null) return [makeArgSnippet(calleeName, createParams, "constructor")];
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
