@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.18] — 2026-06-03
+
 ### Added
 
   - Semantic tokens now advertise and handle range requests, allowing clients to
