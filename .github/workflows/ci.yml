@@ -83,7 +83,12 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
-      - run: bun test
+      - name: Run non-Pike tests
+        if: matrix.os != 'ubuntu-latest'
+        run: bun run test:non-pike
+      - name: Run full Bun tests
+        if: matrix.os == 'ubuntu-latest'
+        run: bun test
 
   quality-gates:
     runs-on: ubuntu-latest
@@ -106,6 +111,8 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Install VSCE
+        run: bun add -g @vscode/vsce
       - run: bash scripts/smoke-test.sh
 
   vscode-integration:
