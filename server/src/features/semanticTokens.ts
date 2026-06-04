@@ -285,9 +285,10 @@ export function produceSemanticTokens(
       continue;
     }
 
-    // Other unresolved identifiers — classify using external lookup.
-    // Predef builtins get `builtinFunction` type, stdlib modules get `namespace`.
-    // Unknown references fall back to `variable`.
+    // Other unresolved identifiers — classify using external lookup and syntax.
+    // Predef builtins get `builtinFunction`, stdlib modules get `namespace`, and
+    // unresolved call targets stay function-shaped instead of being erased into
+    // variables. Unknown non-call references fall back to `variable`.
     if (ref.name.length > 0) {
       let refTypeId: TokenTypeId = 5; // 'variable'
       if (externalLookup) {
@@ -296,6 +297,9 @@ export function produceSemanticTokens(
         } else if (externalLookup.stdlibModules?.has(ref.name)) {
           refTypeId = 8; // 'namespace'
         }
+      }
+      if (refTypeId === 5 && ref.kind === 'call') {
+        refTypeId = 3; // 'function'
       }
       tokens.push({
         line: ref.loc.line,

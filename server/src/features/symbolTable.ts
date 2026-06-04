@@ -174,7 +174,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     if (!root) return emptySymbolTable(uri, version);
 
     bump("symbolTablesBuilt");
-    const state = initBuildState(root, sourceText ?? '');
+    const state = initBuildState(root, sourceText ?? root.text ?? '');
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);
