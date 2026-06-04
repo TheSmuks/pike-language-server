@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     token colors.
   - File rename operation registration is restricted to `file:` Pike files,
     avoiding folder-operation noise from clients evaluating Pike rename filters.
+  - The GitHub Release workflow installs `vsce` before packaging VSIX assets and
+    overwrites existing release assets on rerun.
 
 ## [0.8.19] — 2026-06-04
 

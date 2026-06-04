@@ -35,6 +35,9 @@ jobs:
       - name: Build extension
         run: bun run build:extension
 
+      - name: Install VSIX packager
+        run: bun add -g @vscode/vsce
+
       - name: Package VSIX
         run: bash scripts/build-vsix.sh
 
@@ -43,4 +46,4 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VSIX_PATH=$(cat out/.latest-vsix)
-          gh release upload "${{ github.event.release.tag_name }}" "$VSIX_PATH"
+          gh release upload "${{ github.event.release.tag_name }}" "$VSIX_PATH" --clobber
