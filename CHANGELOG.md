@@ -8,6 +8,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.19] — 2026-06-04
+
+### Fixed
+
+  - Cross-file features now refresh when background indexing makes dependencies
+    available: affected open documents republish diagnostics, request CodeLens
+    refresh, and refresh semantic tokens without requiring an edit.
+  - Inherit/import dependents are invalidated when their target file is
+    indexed, forcing `wireInheritance` to run again after cold-index races.
+  - `import Foo;` is no longer flagged unused by literal occurrence counting;
+    Pike imports can expose names that are used without the `Foo.` qualifier.
+  - Unresolved call identifiers stay function-shaped in semantic tokens instead
+    of being demoted to `variable`, so calls to stdlib/built-in functions
+    pick up theme function-call colors.
+  - The current `#include` LSP symbol-resolution limitation is documented in
+    known limitations and ADR-0027.
+
 ## [0.8.18] — 2026-06-03
 
 ### Added
