@@ -174,7 +174,11 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     if (!root) return emptySymbolTable(uri, version);
 
     bump("symbolTablesBuilt");
-    const state = initBuildState(root, sourceText ?? root.text ?? '');
+    // Callers MUST pass the pre-split source. Materializing rootNode.text
+    // inside this hot path is O(N) and the source is already available from
+    // the LSP document change notification — fall back to an empty string
+    // would silently produce wrong character offsets for every identifier.
+    const state = initBuildState(root, sourceText ?? '');
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);

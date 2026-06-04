@@ -4,6 +4,7 @@
  */
 
 import { ModuleResolver, detectPikePaths, type PikePaths, type PikePathOverrides } from "./moduleResolver";
+import { rewireDependents as rewireDependentsFn } from "./dependentsInvalidator";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
 import { pathToUri, uriToPath as uriToPathUtil } from "../util/uri";
@@ -362,27 +363,11 @@ export class WorkspaceIndex {
 
   isStale(uri: string): boolean { return this.files.get(normUri(uri))?.stale ?? false; }
 
-  /**
-   * Invalidate dependents of a newly-indexed file so inheritance/import wiring
-   * runs again with the target table available.
-   *
-   * `wireInheritance()` is deliberately synchronous. When a dependent is built
-   * before its target is indexed, it skips the missing target and stores a
-   * complete-but-unwired table. Re-indexing the target must therefore invalidate
-   * every dependent, not only dependents whose table is already null.
-   */
   rewireDependents(uri: string): string[] {
-    const dependentUris = this.getDependents(normUri(uri));
-    const reWired: string[] = [];
-
-    for (const depUri of dependentUris) {
-      if (!this.files.has(depUri)) continue;
-      this.invalidateWithDependents(depUri);
-      reWired.push(depUri);
-    }
-
-    return reWired;
+    return rewireDependentsFn(this, normUri(uri));
   }
+
+  hasFile(uri: string): boolean { return this.files.has(uri); }
 
   clear(): void {
     this.files.clear();

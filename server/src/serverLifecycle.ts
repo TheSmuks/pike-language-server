@@ -28,6 +28,7 @@ import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
 import { hashContent } from "./features/cacheHash";
+import { createIndexWarmRefresh } from "./features/indexWarmRefresh";
 
 // ---------------------------------------------------------------------------
 // Cache restore + refresh (M2: two-phase startup)
@@ -242,7 +243,6 @@ function warmUpPikeWorker(connection: Connection, worker: PikeWorker, background
 
 function startBackgroundIndexing(
   connection: Connection,
-  documents: TextDocuments<TextDocument>,
   index: WorkspaceIndex,
   backgroundIndexEnabled: boolean,
   backgroundIndexBatchSize: number,
@@ -254,71 +254,13 @@ function startBackgroundIndexing(
   }
   ctx.backgroundIndexCts = new CancellationTokenSource();
 
-  // Debounce/Coalesce refresh calls — O(batches) not O(files).
-  // Collect pending open doc URIs that depend on indexed files, then refresh.
-  const pendingRefresh = new Set<string>();
-  let refreshTimer: ReturnType<typeof setTimeout> | undefined;
-
-  const requestCodeLensRefresh = (): void => {
-    try {
-      const result = connection.sendRequest("workspace/codeLens/refresh") as unknown;
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        void (result as Promise<void>).catch((err: unknown) => {
-          logError(connection, ErrorCategory.System, "workspace/codeLens/refresh", err);
-        });
-      }
-    } catch (err) {
-      logError(connection, ErrorCategory.System, "workspace/codeLens/refresh", err);
-    }
-  };
-
-  const requestSemanticTokensRefresh = (): void => {
-    if (!ctx.clientSupportsSemanticTokensRefresh) return;
-    try {
-      const result = connection.languages.semanticTokens.refresh() as unknown;
-      if (result && typeof (result as Promise<void>).catch === "function") {
-        void (result as Promise<void>).catch((err: unknown) => {
-          logError(connection, ErrorCategory.System, "semanticTokens.refresh", err);
-        });
-      }
-    } catch (err) {
-      logError(connection, ErrorCategory.System, "semanticTokens.refresh", err);
-    }
-  };
-
-  const scheduleRefresh = (depUri: string) => {
-    pendingRefresh.add(depUri);
-    if (refreshTimer) return;
-    refreshTimer = setTimeout(() => {
-      refreshTimer = undefined;
-      if (pendingRefresh.size === 0) return;
-
-      let openAffectedCount = 0;
-      for (const uri of pendingRefresh) {
-        const isOpen = documents.all().some(d => d.uri === uri);
-        if (isOpen) {
-          openAffectedCount++;
-          ctx.diagnosticManager.onDidChange(uri);
-        }
-      }
-
-      if (openAffectedCount > 0) {
-        requestCodeLensRefresh();
-        requestSemanticTokensRefresh();
-      }
-      pendingRefresh.clear();
-    }, 200);
-  };
-
-  const onFileIndexed = (uri: string) => {
-    // Find all dependents of the newly-indexed file and mark them for refresh
-    const dependents = index.getDependents(uri);
-    for (const dep of dependents) {
-      scheduleRefresh(dep);
-    }
-    // Also re-wire any dependent's inheritance chain now that target is available
-    index.rewireDependents(uri);
-  };
+  const refresh = createIndexWarmRefresh({
+    connection,
+    documents: ctx.documents,
+    index,
+    clientSupportsSemanticTokensRefresh: ctx.clientSupportsSemanticTokensRefresh,
+    diagnosticManager: ctx.diagnosticManager,
+  });
 
   logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
   indexWorkspaceFiles({
@@ -327,7 +269,7 @@ function startBackgroundIndexing(
     workspaceRoot: index.workspaceRoot,
     batchSize: backgroundIndexBatchSize,
     cancellationToken: ctx.backgroundIndexCts.token,
-    onFileIndexed,
+    onFileIndexed: refresh.onFileIndexed,
   }).then(() => {
     logInfo(connection, "[init] step 7f: background indexing complete");
   }).catch((err) => {
@@ -396,7 +338,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   cacheLoadPromise.then((cached) => {
     if (!cached) {
       logInfo(connection, "[init] step 7e: no cache found — fresh start");
-      startBackgroundIndexing(connection, documents, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
+      startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
     } else {
       const restored = restoreCachedEntries(index, cached);
       const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
@@ -406,7 +348,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
         if (reindexed > 0) {
           logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
         }
-        startBackgroundIndexing(connection, documents, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
+        startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
       }).catch((err) => {
         logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
       });
