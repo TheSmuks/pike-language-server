@@ -134,7 +134,7 @@ async function buildSemanticTokenData(
   token: CancellationToken,
   range?: SemanticTokenRange,
 ): Promise<number[]> {
-  const doc = ctx.documents.get(uri);
+  let doc = ctx.documents.get(uri);
   const docVersion = doc?.version;
   const cached = ctx.semanticTokensCache.get(uri);
 
@@ -145,6 +145,10 @@ async function buildSemanticTokenData(
     return [];
   }
 
+  if (!doc) {
+    await Promise.resolve();
+    doc = ctx.documents.get(uri);
+  }
   if (!doc) return [];
 
   const table = await ctx.getSymbolTable(uri);
@@ -156,11 +160,22 @@ async function buildSemanticTokenData(
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
+  if (!range && data.length === 0 && cached && hasParseError(doc.getText(), uri)) {
+    return cached.data;
+  }
   if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data });
   if (ctx.debugTelemetry) {
     logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length} range=${range ? "yes" : "no"}`);
   }
   return data;
+}
+
+function hasParseError(source: string, uri: string): boolean {
+  try {
+    return parse(source, uri).rootNode.hasError;
+  } catch {
+    return false;
+  }
 }
 
 /** Handle textDocument/documentHighlight requests. */

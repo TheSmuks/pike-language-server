@@ -11,12 +11,24 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 describe("semantic tokens for opened files", () => {
-  test("document handlers refresh semantic tokens from the didOpen path", () => {
+  test("didOpen handler indexes and refreshes semantic tokens", async () => {
     const source = readFileSync("server/src/serverDocumentHandler.ts", "utf8");
 
+    // didOpen should index immediately on the fast local path, then schedule
+    // semantic token refresh. Full dependency resolution stays lazy so an
+    // `inherit` cannot block first paint.
     expect(source).toContain("documents.onDidOpen");
     expect(source).toContain("handleDidOpen");
-    expect(source).toContain("scheduleOpenedDocumentSemanticTokensRefresh(ctx)");
-    expect(source).toContain("[50, 250, 1000]");
+    expect(source).toContain("indexOpenedDocumentFast");
+    expect(source).toContain("upsertBackgroundFile");
+    expect(source).toContain("scheduleSemanticTokensRefresh");
+  });
+
+  test("parse errors preserve last good full semantic token response", () => {
+    const source = readFileSync("server/src/features/navigationDocumentFeatures.ts", "utf8");
+
+    expect(source).toContain("data.length === 0");
+    expect(source).toContain("hasParseError(doc.getText(), uri)");
+    expect(source).toContain("return cached.data");
   });
 });
