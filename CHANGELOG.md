@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.20] — 2026-06-04
+
+### Fixed
+
+  - Semantic tokens are indexed immediately when Pike files open, so semantic
+    coloring is available on first paint instead of waiting for an edit.
+  - Semantic coloring is preserved while a document contains parse errors by
+    reusing the last good full semantic-token response instead of clearing all
+    token colors.
+  - File rename operation registration is restricted to `file:` Pike files,
+    avoiding folder-operation noise from clients evaluating Pike rename filters.
+
 ## [0.8.19] — 2026-06-04
 
 ### Fixed

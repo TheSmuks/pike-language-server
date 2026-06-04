@@ -6,6 +6,7 @@
  */
 
 import {
+  FileOperationPatternKind,
   TextDocumentSyncKind,
   SemanticTokensOptions,
   SemanticTokensRegistrationOptions,
@@ -56,8 +57,20 @@ function buildWorkspaceFileOperations(): object {
     fileOperations: {
       didRename: {
         filters: [
-          { pattern: { glob: '**/*.pike' } },
-          { pattern: { glob: '**/*.pmod' } },
+          {
+            scheme: "file",
+            pattern: {
+              glob: '**/*.pike',
+              matches: FileOperationPatternKind.file,
+            },
+          },
+          {
+            scheme: "file",
+            pattern: {
+              glob: '**/*.pmod',
+              matches: FileOperationPatternKind.file,
+            },
+          },
         ],
       },
     },

@@ -148,15 +148,6 @@ function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
   }, 50);
 }
 
-function scheduleOpenedDocumentSemanticTokensRefresh(ctx: ServerContext): void {
-  // The first VSCode request can happen before the LSP server has parsed the
-  // just-opened document. Send a small refresh burst after open/indexing so the
-  // editor re-requests tokens without requiring a user edit. The requests are
-  // cheap; VSCode coalesces repaint work, and failures are logged but harmless.
-  for (const delayMs of [50, 250, 1000]) {
-    setTimeout(() => requestSemanticTokensRefresh(ctx), delayMs);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Implementation
@@ -191,11 +182,40 @@ async function handleOpenedOrChangedContent(
   scheduleSemanticTokensRefresh(ctx);
 }
 
+async function indexOpenedDocumentFast(
+  ctx: ServerContext,
+  doc: TextDocument,
+): Promise<number> {
+  const content = validateDocumentContent(ctx.connection, doc);
+  if (content === null) return 0;
+
+  const tree = parse(content, doc.uri);
+  const invalidated = ctx.index.invalidateWithDependents(doc.uri);
+  ctx.index.upsertBackgroundFile(doc.uri, doc.version, tree, content);
+  const reWired = ctx.index.rewireDependents(doc.uri);
+  return invalidated.length + reWired.length;
+}
+
 async function handleDidOpen(
   ctx: ServerContext,
-  _doc: TextDocument,
+  doc: TextDocument,
 ): Promise<void> {
-  scheduleOpenedDocumentSemanticTokensRefresh(ctx);
+  if (!isParserReady()) {
+    queuePendingDocument(ctx, doc);
+    return;
+  }
+
+  try {
+    const invalidatedCount = await indexOpenedDocumentFast(ctx, doc);
+    if (invalidatedCount > 1) {
+      logInfo(ctx.connection, `Invalidated ${invalidatedCount} files (open ${doc.uri})`);
+    }
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.Parse, `onDidOpen(${doc.uri})`, err);
+    return;
+  }
+
+  scheduleSemanticTokensRefresh(ctx);
 }
 
 async function handleDidChangeContent(
