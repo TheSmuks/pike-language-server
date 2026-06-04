@@ -40,6 +40,11 @@ export interface BackgroundIndexOptions {
   batchSize?: number;
   /** Token to cancel background indexing between batches. */
   cancellationToken?: CancellationToken;
+  /**
+   * Called after each file is inserted into the index. Callers must debounce
+   * UI refresh work so workspace scans remain O(batches), not O(files).
+   */
+  onFileIndexed?: (uri: string) => void;
 }
 
 /** Parsed file ready for insertion into the index. */
@@ -173,9 +178,11 @@ function upsertParsedBatch(
   parsed: (ParsedFile | null)[],
   index: WorkspaceIndex,
   connection: Connection,
-): { indexed: number; errors: number } {
+  onFileIndexed?: (uri: string) => void,
+): { indexed: number; errors: number; uris: string[] } {
   let indexed = 0;
   let errors = 0;
+  const uris: string[] = [];
 
   for (const file of parsed) {
     if (!file || !file.tree) continue;
@@ -187,6 +194,8 @@ function upsertParsedBatch(
         file.tree,
         file.content,
       );
+      uris.push(file.uri);
+      onFileIndexed?.(file.uri);
     } catch (err) {
       errors++;
       logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:upsertBackgroundFile(${file.filepath})`, err);
@@ -196,7 +205,7 @@ function upsertParsedBatch(
     file.tree.delete();
     indexed++;
   }
-  return { indexed, errors };
+  return { indexed, errors, uris };
 }
 
 /**
@@ -212,6 +221,7 @@ async function processBatches(
   progressToken: string | number | undefined,
   totalFiles: number,
   cancellationToken?: CancellationToken,
+  onFileIndexed?: (uri: string) => void,
 ): Promise<{ indexed: number; errors: number; cancelled: boolean }> {
   let indexed = 0;
   let errors = 0;
@@ -234,7 +244,7 @@ async function processBatches(
 
     // Phase 2: Insert sequentially (shared mutable state, now synchronous)
     startSpan("batchUpsert");
-    const result = upsertParsedBatch(parsed, index, connection);
+    const result = upsertParsedBatch(parsed, index, connection, onFileIndexed);
     stopSpan("batchUpsert");
     indexed += result.indexed;
     errors += result.errors;
@@ -264,6 +274,7 @@ export async function indexWorkspaceFiles(
 
   const { connection, index, workspaceRoot } = options;
   const batchSize = options.batchSize ?? BATCH_SIZE;
+  const onFileIndexed = options.onFileIndexed;
 
   if (!workspaceRoot) {
     logInfo(connection, "no workspace root, skipping background indexing");
@@ -294,6 +305,7 @@ export async function indexWorkspaceFiles(
   const { indexed, errors } = await processBatches(
     connection, index, pending, batchSize, progressToken, files.length,
     options.cancellationToken,
+    onFileIndexed,
   );
 
   reportProgressDone(connection, progressToken, indexed, errors);

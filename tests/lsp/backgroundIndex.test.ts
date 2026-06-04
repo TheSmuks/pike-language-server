@@ -6,6 +6,10 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createTestServer, type TestServer } from "./helpers";
+import { initParser } from "../../server/src/parser";
+import { indexWorkspaceFiles } from "../../server/src/features/backgroundIndex";
+import { WorkspaceIndex } from "../../server/src/features/workspaceIndex";
+import type { Connection } from "vscode-languageserver/node";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -14,6 +18,8 @@ let server: TestServer;
 let tempDir: string;
 
 beforeAll(async () => {
+  await initParser();
+
   // Create temp directory with .pike files
   tempDir = mkdtempSync(join(tmpdir(), "pike-lsp-bg-index-"));
 
@@ -39,6 +45,20 @@ afterAll(async () => {
   await server.teardown();
   rmSync(tempDir, { recursive: true, force: true });
 });
+
+function createSilentConnection(): Connection {
+  return {
+    sendRequest: async () => { throw new Error("progress unsupported"); },
+    sendProgress: () => undefined,
+    sendNotification: () => undefined,
+    console: {
+      error: () => undefined,
+      warn: () => undefined,
+      log: () => undefined,
+      info: () => undefined,
+    },
+  } as unknown as Connection;
+}
 
 describe("US-021: Background workspace indexing", () => {
   test("background indexing populates workspace index from disk files", async () => {
@@ -107,5 +127,30 @@ describe("US-021: Background workspace indexing", () => {
     expect(symbols).toBeDefined();
     expect(highlights).toBeDefined();
     expect(docSymbols).toBeDefined();
+  });
+
+  test("onFileIndexed observes each indexed file for dependent refresh", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pike-lsp-bg-callback-"));
+    try {
+      writeFileSync(join(root, "base.pike"), "class Base { int value; }\n");
+      writeFileSync(join(root, "child.pike"), "inherit \"base.pike\";\n");
+
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      const indexedUris: string[] = [];
+
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        batchSize: 1,
+        onFileIndexed: (uri) => indexedUris.push(uri),
+      });
+
+      expect(indexedUris.length).toBe(2);
+      expect(indexedUris.some(uri => uri.endsWith("base.pike"))).toBe(true);
+      expect(indexedUris.some(uri => uri.endsWith("child.pike"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

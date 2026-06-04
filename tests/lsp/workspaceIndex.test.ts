@@ -149,28 +149,45 @@ describe("WorkspaceIndex — invalidation", () => {
   test("invalidateWithDependents invalidates self and dependents", async () => {
     index.clear();
 
-    // Dependency: B inherits from A, so B depends on A
     const contentA = readCorpus("cross-inherit-simple-a.pike");
     const treeA = parse(contentA);
-    await index.upsertFile(corpusPath("cross-inherit-simple-a.pike"), 1, treeA, contentA, ModificationSource.DidOpen);
+    const uriA = corpusPath("cross-inherit-simple-a.pike");
+    await index.upsertFile(uriA, 1, treeA, contentA, ModificationSource.DidOpen);
 
     const contentB = readCorpus("cross-inherit-simple-b.pike");
     const treeB = parse(contentB);
-    await index.upsertFile(corpusPath("cross-inherit-simple-b.pike"), 1, treeB, contentB, ModificationSource.DidOpen);
-
-    const uriA = corpusPath("cross-inherit-simple-a.pike");
     const uriB = corpusPath("cross-inherit-simple-b.pike");
+    await index.upsertFile(uriB, 1, treeB, contentB, ModificationSource.DidOpen);
 
-    // Both have valid symbol tables
     expect(index.getSymbolTable(uriA)).not.toBeNull();
     expect(index.getSymbolTable(uriB)).not.toBeNull();
 
-    // Invalidate A — B depends on A, so B should also be invalidated
     const invalidated = index.invalidateWithDependents(uriA);
 
     expect(invalidated).toContain(uriA);
     expect(invalidated).toContain(uriB);
     expect(index.getSymbolTable(uriA)).toBeNull();
+    expect(index.getSymbolTable(uriB)).toBeNull();
+  });
+
+  test("rewireDependents invalidates previously-built dependents", async () => {
+    index.clear();
+
+    const contentA = readCorpus("cross-inherit-simple-a.pike");
+    const treeA = parse(contentA);
+    const uriA = corpusPath("cross-inherit-simple-a.pike");
+    await index.upsertFile(uriA, 1, treeA, contentA, ModificationSource.DidOpen);
+
+    const contentB = readCorpus("cross-inherit-simple-b.pike");
+    const treeB = parse(contentB);
+    const uriB = corpusPath("cross-inherit-simple-b.pike");
+    await index.upsertFile(uriB, 1, treeB, contentB, ModificationSource.DidOpen);
+
+    expect(index.getSymbolTable(uriB)).not.toBeNull();
+
+    const reWired = index.rewireDependents(uriA);
+
+    expect(reWired).toContain(uriB);
     expect(index.getSymbolTable(uriB)).toBeNull();
   });
 });

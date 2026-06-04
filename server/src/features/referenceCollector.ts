@@ -127,14 +127,51 @@ function collectIdentifierRef(node: Node, state: BuildState): void {
 
   const name = nameNode.text;
   const declId = resolveName(name, node, state);
+  const kind = isCallTargetIdentifier(node) ? 'call' : 'identifier';
 
   state.references.push({
     name,
     loc: toLocUtf16(nameNode.startPosition, state.lines, state.offsetMap),
-    kind: 'identifier',
+    kind,
     resolvesTo: declId,
     confidence: declId !== null ? 'high' : 'low',
   });
+}
+
+/**
+ * Return true when an identifier_expr is the callee in `name(...)`.
+ *
+ * tree-sitter-pike represents calls as a postfix_expr with the callee in the
+ * first child and an argument_list later in the same postfix_expr. Checking the
+ * first-child spine keeps ordinary arguments (`write(arglist)`) as identifiers
+ * while classifying the unresolved callee (`write`) as a function-shaped token.
+ */
+function isCallTargetIdentifier(node: Node): boolean {
+  let callee: Node = node;
+  while (callee.parent && isTransparentCalleeWrapper(callee.parent, callee)) {
+    callee = callee.parent;
+  }
+
+  const call = callee.parent;
+  if (!call || call.type !== 'postfix_expr') return false;
+  const firstChild = call.child(0);
+  if (!firstChild || !sameNodeRange(firstChild, callee)) return false;
+  return call.children.some(child => child.type === 'argument_list');
+}
+
+function isTransparentCalleeWrapper(parent: Node, child: Node): boolean {
+  if (parent.type !== 'primary_expr' && parent.type !== 'postfix_expr') return false;
+  if (parent.type === 'postfix_expr' && parent.childCount !== 1) return false;
+  const firstChild = parent.child(0);
+  if (!firstChild || !sameNodeRange(firstChild, child)) return false;
+  return !parent.children.some(node => node.type === 'argument_list');
+}
+
+function sameNodeRange(a: Node, b: Node): boolean {
+  return a.startPosition.row === b.startPosition.row &&
+    a.startPosition.column === b.startPosition.column &&
+    a.endPosition.row === b.endPosition.row &&
+    a.endPosition.column === b.endPosition.column;
 }
 
 function collectScopeRef(node: Node, state: BuildState): void {

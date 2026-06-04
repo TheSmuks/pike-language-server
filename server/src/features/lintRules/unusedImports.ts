@@ -20,7 +20,6 @@
 
 import type { Tree } from "web-tree-sitter";
 import type { Diagnostic } from "vscode-languageserver-types";
-import { DiagnosticSeverity } from "vscode-languageserver-types";
 import type { SymbolTable } from "../symbolTable";
 
 /** Diagnostic code for unused import. */
@@ -42,64 +41,14 @@ export function detectUnusedImports(
   table: SymbolTable,
   source: string,
 ): Diagnostic[] {
-  const diagnostics: Diagnostic[] = [];
+  void tree;
+  void table;
+  void source;
 
-  // Collect import declarations only — inherit is excluded because inherited
-  // members are used through implicit scope access (no module prefix needed).
-  const imports = table.declarations.filter(
-    d => d.kind === "import",
-  );
-
-  if (imports.length === 0) return diagnostics;
-
-  // Use the provided source text for fast string scanning
-
-  for (const decl of imports) {
-    // The name of the imported module (e.g., "Stdio", "Animal")
-    const name = decl.alias || decl.name;
-
-    // Count references: the declaration itself, plus any usage.
-    // A simple approach: check if the name appears more than once in the source
-    // (the declaration counts as one, any usage counts as additional).
-    const occurrences = countOccurrences(source, name);
-
-    // If the name only appears once (the declaration itself), it's unused
-    if (occurrences <= 1) {
-      // Double-check with the symbol table references
-      const refs = table.references.filter(r => r.name === name);
-      if (refs.length === 0) {
-        diagnostics.push({
-          severity: DiagnosticSeverity.Hint,
-          range: decl.nameRange ?? decl.range,
-          message: `Imported module '${name}' is never used`,
-          source: "pike-lint",
-          code: CODE_UNUSED_IMPORT,
-        });
-      }
-    }
-  }
-
-  return diagnostics;
-}
-
-/**
- * Count occurrences of a word in source text.
- * Uses word-boundary-aware matching to avoid false positives
- * (e.g., "Cat" shouldn't match "Category").
- */
-function countOccurrences(source: string, word: string): number {
-  let count = 0;
-  const pattern = new RegExp(`\\b${escapeRegex(word)}\\b`, "g");
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(source)) !== null) {
-    count++;
-    // Safety limit to prevent infinite loops on pathological input
-    if (count > 1000) break;
-  }
-  return count;
-}
-
-/** Escape special regex characters in a string. */
-function escapeRegex(str: string): string {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Imports are intentionally excluded. Pike imports expose names through
+  // implicit scope access, so `import Stdio; write("x");` uses Stdio even
+  // though the literal module token appears only in the import declaration.
+  // Precise unused-import detection needs resolved exported symbols; leave it
+  // to Pike diagnostics until the LSP has that analysis.
+  return [];
 }
