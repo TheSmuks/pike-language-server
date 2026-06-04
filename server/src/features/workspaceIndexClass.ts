@@ -4,6 +4,7 @@
  */
 
 import { ModuleResolver, detectPikePaths, type PikePaths, type PikePathOverrides } from "./moduleResolver";
+import { rewireDependents as rewireDependentsFn } from "./dependentsInvalidator";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
 import { pathToUri, uriToPath as uriToPathUtil } from "../util/uri";
@@ -361,6 +362,12 @@ export class WorkspaceIndex {
   }
 
   isStale(uri: string): boolean { return this.files.get(normUri(uri))?.stale ?? false; }
+
+  rewireDependents(uri: string): string[] {
+    return rewireDependentsFn(this, normUri(uri));
+  }
+
+  hasFile(uri: string): boolean { return this.files.has(uri); }
 
   clear(): void {
     this.files.clear();

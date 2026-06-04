@@ -37,7 +37,7 @@ afterAll(() => {
 function parseAndBuild(src: string): SymbolTable {
   const tree = parser.parse(src);
   assert(tree, "Parse failed");
-  return buildSymbolTable(tree, "file:///test.pike", 1);
+  return buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 }
 
 function assert(condition: unknown, msg: string): asserts condition {
@@ -251,6 +251,59 @@ describe("produceSemanticTokens", () => {
     expect(memberToken!.modifiers).toBe(0);
   });
 
+  test("classifies screenshot-style identifiers by syntactic role", () => {
+    const src = [
+      "void f(object arglist, Environment env) {",
+      "  string local = arglist->car->to_string();",
+      "  write(local);",
+      "  env.extend(arglist->car);",
+      "  make_symbol(arglist->car->is_string);",
+      "}",
+    ].join("\n");
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    expect(table.references).toContainEqual(expect.objectContaining({
+      name: "write",
+      kind: "call",
+      loc: { line: 2, character: 2 },
+    }));
+    expect(table.references).toContainEqual(expect.objectContaining({
+      name: "env",
+      kind: "identifier",
+      loc: { line: 3, character: 2 },
+    }));
+    expect(table.references).toContainEqual(expect.objectContaining({
+      name: "car",
+      kind: "arrow_access",
+      loc: { line: 4, character: 23 },
+    }));
+
+    const arglistDeclToken = findToken(tokens, 0, 14);
+    expect(arglistDeclToken).toBeDefined();
+    expect(arglistDeclToken!.typeId).toBe(6); // parameter declaration
+
+    const arglistUseToken = findToken(tokens, 1, 17);
+    expect(arglistUseToken).toBeDefined();
+    expect(arglistUseToken!.typeId).toBe(6); // parameter use
+
+    const carArrowToken = findToken(tokens, 1, 26);
+    expect(carArrowToken).toBeDefined();
+    expect(carArrowToken!.typeId).toBe(METHOD_TYPE_ID); // -> member
+
+    const extendDotToken = findToken(tokens, 3, 6);
+    expect(extendDotToken).toBeDefined();
+    expect(extendDotToken!.typeId).toBe(METHOD_TYPE_ID); // . member call
+
+    const writeCallToken = findToken(tokens, 2, 2);
+    expect(writeCallToken).toBeDefined();
+    expect(writeCallToken!.typeId).toBe(3); // unresolved call target
+
+    const makeSymbolCallToken = findToken(tokens, 4, 2);
+    expect(makeSymbolCallToken).toBeDefined();
+    expect(makeSymbolCallToken!.typeId).toBe(3); // unresolved call target
+  });
+
   test("produces tokens for inherit declarations as namespace", () => {
     const src = [
       "class Animal {",
@@ -402,6 +455,7 @@ describe("deltaEncodeTokens", () => {
 // ---------------------------------------------------------------------------
 // LSP protocol tests — textDocument/semanticTokens/full (US-014)
 // ---------------------------------------------------------------------------
+
 
 
 describe("US-014: semanticTokens/full LSP protocol", () => {

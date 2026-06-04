@@ -462,20 +462,27 @@ int main() {
     expect(diags.length).toBe(0);
   });
 
-  test("flags unused import", () => {
+  test("does not flag import (implicit scope, same as inherit)", () => {
+    // Imports are excluded from the unused check just like inherits.
+    // Pike's `import Foo;` brings names into scope without requiring the
+    // `Foo.` prefix. Detecting whether imported names are actually used
+    // requires cross-file type analysis (same problem as inherit).
     const src = `import Stdio;
 
 int main() {
+    write("hello");
     return 1;
 }`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, src, 1);
     const diags = detectUnusedImports(tree, table, src);
-    expect(diags.length).toBe(1);
-    expect(diags[0].code).toBe(CODE_UNUSED_IMPORT);
+    // Stdio is NOT flagged: write() is used but Stdio only appears once
+    // (the import declaration). This is a false positive if we count
+    // occurrences naively. Import is excluded like inherit.
+    expect(diags.length).toBe(0);
   });
 
-  test("does not flag used import", () => {
+  test("does not flag used import (prefixed usage)", () => {
     const src = `import Stdio;
 
 int main() {

@@ -22,6 +22,10 @@ export function registerDocumentHandlers(
   documents: TextDocuments<TextDocument>,
   ctx: ServerContext,
 ): void {
+  documents.onDidOpen(async (event) => {
+    await handleDidOpen(ctx, event.document);
+  });
+
   documents.onDidChangeContent(async (event) => {
     await handleDidChangeContent(ctx, event.document);
   });
@@ -82,21 +86,24 @@ async function parseAndIndexDocument(
   ctx: ServerContext,
   doc: TextDocument,
   content: string,
+  source: ModificationSource,
 ): Promise<number> {
-  const tree = parse(content, doc.uri);
-  const invalidated = ctx.index.invalidateWithDependents(doc.uri);
-  const promise = ctx.index.upsertFile(
-    doc.uri, doc.version, tree, content, ModificationSource.DidChange,
-  );
+  const promise = (async () => {
+    const tree = parse(content, doc.uri);
+    const invalidated = ctx.index.invalidateWithDependents(doc.uri);
+    await ctx.index.upsertFile(doc.uri, doc.version, tree, content, source);
+    const reWired = ctx.index.rewireDependents(doc.uri);
+    return invalidated.length + reWired.length;
+  })();
+
   ctx.upsertInFlight.set(doc.uri, promise);
   try {
-    await promise;
+    return await promise;
   } finally {
     if (ctx.upsertInFlight.get(doc.uri) === promise) {
       ctx.upsertInFlight.delete(doc.uri);
     }
   }
-  return invalidated.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -120,22 +127,45 @@ function triggerDiagnostics(ctx: ServerContext, uri: string): void {
 // Semantic tokens refresh scheduler
 // ---------------------------------------------------------------------------
 
+function requestSemanticTokensRefresh(ctx: ServerContext): void {
+  try {
+    const refreshResult = ctx.connection.languages.semanticTokens.refresh() as unknown;
+    if (refreshResult && typeof (refreshResult as Promise<void>).catch === "function") {
+      void (refreshResult as Promise<void>).catch((err: unknown) => {
+        logError(ctx.connection, ErrorCategory.System, "semanticTokens.refresh", err);
+      });
+    }
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.System, "semanticTokens.refresh", err);
+  }
+}
+
 function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
-  if (!ctx.clientSupportsSemanticTokensRefresh) return;
   if (ctx.semanticTokensRefreshTimer) return;
   ctx.semanticTokensRefreshTimer = setTimeout(() => {
     ctx.semanticTokensRefreshTimer = undefined;
-    ctx.connection.languages.semanticTokens.refresh();
+    requestSemanticTokensRefresh(ctx);
   }, 50);
+}
+
+function scheduleOpenedDocumentSemanticTokensRefresh(ctx: ServerContext): void {
+  // The first VSCode request can happen before the LSP server has parsed the
+  // just-opened document. Send a small refresh burst after open/indexing so the
+  // editor re-requests tokens without requiring a user edit. The requests are
+  // cheap; VSCode coalesces repaint work, and failures are logged but harmless.
+  for (const delayMs of [50, 250, 1000]) {
+    setTimeout(() => requestSemanticTokensRefresh(ctx), delayMs);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
-async function handleDidChangeContent(
+async function handleOpenedOrChangedContent(
   ctx: ServerContext,
   doc: TextDocument,
+  source: ModificationSource,
 ): Promise<void> {
   if (!isParserReady()) {
     queuePendingDocument(ctx, doc);
@@ -147,7 +177,7 @@ async function handleDidChangeContent(
 
   let invalidatedCount: number;
   try {
-    invalidatedCount = await parseAndIndexDocument(ctx, doc, content);
+    invalidatedCount = await parseAndIndexDocument(ctx, doc, content, source);
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, `onDidChangeContent(${doc.uri})`, err);
     return;
@@ -159,6 +189,20 @@ async function handleDidChangeContent(
 
   triggerDiagnostics(ctx, doc.uri);
   scheduleSemanticTokensRefresh(ctx);
+}
+
+async function handleDidOpen(
+  ctx: ServerContext,
+  _doc: TextDocument,
+): Promise<void> {
+  scheduleOpenedDocumentSemanticTokensRefresh(ctx);
+}
+
+async function handleDidChangeContent(
+  ctx: ServerContext,
+  doc: TextDocument,
+): Promise<void> {
+  await handleOpenedOrChangedContent(ctx, doc, ModificationSource.DidChange);
 }
 
 function handleDidClose(

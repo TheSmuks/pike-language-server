@@ -28,6 +28,7 @@ import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
 import { hashContent } from "./features/cacheHash";
+import { createIndexWarmRefresh } from "./features/indexWarmRefresh";
 
 // ---------------------------------------------------------------------------
 // Cache restore + refresh (M2: two-phase startup)
@@ -152,18 +153,6 @@ export interface InitializedContext {
 // Post-initialization handler (registered via connection.onInitialized)
 // ---------------------------------------------------------------------------
 
-export interface InitializedContext {
-  connection: Connection;
-  documents: TextDocuments<TextDocument>;
-  index: WorkspaceIndex;
-  worker: PikeWorker;
-  clientSupportsWatchedFiles: boolean;
-  backgroundIndexEnabled: boolean;
-  backgroundIndexBatchSize: number;
-  backgroundIndexCts?: import("vscode-languageserver-protocol").CancellationTokenSource;
-  memoryTimer?: ReturnType<typeof setInterval>;
-}
-
 async function initParserStep(connection: Connection): Promise<void> {
   try {
     logInfo(connection, "[init] step 7a: initializing tree-sitter parser");
@@ -264,6 +253,15 @@ function startBackgroundIndexing(
     return;
   }
   ctx.backgroundIndexCts = new CancellationTokenSource();
+
+  const refresh = createIndexWarmRefresh({
+    connection,
+    documents: ctx.documents,
+    index,
+    clientSupportsSemanticTokensRefresh: ctx.clientSupportsSemanticTokensRefresh,
+    diagnosticManager: ctx.diagnosticManager,
+  });
+
   logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
   indexWorkspaceFiles({
     connection,
@@ -271,6 +269,7 @@ function startBackgroundIndexing(
     workspaceRoot: index.workspaceRoot,
     batchSize: backgroundIndexBatchSize,
     cancellationToken: ctx.backgroundIndexCts.token,
+    onFileIndexed: refresh.onFileIndexed,
   }).then(() => {
     logInfo(connection, "[init] step 7f: background indexing complete");
   }).catch((err) => {
