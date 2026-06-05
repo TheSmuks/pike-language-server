@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.24] — 2026-06-05
+
 ### Fixed
 
   - Local variable declarations once again emit the `mutable` semantic token
