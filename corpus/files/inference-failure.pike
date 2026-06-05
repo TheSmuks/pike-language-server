@@ -7,9 +7,9 @@
 // Function returning mixed — no type info for inference
 mixed get_unknown() {
   if (random(2))
-  return "string";
+    return "string";
   else
-  return 42;
+    return 42;
 }
 
 // Function with no explicit return type

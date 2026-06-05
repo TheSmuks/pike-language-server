@@ -33,8 +33,8 @@ int apply_fn(function(int:int) f, int val) {
 
 // Compound generic: mapping from string to function
 mapping(string:function(int:int)) ops = ([
-"double": lambda (int x) { return x * 2; },
-"negate": lambda (int x) { return -x; },
+    "double": lambda (int x) { return x * 2; },
+    "negate": lambda (int x) { return -x; },
 ]);
 
 int main() {

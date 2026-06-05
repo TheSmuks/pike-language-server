@@ -29,10 +29,10 @@ enum TokenKind {
 
 string color_name(Color c) {
   switch (c) {
-    case RED: return "red";
-    case GREEN: return "green";
-    case BLUE: return "blue";
-    default: return "unknown";
+      case RED: return "red";
+      case GREEN: return "green";
+      case BLUE: return "blue";
+      default: return "unknown";
   }
 }
 
