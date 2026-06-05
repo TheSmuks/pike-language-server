@@ -1,6 +1,6 @@
 {
   "name": "pike-language-server",
-  "version": "0.8.22",
+  "version": "0.8.23",
   "activationEvents": [
     "onLanguage:pike"
   ],
