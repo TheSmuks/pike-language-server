@@ -24,6 +24,12 @@ jobs:
           case "$BRANCH_NAME" in
             main|master|develop) echo "Skipping protected branch: $BRANCH_NAME"; exit 0 ;;
           esac
+          REF_PATH="repos/${{ github.repository }}/git/ref/heads/$BRANCH_NAME"
+          if ! gh api "$REF_PATH" --jq '.ref' >/dev/null 2>&1; then
+            echo "Branch already absent: $BRANCH_NAME"
+            exit 0
+          fi
+
           gh api \
             --method DELETE \
             "repos/${{ github.repository }}/git/refs/heads/$BRANCH_NAME" \
