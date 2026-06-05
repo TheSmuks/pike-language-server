@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.25] — 2026-06-05
+
 ### Fixed
 
   - Chained member access (`a.b.c`, `obj->a->b`, mixed `a.b->c.d`) now
