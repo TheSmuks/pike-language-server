@@ -313,6 +313,101 @@ describe("produceSemanticTokens", () => {
     expect(memberToken!.modifiers).toBe(0);
   });
 
+  test("chained member access: each segment resolves to its immediate LHS (regression: Container.Something.Else)", () => {
+    // PR #111 (v0.8.24) fixed the `mutable` modifier regression but exposed
+    // a pre-existing latent bug in `extractLhsIdentifier`: it walked the LHS
+    // subtree via the *first* child recursively, returning the leftmost
+    // identifier in a postfix chain. For `Container.Something.Else`, the
+    // immediate LHS of `Else` is the nested postfix_expr
+    // `Container.Something` — the LHS *name* is `Something`, not `Container`.
+    // Returning `Container` for every access in the chain collapsed
+    // multi-segment coloring: only the leftmost segment's "LHS" was distinct,
+    // and the rest all aliased to it.
+    //
+    // The fix: walk via the *last* child, so the function returns the
+    // rightmost identifier of the LHS subtree (the member that the next
+    // operator will be applied to).
+    const src = "int main() { Container.Something.Else; return 0; }";
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    // Each segment of the chain must receive its own semantic token. The
+    // leftmost identifier (Container) is a plain reference; Something and
+    // Else are unresolved dot_access members and fall back to METHOD_TYPE_ID.
+    // The regression manifested as Something and Else both being emitted
+    // (correct shape) but with the same lhsName metadata — which doesn't
+    // affect token *type* but does affect type resolution downstream.
+    const containerRef = table.references.find(
+      (r) => r.name === "Container" && r.kind === "identifier",
+    );
+    const somethingRef = table.references.find(
+      (r) => r.name === "Something" && r.kind === "dot_access",
+    );
+    const elseRef = table.references.find(
+      (r) => r.name === "Else" && r.kind === "dot_access",
+    );
+    expect(containerRef).toBeDefined();
+    expect(somethingRef).toBeDefined();
+    expect(elseRef).toBeDefined();
+
+    // Something's LHS is Container.
+    expect(somethingRef!.lhsName).toBe("Container");
+    // Else's LHS is Something (the rightmost identifier of the nested
+    // postfix_expr `Container.Something`), NOT Container.
+    expect(elseRef!.lhsName).toBe("Something");
+
+    // Both Something and Else should be emitted as method-shaped tokens
+    // (unresolved member access fallback).
+    const somethingToken = findToken(tokens, 0, 23);
+    const elseToken = findToken(tokens, 0, 33);
+    expect(somethingToken).toBeDefined();
+    expect(somethingToken!.typeId).toBe(METHOD_TYPE_ID);
+    expect(elseToken).toBeDefined();
+    expect(elseToken!.typeId).toBe(METHOD_TYPE_ID);
+  });
+
+  test("chained arrow access: each segment resolves to its immediate LHS", () => {
+    // Same regression class as the dot-chain test, but with `->` operators.
+    // For `obj->a->b`, `a` should have lhsName=obj and `b` should have
+    // lhsName=a.
+    const src = "int main() { obj->a->b; return 0; }";
+    const table = parseAndBuild(src);
+
+    const aRef = table.references.find(
+      (r) => r.name === "a" && r.kind === "arrow_access",
+    );
+    const bRef = table.references.find(
+      (r) => r.name === "b" && r.kind === "arrow_access",
+    );
+    expect(aRef).toBeDefined();
+    expect(bRef).toBeDefined();
+    expect(aRef!.lhsName).toBe("obj");
+    expect(bRef!.lhsName).toBe("a");
+  });
+
+  test("chained mixed access (a.b->c.d): each segment resolves to its immediate LHS", () => {
+    // Mixed operators in one chain. Verifies that the rightmost-walk works
+    // regardless of whether the operators are `.` or `->`.
+    const src = "int main() { a.b->c.d; return 0; }";
+    const table = parseAndBuild(src);
+
+    const bRef = table.references.find(
+      (r) => r.name === "b" && r.kind === "dot_access",
+    );
+    const cRef = table.references.find(
+      (r) => r.name === "c" && r.kind === "arrow_access",
+    );
+    const dRef = table.references.find(
+      (r) => r.name === "d" && r.kind === "dot_access",
+    );
+    expect(bRef).toBeDefined();
+    expect(cRef).toBeDefined();
+    expect(dRef).toBeDefined();
+    expect(bRef!.lhsName).toBe("a");
+    expect(cRef!.lhsName).toBe("b");
+    expect(dRef!.lhsName).toBe("c");
+  });
+
   test("classifies screenshot-style identifiers by syntactic role", () => {
     const src = [
       "void f(object arglist, Environment env) {",

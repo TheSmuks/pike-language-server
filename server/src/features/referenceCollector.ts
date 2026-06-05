@@ -5,9 +5,8 @@
  * Extracted from symbolTable.ts (US-032/US-033).
  */
 import type { Node } from 'web-tree-sitter';
-import type { BuildState, Declaration } from './symbolTable';
-import { PRIMITIVE_TYPES } from './symbolTable';
-import { toLocUtf16, resolveTypeName } from './scope-helpers';
+import type { BuildState } from './symbolTable';
+import { toLocUtf16 } from './scope-helpers';
 import { lookupUtf16 } from '../util/offsetMap';
 import {
   findScopeForNode,
@@ -15,6 +14,7 @@ import {
   findEnclosingClassDecl,
   findDeclInScope,
 } from './scope-helpers';
+import { collectPostfixRef } from './postfixRefs';
 
 // ---------------------------------------------------------------------------
 // Reference collection and resolution
@@ -208,116 +208,9 @@ function collectThisRef(node: Node, state: BuildState): void {
   });
 }
 
-/**
- * Extract the leftmost identifier text from a postfix_expr chain.
- * For d->bark, the LHS postfix_expr contains [primary_expr [identifier_expr [identifier 'd']]].
- * Returns the identifier text, or undefined if not found.
- */
-function extractLhsIdentifier(lhsNode: Node | undefined): string | undefined {
-  if (!lhsNode) return undefined;
-  if (lhsNode.type === 'identifier') return lhsNode.text;
-  // Drill into first child recursively
-  if (lhsNode.childCount > 0) {
-    const child = lhsNode.child(0);
-    return child ? extractLhsIdentifier(child) : undefined;
-  }
-  return undefined;
-}
-
-function collectPostfixRef(node: Node, state: BuildState): void {
-  const children = node.children;
-
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-
-    const isArrowOp = child.type === '->' || child.type === '->?' || child.type === '?->';
-    const isDotOp = child.type === '.';
-    if (!isArrowOp && !isDotOp) continue;
-
-    const memberNode = children[i + 1];
-    if (!memberNode || (memberNode.type !== 'identifier' && memberNode.type !== 'magic_identifier')) continue;
-
-    const memberName = memberNode.text;
-    const lhsName = extractLhsIdentifier(children[i - 1]);
-    const kind = isArrowOp ? 'arrow_access' : 'dot_access';
-
-    const { resolvesTo, confidence } = resolvePostfixMember(lhsName, memberName, node, state);
-
-    state.references.push({
-      name: memberName,
-      loc: toLocUtf16(memberNode.startPosition, state.lines, state.offsetMap),
-      kind,
-      resolvesTo,
-      confidence,
-      lhsName,
-    });
-  }
-}
-
-/** Resolve a postfix member access to its declaration, if possible. */
-function resolvePostfixMember(
-  lhsName: string | undefined,
-  memberName: string,
-  node: Node,
-  state: BuildState,
-): { resolvesTo: number | null; confidence: 'high' | 'low' } {
-  if (!lhsName) return { resolvesTo: null, confidence: 'low' };
-
-  const lhsDeclId = findDeclInScope(lhsName, findScopeForNode(node, state) ?? -1, state);
-  if (lhsDeclId === null) return { resolvesTo: null, confidence: 'low' };
-
-  const lhsDecl = state.declMap.get(lhsDeclId);
-  if (!lhsDecl) return { resolvesTo: null, confidence: 'low' };
-
-  const typeName = resolveTypeName(lhsDecl);
-  if (!typeName || PRIMITIVE_TYPES.has(typeName)) return { resolvesTo: null, confidence: 'low' };
-
-  const typeClassDecl = state.declarations.find(
-    d => d.kind === 'class' && d.name === typeName,
-  );
-  if (!typeClassDecl) return { resolvesTo: null, confidence: 'low' };
-
-  return findMemberInClassScope(memberName, typeClassDecl, state);
-}
-
-/**
- * Search for a member in the class scope associated with the resolved type
- * declaration.  Uses range overlap to find the class body scope, matching
- * the pattern documented in architecture-gotchas.md: class declarations live
- * in FILE scope but class MEMBERS live in the CLASS scope whose range
- * overlaps the class declaration.
- */
-function findMemberInClassScope(
-  memberName: string,
-  typeClassDecl: Declaration,
-  state: BuildState,
-): { resolvesTo: number | null; confidence: 'high' | 'low' } {
-  // Find the class body scope whose range overlaps the class declaration.
-  // The class scope is a child of the scope containing the class declaration
-  // (typically file scope), and its range is contained within the declaration
-  // range.
-  for (const scope of state.scopes) {
-    if (scope.kind !== 'class') continue;
-    // The class body scope's parentId should be the class declaration's scopeId,
-    // and the scope's range should overlap with the class declaration's range.
-    if (scope.parentId === typeClassDecl.scopeId &&
-        scope.range.start.line >= typeClassDecl.range.start.line &&
-        scope.range.start.line <= typeClassDecl.range.end.line) {
-      for (const memberDeclId of scope.declarations) {
-        const memberDecl = state.declMap.get(memberDeclId);
-        if (memberDecl && memberDecl.name === memberName) {
-          return { resolvesTo: memberDeclId, confidence: 'high' };
-        }
-      }
-      // Also check inherited scopes for the member.
-      for (const inheritedId of scope.inheritedScopes) {
-        const match = findDeclInScope(memberName, inheritedId, state);
-        if (match !== null) return { resolvesTo: match, confidence: 'high' };
-      }
-    }
-  }
-  return { resolvesTo: null, confidence: 'low' };
-}
+// ---------------------------------------------------------------------------
+// Type references
+// ---------------------------------------------------------------------------
 
 function collectTypeRef(node: Node, state: BuildState): void {
   // Walk for id_type children which contain user-defined type references

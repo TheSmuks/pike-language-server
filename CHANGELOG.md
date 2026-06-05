@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Chained member access (`a.b.c`, `obj->a->b`, mixed `a.b->c.d`) now
+    records the *immediate* LHS of each access instead of the leftmost
+    identifier of the chain. Previously, the reference collector's
+    `extractLhsIdentifier` walked the LHS subtree via the first child
+    recursively, so for `Container.Something.Else` both `Something` and
+    `Else` had `lhsName=Container`. The fix walks via the last child,
+    so `Else` correctly has `lhsName=Something`. This restores
+    multi-segment chain coloring and makes downstream type resolution
+    see the right receiver for each access. Pre-existing latent bug
+    surfaced by the v0.8.24 mutable-modifier fix.
+
 ## [0.8.24] — 2026-06-05
 
 ### Fixed
