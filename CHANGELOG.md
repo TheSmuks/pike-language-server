@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.21] — 2026-06-05
+
+### Fixed
+
+  - Alt+Up/Alt+Down line moves now wait for LSP document sync before formatting
+    and run a stabilization pass, preserving Pike indentation when lines cross
+    block boundaries.
+  - Pike line-move commands are declared in both development and packaged VSCode
+    manifests so keybindings resolve consistently.
+
 ## [0.8.20] — 2026-06-04
 
 ### Fixed
