@@ -2,7 +2,7 @@
   "name": "pike-language-server",
   "displayName": "Pike Language Server",
   "description": "Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more",
-  "version": "0.8.20",
+  "version": "0.8.21",
   "publisher": "thesmuks",
   "engines": {
     "vscode": "^1.85.0"
@@ -95,6 +95,16 @@
         "editor.semanticHighlighting.enabled": true
       }
     },
+    "commands": [
+      {
+        "command": "pike.moveLinesUp",
+        "title": "Pike: Move Lines Up"
+      },
+      {
+        "command": "pike.moveLinesDown",
+        "title": "Pike: Move Lines Down"
+      }
+    ],
     "keybindings": [
       {
         "key": "alt+up",

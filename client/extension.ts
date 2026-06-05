@@ -33,6 +33,33 @@ let client: LanguageClient | undefined;
 /** Tracked FileSystemWatcher so it can be disposed on restart. */
 let fileWatcher: vscode.FileSystemWatcher | undefined;
 
+/**
+ * Yield to VSCode and vscode-languageclient after a text edit.
+ *
+ * Built-in line moves update the editor immediately, while LSP document sync is
+ * delivered through VSCode's event queue. Formatting in the same tick can race
+ * the server's didChange handler and format the stale pre-move document.
+ */
+function waitForDocumentSyncTurn(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Move selected lines, then format after the LSP has seen the moved text. */
+async function moveLinesThenFormat(editor: vscode.TextEditor, command: string): Promise<void> {
+  const beforeText = editor.document.getText();
+  await vscode.commands.executeCommand(command);
+  if (editor.document.getText() === beforeText) return;
+
+  await waitForDocumentSyncTurn();
+  await vscode.commands.executeCommand("editor.action.formatDocument");
+
+  // A second pass is intentional: the first request can still race didChange on
+  // slow extension hosts. One more event-loop turn lets the server process the
+  // move and the first formatting edit, so indentation stabilizes deterministically.
+  await waitForDocumentSyncTurn();
+  await vscode.commands.executeCommand("editor.action.formatDocument");
+}
+
 // ─── Observability ──────────────────────────────────────────────────────────
 
 /**
@@ -415,20 +442,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // produces wrong indentation when lines cross block boundaries.
   context.subscriptions.push(
     vscode.commands.registerTextEditorCommand("pike.moveLinesUp", async (editor) => {
-      const before = editor.document.getText();
-      await vscode.commands.executeCommand("editor.action.moveLinesUpAction");
-      if (editor.document.getText() !== before) {
-        await vscode.commands.executeCommand("editor.action.formatDocument");
-      }
+      await moveLinesThenFormat(editor, "editor.action.moveLinesUpAction");
     }),
   );
   context.subscriptions.push(
     vscode.commands.registerTextEditorCommand("pike.moveLinesDown", async (editor) => {
-      const before = editor.document.getText();
-      await vscode.commands.executeCommand("editor.action.moveLinesDownAction");
-      if (editor.document.getText() !== before) {
-        await vscode.commands.executeCommand("editor.action.formatDocument");
-      }
+      await moveLinesThenFormat(editor, "editor.action.moveLinesDownAction");
     }),
   );
 

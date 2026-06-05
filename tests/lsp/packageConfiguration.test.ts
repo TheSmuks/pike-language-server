@@ -40,6 +40,33 @@ describe("VSCode configuration contributions", () => {
     }
   });
 
+  test("declares Pike line-move commands for both keybinding manifests", () => {
+    const root = process.cwd();
+    const manifests = [
+      readJson(join(root, "package.json")),
+      readJson(join(root, "extension.package.json")),
+    ];
+
+    for (const manifest of manifests) {
+      const commands = manifest.contributes.commands ?? [];
+      const keybindings = manifest.contributes.keybindings ?? [];
+      const commandIds = commands.map((entry: any) => entry.command);
+
+      expect(commandIds).toContain("pike.moveLinesUp");
+      expect(commandIds).toContain("pike.moveLinesDown");
+      expect(keybindings).toContainEqual(expect.objectContaining({
+        key: "alt+up",
+        command: "pike.moveLinesUp",
+        when: "editorTextFocus && editorLangId == pike",
+      }));
+      expect(keybindings).toContainEqual(expect.objectContaining({
+        key: "alt+down",
+        command: "pike.moveLinesDown",
+        when: "editorTextFocus && editorLangId == pike",
+      }));
+    }
+  });
+
   test("maps every emitted semantic token type to TextMate fallback scopes", () => {
     const root = process.cwd();
     const manifests = [
