@@ -43,7 +43,7 @@ class Leaf {
 
   string info() {
     return sprintf("id=%d label=%s weight=%.2f",
-    get_id(), get_label(), weight);
+        get_id(), get_label(), weight);
   }
 }
 
