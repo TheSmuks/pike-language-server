@@ -31,4 +31,12 @@ describe("semantic tokens for opened files", () => {
     expect(source).toContain("hasParseError(doc.getText(), uri)");
     expect(source).toContain("return cached.data");
   });
+
+  test("semantic token requests wait for parser readiness on first open", () => {
+    const source = readFileSync("server/src/features/navigationDocumentFeatures.ts", "utf8");
+
+    expect(source).toContain("initParser");
+    expect(source).toContain("isParserReady");
+    expect(source).toContain("ensureParserReadyForSemanticTokens");
+  });
 });

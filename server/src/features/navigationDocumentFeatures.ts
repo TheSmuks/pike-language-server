@@ -13,7 +13,7 @@ import {
   DocumentHighlightKind,
 } from "vscode-languageserver/node";
 import type { NavigationContext } from "./navigationHandler";
-import { parse } from "../parser";
+import { initParser, isParserReady, parse } from "../parser";
 import { getDocumentSymbols } from "./documentSymbol";
 import {
   getDefinitionAt,
@@ -151,6 +151,12 @@ async function buildSemanticTokenData(
   }
   if (!doc) return [];
 
+  const parserReady = await ensureParserReadyForSemanticTokens(ctx);
+  if (!parserReady) {
+    if (!range && cached && cached.version === doc.version) return cached.data;
+    return [];
+  }
+
   const table = await ctx.getSymbolTable(uri);
   if (!table) {
     if (!range && cached && cached.version === doc.version) return cached.data;
@@ -170,8 +176,20 @@ async function buildSemanticTokenData(
   return data;
 }
 
+async function ensureParserReadyForSemanticTokens(ctx: NavigationContext): Promise<boolean> {
+  if (isParserReady()) return true;
+  try {
+    await initParser();
+    return isParserReady();
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.initParser", err);
+    return false;
+  }
+}
+
 function hasParseError(source: string, uri: string): boolean {
   try {
+    if (!isParserReady()) return false;
     return parse(source, uri).rootNode.hasError;
   } catch {
     return false;

@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.22] — 2026-06-05
+
+### Fixed
+
+  - Semantic token requests now wait for the tree-sitter parser to finish
+    initializing before answering first-open requests, preventing VSCode from
+    receiving an empty token payload that clears coloring as a file opens.
+
 ## [0.8.21] — 2026-06-05
 
 ### Fixed
