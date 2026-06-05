@@ -4,7 +4,7 @@
 
 **Full-featured language support for [Pike](https://pike.lysator.liu.se/) in Visual Studio Code.**
 
-[![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server) <!-- template-v0.8.22 -->
+[![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server) <!-- template-v0.8.23 -->
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
 
 | [Installation](#installation) · [Features](#features) · [Configuration](#configuration) · [Architecture](#architecture) · [Testing](#testing) · [Contributing](./CONTRIBUTING.md)

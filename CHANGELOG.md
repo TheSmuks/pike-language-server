@@ -8,11 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.23] — 2026-06-05
+
 ### Fixed
 
   - Formatter integration now uses `pike-fmt` 0.1.7, preserving indentation for
     split control-flow headers and nested `switch`/`case`/`default` bodies after
     line moves or custom formatting.
+  - Branch-cleanup CI now treats already-deleted feature branches as success,
+    avoiding noisy post-merge failures when squash merge deletes the branch first.
 
 ## [0.8.22] — 2026-06-05
 
