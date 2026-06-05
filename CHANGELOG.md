@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Local variable declarations once again emit the `mutable` semantic token
+    modifier (regression introduced in v0.8.13 by PR #90). Themes that style
+    `variable.mutable` distinctly (italic, different foreground) recover the
+    previous coloring for reassignable locals in `switch`/`case` bodies and
+    other scopes. Themes that don't style the modifier are unaffected because
+    the bit is additive and falls back to the base `variable` color.
+
 ## [0.8.23] — 2026-06-05
 
 ### Fixed
