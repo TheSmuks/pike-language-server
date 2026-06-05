@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Formatter integration now uses `pike-fmt` 0.1.7, preserving indentation for
+    split control-flow headers and nested `switch`/`case`/`default` bodies after
+    line moves or custom formatting.
+
 ## [0.8.22] — 2026-06-05
 
 ### Fixed
