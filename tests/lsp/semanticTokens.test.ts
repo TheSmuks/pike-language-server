@@ -121,6 +121,65 @@ describe("DeclKind to TokenType mapping", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Modifier emission
+// ---------------------------------------------------------------------------
+
+describe("tokenModifiersForDecl", () => {
+  test("variable declarations carry the mutable modifier (regression: PR #90)", () => {
+    // PR #90 (v0.8.13, commit 5ba5d76) removed the `mutable` modifier from
+    // variable declarations, citing a concern that the modifier has no
+    // common theme mapping. The modifier is additive — themes that don't
+    // define `variable.mutable` fall back to the bare `variable` color, so
+    // removing the bit only ever loses distinction (in themes that DO style
+    // it), it never gains it. The bit was originally added in PR #85 (v0.8.12)
+    // and must be present on reassignable local variables here.
+    const mods = tokenModifiersForDecl("variable");
+    expect(mods & (1 << 5)).toBeTruthy(); // mutable bit set
+  });
+
+  test("constant declarations do NOT carry the mutable modifier", () => {
+    const mods = tokenModifiersForDecl("constant");
+    expect(mods & (1 << 5)).toBeFalsy(); // mutable bit clear
+    expect(mods & (1 << 2)).toBeTruthy(); // readonly bit set
+  });
+
+  test("parameter declarations do NOT carry the mutable modifier", () => {
+    const mods = tokenModifiersForDecl("parameter");
+    expect(mods & (1 << 5)).toBeFalsy();
+  });
+
+  test("end-to-end: produceSemanticTokens emits mutable for case-body local variable", () => {
+    // The case-body local variable is the user-reported regression site.
+    // Verify bit 5 is set on the declaration, but not on a reference
+    // (references intentionally drop declaration/definition bits — see
+    // tokenModifiersForReference).
+    const src = [
+      "int main() {",
+      "  switch (1) {",
+      "    case 1: {",
+      "      int counter = 0;",
+      "      counter++;",
+      "      break;",
+      "    }",
+      "  }",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    // The declaration of `counter` lives at line 3, column 10
+    // (after "      int ").
+    const counterDecl = tokens.find(
+      (t) => t.line === 3 && t.character === 10 && (t.modifiers & (1 << 0)) !== 0,
+    );
+    expect(counterDecl).toBeDefined();
+    expect(counterDecl!.modifiers & (1 << 5)).toBeTruthy();
+    expect(counterDecl!.typeId).toBe(5); // 'variable'
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Token production from symbol table
 // ---------------------------------------------------------------------------
 
@@ -197,15 +256,18 @@ describe("produceSemanticTokens", () => {
     expect(countToken).toBeDefined();
     expect(countToken!.typeId).toBe(5); // variable
 
-    // Custom semantic modifiers with no common theme mapping can erase color
-    // in VSCode. Variables should use the standard variable token selector.
-    expect(countToken!.modifiers & (1 << 5)).toBeFalsy();
+    // The `mutable` modifier is emitted on reassignable local variables
+    // so themes that style `variable.mutable` distinctly (italic, different
+    // foreground) can tell them apart from constants/parameters. Themes
+    // that don't define the rule fall back to the bare `variable` color —
+    // the bit is additive, never subtractive.
+    expect(countToken!.modifiers & (1 << 5)).toBeTruthy(); // mutable bit set
 
     // 'name' at line 2, char 9
     const nameToken = findToken(tokens, 2, 9);
     expect(nameToken).toBeDefined();
     expect(nameToken!.typeId).toBe(5); // variable
-    expect(nameToken!.modifiers & (1 << 5)).toBeFalsy();
+    expect(nameToken!.modifiers & (1 << 5)).toBeTruthy(); // mutable bit set
   });
 
   test("produces tokens for resolved variable and function references", () => {
