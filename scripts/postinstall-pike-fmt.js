@@ -1,7 +1,7 @@
 /**
- * postinstall: Fix pike-fmt v0.1.5 packaging bug.
+ * postinstall: Ensure the bundled pike-fmt CLI can load web-tree-sitter.wasm.
  *
- * pike-fmt v0.1.5 bundles its CLI with esbuild, which inlines the
+ * pike-fmt bundles its CLI with esbuild, which inlines the
  * web-tree-sitter runtime JS. However, web-tree-sitter.wasm (the tree-sitter
  * parser framework WASM) is NOT included in the npm tarball.
  *
@@ -30,7 +30,7 @@ if (existsSync(actualWasm) && !existsSync(distWasm)) {
   const rel = "../../web-tree-sitter/web-tree-sitter.wasm";
   try {
     symlinkSync(rel, distWasm);
-    console.log("[postinstall] Symlinked web-tree-sitter.wasm for pike-fmt v0.1.5");
+    console.log("[postinstall] Symlinked web-tree-sitter.wasm for pike-fmt");
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
   }
