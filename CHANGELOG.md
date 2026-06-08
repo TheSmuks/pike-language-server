@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.26] — 2026-06-08
+
+### Fixed
+
+  - Semantic coloring no longer disappears a few seconds after opening a Pike
+    file when a delayed workspace/index refresh returns empty same-version
+    semantic token data. The server now preserves the last good same-version
+    full/range token cache instead of sending a destructive empty response.
+
 ## [0.8.25] — 2026-06-05
 
 ### Fixed
