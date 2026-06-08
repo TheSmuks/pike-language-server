@@ -14,6 +14,7 @@ import { PikeWorker } from "./features/pikeWorker";
 import { LRUCache } from "./util/lruCache";
 import type { PikeCacheEntry } from "./features/diagnosticManager";
 import type { SymbolTable } from "./features/symbolTable";
+import type { SemanticToken } from "./features/semanticTokens";
 import {
   loadStdlibAutodocIndex,
   loadPredefBuiltinIndex,
@@ -68,7 +69,7 @@ export interface ServerContext {
   /** Enables verbose internal telemetry logs for race/staleness debugging. */
   debugTelemetry: boolean;
   /** Last successful semantic token payload/version by URI (for transient-race fallback). */
-  semanticTokensCache: Map<string, { version: number; data: number[] }>;
+  semanticTokensCache: Map<string, { version: number; data: number[]; tokens: SemanticToken[] }>;
   /** Latest document version dropped while parser initialization was pending. */
   pendingParserDocuments: Map<string, TextDocument>;
   semanticTokensRefreshTimer?: ReturnType<typeof setTimeout>;
@@ -201,7 +202,7 @@ export function createServerContext(
     predefBuiltins,
     predefAutodoc,
     debugTelemetry: false,
-    semanticTokensCache: new Map<string, { version: number; data: number[] }>(),
+    semanticTokensCache: new Map<string, { version: number; data: number[]; tokens: SemanticToken[] }>(),
     pendingParserDocuments: new Map<string, TextDocument>(),
   };
 }

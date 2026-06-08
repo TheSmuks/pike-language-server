@@ -24,6 +24,7 @@ import {
   deltaEncodeTokens,
   getExternalLookup,
   sliceSemanticTokens,
+  type SemanticToken,
   type SemanticTokenRange,
 } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
@@ -128,7 +129,7 @@ async function handleSemanticTokensRange(
   return { data };
 }
 
-async function buildSemanticTokenData(
+export async function buildSemanticTokenData(
   ctx: NavigationContext,
   uri: string,
   token: CancellationToken,
@@ -139,9 +140,8 @@ async function buildSemanticTokenData(
   const cached = ctx.semanticTokensCache.get(uri);
 
   if (token.isCancellationRequested) {
-    if (!range && cached && docVersion !== undefined && cached.version === docVersion) {
-      return cached.data;
-    }
+    const fallback = getCachedSemanticTokenData(cached, docVersion, range);
+    if (fallback) return fallback;
     return [];
   }
 
@@ -153,27 +153,42 @@ async function buildSemanticTokenData(
 
   const parserReady = await ensureParserReadyForSemanticTokens(ctx);
   if (!parserReady) {
-    if (!range && cached && cached.version === doc.version) return cached.data;
+    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
+    if (fallback) return fallback;
     return [];
   }
 
   const table = await ctx.getSymbolTable(uri);
   if (!table) {
-    if (!range && cached && cached.version === doc.version) return cached.data;
+    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
+    if (fallback) return fallback;
     return [];
   }
 
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
-  if (!range && data.length === 0 && cached && hasParseError(doc.getText(), uri)) {
-    return cached.data;
+  if (data.length === 0) {
+    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
+    if (fallback) return fallback;
   }
-  if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data });
+  if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data, tokens });
   if (ctx.debugTelemetry) {
     logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length} range=${range ? "yes" : "no"}`);
   }
   return data;
+}
+
+function getCachedSemanticTokenData(
+  cached: { version: number; data: number[]; tokens: SemanticToken[] } | undefined,
+  docVersion: number | undefined,
+  range?: SemanticTokenRange,
+): number[] | null {
+  if (!cached) return null;
+  if (docVersion === undefined) return null;
+  if (cached.version !== docVersion) return null;
+  if (!range) return cached.data;
+  return deltaEncodeTokens(sliceSemanticTokens(cached.tokens, range));
 }
 
 async function ensureParserReadyForSemanticTokens(ctx: NavigationContext): Promise<boolean> {
@@ -183,15 +198,6 @@ async function ensureParserReadyForSemanticTokens(ctx: NavigationContext): Promi
     return isParserReady();
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.initParser", err);
-    return false;
-  }
-}
-
-function hasParseError(source: string, uri: string): boolean {
-  try {
-    if (!isParserReady()) return false;
-    return parse(source, uri).rootNode.hasError;
-  } catch {
     return false;
   }
 }
