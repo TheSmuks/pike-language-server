@@ -24,12 +24,12 @@ describe("semantic tokens for opened files", () => {
     expect(source).toContain("scheduleSemanticTokensRefresh");
   });
 
-  test("parse errors preserve last good full semantic token response", () => {
+  test("empty semantic token responses preserve last good full response", () => {
     const source = readFileSync("server/src/features/navigationDocumentFeatures.ts", "utf8");
 
     expect(source).toContain("data.length === 0");
-    expect(source).toContain("hasParseError(doc.getText(), uri)");
-    expect(source).toContain("return cached.data");
+    expect(source).toContain("getCachedSemanticTokenData(cached, doc.version, range)");
+    expect(source).toContain("return fallback");
   });
 
   test("semantic token requests wait for parser readiness on first open", () => {
