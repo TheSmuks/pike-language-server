@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.27] — 2026-06-11
+
+### Fixed
+
+  - Semantic token responses now reject symbol tables whose version is stale
+    relative to the latest open document, preventing delayed refresh races from
+    returning misaligned tokens that leave some identifiers uncolored.
+
 ## [0.8.26] — 2026-06-08
 
 ### Fixed

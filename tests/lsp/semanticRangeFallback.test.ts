@@ -89,4 +89,40 @@ describe("semantic token range fallback", () => {
     expect(data.length).toBeGreaterThan(0);
     expect(data).toEqual(deltaEncodeTokens(cachedTokens));
   });
+
+  test("does not return tokens from a table stale relative to the latest open document", async () => {
+    const uri = "file:///semantic-table-version-race.pike";
+    const sourceV1 = [
+      "int main() {",
+      "  string local = \"x\";",
+      "  write(local);",
+      "}",
+    ].join("\n");
+    const sourceV2 = [
+      "int main() {",
+      "    string local = \"x\";",
+      "    write(local);",
+      "}",
+    ].join("\n");
+    const docV1 = TextDocument.create(uri, "pike", 1, sourceV1);
+    const docV2 = TextDocument.create(uri, "pike", 2, sourceV2);
+    const staleTable = buildSymbolTable(parse(sourceV1, uri), uri, docV1.version, undefined, sourceV1);
+    let currentDoc = docV1;
+    const ctx = {
+      documents: { get: (requestedUri: string) => requestedUri === uri ? currentDoc : undefined },
+      semanticTokensCache: new Map(),
+      getSymbolTable: async () => {
+        currentDoc = docV2;
+        return staleTable;
+      },
+      predefBuiltins: {},
+      stdlibIndex: {},
+      debugTelemetry: false,
+      connection: {},
+    } as any;
+
+    const data = await buildSemanticTokenData(ctx, uri, CancellationToken.None);
+    expect(data).toEqual([]);
+    expect(ctx.semanticTokensCache.has(uri)).toBe(false);
+  });
 });

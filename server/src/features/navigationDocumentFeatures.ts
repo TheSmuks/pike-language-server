@@ -159,8 +159,10 @@ export async function buildSemanticTokenData(
   }
 
   const table = await ctx.getSymbolTable(uri);
-  if (!table) {
-    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
+  const currentDoc = ctx.documents.get(uri);
+  if (!currentDoc) return [];
+  if (!table || table.version !== currentDoc.version) {
+    const fallback = getCachedSemanticTokenData(cached, currentDoc.version, range);
     if (fallback) return fallback;
     return [];
   }
