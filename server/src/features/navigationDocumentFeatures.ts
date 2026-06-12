@@ -18,7 +18,9 @@ import { getDocumentSymbols } from "./documentSymbol";
 import {
   getDefinitionAt,
   getReferencesTo,
+  type SymbolTable,
 } from "./symbolTable";
+import { buildSymbolTable } from "./symbolTable";
 import {
   produceSemanticTokens,
   deltaEncodeTokens,
@@ -161,24 +163,60 @@ export async function buildSemanticTokenData(
   const table = await ctx.getSymbolTable(uri);
   const currentDoc = ctx.documents.get(uri);
   if (!currentDoc) return [];
-  if (!table || table.version !== currentDoc.version) {
+  if (!table) {
+    const fallback = getCachedSemanticTokenData(cached, currentDoc.version, range);
+    if (fallback) return fallback;
+    return buildDirectSemanticTokenData(ctx, uri, currentDoc, range);
+  }
+  if (table.version !== currentDoc.version) {
     const fallback = getCachedSemanticTokenData(cached, currentDoc.version, range);
     if (fallback) return fallback;
     return [];
   }
 
+  return encodeSemanticTokenData(ctx, uri, doc.version, table, cached, range);
+}
+
+function encodeSemanticTokenData(
+  ctx: NavigationContext,
+  uri: string,
+  docVersion: number,
+  table: SymbolTable,
+  cached: { version: number; data: number[]; tokens: SemanticToken[] } | undefined,
+  range?: SemanticTokenRange,
+): number[] {
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
   if (data.length === 0) {
-    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
+    const fallback = getCachedSemanticTokenData(cached, docVersion, range);
     if (fallback) return fallback;
   }
-  if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data, tokens });
+  if (!range) ctx.semanticTokensCache.set(uri, { version: docVersion, data, tokens });
   if (ctx.debugTelemetry) {
-    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${doc.version} tokens=${data.length} range=${range ? "yes" : "no"}`);
+    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${docVersion} tokens=${data.length} range=${range ? "yes" : "no"}`);
   }
   return data;
+}
+
+function buildDirectSemanticTokenData(
+  ctx: NavigationContext,
+  uri: string,
+  doc: { version: number; getText(): string },
+  range?: SemanticTokenRange,
+): number[] {
+  try {
+    const source = doc.getText();
+    const table = buildSymbolTable(parse(source, uri), uri, doc.version, undefined, source);
+    const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
+    const tokens = produceSemanticTokens(table, externalLookup);
+    const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
+    if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data, tokens });
+    return data;
+  } catch (err) {
+    logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.direct", err);
+    return [];
+  }
 }
 
 function getCachedSemanticTokenData(
