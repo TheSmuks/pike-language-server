@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.28] — 2026-06-12
+
 ### Fixed
 
   - Semantic tokens now self-heal on file re-open/file-switch races by building
