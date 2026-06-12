@@ -20,16 +20,16 @@
 
 **Purpose**: Establish resource-resilience scaffolding, fixtures, and ADR placeholders used by all stories.
 
-- [ ] T001 Verify and append missing Node/TypeScript ignore patterns in `.gitignore`
-- [ ] T002 [P] Create synthetic Pike workspace fixture generator in `tests/perf/syntheticWorkspace.ts`
-- [ ] T003 [P] Create shared resource-resilience LSP test helpers in `tests/lsp/resourceResilienceHelpers.ts`
-- [ ] T004 [P] Create Pike worker process test helpers in `tests/lsp/pikeWorkerProcessHelpers.ts`
-- [ ] T005 [P] Create cache fixture helpers for corrupt, duplicate, old-format, and superseded entries in `tests/lsp/persistentCacheFixtures.ts`
-- [ ] T006 [P] Add resource-resilience profiler counters for file reads, cache entry loads, demotions, hibernations, and worker restarts in `server/src/features/profiler.ts`
-- [ ] T007 [P] Add ADR stub for cache and memory resilience in `docs/decisions/0030-resource-resilient-cache-and-memory.md`
-- [ ] T008 [P] Add ADR stub for lazy indexing and dependency-map semantics in `docs/decisions/0031-lazy-indexing-and-dependency-map.md`
-- [ ] T009 [P] Add ADR stub for Pike worker heartbeat/watchdog lifecycle in `docs/decisions/0032-pike-worker-liveness.md`
-- [ ] T010 [P] Add ADR stub for idle hibernation without server self-exit in `docs/decisions/0033-idle-hibernation.md`
+- [X] T001 Verify and append missing Node/TypeScript ignore patterns in `.gitignore`
+- [X] T002 [P] Create synthetic Pike workspace fixture generator in `tests/perf/syntheticWorkspace.ts`
+- [X] T003 [P] Create shared resource-resilience LSP test helpers in `tests/lsp/resourceResilienceHelpers.ts`
+- [X] T004 [P] Create Pike worker process test helpers in `tests/lsp/pikeWorkerProcessHelpers.ts`
+- [X] T005 [P] Create cache fixture helpers for corrupt, duplicate, old-format, and superseded entries in `tests/lsp/persistentCacheFixtures.ts`
+- [X] T006 [P] Add resource-resilience profiler counters for file reads, cache entry loads, demotions, hibernations, and worker restarts in `server/src/features/profiler.ts`
+- [X] T007 [P] Add ADR stub for cache and memory resilience in `docs/decisions/0030-resource-resilient-cache-and-memory.md`
+- [X] T008 [P] Add ADR stub for lazy indexing and dependency-map semantics in `docs/decisions/0031-lazy-indexing-and-dependency-map.md`
+- [X] T009 [P] Add ADR stub for Pike worker heartbeat/watchdog lifecycle in `docs/decisions/0032-pike-worker-liveness.md`
+- [X] T010 [P] Add ADR stub for idle hibernation without server self-exit in `docs/decisions/0033-idle-hibernation.md`
 
 **Checkpoint**: Shared fixtures and documentation targets exist; RED tests can now be added story-by-story.
 
