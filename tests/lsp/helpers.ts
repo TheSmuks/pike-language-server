@@ -67,6 +67,8 @@ export function createSilentStream(): PassThrough {
 export interface TestServerOptions {
   /** Workspace root URI (e.g., file:///path/to/dir). Defaults to null. */
   rootUri?: string | null;
+  /** Optional handler for workspace/semanticTokens/refresh requests. */
+  semanticTokensRefreshHandler?: () => void;
 }
 
 export interface TestServer {
@@ -126,6 +128,10 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
   // handler, the JSON-RPC test client rejects the request and turns unrelated
   // tests red.
   client.onRequest("window/showMessageRequest", () => null);
+  client.onRequest("workspace/semanticTokens/refresh", () => {
+    options?.semanticTokensRefreshHandler?.();
+    return null;
+  });
   client.listen();
 
   // Perform LSP initialization handshake

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Semantic-token lifecycle races now return protocol errors (`ContentModified`
+    or `RequestCancelled`) instead of destructive empty token payloads, and
+    same-file typing no longer emits workspace semantic-token refresh requests.
+
 ## [0.8.28] — 2026-06-12
 
 ### Fixed
