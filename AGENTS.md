@@ -218,7 +218,7 @@
    218|## Template Version
    219|
    220|
-   221|This project was generated from `ai-project-template` version **0.8.29**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect.
+   221|This project was generated from `ai-project-template` version **0.8.30**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect.
    222|
 
 <!-- SPECKIT START -->
