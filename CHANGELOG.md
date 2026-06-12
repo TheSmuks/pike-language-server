@@ -8,6 +8,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+  - Resource resilience (ADR 0032–0033): memory-pressure handling demotes
+    non-essential index entries and enters degraded mode when the heap budget
+    is exceeded. The Pike worker uses a heartbeat/watchdog protocol with
+    exponential backoff to detect and recover from unresponsive or crashed
+    subprocesses. Idle sessions hibernate after a configurable timeout (no
+    open documents, no activity), stopping the worker and clearing caches to
+    reduce footprint on shared SSH hosts. Wake is lazy — the first request
+    after hibernation rehydrates the index; a full reindex only runs after
+    sustained activity.
+
+  - Resource-state notifications (`pike/resourceState`) now include a
+    `timestamp` field for client-side status-bar display.
+
+  - Lingering-session troubleshooting guide (`docs/lingering-remote-sessions.md`)
+    covering degraded mode, hibernation, worker crashes, and log output.
+
+  - Lazy indexing with dependency map (ADR 0031): default `openFiles` mode
+    indexes only open files and their bounded dependency closure, making
+    startup fast regardless of workspace size. Global features (workspace
+    symbol, references, rename, call/type hierarchy, implementation) prepare
+    the full index on-demand with `workDoneProgress` and cancellation support.
+    `full` and `auto` modes remain supported for immediate global features.
+
+  - Background and on-demand indexing batches now yield via `setImmediate`
+    between batches, keeping interactive requests (hover, completion,
+    diagnostics) responsive during full workspace scans.
+
+### Changed
+
+  - The persistent cache now self-heals on load: old-format entries are
+    upgraded from source-file mtime/size metadata (so unchanged files no
+    longer require a content read), and corrupt, duplicate, missing-source,
+    and superseded entries are dropped and pruned. After save, on-disk cache
+    file count equals the live entry count.
+
+  - Cache restore is bounded: entries load in fixed-size batches instead of a
+    single `Promise.all`, and an overflow path wipes and rebuilds when the
+    stored count vastly exceeds the expected live set, preventing startup OOM
+    against bloated historical caches (~20,000 entries).
+
+  - Pike worker request timeout now force-kills the underlying subprocess and
+    rejects pending work truthfully; the worker restarts on the next request
+    instead of leaving a wedged process as the only FIFO worker.
+
+  - Shutdown is deadline-bounded: the cache save observes a fixed deadline and
+    the Pike worker is always terminated before shutdown returns, so no orphan
+    Pike process survives even when the save is slow.
+
+  - Under degraded mode (memory pressure), global features that require new
+    candidate expansion (workspace symbol, references, rename, call/type
+    hierarchy, implementation) return an explicit "temporarily unavailable
+    under memory pressure" error rather than partial or empty success.
+
+  - The client status bar reflects resource state (indexing, degraded,
+    hibernating, hibernated, waking) non-modally, and the resource-state
+    notification handler is now re-registered after a settings-change restart.
+
 ## [0.8.29] — 2026-06-12
 
 ### Fixed

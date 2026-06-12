@@ -12,6 +12,8 @@ export type {
   FileEntry,
   WorkspaceIndexOptions,
   OnDemandIndexFn,
+  DependencyMap,
+  IndexEntryLifecycle,
 } from "./workspaceTypes";
 export { ModificationSource, ModificationSource as ModificationSourceValue } from "./workspaceTypes";
 export type { ResourceConfiguration, ResourceStateValue, ResourceStateNotification, IndexingMode, MemoryBudget, HibernationStateValue } from "./resourceTypes";

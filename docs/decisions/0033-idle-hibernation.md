@@ -41,7 +41,13 @@ A previous version of the server would exit after sustained idle, relying on VSC
 
 ## Validation
 
-RED/GREEN evidence to be filled after US4 implementation (Phase 6):
+- 14 hibernation state-machine tests pass (`bun test tests/lsp/hibernation.test.ts`)
+- 497 total tests pass with 0 failures after integration
+- Typecheck passes (`bun run typecheck`)
+- No-self-exit rationale: the LSP process stays alive during hibernation. Only
+  the Pike worker subprocess is killed and the in-memory index is cleared. This
+  is required for VSCode Remote reliability — VSCode does not auto-restart
+  crashed LSP servers in remote sessions.
 - [ ] Fake-clock hibernation transition test result
 - [ ] Post-hibernation lazy wake correctness test result
 - [ ] Watched-file-events-do-not-reset-idle test result

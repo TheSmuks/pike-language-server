@@ -133,6 +133,9 @@ export class PikeWorker extends PikeWorkerProcess {
           const queueIdx = q.findIndex(item => item.payload === payload);
           if (queueIdx !== -1) { q.splice(queueIdx, 1); break; }
         }
+        // Force-kill the unresponsive process so the next request starts fresh.
+        // Without this, a hung Pike process blocks all subsequent requests.
+        this.forceKillForTimeout(id);
         reject(new Error(`TIMEOUT: Pike worker timeout for id=${id}`));
       }, this.config.requestTimeoutMs);
 

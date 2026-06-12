@@ -42,11 +42,17 @@ export function registerShutdownHandler(
       logInfo(connection, generateReport());
     }
 
-    await savePersistentCache(connection, ctx);
+    // Deadline-bound cache save: never block shutdown longer than 5 seconds.
+    // A slow or hanging cache write must not prevent Pike termination.
+    await savePersistentCacheWithDeadline(connection, ctx);
 
     ctx.index.clear();
     cacheClear(ctx);
     clearTreeCache();
+
+    // Always terminate Pike before returning — no orphan workers.
+    // This is unconditional: even if cache save failed or timed out,
+    // the worker process must be killed.
     ctx.worker.stop();
   });
 }
@@ -55,16 +61,46 @@ export function registerShutdownHandler(
 // Implementation
 // ---------------------------------------------------------------------------
 
-async function savePersistentCache(
+// Maximum time to wait for cache save during shutdown (ms).
+const SHUTDOWN_CACHE_DEADLINE_MS = 5_000;
+
+/**
+ * Save the persistent cache with a deadline.
+ *
+ * If cache save exceeds SHUTDOWN_CACHE_DEADLINE_MS, it is abandoned.
+ * The caller (shutdown handler) always terminates the Pike worker
+ * after this returns, regardless of cache save outcome.
+ */
+async function savePersistentCacheWithDeadline(
   connection: Connection,
   ctx: ServerContext,
 ): Promise<void> {
+  const controller = new AbortController();
+  const deadline = setTimeout(
+    () => controller.abort(),
+    SHUTDOWN_CACHE_DEADLINE_MS,
+  );
+
   try {
-    const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), "tree-sitter-pike.wasm");
+    const wasmPath = resolve(
+      import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)),
+      "tree-sitter-pike.wasm",
+    );
     const wasmHash = computeWasmHash(wasmPath);
-    await saveCache(ctx.index.workspaceRoot, ctx.index, wasmHash);
+
+    await Promise.race([
+      saveCache(ctx.index.workspaceRoot, ctx.index, wasmHash),
+      new Promise<never>((_, reject) => {
+        controller.signal.addEventListener("abort", () => {
+          reject(new Error("Cache save timed out"));
+        });
+      }),
+    ]);
   } catch (err) {
     // Cache save failure is non-critical, but log for visibility.
-    logWarn(connection, `Failed to save persistent cache: ${err}`);
+    const msg = err instanceof Error ? err.message : String(err);
+    logWarn(connection, `Cache save during shutdown was abandoned: ${msg}`);
+  } finally {
+    clearTimeout(deadline);
   }
 }

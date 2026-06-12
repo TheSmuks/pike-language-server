@@ -98,6 +98,8 @@ function registerPostInitHandler(
       backgroundIndexBatchSize: ctx.backgroundIndexBatchSize,
       clientSupportsWatchedFiles: ctx.clientSupportsWatchedFiles,
       clientSupportsSemanticTokensRefresh: ctx.clientSupportsSemanticTokensRefresh,
+      resourceConfig: ctx.resourceConfig,
+      resourceState: ctx.resourceState,
     });
   });
 }
@@ -126,6 +128,17 @@ function registerFeatureHandlers(
   // ctx.index is a placeholder at registration time; handleInitialize
   // replaces it with the real index. A direct value capture would hold
   // the stale placeholder forever.
+  // Activity-tracking wrapper: records activity and gates on wake before
+  // every LSP request handler runs. The wake gate is a no-op when not
+  // hibernated, so the overhead is negligible in normal operation.
+  const recordActivity = (): void => {
+    ctx.hibernationManager.recordActivity();
+  };
+  const beforeRequest = async (): Promise<void> => {
+    recordActivity();
+    await ctx.hibernationManager.wakeGate();
+  };
+
   const handlerContext = {
     documents: ctx.documents,
     get index() { return ctx.index; },
@@ -139,6 +152,7 @@ function registerFeatureHandlers(
     upsertInFlight: ctx.upsertInFlight,
     get debugTelemetry() { return ctx.debugTelemetry; },
     connection: ctx.connection,
+    beforeRequest,
   };
 
   registerHoverHandler(connection, handlerContext);
@@ -146,6 +160,7 @@ function registerFeatureHandlers(
   registerFormattingHandler(connection, {
     documents: ctx.documents,
     formattingConfig: ctx.formattingConfig,
+    beforeRequest,
   });
 }
 

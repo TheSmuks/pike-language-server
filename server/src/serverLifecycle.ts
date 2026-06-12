@@ -29,6 +29,49 @@ import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
 import { hashContent } from "./features/cacheHash";
 import { createIndexWarmRefresh } from "./features/indexWarmRefresh";
+import { isOverMemoryBudget } from "./serverInitHandler";
+import type { ResourceConfiguration } from "./features/resourceTypes";
+import type { ResourceStateTracker } from "./features/resourceState";
+import type { HibernationManager } from "./features/hibernation";
+
+// ---------------------------------------------------------------------------
+// Fail-fast error handlers (T040)
+// ---------------------------------------------------------------------------
+
+/**
+ * Install process-level fail-fast error handlers.
+ *
+ * After this call:
+ * - uncaughtException → logged, then process.exit(1)
+ * - unhandledRejection → logged as critical (Node 15+ exits by default)
+ *
+ * Call once during startup, before the connection listens.
+ */
+export function installFailFastHandlers(): void {
+  process.on("uncaughtException", (err: Error) => {
+    logError(
+      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
+      ErrorCategory.System,
+      "uncaughtException (fatal)",
+      err,
+    );
+
+    // Give the log a moment to flush to stderr/JSON-RPC console.
+    setImmediate(() => process.exit(1));
+  });
+
+  process.on("unhandledRejection", (reason: unknown) => {
+    logError(
+      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
+      ErrorCategory.System,
+      "unhandledRejection (fatal)",
+      reason,
+    );
+    // Node 15+ already terminates on unhandledRejection by default.
+    // We log explicitly so the error reaches the ErrorLog ring buffer
+    // and the client status-bar badge before the process exits.
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Cache restore + refresh (M2: two-phase startup)
@@ -147,6 +190,12 @@ export interface InitializedContext {
   clientSupportsSemanticTokensRefresh: boolean;
   backgroundIndexCts?: import("vscode-languageserver-protocol").CancellationTokenSource;
   memoryTimer?: ReturnType<typeof setInterval>;
+  /** Phase 3: resource config for memory-budget checks. */
+  resourceConfig: ResourceConfiguration;
+  /** Phase 3: resource state tracker for degraded-mode transitions. */
+  resourceState: ResourceStateTracker;
+  /** Phase 6: hibernation manager for idle-session hibernation. */
+  hibernationManager?: HibernationManager;
 }
 
 // ---------------------------------------------------------------------------
@@ -248,10 +297,19 @@ function startBackgroundIndexing(
   backgroundIndexBatchSize: number,
   ctx: InitializedContext,
 ): void {
+  const mode = ctx.resourceConfig.indexing.mode;
+
   if (!backgroundIndexEnabled) {
     logInfo(connection, "[init] step 7f: background indexing disabled by settings");
     return;
   }
+
+  // openFiles mode: no workspace scan. Files are indexed on demand.
+  if (mode === "openFiles") {
+    logInfo(connection, "[init] step 7f: openFiles mode — skipping workspace scan");
+    return;
+  }
+
   ctx.backgroundIndexCts = new CancellationTokenSource();
 
   const refresh = createIndexWarmRefresh({
@@ -262,12 +320,16 @@ function startBackgroundIndexing(
     diagnosticManager: ctx.diagnosticManager,
   });
 
-  logInfo(connection, `[init] step 7f: starting background workspace indexing (batch size ${backgroundIndexBatchSize})`);
+  logInfo(connection, `[init] step 7f: starting ${mode} workspace indexing (batch size ${backgroundIndexBatchSize})`);
   indexWorkspaceFiles({
     connection,
     index,
     workspaceRoot: index.workspaceRoot,
     batchSize: backgroundIndexBatchSize,
+    indexingMode: mode,
+    ignoreGlobs: ctx.resourceConfig.indexing.ignoreGlobs,
+    maxFileSizeBytes: ctx.resourceConfig.indexing.maxFileSizeBytes,
+    fullScanFileLimit: ctx.resourceConfig.indexing.fullScanFileLimit,
     cancellationToken: ctx.backgroundIndexCts.token,
     onFileIndexed: refresh.onFileIndexed,
   }).then(() => {
@@ -282,6 +344,13 @@ function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection)
   const HEAP_USAGE_WARNING_RATIO = 0.80;
 
   ctx.memoryTimer = setInterval(() => {
+    // Hibernation idle check — fires on the same timer as memory monitoring.
+    // The manager's checkIdleTimeout is a no-op when hibernation is disabled
+    // or documents are open.
+    void ctx.hibernationManager?.checkIdleTimeout().catch((err: unknown) => {
+      logWarn(connection, `[hibernation] idle check error: ${err}`);
+    });
+
     const mem = process.memoryUsage();
     const heapRatio = mem.heapUsed / mem.heapTotal;
 
@@ -336,6 +405,14 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   warmUpPikeWorker(connection, worker, backgroundIndexEnabled);
 
   cacheLoadPromise.then((cached) => {
+    // T036: Enter degraded mode if heap exceeds memory budget.
+    // Skip background indexing to avoid further memory pressure.
+    if (isOverMemoryBudget(ctx.resourceConfig, connection)) {
+      ctx.resourceState.transition("degraded", "memory budget exceeded after cache restore");
+      logWarn(connection, "[init] step 7e: degraded mode — skipping background indexing");
+      return;
+    }
+
     if (!cached) {
       logInfo(connection, "[init] step 7e: no cache found — fresh start");
       startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);

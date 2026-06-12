@@ -22,6 +22,7 @@ export const DEFAULT_RESOURCE_CONFIG: ResourceConfiguration = {
     maxFileSizeBytes: 1_048_576, // 1 MB
     dependencyClosureDepth: 5,
     dependencyClosureCount: 200,
+    fullScanFileLimit: 500,
   },
   memory: {
     budgetMb: 512,
@@ -52,6 +53,7 @@ const BOUNDS = {
   maxFileSizeBytes: { min: 1024, max: 50 * 1024 * 1024 },
   dependencyClosureDepth: { min: 0, max: 20 },
   dependencyClosureCount: { min: 0, max: 10_000 },
+  fullScanFileLimit: { min: 0, max: 50_000 },
   budgetMb: { min: 64, max: 8192 },
   demotionThresholdFraction: { min: 0.5, max: 0.99 },
   recoveryThresholdFraction: { min: 0.1, max: 0.8 },
@@ -101,6 +103,7 @@ export interface RawResourceSettings {
   indexMaxFileSizeBytes?: number;
   indexDependencyClosureDepth?: number;
   indexDependencyClosureCount?: number;
+  indexFullScanFileLimit?: number;
   memoryBudgetMb?: number;
   workerRequestTimeoutMs?: number;
   workerHeartbeatIntervalMs?: number;
@@ -147,6 +150,7 @@ export function parseResourceConfig(raw: RawResourceSettings | undefined | null)
       maxFileSizeBytes: clamp(r.indexMaxFileSizeBytes, d.indexing.maxFileSizeBytes, BOUNDS.maxFileSizeBytes.min, BOUNDS.maxFileSizeBytes.max),
       dependencyClosureDepth: clamp(r.indexDependencyClosureDepth, d.indexing.dependencyClosureDepth, BOUNDS.dependencyClosureDepth.min, BOUNDS.dependencyClosureDepth.max),
       dependencyClosureCount: clamp(r.indexDependencyClosureCount, d.indexing.dependencyClosureCount, BOUNDS.dependencyClosureCount.min, BOUNDS.dependencyClosureCount.max),
+      fullScanFileLimit: clamp(r.indexFullScanFileLimit, d.indexing.fullScanFileLimit, BOUNDS.fullScanFileLimit.min, BOUNDS.fullScanFileLimit.max),
     },
     memory: {
       budgetMb: clamp(r.memoryBudgetMb, d.memory.budgetMb, BOUNDS.budgetMb.min, BOUNDS.budgetMb.max),
@@ -168,4 +172,29 @@ export function parseResourceConfig(raw: RawResourceSettings | undefined | null)
       sustainedActivityMs: clamp(r.hibernationSustainedActivityMs, d.hibernation.sustainedActivityMs, BOUNDS.sustainedActivityMs.min, BOUNDS.sustainedActivityMs.max),
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Auto-mode resolution (T050, US2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve an indexing mode after discovering how many files the workspace has.
+ *
+ * - `full` and `openFiles` pass through unchanged.
+ * - `auto` upgrades to `full` when the discovery count is at or below
+ *   `fullScanFileLimit`; otherwise it falls back to `openFiles` and the caller
+ *   should log the demotion reason.
+ *
+ * This never throws. Callers are expected to log the resolved mode when it
+ * differs from the configured mode.
+ */
+export function resolveAutoMode(
+  mode: IndexingMode,
+  discoveredFileCount: number,
+  fullScanFileLimit: number,
+): IndexingMode {
+  if (mode !== "auto") return mode;
+  // auto behaves like full only when discovery count is at or below the limit.
+  return discoveredFileCount <= fullScanFileLimit ? "full" : "openFiles";
 }

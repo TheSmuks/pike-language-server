@@ -179,3 +179,48 @@ describe("ResourceStateTracker: fake clock", () => {
     expect(tracker.idleMs()).toBe(5_000);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T096: Status-bar resource-state notification details
+// ---------------------------------------------------------------------------
+
+describe("US5: Status-bar resource-state details (Phase 7, T096)", () => {
+  test("degraded transition includes detail string", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("degraded", "memory budget exceeded (450MB/512MB)");
+    expect(notifications).toHaveLength(1);
+    expect(notifications[0].state).toBe("degraded");
+    expect(notifications[0].detail).toContain("memory budget");
+  });
+
+  test("hibernating transition includes idle detail", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("hibernating", "idle timeout (15min, 0 open docs)");
+    expect(notifications[0].state).toBe("hibernating");
+    expect(notifications[0].detail).toContain("idle timeout");
+  });
+
+  test("waking transition includes detail", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("hibernating");
+    tracker.transition("hibernated");
+    tracker.transition("waking", "request received — rehydrating");
+    expect(notifications[2].state).toBe("waking");
+    expect(notifications[2].detail).toContain("rehydrating");
+  });
+
+  test("active recovery transition includes detail", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("degraded", "pressure");
+    tracker.transition("active", "heap pressure resolved");
+    expect(notifications[1].state).toBe("active");
+    expect(notifications[1].detail).toContain("resolved");
+  });
+
+  test("notification includes timestamp field", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("degraded", "test");
+    expect(notifications[0]).toHaveProperty("timestamp");
+    expect(typeof notifications[0].timestamp).toBe("number");
+  });
+});

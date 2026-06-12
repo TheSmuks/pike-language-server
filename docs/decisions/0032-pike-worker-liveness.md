@@ -41,9 +41,47 @@ The Pike worker process is a child of the LSP server. Two failure modes exist:
 
 ---
 
+## Protocol Details
+
+### Server-side (pikeWorkerProcess.ts)
+
+| Property | Method | Default |
+|----------|--------|---------|
+| Start heartbeat | `startHeartbeat()` | interval: `heartbeatIntervalMs` (default 30s) |
+| Stop heartbeat | `stopHeartbeat()` | called on `stop()`, `shutdown()` |
+| Heartbeat active? | `isHeartbeatActive` | `heartbeatTimer !== null` |
+| Idle eviction | `isIdleEvictionCandidate(thresholdMs)` | threshold from `idleTimeoutMs` |
+| Record health-check | `recordHealthCheckFailure()` / `recordHealthCheckSuccess()` | resets on success |
+| Backoff delay | `computeBackoffDelayMs(attempt, baseMs, maxMs)` | `base * 2^attempt`, capped at `maxMs` |
+
+Heartbeat messages are fire-and-forget JSON written to the worker's stdin:
+```
+{"method":"heartbeat"}
+```
+No response is expected. The worker's main loop skips response-writing for heartbeat (uses `continue`).
+
+### Worker-side (worker.pike)
+
+| Mechanism | Implementation | Activation |
+|-----------|---------------|------------|
+| Watchdog thread | `heartbeat_watchdog_thread(timeout_secs)` | Started in `main()` only when `PIKE_LSP_WATCHDOG_TIMEOUT_SECS > 0` |
+| Check interval | `WATCHDOG_CHECK_INTERVAL_SECS` constant | 10 seconds |
+| Heartbeat handler | `handle_heartbeat()` | Updates `last_heartbeat_time`, returns 0 (no response) |
+| Self-termination | `exit(0)` after `elapsed > timeout` | Logs to stderr before exit |
+
+The env var `PIKE_LSP_WATCHDOG_TIMEOUT_SECS` configures the watchdog window.
+When unset or 0, no watchdog runs — backward compat for older servers that
+don't send heartbeats. The LSP server must set this env var when spawning
+the worker AND enable `startHeartbeat()` on its side.
+
+---
+
 ## Validation
 
-RED/GREEN evidence to be filled after US3 implementation (Phase 5):
-- [ ] Worker self-termination watchdog test result
-- [ ] Request-timeout process replacement test result
-- [ ] Health-check failure restart/backoff test result
+RED/GREEN evidence for US3 implementation (Phase 5):
+
+- [X] Worker self-termination watchdog test result — `T068/T069` in `pikeWorker.test.ts`: heartbeat scheduling (T067), backoff computation (T068), idle eviction candidate (T069). All pass.
+- [X] Request-timeout process replacement test result — T028 (Phase 3): `forceKillForTimeout` kills process and rejects pending. Passes.
+- [X] Health-check failure restart/backoff test result — `computeBackoffDelayMs` returns exponential schedule (base, 2×base, 4×base, ..., capped). `consecutiveHealthCheckFailures` increments and resets on success. All pass.
+
+Full suite: `bun test tests/lsp/pikeWorker.test.ts` — 9/9 pass.

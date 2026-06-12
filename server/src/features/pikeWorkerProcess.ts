@@ -62,6 +62,12 @@ export abstract class PikeWorkerProcess {
   protected idleTimer: ReturnType<typeof setTimeout> | null = null;
   protected lastRequestTime = 0;
 
+  // Heartbeat (US3 ADR 0032)
+  protected heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Health-check tracking (US3 ADR 0032)
+  protected healthCheckFailures = 0;
+
   // Memory ceiling tracking
   protected requestCount = 0;
   protected startTime = 0;
@@ -267,6 +273,7 @@ export abstract class PikeWorkerProcess {
    */
   stop(): void {
     this.clearIdleTimer();
+    this.stopHeartbeat();
     if (this.proc && !this.proc.killed) {
       const dying = this.proc;
       dying.kill("SIGTERM");
@@ -404,7 +411,12 @@ export abstract class PikeWorkerProcess {
   // Idle eviction
   // ---------------------------------------------------------------------------
 
-  protected resetIdleTimer(): void {
+  /**
+   * Reset the idle eviction timer. Called on every request and by the heartbeat
+   * manager to keep the worker alive during active use. Public so external
+   * callers (heartbeat/watchdog) can indicate activity.
+   */
+  resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
       if (shouldEvictIdle(this.proc, this.pending.size, this.queues.map(q => q.length))) {
@@ -412,6 +424,7 @@ export abstract class PikeWorkerProcess {
       }
     }, this.config.idleTimeoutMs);
     if (this.idleTimer?.unref) this.idleTimer.unref();
+    this.lastRequestTime = Date.now();
   }
 
   protected clearIdleTimer(): void {
@@ -431,6 +444,148 @@ export abstract class PikeWorkerProcess {
       this.config.maxRequestsBeforeRestart,
       this.startTime, this.config.maxActiveMinutes,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Force-kill for timeout (T037/T038)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Force-kill the Pike process when a request times out.
+   *
+   * A timed-out request means the process is stuck (infinite loop, deadlock,
+   * or waiting on unreachable I/O). SIGTERM may never deliver because Pike's
+   * signal handling is unreliable under load. SIGKILL is the only safe option.
+   *
+   * Rejects ALL pending requests truthfully — they will never get responses
+   * from the killed process. The next request will lazily spawn a fresh one.
+   */
+  forceKillForTimeout(timedOutRequestId: number): void {
+    if (!this.proc || this.proc.killed) return;
+
+    const dying = this.proc;
+    this.onWarning?.(
+      "worker.timeoutForceKill",
+      `Request id=${timedOutRequestId} timed out — force-killing Pike process (pid=${dying.pid})`,
+    );
+
+    // Null the proc reference so the exit handler knows this is an intentional kill.
+    this.proc = null;
+
+    // Send SIGKILL immediately — no grace period for a hung process.
+    try {
+      dying.kill("SIGKILL");
+    } catch {
+      // Process may have already exited.
+    }
+
+    // Reject all remaining pending requests — they will never get responses.
+    if (this.pending.size > 0) {
+      const error = new Error(
+        `Pike worker force-killed after timeout on request id=${timedOutRequestId}`,
+      );
+      for (const [, pending] of this.pending) {
+        clearTimeout(pending.timeout);
+        pending.reject(error);
+      }
+      this.pending.clear();
+    }
+
+    // Clear the queue — nothing can be sent to a dead process.
+    for (const q of this.queues) {
+      for (const item of q) {
+        clearTimeout(item.timeout);
+        item.reject(new Error("Pike worker queue cleared after timeout force-kill"));
+      }
+      q.length = 0;
+    }
+    this.sending = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Heartbeat, health-check, and backoff (US3, ADR 0032)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Whether the heartbeat interval is currently active.
+   * The heartbeat sends periodic "heartbeat" notifications to the Pike worker
+   * so it can self-terminate if the LSP server crashes or hibernates.
+   */
+  get isHeartbeatActive(): boolean {
+    return this.heartbeatTimer !== null;
+  }
+
+  /**
+   * Start sending heartbeat notifications at the configured interval.
+   * No-op if already active.
+   */
+  startHeartbeat(): void {
+    if (this.heartbeatTimer) return;
+    const interval = this.config.heartbeatIntervalMs ?? 30_000;
+    this.heartbeatTimer = setInterval(() => {
+      if (!this.proc || this.proc.killed) return;
+      // Send heartbeat as a fire-and-forget write — no response expected.
+      try {
+        this.proc.stdin?.write(JSON.stringify({ method: "heartbeat" }) + "\n");
+      } catch {
+        // Process may have died between the alive check and the write.
+      }
+    }, interval);
+    if (this.heartbeatTimer.unref) this.heartbeatTimer.unref();
+  }
+
+  /**
+   * Stop the heartbeat interval. Safe to call when no heartbeat is active.
+   * Also called during stop() and shutdown to prevent timer leaks.
+   */
+  stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
+  }
+
+  /** Number of consecutive health-check failures since the last success. */
+  get consecutiveHealthCheckFailures(): number {
+    return this.healthCheckFailures;
+  }
+
+  /** Record a health-check failure. Increments the consecutive counter. */
+  recordHealthCheckFailure(): void {
+    this.healthCheckFailures++;
+  }
+
+  /** Record a health-check success. Resets the consecutive failure counter. */
+  recordHealthCheckSuccess(): void {
+    this.healthCheckFailures = 0;
+  }
+
+  /**
+   * Compute exponential backoff delay for worker restart attempts.
+   *
+   * Formula: base * 2^attempt, capped at maxMs.
+   * attempt 0: base, 1: 2*base, 2: 4*base, ... N: min(base * 2^N, maxMs).
+   *
+   * Static so it can be tested without instantiating a worker.
+   */
+  static computeBackoffDelayMs(
+    attempt: number,
+    baseMs: number,
+    maxMs: number,
+  ): number {
+    const raw = baseMs * Math.pow(2, attempt);
+    return Math.min(raw, maxMs);
+  }
+
+  /**
+   * Check whether the worker is idle long enough to be evicted.
+   * Returns true if the worker is alive and has been idle (no requests) for
+   * at least thresholdMs milliseconds.
+   */
+  isIdleEvictionCandidate(thresholdMs: number): boolean {
+    if (!this.proc || this.proc.killed) return false;
+    if (this.lastRequestTime === 0) return false;
+    return Date.now() - this.lastRequestTime >= thresholdMs;
   }
 
   // ---------------------------------------------------------------------------

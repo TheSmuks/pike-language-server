@@ -72,28 +72,28 @@
 
 ### Tests for User Story 1
 
-- [ ] T024 [P] [US1] Add RED cache migration/self-healing tests for old-format, corrupt, duplicate, and superseded entries in `tests/lsp/persistentCache.test.ts`
-- [ ] T025 [P] [US1] Add RED cache file-count invariant and prune tests in `tests/lsp/persistentCache.test.ts`
-- [ ] T026 [P] [US1] Add RED metadata-staleness test proving unchanged cache load reads zero file contents in `tests/lsp/persistentCache.test.ts`
-- [ ] T027 [P] [US1] Add RED bloated-cache constrained-memory startup test in `tests/lsp/resourceResilience.test.ts`
-- [ ] T028 [P] [US1] Add RED Pike request-timeout process replacement test in `tests/lsp/pikeWorker.test.ts`
-- [ ] T029 [P] [US1] Add RED shutdown deadline/no-orphan-worker test with slow cache save in `tests/lsp/shutdown.test.ts`
-- [ ] T030 [P] [US1] Add RED unrecoverable internal error fail-fast test in `tests/lsp/error-handling.test.ts`
+- [X] T024 [P] [US1] Add RED cache migration/self-healing tests for old-format, corrupt, duplicate, and superseded entries in `tests/lsp/persistentCache.test.ts`
+- [X] T025 [P] [US1] Add RED cache file-count invariant and prune tests in `tests/lsp/persistentCache.test.ts`
+- [X] T026 [P] [US1] Add RED metadata-staleness test proving unchanged cache load reads zero file contents in `tests/lsp/persistentCache.test.ts`
+- [X] T027 [P] [US1] Add RED bloated-cache constrained-memory startup test in `tests/lsp/resourceResilience.test.ts`
+- [X] T028 [P] [US1] Add RED Pike request-timeout process replacement test in `tests/lsp/pikeWorker.test.ts`
+- [X] T029 [P] [US1] Add RED shutdown deadline/no-orphan-worker test with slow cache save in `tests/lsp/shutdown.test.ts`
+- [X] T030 [P] [US1] Add RED unrecoverable internal error fail-fast test in `tests/lsp/error-handling.test.ts`
 
 ### Implementation for User Story 1
 
-- [ ] T031 [US1] Extend `PersistentCacheEntry` with `mtimeMs`, `sizeBytes`, `dependencies`, and schema version handling in `server/src/features/persistentCache.ts`
-- [ ] T032 [US1] Implement bounded-batch cache restore and overflow wipe path in `server/src/features/persistentCache.ts`
-- [ ] T033 [US1] Implement old-format cache metadata upgrade by statting source files in `server/src/features/persistentCache.ts`
-- [ ] T034 [US1] Implement corrupt/duplicate/superseded cache self-healing and prune scheduling in `server/src/features/persistentCache.ts`
-- [ ] T035 [US1] Implement atomic cache save and live-entry-only prune so cache file count equals live entry count in `server/src/features/persistentCache.ts`
-- [ ] T036 [US1] Add memory-budget checks during startup/cache restore and enter degraded mode without aborting in `server/src/serverInitHandler.ts`
-- [ ] T037 [US1] Make Pike request timeout force-kill the underlying process, reject pending work truthfully, and restart on the next request in `server/src/features/pikeWorker.ts`
-- [ ] T038 [US1] Add force-kill/terminate deadline helpers for child processes in `server/src/features/pikeWorkerProcess.ts`
-- [ ] T039 [US1] Deadline-bound shutdown cache save and always terminate Pike before returning shutdown in `server/src/serverShutdownHandler.ts`
-- [ ] T040 [US1] Install fail-fast logging for unrecoverable server errors in `server/src/serverLifecycle.ts`
-- [ ] T041 [US1] Update cache/memory ADR decisions with measured RED/GREEN evidence in `docs/decisions/0030-resource-resilient-cache-and-memory.md`
-- [ ] T042 [US1] Validate MVP with `bun test tests/lsp/persistentCache.test.ts tests/lsp/resourceResilience.test.ts tests/lsp/pikeWorker.test.ts tests/lsp/shutdown.test.ts tests/lsp/error-handling.test.ts`
+- [X] T031 [US1] Extend `PersistentCacheEntry` with `mtimeMs`, `sizeBytes`, `dependencies`, and schema version handling in `server/src/features/persistentCache.ts`
+- [X] T032 [US1] Implement bounded-batch cache restore and overflow wipe path in `server/src/features/persistentCache.ts`
+- [X] T033 [US1] Implement old-format cache metadata upgrade by statting source files in `server/src/features/persistentCache.ts`
+- [X] T034 [US1] Implement corrupt/duplicate/superseded cache self-healing and prune scheduling in `server/src/features/persistentCache.ts`
+- [X] T035 [US1] Implement atomic cache save and live-entry-only prune so cache file count equals live entry count in `server/src/features/persistentCache.ts`
+- [X] T036 [US1] Add memory-budget checks during startup/cache restore and enter degraded mode without aborting in `server/src/serverInitHandler.ts`
+- [X] T037 [US1] Make Pike request timeout force-kill the underlying process, reject pending work truthfully, and restart on the next request in `server/src/features/pikeWorker.ts`
+- [X] T038 [US1] Add force-kill/terminate deadline helpers for child processes in `server/src/features/pikeWorkerProcess.ts`
+- [X] T039 [US1] Deadline-bound shutdown cache save and always terminate Pike before returning shutdown in `server/src/serverShutdownHandler.ts`
+- [X] T040 [US1] Install fail-fast logging for unrecoverable server errors in `server/src/serverLifecycle.ts`
+- [X] T041 [US1] Update cache/memory ADR decisions with measured RED/GREEN evidence in `docs/decisions/0030-resource-resilient-cache-and-memory.md`
+- [X] T042 [US1] Validate MVP with `bun test tests/lsp/persistentCache.test.ts tests/lsp/resourceResilience.test.ts tests/lsp/pikeWorker.test.ts tests/lsp/shutdown.test.ts tests/lsp/error-handling.test.ts`
 
 **Checkpoint**: MVP is independently shippable: crash and teardown hardening are GREEN.
 
@@ -107,30 +107,30 @@
 
 ### Tests for User Story 2
 
-- [ ] T043 [P] [US2] Add RED default `openFiles` indexing-mode startup test in `tests/lsp/backgroundIndex.test.ts`
-- [ ] T044 [P] [US2] Add RED dependency-closure depth/count cap tests in `tests/lsp/importDependencies.test.ts`
-- [ ] T045 [P] [US2] Add RED full/auto/openFiles mode behavior tests in `tests/lsp/configuration.test.ts`
-- [ ] T046 [P] [US2] Add RED cross-file feature parameterized tests over indexing modes in `tests/lsp/crossFileResolution.test.ts`
-- [ ] T047 [P] [US2] Add RED workspace symbol progress/cancellation test in `tests/lsp/workspaceSymbol.test.ts`
-- [ ] T048 [P] [US2] Add RED rename/references/hierarchy/implementation lazy-candidate tests in `tests/lsp/references.test.ts`
-- [ ] T049 [P] [US2] Add RED large-workspace time-to-first-hover/semantic-tokens benchmark in `tests/perf/large-workspace.test.ts`
+- [X] T043 [P] [US2] Add RED default `openFiles` indexing-mode startup test in `tests/lsp/backgroundIndex.test.ts`
+- [X] T044 [P] [US2] Add RED dependency-closure depth/count cap tests in `tests/lsp/importDependencies.test.ts`
+- [X] T045 [P] [US2] Add RED full/auto/openFiles mode behavior tests in `tests/lsp/configuration.test.ts`
+- [X] T046 [P] [US2] Add RED cross-file feature parameterized tests over indexing modes in `tests/lsp/crossFileResolution.test.ts`
+- [X] T047 [P] [US2] Add RED workspace symbol progress/cancellation test in `tests/lsp/workspaceSymbol.test.ts`
+- [X] T048 [P] [US2] Add RED rename/references/hierarchy/implementation lazy-candidate tests in `tests/lsp/references.test.ts`
+- [X] T049 [P] [US2] Add RED large-workspace time-to-first-hover/semantic-tokens benchmark in `tests/perf/large-workspace.test.ts`
 
 ### Implementation for User Story 2
 
-- [ ] T050 [US2] Add indexing-mode config parsing and default `openFiles` selection in `server/src/features/resourceConfiguration.ts`
-- [ ] T051 [US2] Gate startup background indexing by `openFiles`, `full`, and `auto` modes in `server/src/serverInitHandler.ts`
-- [ ] T052 [US2] Implement ignore-glob, max-file-size, and full-scan file-count cap handling in `server/src/features/backgroundIndex.ts`
-- [ ] T053 [US2] Implement open-document dependency-closure indexing with depth/count caps in `server/src/serverDocumentHandler.ts`
-- [ ] T054 [US2] Maintain lightweight forward/reverse dependency map on upsert, delete, and file-watch events in `server/src/features/workspaceIndexClass.ts`
-- [ ] T055 [US2] Add dependency-map lifecycle fields to `FileEntry` and workspace types in `server/src/features/workspaceTypes.ts`
-- [ ] T056 [US2] Update file watcher invalidation to keep the dependency map current without full symbol retention in `server/src/serverFileWatchHandler.ts`
-- [ ] T057 [US2] Implement global query preparation with workDoneProgress and cancellation in `server/src/features/workspaceResolution.ts`
-- [ ] T058 [US2] Route workspace symbol through lazy global preparation and complete-result semantics in `server/src/features/workspaceSymbol.ts`
-- [ ] T059 [US2] Route references and rename through lazy global preparation and complete-result semantics in `server/src/features/rename.ts`
-- [ ] T060 [US2] Route call hierarchy, type hierarchy, and go-to-implementation through lazy global preparation in `server/src/features/callHierarchy.ts`
-- [ ] T061 [US2] Add yielding between background scan batches and on-demand candidate batches in `server/src/features/backgroundIndex.ts`
-- [ ] T062 [US2] Update lazy-indexing ADR with mode semantics and benchmark output in `docs/decisions/0031-lazy-indexing-and-dependency-map.md`
-- [ ] T063 [US2] Validate lazy indexing with `bun test tests/lsp/backgroundIndex.test.ts tests/lsp/importDependencies.test.ts tests/lsp/crossFileResolution.test.ts tests/lsp/workspaceSymbol.test.ts tests/lsp/references.test.ts tests/perf/large-workspace.test.ts`
+- [X] T050 [US2] Add indexing-mode config parsing and default `openFiles` selection in `server/src/features/resourceConfiguration.ts`
+- [X] T051 [US2] Gate startup background indexing by `openFiles`, `full`, and `auto` modes in `server/src/serverInitHandler.ts`
+- [X] T052 [US2] Implement ignore-glob, max-file-size, and full-scan file-count cap handling in `server/src/features/backgroundIndex.ts`
+- [X] T053 [US2] Implement open-document dependency-closure indexing with depth/count caps in `server/src/serverDocumentHandler.ts`
+- [X] T054 [US2] Maintain lightweight forward/reverse dependency map on upsert, delete, and file-watch events in `server/src/features/workspaceIndexClass.ts`
+- [X] T055 [US2] Add dependency-map lifecycle fields to `FileEntry` and workspace types in `server/src/features/workspaceTypes.ts`
+- [X] T056 [US2] Update file watcher invalidation to keep the dependency map current without full symbol retention in `server/src/serverFileWatchHandler.ts`
+- [X] T057 [US2] Implement global query preparation with workDoneProgress and cancellation in `server/src/features/workspaceResolution.ts`
+- [X] T058 [US2] Route workspace symbol through lazy global preparation and complete-result semantics in `server/src/features/workspaceSymbol.ts`
+- [X] T059 [US2] Route references and rename through lazy global preparation and complete-result semantics in `server/src/features/rename.ts`
+- [X] T060 [US2] Route call hierarchy, type hierarchy, and go-to-implementation through lazy global preparation in `server/src/features/callHierarchy.ts`
+- [X] T061 [US2] Add yielding between background scan batches and on-demand candidate batches in `server/src/features/backgroundIndex.ts`
+- [X] T062 [US2] Update lazy-indexing ADR with mode semantics and benchmark output in `docs/decisions/0031-lazy-indexing-and-dependency-map.md`
+- [X] T063 [US2] Validate lazy indexing with `bun test tests/lsp/backgroundIndex.test.ts tests/lsp/importDependencies.test.ts tests/lsp/crossFileResolution.test.ts tests/lsp/workspaceSymbol.test.ts tests/lsp/references.test.ts tests/perf/large-workspace.test.ts`
 
 **Checkpoint**: Lazy startup and global-feature correctness are independently testable and GREEN.
 
@@ -144,25 +144,25 @@
 
 ### Tests for User Story 3
 
-- [ ] T064 [P] [US3] Add RED index-entry demotion and rehydration tests in `tests/lsp/workspaceIndex.test.ts`
-- [ ] T065 [P] [US3] Add RED degraded-mode global-feature unavailable tests in `tests/lsp/resourceResilience.test.ts`
-- [ ] T066 [P] [US3] Add RED memory-pressure demotion benchmark with five open files in `tests/perf/large-workspace.test.ts`
-- [ ] T067 [P] [US3] Add RED server-side worker heartbeat and idle-eviction tests in `tests/lsp/pikeWorker.test.ts`
-- [ ] T068 [P] [US3] Add RED Pike worker self-termination watchdog test in `tests/lsp/pikeWorker.test.ts`
-- [ ] T069 [P] [US3] Add RED worker health-check failure restart/backoff test in `tests/lsp/pikeWorker.test.ts`
+- [X] T064 [P] [US3] Add RED index-entry demotion and rehydration tests in `tests/lsp/workspaceIndex.test.ts`
+- [X] T065 [P] [US3] Add RED degraded-mode global-feature unavailable tests in `tests/lsp/resourceResilience.test.ts`
+- [X] T066 [P] [US3] Add RED memory-pressure demotion benchmark with five open files in `tests/perf/large-workspace.test.ts`
+- [X] T067 [P] [US3] Add RED server-side worker heartbeat and idle-eviction tests in `tests/lsp/pikeWorker.test.ts`
+- [X] T068 [P] [US3] Add RED Pike worker self-termination watchdog test in `tests/lsp/pikeWorker.test.ts`
+- [X] T069 [P] [US3] Add RED worker health-check failure restart/backoff test in `tests/lsp/pikeWorker.test.ts`
 
 ### Implementation for User Story 3
 
-- [ ] T070 [US3] Add `full`, `stub`, `demoted`, and `loading` entry lifecycle support in `server/src/features/workspaceTypes.ts`
-- [ ] T071 [US3] Implement demotion of non-open, non-closure entries while preserving dependency map in `server/src/features/workspaceIndexClass.ts`
-- [ ] T072 [US3] Implement rehydration of demoted entries from cache or source in `server/src/features/workspaceIndexClass.ts`
-- [ ] T073 [US3] Implement heap-pressure monitor with hysteresis and demotion logging in `server/src/features/resourceState.ts`
-- [ ] T074 [US3] Make global features return explicit temporarily-unavailable errors while degraded in `server/src/features/workspaceResolution.ts`
-- [ ] T075 [US3] Add outbound heartbeat scheduling, stop rules, idle eviction, and failed-health-check restart logic in `server/src/features/pikeWorker.ts`
-- [ ] T076 [US3] Add heartbeat send/stop primitives and process status tracking in `server/src/features/pikeWorkerProcess.ts`
-- [ ] T077 [US3] Implement worker-side heartbeat watchdog thread and timeout exit in `harness/worker.pike`
-- [ ] T078 [US3] Document the worker heartbeat protocol in `docs/decisions/0032-pike-worker-liveness.md`
-- [ ] T079 [US3] Validate bounded memory and worker liveness with `bun test tests/lsp/workspaceIndex.test.ts tests/lsp/resourceResilience.test.ts tests/lsp/pikeWorker.test.ts tests/perf/large-workspace.test.ts`
+- [X] T070 [US3] Add `full`, `stub`, `demoted`, and `loading` entry lifecycle support in `server/src/features/workspaceTypes.ts`
+- [X] T071 [US3] Implement demotion of non-open, non-closure entries while preserving dependency map in `server/src/features/workspaceIndexClass.ts`
+- [X] T072 [US3] Implement rehydration of demoted entries from cache or source in `server/src/features/workspaceIndexClass.ts`
+- [X] T073 [US3] Implement heap-pressure monitor with hysteresis and demotion logging in `server/src/features/resourceState.ts`
+- [X] T074 [US3] Make global features return explicit temporarily-unavailable errors while degraded in `server/src/features/workspaceResolution.ts`
+- [X] T075 [US3] Add outbound heartbeat scheduling, stop rules, idle eviction, and failed-health-check restart logic in `server/src/features/pikeWorker.ts`
+- [X] T076 [US3] Add heartbeat send/stop primitives and process status tracking in `server/src/features/pikeWorkerProcess.ts`
+- [X] T077 [US3] Implement worker-side heartbeat watchdog thread and timeout exit in `harness/worker.pike`
+- [X] T078 [US3] Document the worker heartbeat protocol in `docs/decisions/0032-pike-worker-liveness.md`
+- [X] T079 [US3] Validate bounded memory and worker liveness with `bun test tests/lsp/workspaceIndex.test.ts tests/lsp/resourceResilience.test.ts tests/lsp/pikeWorker.test.ts tests/perf/large-workspace.test.ts`
 
 **Checkpoint**: Memory pressure and worker liveness are GREEN, with no orphan Pike process after watchdog expiry.
 
@@ -176,24 +176,24 @@
 
 ### Tests for User Story 4
 
-- [ ] T080 [P] [US4] Add RED fake-clock idle hibernation transition tests in `tests/lsp/hibernation.test.ts`
-- [ ] T081 [P] [US4] Add RED hibernation cancellation and deadline-save tests in `tests/lsp/hibernation.test.ts`
-- [ ] T082 [P] [US4] Add RED post-hibernation lazy wake correctness tests in `tests/lsp/hibernation.test.ts`
-- [ ] T083 [P] [US4] Add RED watched-file-events-do-not-reset-idle tests in `tests/lsp/hibernation.test.ts`
-- [ ] T084 [P] [US4] Add RED sustained-activity-delayed full/auto reindex tests in `tests/lsp/hibernation.test.ts`
+- [X] T080 [P] [US4] Add RED fake-clock idle hibernation transition tests in `tests/lsp/hibernation.test.ts`
+- [X] T081 [P] [US4] Add RED hibernation cancellation and deadline-save tests in `tests/lsp/hibernation.test.ts`
+- [X] T082 [P] [US4] Add RED post-hibernation lazy wake correctness tests in `tests/lsp/hibernation.test.ts`
+- [X] T083 [P] [US4] Add RED watched-file-events-do-not-reset-idle tests in `tests/lsp/hibernation.test.ts`
+- [X] T084 [P] [US4] Add RED sustained-activity-delayed full/auto reindex tests in `tests/lsp/hibernation.test.ts`
 
 ### Implementation for User Story 4
 
-- [ ] T085 [US4] Implement hibernation state machine and idle timer in `server/src/features/hibernation.ts`
-- [ ] T086 [US4] Update request/open-document activity tracking to drive hibernation in `server/src/serverContext.ts`
-- [ ] T087 [US4] Ensure watched-file events do not reset idle when no documents are open in `server/src/serverFileWatchHandler.ts`
-- [ ] T088 [US4] Cancel background indexing and on-demand work during hibernation in `server/src/features/backgroundIndex.ts`
-- [ ] T089 [US4] Add deadline-bound hibernation save and clear in-memory cache/index state in `server/src/features/persistentCache.ts`
-- [ ] T090 [US4] Stop Pike worker and heartbeat during hibernation without exiting the LSP process in `server/src/features/pikeWorker.ts`
-- [ ] T091 [US4] Implement lazy wake/rehydration gate before requests in `server/src/serverLifecycle.ts`
-- [ ] T092 [US4] Schedule delayed full/auto reindex only after sustained activity in `server/src/serverInitHandler.ts`
-- [ ] T093 [US4] Update hibernation ADR with no-self-exit rationale and validation output in `docs/decisions/0033-idle-hibernation.md`
-- [ ] T094 [US4] Validate hibernation with `bun test tests/lsp/hibernation.test.ts tests/lsp/pikeWorker.test.ts tests/lsp/backgroundIndex.test.ts`
+- [X] T085 [US4] Implement hibernation state machine and idle timer in `server/src/features/hibernation.ts`
+- [X] T086 [US4] Update request/open-document activity tracking to drive hibernation in `server/src/serverContext.ts`
+- [X] T087 [US4] Ensure watched-file events do not reset idle when no documents are open in `server/src/serverFileWatchHandler.ts`
+- [X] T088 [US4] Cancel background indexing and on-demand work during hibernation in `server/src/features/backgroundIndex.ts`
+- [X] T089 [US4] Add deadline-bound hibernation save and clear in-memory cache/index state in `server/src/features/persistentCache.ts`
+- [X] T090 [US4] Stop Pike worker and heartbeat during hibernation without exiting the LSP process in `server/src/features/pikeWorker.ts`
+- [X] T091 [US4] Implement lazy wake/rehydration gate before requests in `server/src/serverLifecycle.ts`
+- [X] T092 [US4] Schedule delayed full/auto reindex only after sustained activity in `server/src/serverInitHandler.ts`
+- [X] T093 [US4] Update hibernation ADR with no-self-exit rationale and validation output in `docs/decisions/0033-idle-hibernation.md`
+- [X] T094 [US4] Validate hibernation with `bun test tests/lsp/hibernation.test.ts tests/lsp/pikeWorker.test.ts tests/lsp/backgroundIndex.test.ts`
 
 **Checkpoint**: Idle remote sessions shed footprint, keep the LSP process alive, and wake lazily with correct answers.
 
@@ -207,18 +207,18 @@
 
 ### Tests for User Story 5
 
-- [ ] T095 [P] [US5] Add RED log-signal tests for degraded, demotion, worker restart, and hibernation events in `tests/lsp/errorLog.test.ts`
-- [ ] T096 [P] [US5] Add RED client status-bar resource-state tests in `tests/lsp/resourceState.test.ts`
-- [ ] T097 [P] [US5] Add RED documentation command smoke checks for lingering-session diagnostics in `tests/lsp/resourceDocs.test.ts`
+- [X] T095 [P] [US5] Add RED log-signal tests for degraded, demotion, worker restart, and hibernation events in `tests/lsp/errorLog.test.ts`
+- [X] T096 [P] [US5] Add RED client status-bar resource-state tests in `tests/lsp/resourceState.test.ts`
+- [X] T097 [P] [US5] Add RED documentation command smoke checks for lingering-session diagnostics in `tests/lsp/resourceDocs.test.ts`
 
 ### Implementation for User Story 5
 
-- [ ] T098 [US5] Add standardized resource log messages with heap/count/reason details in `server/src/util/errorLog.ts`
-- [ ] T099 [US5] Emit resource-state notifications for degraded, indexing, hibernating, hibernated, and waking transitions in `server/src/features/resourceState.ts`
-- [ ] T100 [US5] Render client status-bar resource states and per-request unavailability messages in `client/extension.ts`
-- [ ] T101 [US5] Write lingering remote session troubleshooting guide in `docs/lingering-remote-sessions.md`
-- [ ] T102 [US5] Update `CHANGELOG.md` `[Unreleased]` with resource-resilience behavior changes
-- [ ] T103 [US5] Validate operability with `bun test tests/lsp/errorLog.test.ts tests/lsp/resourceState.test.ts tests/lsp/resourceDocs.test.ts`
+- [X] T098 [US5] Add standardized resource log messages with heap/count/reason details in `server/src/util/errorLog.ts`
+- [X] T099 [US5] Emit resource-state notifications for degraded, indexing, hibernating, hibernated, and waking transitions in `server/src/features/resourceState.ts`
+- [X] T100 [US5] Render client status-bar resource states and per-request unavailability messages in `client/extension.ts`
+- [X] T101 [US5] Write lingering remote session troubleshooting guide in `docs/lingering-remote-sessions.md`
+- [X] T102 [US5] Update `CHANGELOG.md` `[Unreleased]` with resource-resilience behavior changes
+- [X] T103 [US5] Validate operability with `bun test tests/lsp/errorLog.test.ts tests/lsp/resourceState.test.ts tests/lsp/resourceDocs.test.ts`
 
 **Checkpoint**: Operators and developers can see, diagnose, and remediate resource-state behavior.
 
@@ -228,15 +228,15 @@
 
 **Purpose**: Full validation, quality gates, and spec traceability across all stories.
 
-- [ ] T104 [P] Update `specs/001-resource-resilience/quickstart.md` with final measured commands and observed outputs
-- [ ] T105 [P] Update `docs/ci.md` with any new resource-resilience test groups or benchmark commands
-- [ ] T106 [P] Audit all new tests for deterministic fake clocks, bounded waits, and no external-service dependencies in `tests/lsp/`
-- [ ] T107 [P] Audit all new resource loops, queues, timers, and cache scans for explicit limits in `server/src/`
-- [ ] T108 Run full typecheck with `bun run typecheck`
-- [ ] T109 Run full build with `bun run build`
-- [ ] T110 Run full test suite with `bun run test`
-- [ ] T111 Run Pike harness validation with `bash scripts/test-pike.sh`
-- [ ] T112 Update `specs/001-resource-resilience/tasks.md` by marking all completed tasks `[X]`
+- [X] T104 [P] Update `specs/001-resource-resilience/quickstart.md` with final measured commands and observed outputs
+- [X] T105 [P] Update `docs/ci.md` with any new resource-resilience test groups or benchmark commands
+- [X] T106 [P] Audit all new tests for deterministic fake clocks, bounded waits, and no external-service dependencies in `tests/lsp/`
+- [X] T107 [P] Audit all new resource loops, queues, timers, and cache scans for explicit limits in `server/src/`
+- [X] T108 Run full typecheck with `bun run typecheck`
+- [X] T109 Run full build with `bun run build`
+- [X] T110 Run full test suite with `bun run test`
+- [X] T111 Run Pike harness validation with `bash scripts/test-pike.sh`
+- [X] T112 Update `specs/001-resource-resilience/tasks.md` by marking all completed tasks `[X]`
 
 ---
 

@@ -55,6 +55,8 @@ export interface HoverContext {
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
   predefBuiltins: Record<string, string>;
   predefAutodoc: Record<string, PredefAutodocEntry>;
+  /** Called before each request — records activity and gates on wake. */
+  beforeRequest?: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -135,8 +137,10 @@ export function registerHoverHandler(
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
   };
-  connection.onHover((params, token) =>
-    handleHover(ctx, baseResolutionCtx, makeTypeInferrer, params, token));
+  connection.onHover(async (params, token) => {
+    await ctx.beforeRequest?.();
+    return handleHover(ctx, baseResolutionCtx, makeTypeInferrer, params, token);
+  });
 }
 
 /** Build a type inferrer factory for hover. */

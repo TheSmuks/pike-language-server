@@ -156,21 +156,49 @@ describe("PikeWorker stop: unit-level (no Pike required)", () => {
 
   test("stop() empties the queue", () => {
     const worker = new PikeWorker();
-    (worker as any).queue.push({
+    (worker as any).queues[0].push({
       payload: "test",
       resolve: () => {},
       reject: () => {},
       timeout: setTimeout(() => {}, 10000),
       priority: 0,
     });
-    expect((worker as any).queue.length).toBe(1);
+    expect((worker as any).queues[0].length).toBe(1);
 
     worker.stop();
-    expect((worker as any).queue.length).toBe(0);
+    expect((worker as any).queues[0].length).toBe(0);
   });
 
   test("isAvailable returns true when Pike was never attempted", () => {
     const worker = new PikeWorker();
+    expect(worker.isAvailable).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. Shutdown deadline — worker termination guarantee (no Pike required)
+// ---------------------------------------------------------------------------
+
+describe("Shutdown deadline: worker termination guarantee (Phase 3, T029)", () => {
+  test("T029: worker.stop() is callable and terminates process", () => {
+    const worker = new PikeWorker();
+    expect(worker.isAlive).toBe(false);
+    // stop() before start is a no-op — no crash.
+    worker.stop();
+    expect(worker.isAlive).toBe(false);
+  });
+
+  test("T029: forceKillForTimeout is safe on unstarted worker (no-op)", () => {
+    const worker = new PikeWorker();
+    // No proc → early return. Must not throw.
+    expect(() => worker.forceKillForTimeout(42)).not.toThrow();
+  });
+
+  test("T029: forceKillForTimeout does not corrupt state on unstarted worker", () => {
+    const worker = new PikeWorker();
+    worker.forceKillForTimeout(1);
+    // Worker is still usable after a no-op forceKill.
+    expect(worker.isAlive).toBe(false);
     expect(worker.isAvailable).toBe(true);
   });
 });

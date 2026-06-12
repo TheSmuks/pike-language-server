@@ -23,6 +23,7 @@ import {
 } from "./typeHierarchy";
 import { produceCodeLenses } from "./codeLens";
 import { registerDocumentLinkHandler } from "./documentLink";
+import { prepareGlobalQuery } from "./workspaceResolution";
 import { computeContentHash } from "./diagnosticManager";
 import { uriToPath } from "../util/uri";
 import { logError, logWarn, ErrorCategory } from "../util/errorLog.js";
@@ -72,6 +73,14 @@ function registerCallHierarchyHandlers(
       if (token.isCancellationRequested) return [];
       const item = params.item;
       if (!ctx.index) return [];
+
+      // Incoming calls span the whole workspace — ensure complete results.
+      await prepareGlobalQuery({
+        connection, index: ctx.index,
+        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+      });
+      if (token.isCancellationRequested) return [];
+
       return getIncomingCalls(item, ctx.index);
     },
   );
@@ -89,6 +98,14 @@ function registerCallHierarchyHandlers(
       const source = doc.getText();
       const tree = parse(source, uri);
       if (!ctx.index) return [];
+
+      // Outgoing calls may resolve into other workspace files.
+      await prepareGlobalQuery({
+        connection, index: ctx.index,
+        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+      });
+      if (token.isCancellationRequested) return [];
+
       const lines = source.split('\n');
       return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
     },
@@ -123,6 +140,14 @@ function registerTypeHierarchyHandlers(
       if (!ctx.index) return [];
       const table = await ctx.getSymbolTable(item.uri);
       if (!table) return [];
+
+      // Supertypes may resolve into other workspace files.
+      await prepareGlobalQuery({
+        connection, index: ctx.index,
+        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+      });
+      if (token.isCancellationRequested) return [];
+
       return getSupertypes(ctx.index, table, item.uri, item);
     },
   );
@@ -133,6 +158,14 @@ function registerTypeHierarchyHandlers(
       if (token.isCancellationRequested) return [];
       const item = params.item;
       if (!ctx.index) return [];
+
+      // Subtypes span the whole workspace — ensure complete results.
+      await prepareGlobalQuery({
+        connection, index: ctx.index,
+        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+      });
+      if (token.isCancellationRequested) return [];
+
       return getSubtypes(ctx.index, item.uri, item);
     },
   );

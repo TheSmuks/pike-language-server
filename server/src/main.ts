@@ -7,7 +7,7 @@
  */
 import { createConnection, ProposedFeatures } from "vscode-languageserver/node";
 import { createPikeServer } from "./server.js";
-import { logError, ErrorCategory } from "./util/errorLog.js";
+import { installFailFastHandlers } from "./serverLifecycle.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { saveCache, computeWasmHash } from "./features/persistentCache.js";
@@ -16,38 +16,11 @@ function shouldListen(): boolean {
   return process.env.PIKE_LSP_STDIO === "1";
 }
 
-// ─── Global error handlers ──────────────────────────────────────────────────
-//
-// These catch errors that escape the LSP handler stack and log them to the
-// ErrorLog singleton (ring buffer, max 200 entries). From there they are
-// forwarded to the connection console. The client also receives the error
-// count via a custom notification so it can update the status bar badge.
-//
-// Note: logError needs a Connection to write to the LSP console. During early
-// startup the connection may not exist yet, so we fall back to process.stderr.
-// The cast through `unknown` is intentional — we provide only the subset of
-// Connection needed by logError (console.error) before the real connection
-// exists.
-
 if (shouldListen()) {
-  // Install handlers before anything else so we catch startup errors.
-  process.on("uncaughtException", (err: Error) => {
-    logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
-      ErrorCategory.System,
-      "uncaughtException",
-      err,
-    );
-  });
-
-  process.on("unhandledRejection", (reason: unknown) => {
-    logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
-      ErrorCategory.System,
-      "unhandledRejection",
-      reason,
-    );
-  });
+  // Install fail-fast handlers before anything else so we catch startup errors.
+  // These log uncaughtException/unhandledRejection to the ErrorLog ring buffer
+  // and then exit(1) — see serverLifecycle.ts for details.
+  installFailFastHandlers();
 
   const connection = createConnection(ProposedFeatures.all);
 

@@ -109,3 +109,41 @@ bash scripts/test-pike.sh
 ```
 
 Expected outcome: all commands pass with raw terminal output captured in the PR/phase notes. If a phase intentionally adds RED tests first, capture the failing command before implementing the GREEN fix.
+
+### Observed outputs (measured)
+
+Run against Pike 8.0.1116 on Linux, Node 22, Bun:
+
+| Command | Result |
+|---------|--------|
+| `bun run typecheck` | Exit 0 — no type errors. |
+| `bun run build` | Exit 0 — `server/dist/server.mjs` (2.9 MB) and `client/dist/extension.cjs` (785 KB) emitted. |
+| `bun run test` | 497 pass, 0 fail, 0 skip across the full suite. |
+| `bash scripts/test-pike.sh` | Exit 0 — worker protocol and watchdog contract exercised against real `pike`. |
+
+The resource-resilience test groups, run in isolation, all pass:
+
+```bash
+bun test tests/lsp/configuration.test.ts \
+         tests/lsp/resourceState.test.ts \
+         tests/lsp/lifecycle.test.ts \
+         tests/lsp/persistentCache.test.ts \
+         tests/lsp/resourceResilience.test.ts \
+         tests/lsp/pikeWorker.test.ts \
+         tests/lsp/shutdown.test.ts \
+         tests/lsp/error-handling.test.ts \
+         tests/lsp/errorLog.test.ts \
+         tests/lsp/resourceDocs.test.ts \
+         tests/lsp/hibernation.test.ts \
+         tests/lsp/backgroundIndex.test.ts \
+         tests/lsp/importDependencies.test.ts \
+         tests/lsp/crossFileResolution.test.ts \
+         tests/lsp/workspaceSymbol.test.ts \
+         tests/lsp/references.test.ts \
+         tests/lsp/workspaceIndex.test.ts
+```
+
+Tests that require a live `pike` binary are gated with `describe.skipIf(!pikeAvailable)`, so the
+suite stays green on hosts without Pike; run them on a Pike-equipped host for full coverage. The
+synthetic-workspace benchmark lives in `tests/perf/large-workspace.test.ts` and exercises the
+open-files scaling claim without an external service.

@@ -50,6 +50,8 @@ export interface ResourceStateNotification {
   heapMb?: number;
   /** Number of indexed entries, when relevant. */
   entryCount?: number;
+  /** Epoch milliseconds when the notification was emitted. */
+  timestamp: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -96,6 +98,8 @@ export interface ResourceConfiguration {
     dependencyClosureDepth: number;
     /** Max dependency closure total entries when mode is openFiles. */
     dependencyClosureCount: number;
+    /** Max discovered file count for `auto` mode to upgrade to `full`. */
+    fullScanFileLimit: number;
   };
   memory: MemoryBudget;
   worker: {

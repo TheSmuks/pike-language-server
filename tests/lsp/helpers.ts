@@ -69,6 +69,16 @@ export interface TestServerOptions {
   rootUri?: string | null;
   /** Optional handler for workspace/semanticTokens/refresh requests. */
   semanticTokensRefreshHandler?: () => void;
+  /** Advertise window.workDoneProgress capability and track progress notifications. */
+  workDoneProgress?: boolean;
+  /** Initialization options passed to the server during initialize. */
+  initializationOptions?: Record<string, unknown>;
+}
+
+/** A single workDoneProgress notification received from the server. */
+export interface ProgressEvent {
+  token: string | number;
+  value: { kind: string; title?: string; message?: string; percentage?: number };
 }
 
 export interface TestServer {
@@ -82,6 +92,10 @@ export interface TestServer {
   c2s: PassThrough;
   /** Server-to-client stream for raw response reading. */
   s2c: PassThrough;
+  /** Progress notifications received (only populated when workDoneProgress enabled). */
+  progressEvents: ProgressEvent[];
+  /** Cancel a work-done-progress token by sending a cancel notification. */
+  cancelProgress(token: string | number): void;
   /** Tear down both connections and streams. */
   teardown(): Promise<void>;
 }
@@ -132,13 +146,28 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
     options?.semanticTokensRefreshHandler?.();
     return null;
   });
+
+  // Track workDoneProgress notifications when the capability is enabled.
+  const progressEvents: ProgressEvent[] = [];
+  if (options?.workDoneProgress) {
+    client.onRequest("window/workDoneProgress/create", (params: { token: string | number }) => {
+      return Promise.resolve();
+    });
+    client.onNotification("$/progress", (params: { token: string | number; value: ProgressEvent["value"] }) => {
+      progressEvents.push({ token: params.token, value: params.value });
+    });
+  }
+
   client.listen();
 
   // Perform LSP initialization handshake
   await client.sendRequest("initialize", {
     processId: null,
     rootUri: options?.rootUri ?? null,
-    capabilities: {},
+    capabilities: {
+      window: options?.workDoneProgress ? { workDoneProgress: {} } : undefined,
+    },
+    initializationOptions: options?.initializationOptions,
   });
   // The initialized notification triggers parser init
   client.sendNotification("initialized", {});
@@ -154,6 +183,10 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
     server,
     c2s,
     s2c,
+    progressEvents,
+    cancelProgress(token: string | number): void {
+      client.sendNotification("$/cancelProgress", { token });
+    },
     openDoc(uri: string, text: string, languageId = "pike"): string {
       const version = nextDocVersion++;
       // Send didOpen through the client so TextDocuments picks it up

@@ -192,3 +192,70 @@ describe("parseResourceConfig: dependency closure", () => {
     expect(config.indexing.dependencyClosureCount).toBe(10_000);
   });
 });
+
+// ---------------------------------------------------------------------------
+// T045: full/auto/openFiles mode behavior tests (US2)
+//
+// Tests resolveAutoMode() and fullScanFileLimit parsing. These exercise the
+// mode-gating contract: `auto` behaves like `full` only when the workspace
+// discovery count is at or below `fullScanFileLimit`; otherwise it falls back
+// to `openFiles`.
+// ---------------------------------------------------------------------------
+
+import { resolveAutoMode } from "../../server/src/features/resourceConfiguration";
+
+describe("T045: indexing mode resolution (US2)", () => {
+  test("fullScanFileLimit defaults to 500", () => {
+    const config = parseResourceConfig(undefined);
+    expect(config.indexing.fullScanFileLimit).toBe(500);
+  });
+
+  test("fullScanFileLimit is parsed from settings", () => {
+    const config = parseResourceConfig({ indexFullScanFileLimit: 1000 });
+    expect(config.indexing.fullScanFileLimit).toBe(1000);
+  });
+
+  test("fullScanFileLimit clamps below minimum (0)", () => {
+    const config = parseResourceConfig({ indexFullScanFileLimit: -1 });
+    expect(config.indexing.fullScanFileLimit).toBe(0);
+  });
+
+  test("fullScanFileLimit clamps above maximum", () => {
+    const config = parseResourceConfig({ indexFullScanFileLimit: 999_999 });
+    expect(config.indexing.fullScanFileLimit).toBe(50_000);
+  });
+
+  test("non-number fullScanFileLimit falls back to default", () => {
+    const config = parseResourceConfig({ indexFullScanFileLimit: "lots" as any });
+    expect(config.indexing.fullScanFileLimit).toBe(500);
+  });
+
+  test("resolveAutoMode: auto under limit resolves to full", () => {
+    expect(resolveAutoMode("auto", 100, 500)).toBe("full");
+  });
+
+  test("resolveAutoMode: auto at limit resolves to full (inclusive)", () => {
+    expect(resolveAutoMode("auto", 500, 500)).toBe("full");
+  });
+
+  test("resolveAutoMode: auto over limit falls back to openFiles", () => {
+    expect(resolveAutoMode("auto", 501, 500)).toBe("openFiles");
+  });
+
+  test("resolveAutoMode: auto with zero files resolves to full", () => {
+    expect(resolveAutoMode("auto", 0, 500)).toBe("full");
+  });
+
+  test("resolveAutoMode: auto with fullScanFileLimit 0 always falls back to openFiles", () => {
+    expect(resolveAutoMode("auto", 1, 0)).toBe("openFiles");
+    expect(resolveAutoMode("auto", 0, 0)).toBe("full");
+  });
+
+  test("resolveAutoMode: full passes through unchanged", () => {
+    expect(resolveAutoMode("full", 999_999, 500)).toBe("full");
+  });
+
+  test("resolveAutoMode: openFiles passes through unchanged", () => {
+    expect(resolveAutoMode("openFiles", 0, 500)).toBe("openFiles");
+  });
+});

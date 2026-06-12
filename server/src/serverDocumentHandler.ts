@@ -8,6 +8,8 @@
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Connection } from "vscode-languageserver/node";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { initParser, isParserReady, parse, deleteTree } from "./parser";
 import { ModificationSource } from "./features/workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
@@ -23,14 +25,17 @@ export function registerDocumentHandlers(
   ctx: ServerContext,
 ): void {
   documents.onDidOpen(async (event) => {
+    ctx.hibernationManager.onDocumentOpen();
     await handleDidOpen(ctx, event.document);
   });
 
   documents.onDidChangeContent(async (event) => {
+    ctx.hibernationManager.recordActivity();
     await handleDidChangeContent(ctx, event.document);
   });
 
   documents.onDidClose((event) => {
+    ctx.hibernationManager.onDocumentClose();
     handleDidClose(ctx, event.document.uri);
   });
 
@@ -169,6 +174,102 @@ async function indexOpenedDocumentFast(
   return invalidated.length + reWired.length;
 }
 
+// ---------------------------------------------------------------------------
+// Dependency-closure indexing (T053)
+// ---------------------------------------------------------------------------
+
+/**
+ * Proactively index the transitive dependency closure of an opened file.
+ *
+ * When a document is opened in openFiles mode, only that file is indexed.
+ * Cross-file features (go-to-def, references) need the file's dependencies
+ * too. This function walks the dependency graph breadth-first, reading
+ * and indexing each dependency from disk, bounded by depth and count caps.
+ *
+ * Already-indexed files are skipped — only missing dependencies are read.
+ * Fire-and-forget: callers must not await this for didOpen responsiveness.
+ *
+ * Returns the number of newly indexed files.
+ */
+export async function indexDependencyClosure(
+  ctx: ServerContext,
+  rootUri: string,
+): Promise<number> {
+  const depthMax = ctx.resourceConfig.indexing.dependencyClosureDepth;
+  const countMax = ctx.resourceConfig.indexing.dependencyClosureCount;
+  if (depthMax <= 0 || countMax <= 0) return 0;
+
+  const index = ctx.index;
+  const visited = new Set<string>([rootUri]);
+  let indexedCount = 0;
+  let frontier: string[] = [rootUri];
+
+  for (let depth = 0; depth < depthMax && frontier.length > 0; depth++) {
+    const nextFrontier: string[] = [];
+
+    for (const uri of frontier) {
+      // Resolve this file's dependencies if not already done.
+      await index.ensureDependenciesResolved(uri);
+      const entry = index.getFile(uri);
+      if (!entry) continue;
+
+      for (const depUri of entry.dependencies) {
+        if (visited.has(depUri)) continue;
+        visited.add(depUri);
+
+        // Already indexed by background scan or another closure.
+        if (index.getFile(depUri)) continue;
+        if (indexedCount >= countMax) return indexedCount;
+
+        // Read dependency from disk and index it.
+        const indexed = await indexDependencyFromDisk(ctx, depUri);
+        if (indexed) {
+          indexedCount++;
+          nextFrontier.push(depUri);
+        }
+      }
+    }
+
+    frontier = nextFrontier;
+  }
+
+  return indexedCount;
+}
+
+/**
+ * Read a single file from disk, parse it, and insert as a background entry.
+ * Returns true if the file was successfully indexed, false on any error.
+ */
+async function indexDependencyFromDisk(
+  ctx: ServerContext,
+  uri: string,
+): Promise<boolean> {
+  let filePath: string;
+  try {
+    filePath = fileURLToPath(uri);
+  } catch {
+    // Not a file:// URI — can't read from disk.
+    return false;
+  }
+
+  let content: string;
+  try {
+    content = await readFile(filePath, "utf-8");
+  } catch {
+    // File may not exist on disk (resolved import that's a built-in module).
+    return false;
+  }
+
+  try {
+    const tree = parse(content, uri);
+    if (!tree) return false;
+    ctx.index.upsertBackgroundFile(uri, 1, tree, content);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function handleDidOpen(
   ctx: ServerContext,
   doc: TextDocument,
@@ -188,6 +289,23 @@ async function handleDidOpen(
     return;
   }
 
+  // The onDidChangeContent event (fired by TextDocuments on initial open)
+  // triggers a full upsert via parseAndIndexDocument. That full upsert
+  // invalidates the entry (nulls symbolTable) then asynchronously rebuilds
+  // it. We must wait for that upsert to complete before indexing the
+  // dependency closure — otherwise ensureDependenciesResolved sees a null
+  // symbolTable and returns false.
+  const inFlight = ctx.upsertInFlight.get(doc.uri);
+  if (inFlight) {
+    await inFlight.catch(() => {});
+  }
+
+  // Proactively index the dependency closure of the opened file.
+  // Bounded by dependencyClosureDepth and dependencyClosureCount from config.
+  // Fire-and-forget: didOpen must not block on closure indexing.
+  void indexDependencyClosure(ctx, doc.uri).catch((err) => {
+    logError(ctx.connection, ErrorCategory.System, `indexDependencyClosure(${doc.uri})`, err);
+  });
 }
 
 async function handleDidChangeContent(

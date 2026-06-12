@@ -25,9 +25,10 @@
  *       <contentHash2>.json  — ...
  */
 
-import { mkdir, readFile, writeFile, rm, readdir, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, rm, readdir, rename, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   Declaration,
   Reference,
@@ -59,6 +60,10 @@ export interface CachedFileEntry {
   /** Forward dependency URIs (inherit/import targets), persisted for M3. */
   dependencies: string[];
   symbolTable: SerializedSymbolTable | null;
+  /** Last-modified time of the source file when cached (ms epoch). */
+  mtimeMs?: number;
+  /** Size of the source file in bytes when cached. */
+  sizeBytes?: number;
 }
 
 /** CacheIndex: small root file with format version and WASM hash.
@@ -81,6 +86,10 @@ const CACHE_SUBDIR = "cache";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
 const FORMAT_VERSION = 2; // Per-file entries (was 1: monolithic)
 const MAX_ENTRIES = 100_000;
+/** Maximum entries to load in one batch. Prevents memory spike on large caches. */
+const LOAD_BATCH_SIZE = 50;
+/** If cache has more entries than this on load, wipe and rebuild from scratch. */
+const MAX_CACHE_ENTRIES_ON_LOAD = 50_000;
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -122,10 +131,12 @@ export async function saveCache(
     return;
   }
 
-  // Collect and serialize entries with forward dependencies.
+  // T035: Collect live entries — stale cache files for deleted files are pruned.
+  const liveEntries = new Set<string>();
   const entries: CachedFileEntry[] = [];
   for (const fileEntry of index.getAllEntries()) {
     if (!fileEntry.symbolTable) continue;
+    liveEntries.add(fileEntry.contentHash);
     entries.push({
       uri: fileEntry.uri,
       version: fileEntry.version,
@@ -134,6 +145,13 @@ export async function saveCache(
       symbolTable: serializeSymbolTable(fileEntry.symbolTable),
     });
   }
+
+  // T035: Prune stale entries — files no longer in the index get deleted.
+  await pruneStaleEntries(cacheDir, liveEntries);
+
+  // T031/T033: Stat source files to populate mtime/size metadata.
+  // Old-format entries that lacked these fields are upgraded on this save.
+  await populateSourceMetadata(entries);
 
   // Write all entries in parallel batches, then write the index atomically.
   await writeEntriesBatched(cacheDir, entries);
@@ -167,13 +185,15 @@ export async function loadCache(
   }
 
   // Validate index hash/version; delete cache and return null on mismatch.
-  const cacheIndex = await readAndValidateCacheIndex(cacheDir, indexPath, currentWasmHash);
+  const cacheIndex = await readAndValidateCacheIndex(workspaceRoot, indexPath, currentWasmHash);
   if (!cacheIndex) return null;
 
-  // Scan and load all cache entries in parallel.
+  // Scan and load all cache entries in bounded batches.
+  // Returns null if overflow wipe occurred — caller treats as cache miss.
   const results = await loadCacheEntries(cacheDir, CACHE_SUBDIR);
   stopSpan("loadCache");
-  return results.length > 0 ? results : null;
+  if (results === null || results.length === 0) return null;
+  return results;
 }
 
 /**
@@ -260,6 +280,77 @@ async function writeEntriesBatched(cacheDir: string, entries: CachedFileEntry[])
   }
 }
 
+/**
+ * T035: Prune stale cache entries.
+ *
+ * Deletes cache files that are no longer in the live index (e.g. files
+ * deleted from the workspace). Keeps temp files alone (they'll be cleaned
+ * by the atomic-write logic). Errors on individual deletes are non-fatal.
+ */
+async function pruneStaleEntries(cacheDir: string, liveHashes: Set<string>): Promise<void> {
+  let existingFiles: string[];
+  try {
+    existingFiles = await readdir(cacheDir);
+  } catch {
+    return;
+  }
+
+  const staleFiles = existingFiles.filter(file => {
+    if (!file.endsWith(".json")) return false;
+    if (file.includes(".tmp.")) return false;
+    // Extract contentHash from filename: <contentHash>.json
+    const hash = file.slice(0, -5); // strip ".json"
+    return !liveHashes.has(hash);
+  });
+
+  if (staleFiles.length === 0) return;
+
+  await Promise.all(staleFiles.map(async (file) => {
+    try {
+      await rm(join(cacheDir, file), { force: true });
+      bump("cacheEntryPrunes");
+    } catch {
+      // Non-fatal — stale file will be retried on next save.
+    }
+  }));
+}
+
+/**
+ * T031/T033: Stat source files to populate mtime/size metadata.
+ *
+ * Old-format cache entries that lacked these fields are upgraded on save.
+ * On the next load, mtime/size enables fast staleness checks without a
+ * full content read. Files not on disk (e.g. open-only, unsaved docs)
+ * are left undefined — the entry still saves, it just lacks fast-check data.
+ *
+ * Stats are batched to avoid opening too many file descriptors at once.
+ */
+async function populateSourceMetadata(entries: CachedFileEntry[]): Promise<void> {
+  for (let i = 0; i < entries.length; i += LOAD_BATCH_SIZE) {
+    const batch = entries.slice(i, i + LOAD_BATCH_SIZE);
+    await Promise.all(batch.map(async (entry) => {
+      const meta = await statSourceFile(entry.uri);
+      if (meta) {
+        entry.mtimeMs = meta.mtimeMs;
+        entry.sizeBytes = meta.sizeBytes;
+      }
+    }));
+  }
+}
+
+/** Stat a source file by URI. Returns null if the file is not on disk. */
+async function statSourceFile(uri: string): Promise<{ mtimeMs: number; sizeBytes: number } | null> {
+  try {
+    const filePath = fileURLToPath(uri);
+    const stats = await stat(filePath);
+    return { mtimeMs: stats.mtimeMs, sizeBytes: stats.size };
+  } catch {
+    // File may not exist on disk (open-only document, virtual file).
+    // Leave metadata undefined — the entry still saves without it.
+    return null;
+  }
+}
+
 async function writeCacheIndexAtomically(workspaceRoot: string, wasmHash: string, entryCount: number): Promise<void> {
   startSpan("serializeCacheIndex");
   const indexData = JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount });
@@ -269,7 +360,7 @@ async function writeCacheIndexAtomically(workspaceRoot: string, wasmHash: string
 }
 
 async function readAndValidateCacheIndex(
-  cacheDir: string,
+  workspaceRoot: string,
   indexPath: string,
   currentWasmHash: string,
 ): Promise<CacheIndex | null> {
@@ -284,20 +375,20 @@ async function readAndValidateCacheIndex(
     cacheIndex = JSON.parse(raw);
   } catch {
     stopSpan("deserializeCache");
-    await deleteCache(cacheDir);
+    await deleteCache(workspaceRoot);
     return null;
   }
 
   if (cacheIndex.formatVersion !== FORMAT_VERSION || cacheIndex.wasmHash !== currentWasmHash) {
     stopSpan("deserializeCache");
-    await deleteCache(cacheDir);
+    await deleteCache(workspaceRoot);
     return null;
   }
   stopSpan("deserializeCache");
   return cacheIndex;
 }
 
-async function loadCacheEntries(cacheDir: string, subdir: string): Promise<CachedFileEntry[]> {
+async function loadCacheEntries(cacheDir: string, subdir: string): Promise<CachedFileEntry[] | null> {
   const cacheSubdir = join(cacheDir, subdir);
   if (!existsSync(cacheSubdir)) return [];
 
@@ -308,27 +399,76 @@ async function loadCacheEntries(cacheDir: string, subdir: string): Promise<Cache
     return [];
   }
 
-  const results: CachedFileEntry[] = [];
   const jsonFiles = cacheFiles.filter(f => f.endsWith(".json") && !f.includes(".tmp."));
 
-  await Promise.all(jsonFiles.map(async (file) => {
-    try {
-      const entryPath = join(cacheSubdir, file);
-      startSpan("cacheRead");
-      const entryRaw = await readFile(entryPath, "utf-8");
-      bump("cacheDiskReads");
-      stopSpan("cacheRead");
+  // T032: Overflow protection — if cache is unreasonably large, wipe and rebuild.
+  if (jsonFiles.length > MAX_CACHE_ENTRIES_ON_LOAD) {
+    bump("cacheEntryPrunes");
+    await rm(cacheSubdir, { recursive: true, force: true });
+    return null;
+  }
 
-      const entry: CachedFileEntry = JSON.parse(entryRaw);
-      if (!entry.uri || !entry.contentHash || !("symbolTable" in entry)) return;
-      if (!Array.isArray(entry.dependencies)) entry.dependencies = [];
+  // T032: Bounded-batch loading — process entries in chunks to avoid memory spikes.
+  const results: CachedFileEntry[] = [];
+  const seenUris = new Set<string>();
+  let corruptCount = 0;
+
+  for (let i = 0; i < jsonFiles.length; i += LOAD_BATCH_SIZE) {
+    const batch = jsonFiles.slice(i, i + LOAD_BATCH_SIZE);
+    await Promise.all(batch.map(async (file) => {
+      const entry = await loadSingleEntry(cacheSubdir, file);
+      if (!entry) {
+        corruptCount++;
+        return;
+      }
+
+      // T034: Skip duplicates — keep the first entry for each URI.
+      if (seenUris.has(entry.uri)) {
+        bump("cacheEntryPrunes");
+        return;
+      }
+      seenUris.add(entry.uri);
+
+      // T033: Old-format entries may lack mtimeMs/sizeBytes — leave undefined.
+      // The workspace index will stat the source file on first access and
+      // populate these fields on the next cache save.
       results.push(entry);
-    } catch {
-      // Skip corrupt entries — they will be rebuilt on next save.
-    }
-  }));
+    }));
+  }
 
+  if (corruptCount > 0) {
+    bump("cacheEntryPrunes");
+  }
+
+  bump("cacheEntryLoads");
   return results;
+}
+
+/**
+ * Load and validate a single cache entry.
+ * Returns null for corrupt or invalid entries (self-healing).
+ */
+async function loadSingleEntry(cacheSubdir: string, file: string): Promise<CachedFileEntry | null> {
+  try {
+    const entryPath = join(cacheSubdir, file);
+    startSpan("cacheRead");
+    const entryRaw = await readFile(entryPath, "utf-8");
+    bump("cacheDiskReads");
+    stopSpan("cacheRead");
+
+    const entry: CachedFileEntry = JSON.parse(entryRaw);
+
+    // T034: Validate required fields — skip corrupt entries.
+    if (!entry.uri || typeof entry.uri !== "string") return null;
+    if (!entry.contentHash || typeof entry.contentHash !== "string") return null;
+    if (!("symbolTable" in entry)) return null;
+    if (!Array.isArray(entry.dependencies)) entry.dependencies = [];
+
+    return entry;
+  } catch {
+    // Skip corrupt entries — they will be rebuilt on next save.
+    return null;
+  }
 }
 
 /**

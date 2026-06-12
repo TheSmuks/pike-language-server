@@ -22,6 +22,12 @@ export interface PikeWorkerConfig {
   /** Path to the Pike binary. Default: "pike". */
   pikeBinaryPath: string;
   /**
+   * Heartbeat interval in milliseconds. The server sends periodic heartbeat
+   * notifications to the worker so it can self-terminate if the server crashes
+   * or hibernates. Default: 30000 (30s).
+   */
+  heartbeatIntervalMs?: number;
+  /**
    * Extra directories to add to LD_LIBRARY_PATH when spawning the Pike
    * worker subprocess. Useful on systems where Pike's native modules
    * depend on libraries not on the default linker search path.

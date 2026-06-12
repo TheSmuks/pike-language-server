@@ -20,7 +20,8 @@ import {
 import { produceCodeActions } from "./codeAction";
 import { produceAutodocTemplateActions } from "./autodocTemplate";
 import { produceGetterSetterActions } from "./getterSetter";
-import { searchWorkspaceSymbols } from "./workspaceSymbol";
+import { searchWorkspaceSymbolsLazy } from "./workspaceSymbol";
+import { prepareGlobalQuery } from "./workspaceResolution";
 import stdlibAutodocIndexRaw from "../data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "../data/predef-builtin-index.json";
 import {
@@ -115,7 +116,9 @@ export function registerRefactoringHandlers(
 
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
-    return searchWorkspaceSymbols(params.query ?? "", ctx.index);
+    return searchWorkspaceSymbolsLazy(
+      params.query ?? "", ctx.index, ctx.connection, token,
+    );
   });
 
   connection.onPrepareRename(async (params, token: CancellationToken) => {
@@ -136,6 +139,18 @@ export function registerRefactoringHandlers(
     if (!table) return null;
     const validationError = validateRenameName(params.newName);
     if (validationError) return new ResponseError(ErrorCodes.InvalidRequest, validationError);
+
+    // Ensure the workspace is fully indexed for complete cross-file rename
+    // results. Renames that miss a reference are destructive — partial results
+    // are never acceptable (contracts/lsp-resource-state.md).
+    await prepareGlobalQuery({
+      connection: ctx.connection,
+      index: ctx.index,
+      workspaceRoot: ctx.index.workspaceRoot,
+      cancellationToken: token,
+    });
+    if (token.isCancellationRequested) return null;
+
     const renameResult = await getRenameLocations(table, params.textDocument.uri, params.position.line, params.position.character, ctx.index, protectedNames);
     if (!renameResult) return new ResponseError(ErrorCodes.InvalidRequest, "No renamable symbol at the given position");
     if (renameResult.oldName === params.newName) return new ResponseError(ErrorCodes.InvalidRequest, "New name is the same as the current name");

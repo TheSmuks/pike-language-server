@@ -22,12 +22,13 @@ import {
 import stdlibAutodocIndexRaw from "./data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "./data/predef-builtin-index.json";
 import predefAutodocIndexRaw from "./data/predef-autodoc.json";
-import { logError, logWarn, ErrorCategory } from "./util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
 import { DEFAULT_RESOURCE_CONFIG } from "./features/resourceConfiguration";
 import type { ResourceConfiguration } from "./features/resourceTypes";
 import { ResourceStateTracker, createResourceStateSender } from "./features/resourceState";
+import { HibernationManager, HIBERNATION_DEFAULTS } from "./features/hibernation";
 import { CancellationTokenSource } from "vscode-languageserver/node";
 
 // ---------------------------------------------------------------------------
@@ -77,6 +78,8 @@ export interface ServerContext {
   resourceConfig: ResourceConfiguration;
   /** Resource-state tracker (activity, hibernation, state transitions). */
   resourceState: ResourceStateTracker;
+  /** Hibernation manager — tracks idle timer and triggers hibernate/wake. */
+  hibernationManager: HibernationManager;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +195,53 @@ export function createServerContext(
   const resourceCts = new CancellationTokenSource();
   const resourceState = new ResourceStateTracker(resourceStateSender, resourceCts);
 
+  // Mutable holder for the background-index CTS. The lifecycle handler sets
+  // this when background indexing starts. The hibernation callback reads it
+  // to cancel indexing during hibernation. This indirection is needed because
+  // the context object is not available during construction.
+  const bgIndexCtsHolder: { cts?: CancellationTokenSource } = {};
+
+  // Create hibernation manager. Callbacks reference objects created above
+  // (worker, index, cache). The manager drives hibernate/wake via these hooks.
+  // The idle check timer is started by the server lifecycle handler after init.
+  const hibernationManager = new HibernationManager(
+    {
+      ...HIBERNATION_DEFAULTS,
+      idleTimeoutMs: HIBERNATION_DEFAULTS.idleTimeoutMs,
+    },
+    {
+      onCancelBackgroundIndex: async () => {
+        if (bgIndexCtsHolder.cts) {
+          bgIndexCtsHolder.cts.cancel();
+          bgIndexCtsHolder.cts = new CancellationTokenSource();
+        }
+      },
+      onSaveCache: async () => {
+        const { saveCache, computeWasmHash } = await import("./features/persistentCache");
+        const { resolve: resolvePath, dirname: dirnamePath } = await import("node:path");
+        const { fileURLToPath: toFilePath } = await import("node:url");
+        const wasmPath = resolvePath(
+          dirnamePath(toFilePath(import.meta.url)),
+          "tree-sitter-pike.wasm",
+        );
+        const wasmHash = computeWasmHash(wasmPath);
+        await saveCache(index.workspaceRoot, index, wasmHash);
+      },
+      onClearIndex: () => {
+        index.clear();
+      },
+      onStopWorker: () => {
+        worker.stop();
+      },
+      onWakeStart: async () => {
+        // Rehydration happens through normal on-demand indexing on next request.
+      },
+      onSustainedActivity: () => {
+        logInfo(connection, "[hibernation] sustained activity — scheduling reindex");
+      },
+    },
+  );
+
   return {
     connection,
     documents,
@@ -213,6 +263,7 @@ export function createServerContext(
     pendingParserDocuments: new Map<string, TextDocument>(),
     resourceConfig: DEFAULT_RESOURCE_CONFIG,
     resourceState,
+    hibernationManager,
   };
 }
 

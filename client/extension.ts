@@ -527,6 +527,14 @@ export function activate(context: vscode.ExtensionContext): void {
           );
           context.subscriptions.push(
             client.onNotification(
+              "pike/resourceState",
+              (params: { state: string; detail?: string }) => {
+                setResourceState(params.state as any, params.detail);
+              },
+            ),
+          );
+          context.subscriptions.push(
+            client.onNotification(
               "pike/log",
               (params: { level: string; lines: string[] }) => {
                 const level = params.level === "WARN" ? "warn"
