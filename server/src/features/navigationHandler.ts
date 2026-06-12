@@ -47,6 +47,8 @@ export interface NavigationContext {
   debugTelemetry: boolean;
   /** Connection for logging when content is unexpectedly null. */
   connection: Connection;
+  /** Called before each request — records activity and gates on wake. */
+  beforeRequest?: () => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------

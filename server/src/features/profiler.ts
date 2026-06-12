@@ -63,6 +63,24 @@ export interface ProfilerCounters {
   treeEvictions: number;
   /** Number of inheritance wiring operations (wireInheritance). */
   inheritanceWiringOps: number;
+  /** Number of cache entries loaded from disk on startup. */
+  cacheEntryLoads: number;
+  /** Number of cache entries migrated from old format. */
+  cacheEntryMigrations: number;
+  /** Number of cache entries pruned (superseded/duplicate/corrupt). */
+  cacheEntryPrunes: number;
+  /** Number of index entries demoted to stub under memory pressure. */
+  indexDemotions: number;
+  /** Number of demoted entries rehydrated from cache/source. */
+  indexRehydrations: number;
+  /** Number of hibernation transitions (enter only). */
+  hibernations: number;
+  /** Number of Pike worker restarts after timeout/crash. */
+  workerRestarts: number;
+  /** Number of Pike worker heartbeat checks performed. */
+  workerHeartbeats: number;
+  /** Number of Pike worker heartbeat failures detected. */
+  workerHeartbeatFailures: number;
 }
 
 interface PendingSpan {
@@ -96,6 +114,15 @@ function freshCounters(): ProfilerCounters {
     lazyDepResolutionCalls: 0,
     treeEvictions: 0,
     inheritanceWiringOps: 0,
+    cacheEntryLoads: 0,
+    cacheEntryMigrations: 0,
+    cacheEntryPrunes: 0,
+    indexDemotions: 0,
+    indexRehydrations: 0,
+    hibernations: 0,
+    workerRestarts: 0,
+    workerHeartbeats: 0,
+    workerHeartbeatFailures: 0,
   };
 }
 

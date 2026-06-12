@@ -138,7 +138,8 @@ export { wireInheritance } from './scopeBuilder';
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { pushScope, popScope, toRangeUtf16, resolveTypeName } from './scope-helpers';
+import { toRangeUtf16, resolveTypeName } from './scope-helpers';
+import { pushScope, popScope } from './scope-helpers-state';
 import { wireInheritance } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';

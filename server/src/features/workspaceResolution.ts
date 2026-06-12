@@ -33,6 +33,14 @@ function getFile(ctx: ResolutionContext, uri: string): FileEntry | undefined {
   return ctx.files.get(normalizeUri(uri));
 }
 
+// Global query preparation lives in globalQueryPrep.ts; re-exported here so
+// existing import sites (and the resource-resilience tests) stay unchanged.
+export {
+  prepareGlobalQuery,
+  type GlobalQueryPrepOptions,
+  DegradedGlobalUnavailableError,
+} from "./globalQueryPrep";
+
 // ---------------------------------------------------------------------------
 // Cross-file resolution
 // ---------------------------------------------------------------------------
@@ -335,25 +343,28 @@ async function searchInheritChainForSymbol(
   currentDepth: number,
 ): Promise<{ uri: string; decl: Declaration } | null> {
   for (const decl of table.declarations) {
-    if (decl.kind === "inherit" || decl.kind === "import") {
-      const target = await resolveInheritTarget(ctx, decl, uri);
-      if (target) {
-        const targetEntry = getFile(ctx, target.uri);
-        if (targetEntry?.symbolTable) {
-          // Check direct declarations in the target file.
-          for (const targetDecl of targetEntry.symbolTable.declarations) {
-            if (targetDecl.name === ref.name) {
-              return { uri: target.uri, decl: targetDecl };
-            }
-          }
-          // Recurse: check what the target itself inherits.
-          const transitive = await resolveUnresolvedReference(
-            ctx, ref, targetEntry.symbolTable, target.uri, seen, currentDepth + 1,
-          );
-          if (transitive) return transitive;
-        }
-      }
-    }
+    if (decl.kind !== "inherit" && decl.kind !== "import") continue;
+    const target = await resolveInheritTarget(ctx, decl, uri);
+    if (!target) continue;
+    const targetEntry = getFile(ctx, target.uri);
+    if (!targetEntry?.symbolTable) continue;
+    const direct = findDirectDeclaration(targetEntry.symbolTable, target.uri, ref.name);
+    if (direct) return direct;
+    const transitive = await resolveUnresolvedReference(
+      ctx, ref, targetEntry.symbolTable, target.uri, seen, currentDepth + 1,
+    );
+    if (transitive) return transitive;
+  }
+  return null;
+}
+
+function findDirectDeclaration(
+  table: SymbolTable,
+  uri: string,
+  name: string,
+): { uri: string; decl: Declaration } | null {
+  for (const decl of table.declarations) {
+    if (decl.name === name) return { uri, decl };
   }
   return null;
 }

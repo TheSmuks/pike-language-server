@@ -263,6 +263,7 @@ function resolveName(name: string, refNode: Node, state: BuildState): number | n
 
   // Walk scope chain outward
   let scopeId: number | null = refScopeId;
+  // Bounded: each iteration moves to parentId in the finite scope tree.
   while (scopeId !== null) {
     const scope = state.scopeMap.get(scopeId);
     if (!scope) break;

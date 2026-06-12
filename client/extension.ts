@@ -27,6 +27,12 @@ import {
   onErrorCountChange,
   resetListeners,
 } from "./errorNotificationState";
+import {
+  setResourceState,
+  onResourceStateChange,
+  resetResourceListeners,
+  resourceStateLabel,
+} from "./resourceNotificationState";
 
 let client: LanguageClient | undefined;
 
@@ -206,6 +212,15 @@ function getSettings(): Record<string, unknown> {
 
     // Logging
     logPathRedactionEnabled: config.get<boolean>("log.redactPaths", true),
+
+    // Resource-resilience settings
+    indexingMode: config.get<string>("indexing.mode", "openFiles"),
+    indexIgnoreGlobs: config.get<string[]>("indexing.ignoreGlobs", []),
+    indexMaxFileSizeBytes: config.get<number>("indexing.maxFileSizeBytes", 1048576),
+    memoryBudgetMb: config.get<number>("memory.budgetMb", 512),
+    workerHeartbeatIntervalMs: config.get<number>("worker.heartbeatIntervalMs", 10000),
+    workerWatchdogTimeoutMs: config.get<number>("worker.watchdogTimeoutMs", 60000),
+    hibernationIdleThresholdMs: config.get<number>("hibernation.idleThresholdMs", 600000),
   };
 }
 
@@ -399,6 +414,13 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
+  client.onNotification(
+    "pike/resourceState",
+    (params: { state: string; detail?: string }) => {
+      setResourceState(params.state as any, params.detail);
+    },
+  );
+
   // Server log lines — written to the same output channel with [SERVER] tag
   // so the format is consistent with client-side logs.
   client.onNotification(
@@ -457,6 +479,15 @@ export function activate(context: vscode.ExtensionContext): void {
   });
   context.subscriptions.push({ dispose: unsubscribeErrors });
 
+  // Update status bar with resource state (non-modal indicator).
+  const unsubscribeResource = onResourceStateChange((state, detail) => {
+    const label = resourceStateLabel(state);
+    if (label) {
+      statusBarItem.text = `$(server) Pike LSP (${label})`;
+    }
+  });
+  context.subscriptions.push({ dispose: unsubscribeResource });
+
   // Restart the server when settings change.
   // Guard against rapid-fire config changes creating duplicate clients.
   let restarting = false;
@@ -491,6 +522,14 @@ export function activate(context: vscode.ExtensionContext): void {
               "pike/errorCount",
               (params: { count: number }) => {
                 setErrorCount(params.count);
+              },
+            ),
+          );
+          context.subscriptions.push(
+            client.onNotification(
+              "pike/resourceState",
+              (params: { state: string; detail?: string }) => {
+                setResourceState(params.state as any, params.detail);
               },
             ),
           );

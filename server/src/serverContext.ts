@@ -22,9 +22,14 @@ import {
 import stdlibAutodocIndexRaw from "./data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "./data/predef-builtin-index.json";
 import predefAutodocIndexRaw from "./data/predef-autodoc.json";
-import { logError, logWarn, ErrorCategory } from "./util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
+import { DEFAULT_RESOURCE_CONFIG } from "./features/resourceConfiguration";
+import type { ResourceConfiguration } from "./features/resourceTypes";
+import { ResourceStateTracker, createResourceStateSender } from "./features/resourceState";
+import { HibernationManager, HIBERNATION_DEFAULTS } from "./features/hibernation";
+import { CancellationTokenSource } from "vscode-languageserver/node";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -69,6 +74,12 @@ export interface ServerContext {
   debugTelemetry: boolean;
   /** Latest document version dropped while parser initialization was pending. */
   pendingParserDocuments: Map<string, TextDocument>;
+  /** Resource-resilience configuration (indexing, memory, worker, hibernation). */
+  resourceConfig: ResourceConfiguration;
+  /** Resource-state tracker (activity, hibernation, state transitions). */
+  resourceState: ResourceStateTracker;
+  /** Hibernation manager — tracks idle timer and triggers hibernate/wake. */
+  hibernationManager: HibernationManager;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +170,45 @@ function loadStaticIndices(connection: Connection) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Create hibernation hooks referencing the worker, index, and bg-index CTS holder.
+ * The manager drives hibernate/wake via these callbacks.
+ */
+function createHibernationHooks(
+  connection: Connection,
+  worker: PikeWorker,
+  index: WorkspaceIndex,
+  bgIndexCtsHolder: { cts?: CancellationTokenSource },
+): import("./features/hibernation").HibernationCallbacks {
+  return {
+    onCancelBackgroundIndex: async () => {
+      if (bgIndexCtsHolder.cts) {
+        bgIndexCtsHolder.cts.cancel();
+        bgIndexCtsHolder.cts = new CancellationTokenSource();
+      }
+    },
+    onSaveCache: async () => {
+      const { saveCache, computeWasmHash } = await import("./features/persistentCache");
+      const { resolve: resolvePath, dirname: dirnamePath } = await import("node:path");
+      const { fileURLToPath: toFilePath } = await import("node:url");
+      const wasmPath = resolvePath(
+        dirnamePath(toFilePath(import.meta.url)),
+        "tree-sitter-pike.wasm",
+      );
+      const wasmHash = computeWasmHash(wasmPath);
+      await saveCache(index.workspaceRoot, index, wasmHash);
+    },
+    onClearIndex: () => { index.clear(); },
+    onStopWorker: () => { worker.stop(); },
+    onWakeStart: async () => {
+      // Rehydration happens through normal on-demand indexing on next request.
+    },
+    onSustainedActivity: () => {
+      logInfo(connection, "[hibernation] sustained activity — scheduling reindex");
+    },
+  };
+}
+
+/**
  * Create the shared mutable server context (documents, caches, index, etc.).
  * Called once at the top of createPikeServer.
  */
@@ -166,10 +216,7 @@ export function createServerContext(
   connection: Connection,
 ): ServerContext {
   const documents = new TextDocuments(TextDocument);
-  // Fire-and-forget parser init. handleInitialized awaits the cached promise
-  // later. The .catch() suppresses the early-rejection unhandled-promise
-  // warning — the same promise is re-awaitable via initParser() after the
-  // retry logic in parser.ts clears it on failure.
+  // Fire-and-forget parser init. handleInitialized awaits the cached promise.
   initParser().catch(() => {});
 
   const worker = setupWorker(connection);
@@ -179,6 +226,18 @@ export function createServerContext(
     worker, documents, connection, index, pikeCache,
   );
   const { stdlibIndex, predefBuiltins, predefAutodoc } = loadStaticIndices(connection);
+
+  const resourceStateSender = createResourceStateSender(connection);
+  const resourceCts = new CancellationTokenSource();
+  const resourceState = new ResourceStateTracker(resourceStateSender, resourceCts);
+
+  // Mutable holder for the background-index CTS.
+  const bgIndexCtsHolder: { cts?: CancellationTokenSource } = {};
+
+  const hibernationManager = new HibernationManager(
+    { ...HIBERNATION_DEFAULTS, idleTimeoutMs: HIBERNATION_DEFAULTS.idleTimeoutMs },
+    createHibernationHooks(connection, worker, index, bgIndexCtsHolder),
+  );
 
   return {
     connection,
@@ -199,6 +258,9 @@ export function createServerContext(
     predefAutodoc,
     debugTelemetry: false,
     pendingParserDocuments: new Map<string, TextDocument>(),
+    resourceConfig: DEFAULT_RESOURCE_CONFIG,
+    resourceState,
+    hibernationManager,
   };
 }
 

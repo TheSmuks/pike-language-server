@@ -10,9 +10,10 @@ import { initParser } from "../../server/src/parser";
 import { indexWorkspaceFiles } from "../../server/src/features/backgroundIndex";
 import { WorkspaceIndex } from "../../server/src/features/workspaceIndex";
 import type { Connection } from "vscode-languageserver/node";
-import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
 
 let server: TestServer;
 let tempDir: string;
@@ -143,12 +144,181 @@ describe("US-021: Background workspace indexing", () => {
         index,
         workspaceRoot: root,
         batchSize: 1,
+        indexingMode: "full",
         onFileIndexed: (uri) => indexedUris.push(uri),
       });
 
       expect(indexedUris.length).toBe(2);
       expect(indexedUris.some(uri => uri.endsWith("base.pike"))).toBe(true);
       expect(indexedUris.some(uri => uri.endsWith("child.pike"))).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T043 + T052: Indexing-mode gating and background index caps (US2)
+//
+// Goal: openFiles mode must not scan the workspace; full/auto modes discover
+// and index subject to ignore-glob, file-size, and file-count caps. These are
+// RED tests — the source changes in backgroundIndex.ts (T052) and the mode
+// gating in serverLifecycle.ts (T051) make them GREEN.
+// ---------------------------------------------------------------------------
+
+function makeTempWorkspace(fileCount: number): string {
+  const root = mkdtempSync(join(tmpdir(), "pike-lsp-mode-"));
+  for (let i = 0; i < fileCount; i++) {
+    writeFileSync(join(root, `file${i}.pike`), `class File${i} { int v; }\n`);
+  }
+  return root;
+}
+
+describe("T043: openFiles mode skips full workspace scan (US2)", () => {
+  test("openFiles mode does not index any workspace files", async () => {
+    const root = makeTempWorkspace(3);
+    try {
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "openFiles",
+      });
+
+      // No files should be indexed in openFiles mode.
+      const file0 = index.getFile(pathToFileURL(join(root, "file0.pike")).href);
+      expect(file0).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("full mode indexes all workspace files", async () => {
+    const root = makeTempWorkspace(3);
+    try {
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "full",
+      });
+
+      // All files should be indexed in full mode.
+      for (let i = 0; i < 3; i++) {
+        const entry = index.getFile(pathToFileURL(join(root, `file${i}.pike`)).href);
+        expect(entry).toBeDefined();
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("auto mode with few files behaves like full", async () => {
+    const root = makeTempWorkspace(3);
+    try {
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "auto",
+        fullScanFileLimit: 500,
+      });
+
+      // 3 files <= 500 → auto resolves to full.
+      const entry = index.getFile(pathToFileURL(join(root, "file0.pike")).href);
+      expect(entry).toBeDefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("auto mode with many files falls back to openFiles", async () => {
+    const root = makeTempWorkspace(5);
+    try {
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "auto",
+        fullScanFileLimit: 2,
+      });
+
+      // 5 files > 2 → auto falls back to openFiles (no indexing).
+      const entry = index.getFile(pathToFileURL(join(root, "file0.pike")).href);
+      expect(entry).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("T052: background index caps — ignore-glob, size, count (US2)", () => {
+  test("ignore globs exclude matching directories", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pike-lsp-ignore-"));
+    try {
+      mkdirSync(join(root, "vendor"));
+      writeFileSync(join(root, "main.pike"), "class Main { }\n");
+      writeFileSync(join(root, "vendor", "lib.pike"), "class Lib { }\n");
+
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "full",
+        ignoreGlobs: ["**/vendor/**"],
+      });
+
+      expect(index.getFile(pathToFileURL(join(root, "main.pike")).href)).toBeDefined();
+      expect(index.getFile(pathToFileURL(join(root, "vendor", "lib.pike")).href)).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("files larger than maxFileSizeBytes are skipped", async () => {
+    const root = mkdtempSync(join(tmpdir(), "pike-lsp-size-"));
+    try {
+      writeFileSync(join(root, "small.pike"), "class Small { }\n");
+      // 3 KB file — exceeds the 1 KB limit we set below.
+      writeFileSync(join(root, "big.pike"), `class Big { string s = "${"x".repeat(3000)}"; }\n`);
+
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "full",
+        maxFileSizeBytes: 1024,
+      });
+
+      expect(index.getFile(pathToFileURL(join(root, "small.pike")).href)).toBeDefined();
+      expect(index.getFile(pathToFileURL(join(root, "big.pike")).href)).toBeUndefined();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("fullScanFileLimit caps indexed file count in full mode", async () => {
+    const root = makeTempWorkspace(10);
+    try {
+      const index = new WorkspaceIndex({ workspaceRoot: root });
+      const indexedUris: string[] = [];
+      await indexWorkspaceFiles({
+        connection: createSilentConnection(),
+        index,
+        workspaceRoot: root,
+        indexingMode: "full",
+        fullScanFileLimit: 3,
+        onFileIndexed: (uri) => indexedUris.push(uri),
+      });
+
+      // Only 3 of 10 files indexed due to the cap.
+      expect(indexedUris.length).toBe(3);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
