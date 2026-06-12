@@ -364,18 +364,54 @@ export async function indexWorkspaceFiles(
   const maxFileSizeBytes = options.maxFileSizeBytes ?? 0;
   const fullScanFileLimit = options.fullScanFileLimit ?? 0;
 
-  if (!workspaceRoot) {
-    logInfo(connection, "no workspace root, skipping background indexing");
+  if (!workspaceRoot || mode === "openFiles") {
+    if (!workspaceRoot) {
+      logInfo(connection, "no workspace root, skipping background indexing");
+    } else {
+      logInfo(connection, "openFiles indexing mode — skipping workspace scan");
+    }
+    stopSpan("backgroundIndex");
     return;
   }
 
-  // openFiles mode: never scan the workspace. Files are indexed on demand.
-  if (mode === "openFiles") {
-    logInfo(connection, "openFiles indexing mode — skipping workspace scan");
+  const files = await discoverAndFilterFiles(
+    connection, workspaceRoot, ignoreGlobs, mode, fullScanFileLimit,
+  );
+  if (files === null) {
+    stopSpan("backgroundIndex");
     return;
   }
 
-  // Discover files via recursive directory walk (respecting ignoreGlobs).
+  logInfo(connection, `indexing ${files.length} workspace files (batch size ${batchSize})`);
+  const progressToken = await createProgressReporter(connection, files.length);
+
+  let pending = files.filter(fp => !index.getFile(pathToFileURL(fp).href));
+  if (maxFileSizeBytes > 0) {
+    pending = await filterByFileSize(pending, maxFileSizeBytes, connection);
+  }
+
+  const { indexed, errors } = await processBatches(
+    connection, index, pending, batchSize, progressToken, files.length,
+    options.cancellationToken, onFileIndexed,
+  );
+
+  reportProgressDone(connection, progressToken, indexed, errors);
+  logInfo(connection, `background indexing complete — ${indexed} files indexed, ${errors} errors`);
+  bump("filesDiscovered", files.length);
+  stopSpan("backgroundIndex");
+}
+
+/**
+ * Discover files, resolve auto mode, and apply fullScanFileLimit cap.
+ * Returns null if indexing should be skipped (no files, or auto→openFiles).
+ */
+async function discoverAndFilterFiles(
+  connection: Connection,
+  workspaceRoot: string,
+  ignoreGlobs: string[] | undefined,
+  mode: string,
+  fullScanFileLimit: number,
+): Promise<string[] | null> {
   const files: string[] = [];
   try {
     await measureAsync("discoverFiles", () =>
@@ -383,12 +419,12 @@ export async function indexWorkspaceFiles(
     );
   } catch (err) {
     logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:discoverFiles(${workspaceRoot})`, err);
-    return;
+    return null;
   }
 
   if (files.length === 0) {
     logInfo(connection, "no .pike/.pmod files found in workspace");
-    return;
+    return null;
   }
 
   // auto mode: resolve based on discovered count vs. fullScanFileLimit.
@@ -399,7 +435,7 @@ export async function indexWorkspaceFiles(
         connection,
         `auto mode: ${files.length} files exceed fullScanFileLimit ${fullScanFileLimit} — falling back to openFiles`,
       );
-      return;
+      return null;
     }
   }
 
@@ -409,33 +445,7 @@ export async function indexWorkspaceFiles(
     files.length = fullScanFileLimit;
   }
 
-  logInfo(connection, `indexing ${files.length} workspace files (batch size ${batchSize})`);
-
-  const progressToken = await createProgressReporter(connection, files.length);
-
-  // Filter out already-indexed files (open documents) before batching.
-  let pending = files.filter(fp => !index.getFile(pathToFileURL(fp).href));
-
-  // Apply maxFileSizeBytes cap: stat each pending file and skip oversized ones.
-  if (maxFileSizeBytes > 0) {
-    pending = await filterByFileSize(pending, maxFileSizeBytes, connection);
-  }
-
-  const { indexed, errors } = await processBatches(
-    connection, index, pending, batchSize, progressToken, files.length,
-    options.cancellationToken,
-    onFileIndexed,
-  );
-
-  reportProgressDone(connection, progressToken, indexed, errors);
-
-  logInfo(
-    connection,
-    `background indexing complete — ${indexed} files indexed, ${errors} errors`,
-  );
-
-  bump("filesDiscovered", files.length);
-  stopSpan("backgroundIndex");
+  return files;
 }
 
 /**

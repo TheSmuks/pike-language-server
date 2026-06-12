@@ -9,6 +9,18 @@ import {
   type Connection,
   type CancellationToken,
 } from "vscode-languageserver/node";
+import type {
+  CallHierarchyPrepareParams,
+  CallHierarchyIncomingCallsParams,
+  CallHierarchyOutgoingCallsParams,
+  CallHierarchyItem,
+  CallHierarchyIncomingCall,
+  CallHierarchyOutgoingCall,
+  TypeHierarchyPrepareParams,
+  TypeHierarchySupertypesParams,
+  TypeHierarchySubtypesParams,
+  TypeHierarchyItem,
+} from "vscode-languageserver-protocol";
 import type { NavigationContext } from "./navigationHandler";
 import { parse } from "../parser";
 import {
@@ -47,6 +59,113 @@ export function registerAdvancedHandlers(
 // Handler registration helpers
 // ---------------------------------------------------------------------------
 
+// Call hierarchy handlers (extracted to keep registration functions <50 lines)
+
+async function handlePrepareCallHierarchy(
+  params: CallHierarchyPrepareParams,
+  token: CancellationToken,
+  ctx: NavigationContext,
+): Promise<CallHierarchyItem[] | null> {
+  if (token.isCancellationRequested) return null;
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table) return null;
+  return prepareCallHierarchy(
+    table, params.textDocument.uri,
+    params.position.line, params.position.character,
+  );
+}
+
+async function handleIncomingCalls(
+  params: CallHierarchyIncomingCallsParams,
+  token: CancellationToken,
+  connection: Connection,
+  ctx: NavigationContext,
+): Promise<CallHierarchyIncomingCall[]> {
+  if (token.isCancellationRequested) return [];
+  if (!ctx.index) return [];
+  await prepareGlobalQuery({
+    connection, index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+  return getIncomingCalls(params.item, ctx.index);
+}
+
+async function handleOutgoingCalls(
+  params: CallHierarchyOutgoingCallsParams,
+  token: CancellationToken,
+  connection: Connection,
+  ctx: NavigationContext,
+): Promise<CallHierarchyOutgoingCall[]> {
+  if (token.isCancellationRequested) return [];
+  const item = params.item;
+  const uri = item.uri;
+  const table = await ctx.getSymbolTable(uri);
+  if (!table) return [];
+  const doc = ctx.documents.get(uri);
+  if (!doc) return [];
+  const source = doc.getText();
+  const tree = parse(source, uri);
+  if (!ctx.index) return [];
+  await prepareGlobalQuery({
+    connection, index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+  const lines = source.split('\n');
+  return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
+}
+
+// Type hierarchy handlers
+
+async function handlePrepareTypeHierarchy(
+  params: TypeHierarchyPrepareParams,
+  token: CancellationToken,
+  ctx: NavigationContext,
+): Promise<TypeHierarchyItem[] | null> {
+  if (token.isCancellationRequested) return null;
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table) return null;
+  return prepareTypeHierarchy(
+    table, params.textDocument.uri,
+    params.position.line, params.position.character,
+  );
+}
+
+async function handleSupertypes(
+  params: TypeHierarchySupertypesParams,
+  token: CancellationToken,
+  connection: Connection,
+  ctx: NavigationContext,
+): Promise<TypeHierarchyItem[]> {
+  if (token.isCancellationRequested) return [];
+  if (!ctx.index) return [];
+  const table = await ctx.getSymbolTable(params.item.uri);
+  if (!table) return [];
+  await prepareGlobalQuery({
+    connection, index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+  return getSupertypes(ctx.index, table, params.item.uri, params.item);
+}
+
+async function handleSubtypes(
+  params: TypeHierarchySubtypesParams,
+  token: CancellationToken,
+  connection: Connection,
+  ctx: NavigationContext,
+): Promise<TypeHierarchyItem[]> {
+  if (token.isCancellationRequested) return [];
+  if (!ctx.index) return [];
+  await prepareGlobalQuery({
+    connection, index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+  return getSubtypes(ctx.index, params.item.uri, params.item);
+}
+
 /** Register call hierarchy request handlers (incoming/outgoing calls). */
 function registerCallHierarchyHandlers(
   connection: Connection,
@@ -54,61 +173,15 @@ function registerCallHierarchyHandlers(
 ): void {
   connection.onRequest(
     "textDocument/prepareCallHierarchy",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return null;
-      const table = await ctx.getSymbolTable(params.textDocument.uri);
-      if (!table) return null;
-      return prepareCallHierarchy(
-        table,
-        params.textDocument.uri,
-        params.position.line,
-        params.position.character,
-      );
-    },
+    (params, token) => handlePrepareCallHierarchy(params, token, ctx),
   );
-
   connection.onRequest(
     "callHierarchy/incomingCalls",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return [];
-      const item = params.item;
-      if (!ctx.index) return [];
-
-      // Incoming calls span the whole workspace — ensure complete results.
-      await prepareGlobalQuery({
-        connection, index: ctx.index,
-        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
-      });
-      if (token.isCancellationRequested) return [];
-
-      return getIncomingCalls(item, ctx.index);
-    },
+    (params, token) => handleIncomingCalls(params, token, connection, ctx),
   );
-
   connection.onRequest(
     "callHierarchy/outgoingCalls",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return [];
-      const item = params.item;
-      const uri = item.uri;
-      const table = await ctx.getSymbolTable(uri);
-      if (!table) return [];
-      const doc = ctx.documents.get(uri);
-      if (!doc) return [];
-      const source = doc.getText();
-      const tree = parse(source, uri);
-      if (!ctx.index) return [];
-
-      // Outgoing calls may resolve into other workspace files.
-      await prepareGlobalQuery({
-        connection, index: ctx.index,
-        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
-      });
-      if (token.isCancellationRequested) return [];
-
-      const lines = source.split('\n');
-      return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
-    },
+    (params, token) => handleOutgoingCalls(params, token, connection, ctx),
   );
 }
 
@@ -119,55 +192,15 @@ function registerTypeHierarchyHandlers(
 ): void {
   connection.onRequest(
     "textDocument/prepareTypeHierarchy",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return null;
-      const table = await ctx.getSymbolTable(params.textDocument.uri);
-      if (!table) return null;
-      return prepareTypeHierarchy(
-        table,
-        params.textDocument.uri,
-        params.position.line,
-        params.position.character,
-      );
-    },
+    (params, token) => handlePrepareTypeHierarchy(params, token, ctx),
   );
-
   connection.onRequest(
     "typeHierarchy/supertypes",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return [];
-      const item = params.item;
-      if (!ctx.index) return [];
-      const table = await ctx.getSymbolTable(item.uri);
-      if (!table) return [];
-
-      // Supertypes may resolve into other workspace files.
-      await prepareGlobalQuery({
-        connection, index: ctx.index,
-        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
-      });
-      if (token.isCancellationRequested) return [];
-
-      return getSupertypes(ctx.index, table, item.uri, item);
-    },
+    (params, token) => handleSupertypes(params, token, connection, ctx),
   );
-
   connection.onRequest(
     "typeHierarchy/subtypes",
-    async (params, token: CancellationToken) => {
-      if (token.isCancellationRequested) return [];
-      const item = params.item;
-      if (!ctx.index) return [];
-
-      // Subtypes span the whole workspace — ensure complete results.
-      await prepareGlobalQuery({
-        connection, index: ctx.index,
-        workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
-      });
-      if (token.isCancellationRequested) return [];
-
-      return getSubtypes(ctx.index, item.uri, item);
-    },
+    (params, token) => handleSubtypes(params, token, connection, ctx),
   );
 }
 

@@ -40,36 +40,19 @@ import type { HibernationManager } from "./features/hibernation";
 
 /**
  * Install process-level fail-fast error handlers.
- *
- * After this call:
- * - uncaughtException → logged, then process.exit(1)
- * - unhandledRejection → logged as critical (Node 15+ exits by default)
- *
- * Call once during startup, before the connection listens.
+ * uncaughtException → logged, then process.exit(1).
+ * unhandledRejection → logged as critical (Node 15+ exits by default).
  */
 export function installFailFastHandlers(): void {
-  process.on("uncaughtException", (err: Error) => {
-    logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
-      ErrorCategory.System,
-      "uncaughtException (fatal)",
-      err,
-    );
+  const fakeConn = { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0];
 
-    // Give the log a moment to flush to stderr/JSON-RPC console.
+  process.on("uncaughtException", (err: Error) => {
+    logError(fakeConn, ErrorCategory.System, "uncaughtException (fatal)", err);
     setImmediate(() => process.exit(1));
   });
 
   process.on("unhandledRejection", (reason: unknown) => {
-    logError(
-      { console: { error: (msg: string) => process.stderr.write(msg + "\n") } } as unknown as Parameters<typeof logError>[0],
-      ErrorCategory.System,
-      "unhandledRejection (fatal)",
-      reason,
-    );
-    // Node 15+ already terminates on unhandledRejection by default.
-    // We log explicitly so the error reaches the ErrorLog ring buffer
-    // and the client status-bar badge before the process exits.
+    logError(fakeConn, ErrorCategory.System, "unhandledRejection (fatal)", reason);
   });
 }
 
@@ -78,9 +61,8 @@ export function installFailFastHandlers(): void {
 // ---------------------------------------------------------------------------
 
 /**
- * Restore cached entries into the index. Skips files already present
- * (open documents take precedence). Reconstructs forward dependencies
- * from the serialized dependency lists.
+ * Restore cached entries into the index. Skips files already present.
+ * Reconstructs forward dependencies from serialized dependency lists.
  */
 function restoreCachedEntries(
   index: WorkspaceIndex,
@@ -115,11 +97,9 @@ async function checkEntryStaleness(
   const current = index.getFile(entry.uri);
   if (!current) return undefined;
   if (
-    current.lastModSource !== ModificationSource.DidOpen &&
-    current.lastModSource !== ModificationSource.BackgroundIndex
+    current.lastModSource === ModificationSource.DidOpen ||
+    current.lastModSource === ModificationSource.BackgroundIndex
   ) {
-    // Entry was restored from cache — check staleness
-  } else {
     return undefined; // Already re-indexed
   }
 
@@ -136,14 +116,8 @@ async function checkEntryStaleness(
 
 /**
  * Background refresh of cached entries whose content has changed on disk.
- *
- * After the cache is restored (phase 1), this function reads each cached
- * file from disk, computes its content hash, and compares against the cached
- * hash. Changed files are re-indexed, and their dependents are invalidated
- * via invalidateWithDependents (M3: pruned invalidation).
- *
- * This runs asynchronously — the server is already serving requests from
- * cached data. Re-indexed entries replace stale data in-place.
+ * Reads each cached file, hashes it, re-indexes changed files and
+ * invalidates their dependents via invalidateWithDependents (M3).
  */
 async function refreshStaleCacheEntries(
   connection: Connection,
@@ -173,10 +147,6 @@ async function refreshStaleCacheEntries(
   return reindexed;
 }
 
-// ---------------------------------------------------------------------------
-// Post-initialization handler (registered via connection.onInitialized)
-// ---------------------------------------------------------------------------
-
 export interface InitializedContext {
   connection: Connection;
   documents: TextDocuments<TextDocument>;
@@ -199,7 +169,7 @@ export interface InitializedContext {
 }
 
 // ---------------------------------------------------------------------------
-// Post-initialization handler (registered via connection.onInitialized)
+// Post-init steps
 // ---------------------------------------------------------------------------
 
 async function initParserStep(connection: Connection): Promise<void> {
@@ -375,6 +345,39 @@ function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection)
   if (ctx.memoryTimer.unref) ctx.memoryTimer.unref();
 }
 
+function handleCacheLoad(
+  connection: Connection,
+  index: WorkspaceIndex,
+  cached: CachedFileEntry[] | null,
+  ctx: InitializedContext,
+): void {
+  // T036: Enter degraded mode if heap exceeds memory budget after cache restore.
+  if (isOverMemoryBudget(ctx.resourceConfig, connection)) {
+    ctx.resourceState.transition("degraded", "memory budget exceeded after cache restore");
+    logWarn(connection, "[init] step 7e: degraded mode — skipping background indexing");
+    return;
+  }
+
+  if (!cached) {
+    logInfo(connection, "[init] step 7e: no cache found — fresh start");
+    startBackgroundIndexing(connection, index, ctx.backgroundIndexEnabled, ctx.backgroundIndexBatchSize, ctx);
+    return;
+  }
+
+  const restored = restoreCachedEntries(index, cached);
+  const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
+  logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
+
+  refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
+    if (reindexed > 0) {
+      logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
+    }
+    startBackgroundIndexing(connection, index, ctx.backgroundIndexEnabled, ctx.backgroundIndexBatchSize, ctx);
+  }).catch((err) => {
+    logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
+  });
+}
+
 export async function handleInitialized(ctx: InitializedContext): Promise<void> {
   const {
     connection,
@@ -405,31 +408,7 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   warmUpPikeWorker(connection, worker, backgroundIndexEnabled);
 
   cacheLoadPromise.then((cached) => {
-    // T036: Enter degraded mode if heap exceeds memory budget.
-    // Skip background indexing to avoid further memory pressure.
-    if (isOverMemoryBudget(ctx.resourceConfig, connection)) {
-      ctx.resourceState.transition("degraded", "memory budget exceeded after cache restore");
-      logWarn(connection, "[init] step 7e: degraded mode — skipping background indexing");
-      return;
-    }
-
-    if (!cached) {
-      logInfo(connection, "[init] step 7e: no cache found — fresh start");
-      startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
-    } else {
-      const restored = restoreCachedEntries(index, cached);
-      const depLinks = cached.reduce((n, e) => n + e.dependencies.length, 0);
-      logInfo(connection, `[init] step 7e: restored ${restored} files from cache (${depLinks} dependency links)`);
-
-      refreshStaleCacheEntries(connection, index, cached).then((reindexed) => {
-        if (reindexed > 0) {
-          logInfo(connection, `[init] step 7e: refreshed ${reindexed} stale cache entries`);
-        }
-        startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
-      }).catch((err) => {
-        logError(connection, ErrorCategory.System, "[init] step 7e: cache refresh failed", err);
-      });
-    }
+    handleCacheLoad(connection, index, cached, ctx);
   }).catch((err) => {
     logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
   });
@@ -493,39 +472,18 @@ function applyDiagnosticConfig(
   }
 }
 
-function applyWorkerConfig(
-  config: DiagnosticConfig,
-  worker: PikeWorker,
-): void {
-  const workerUpdate: Partial<{
-    pikeBinaryPath: string;
-    requestTimeoutMs: number;
-    idleTimeoutMs: number;
-    maxRequestsBeforeRestart: number;
-    maxActiveMinutes: number;
-    niceValue: number;
+function applyWorkerConfig(config: DiagnosticConfig, worker: PikeWorker): void {
+  const u: Partial<{
+    pikeBinaryPath: string; requestTimeoutMs: number; idleTimeoutMs: number;
+    maxRequestsBeforeRestart: number; maxActiveMinutes: number; niceValue: number;
   }> = {};
-  if (config.pikeBinaryPath) {
-    workerUpdate.pikeBinaryPath = config.pikeBinaryPath;
-  }
-  if (config.workerRequestTimeoutMs != null && config.workerRequestTimeoutMs > 0) {
-    workerUpdate.requestTimeoutMs = config.workerRequestTimeoutMs;
-  }
-  if (config.workerIdleTimeoutMs != null && config.workerIdleTimeoutMs >= 0) {
-    workerUpdate.idleTimeoutMs = config.workerIdleTimeoutMs;
-  }
-  if (config.workerMaxRequestsBeforeRestart != null && config.workerMaxRequestsBeforeRestart >= 0) {
-    workerUpdate.maxRequestsBeforeRestart = config.workerMaxRequestsBeforeRestart;
-  }
-  if (config.workerMaxActiveMinutes != null && config.workerMaxActiveMinutes >= 0) {
-    workerUpdate.maxActiveMinutes = config.workerMaxActiveMinutes;
-  }
-  if (config.workerNiceValue != null && config.workerNiceValue >= 0) {
-    workerUpdate.niceValue = config.workerNiceValue;
-  }
-  if (Object.keys(workerUpdate).length > 0) {
-    worker.updateConfig(workerUpdate);
-  }
+  if (config.pikeBinaryPath) u.pikeBinaryPath = config.pikeBinaryPath;
+  if (config.workerRequestTimeoutMs != null && config.workerRequestTimeoutMs > 0) u.requestTimeoutMs = config.workerRequestTimeoutMs;
+  if (config.workerIdleTimeoutMs != null && config.workerIdleTimeoutMs >= 0) u.idleTimeoutMs = config.workerIdleTimeoutMs;
+  if (config.workerMaxRequestsBeforeRestart != null && config.workerMaxRequestsBeforeRestart >= 0) u.maxRequestsBeforeRestart = config.workerMaxRequestsBeforeRestart;
+  if (config.workerMaxActiveMinutes != null && config.workerMaxActiveMinutes >= 0) u.maxActiveMinutes = config.workerMaxActiveMinutes;
+  if (config.workerNiceValue != null && config.workerNiceValue >= 0) u.niceValue = config.workerNiceValue;
+  if (Object.keys(u).length > 0) worker.updateConfig(u);
 }
 
 function applyFormattingConfig(

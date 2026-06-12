@@ -97,13 +97,12 @@ export function registerRefactoringHandlers(
   connection: Connection,
   ctx: NavigationContext,
 ): void {
-  // -----------------------------------------------------------------------
-  // textDocument/codeAction (US-018)
-  // -----------------------------------------------------------------------
+  registerCodeActionHandler(connection, ctx);
+  registerWorkspaceSymbolHandler(connection, ctx);
+  registerRenameHandlers(connection, ctx);
+}
 
-  // Handlers
-  // -----------------------------------------------------------------------
-
+function registerCodeActionHandler(connection: Connection, ctx: NavigationContext): void {
   connection.onCodeAction(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
@@ -113,14 +112,18 @@ export function registerRefactoringHandlers(
       ...produceAutodocTemplateActions(params, text),
       ...produceGetterSetterActions(params, text, { stdlibModules })];
   });
+}
 
+function registerWorkspaceSymbolHandler(connection: Connection, ctx: NavigationContext): void {
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     return searchWorkspaceSymbolsLazy(
       params.query ?? "", ctx.index, ctx.connection, token,
     );
   });
+}
 
+function registerRenameHandlers(connection: Connection, ctx: NavigationContext): void {
   connection.onPrepareRename(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
     const table = await ctx.getSymbolTable(params.textDocument.uri);
@@ -140,9 +143,7 @@ export function registerRefactoringHandlers(
     const validationError = validateRenameName(params.newName);
     if (validationError) return new ResponseError(ErrorCodes.InvalidRequest, validationError);
 
-    // Ensure the workspace is fully indexed for complete cross-file rename
-    // results. Renames that miss a reference are destructive — partial results
-    // are never acceptable (contracts/lsp-resource-state.md).
+    // Renames that miss a reference are destructive — ensure full workspace index.
     await prepareGlobalQuery({
       connection: ctx.connection,
       index: ctx.index,

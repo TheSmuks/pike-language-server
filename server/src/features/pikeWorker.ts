@@ -77,15 +77,7 @@ export class PikeWorker extends PikeWorkerProcess {
    */
 
   private checkBackoff(): boolean {
-    if (this.crashBackoffUntil > 0 && Date.now() < this.crashBackoffUntil) {
-      return false; // still in backoff
-    }
-    // Backoff expired — reset crash counter so a fresh start is possible.
-    if (this.crashBackoffUntil > 0) {
-      this.consecutiveCrashes = 0;
-      this.crashBackoffUntil = 0;
-    }
-    return true;
+    return this.health.checkAndClearBackoff();
   }
 
   private prepareRestart(): void {
@@ -107,7 +99,7 @@ export class PikeWorker extends PikeWorkerProcess {
     }
     if (!this.checkBackoff()) {
       return Promise.reject(
-        new Error(`Pike worker is in crash-loop backoff until ${new Date(this.crashBackoffUntil).toISOString()}`),
+        new Error(`Pike worker is in crash-loop backoff until ${new Date(this.health.backoffUntilMs).toISOString()}`),
       );
     }
 

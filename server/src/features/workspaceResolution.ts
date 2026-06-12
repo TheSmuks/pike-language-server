@@ -7,12 +7,9 @@
 
 import { type ModuleResolver } from "./moduleResolver";
 import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
-import type { FileEntry, WorkspaceIndex } from "./workspaceIndex";
+import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
-import type { Connection } from "vscode-languageserver/node";
-import type { CancellationToken } from "vscode-jsonrpc";
-import { indexWorkspaceFiles } from "./backgroundIndex";
 
 // ---------------------------------------------------------------------------
 // Context interface
@@ -36,110 +33,13 @@ function getFile(ctx: ResolutionContext, uri: string): FileEntry | undefined {
   return ctx.files.get(normalizeUri(uri));
 }
 
-// ---------------------------------------------------------------------------
-// Global query preparation
-// ---------------------------------------------------------------------------
-
-/**
- * Options for ensuring the workspace is indexed before a global query.
- */
-export interface GlobalQueryPrepOptions {
-  connection: Connection;
-  index: WorkspaceIndex;
-  workspaceRoot: string;
-  cancellationToken?: CancellationToken;
-  ignoreGlobs?: string[];
-  maxFileSizeBytes?: number;
-  fullScanFileLimit?: number;
-  /**
-   * When true, global features are temporarily unavailable because the server
-   * is under memory pressure. prepareGlobalQuery throws DegradedGlobalUnavailableError
-   * instead of returning partial or empty results.
-   */
-  isDegraded?: () => boolean;
-}
-
-/**
- * Error thrown when a global feature is requested while the server is in
- * degraded mode (under memory pressure).
- *
- * Global features (workspace symbol, find references, rename, call hierarchy)
- * require a complete index. Under memory pressure, the index may be partially
- * demoted. Rather than returning incomplete results, the feature reports this
- * honest error so the client can show an accurate message.
- */
-export class DegradedGlobalUnavailableError extends Error {
-  constructor() {
-    super(
-      "Global features are temporarily unavailable while the server is under memory pressure. " +
-      "Try again after memory pressure subsides.",
-    );
-    this.name = "DegradedGlobalUnavailableError";
-  }
-}
-
-/**
- * Ensure the workspace is fully indexed before a global query proceeds.
- *
- * In `openFiles` mode, the first global query (workspace symbol, find
- * references, rename, call hierarchy) must block to build the complete index.
- * This function triggers a full workspace scan via indexWorkspaceFiles, which
- * discovers and indexes any unindexed files. The scan itself handles batching,
- * yielding between batches, workDoneProgress reporting, and cancellation at
- * safe boundaries.
- *
- * Per contracts/lsp-resource-state.md:
- * - The first request reports workDoneProgress and supports cancellation.
- * - Without cancellation, results must be complete — never partial.
- * - Cancelled preparation is NOT marked done; the next query retries.
- * - When degraded (memory pressure), throws DegradedGlobalUnavailableError
- *   instead of returning partial or empty results.
- *
- * Idempotent: if the index has already been globally prepared, returns 0
- * immediately without re-scanning.
- *
- * Returns the total number of indexed entries after preparation.
- */
-export async function prepareGlobalQuery(
-  options: GlobalQueryPrepOptions,
-): Promise<number> {
-  // Degraded guard: never return partial results under memory pressure.
-  if (options.isDegraded?.()) {
-    throw new DegradedGlobalUnavailableError();
-  }
-
-  const { connection, index, workspaceRoot } = options;
-
-  // Idempotency: skip if a full scan has already completed.
-  if (index.isGlobalPrepDone()) return index.size;
-
-  if (!workspaceRoot) {
-    index.markGlobalPrepDone();
-    return index.size;
-  }
-
-  // Delegate to backgroundIndex — it handles discovery, filtering, batching,
-  // yielding, progress, and cancellation between batches.
-  await indexWorkspaceFiles({
-    connection,
-    index,
-    workspaceRoot,
-    indexingMode: "full",
-    cancellationToken: options.cancellationToken,
-    ignoreGlobs: options.ignoreGlobs,
-    maxFileSizeBytes: options.maxFileSizeBytes,
-    fullScanFileLimit: options.fullScanFileLimit,
-  });
-
-  // Per contract: cancelled preparation must NOT be cached as complete.
-  // Leave globalPrepDone false so the next global query retries.
-  if (options.cancellationToken?.isCancellationRequested) {
-    return index.size;
-  }
-
-  index.markGlobalPrepDone();
-  return index.size;
-}
+// Global query preparation lives in globalQueryPrep.ts; re-exported here so
+// existing import sites (and the resource-resilience tests) stay unchanged.
+export {
+  prepareGlobalQuery,
+  type GlobalQueryPrepOptions,
+  DegradedGlobalUnavailableError,
+} from "./globalQueryPrep";
 
 // ---------------------------------------------------------------------------
 // Cross-file resolution

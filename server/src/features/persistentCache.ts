@@ -5,17 +5,16 @@
  * On startup, reads individual cache entries and validates each by content hash.
  *
  * Design decisions (see ADR 0025):
- * - Per-file cache entries: loading one file does not require parsing the entire
- *   cache. Only the entries for changed files are rebuilt.
- * - Atomic writes: each entry is written to a temp file then renamed, so a crash
+ * - Per-file cache entries: loading one file does not require parsing the
+ *   entire cache. Only changed entries are rebuilt.
+ * - Atomic writes: each entry written to a temp file then renamed, so a crash
  *   during save cannot corrupt an existing valid entry.
- * - Content-hash invalidation: individual entries are invalidated when their
- *   content hash changes. Grammar (WASM) changes invalidate the entire cache.
- * - Forward dependencies are serialized per entry, enabling the M3 reverse-dependency
+ * - Content-hash invalidation: entries invalidated when content hash changes.
+ *   Grammar (WASM) changes invalidate the entire cache.
+ * - Forward dependencies serialized per entry, enabling the M3 reverse-dependency
  *   graph to be reconstructed from cache without async resolution.
  * - No monolithic manifest: the WASM hash and format version live in a small
- *   cacheIndex.json at cache root. This is read first to decide whether to
- *   even scan the cache directory.
+ *   cacheIndex.json at cache root, read first to decide whether to scan.
  *
  * Cache directory structure:
  *   .pike-lsp/
@@ -108,10 +107,8 @@ export function getCachePath(workspaceRoot: string): string {
  * Writes each file entry as an individual JSON file to .pike-lsp/cache/.
  * Uses atomic write (temp file + rename) to prevent corruption on crash.
  * Writes cacheIndex.json last, after all entries, to mark a complete save.
- *
  * Forward dependency URIs are serialized per entry, enabling the reverse
  * dependency graph to be reconstructed from cache without async resolution.
- *
  * Errors are caught and logged — never throws.
  */
 export async function saveCache(
