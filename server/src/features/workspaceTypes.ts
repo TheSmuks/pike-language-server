@@ -28,6 +28,45 @@ export interface PikeVersionDirective {
   minor: number;
 }
 
+// ---------------------------------------------------------------------------
+// Index entry lifecycle (resource resilience)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lifecycle state of an index entry.
+ *
+ * - `full`: symbol table present; the entry is query-ready.
+ * - `loading`: an async resolution (symbol table or dependencies) is in flight.
+ * - `stub`: only identity + dependency edges retained (e.g. hibernation save).
+ * - `demoted`: symbol table dropped under memory pressure; dependency edges kept.
+ *
+ * Open documents and their active dependency closure stay `full` unless
+ * explicitly reloading. Demoted/stub entries retain enough data to rehydrate
+ * from cache or source. See data-model.md (IndexEntry state transitions).
+ */
+export type IndexEntryLifecycle = "full" | "loading" | "stub" | "demoted";
+
+// ---------------------------------------------------------------------------
+// Dependency map (resource resilience)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lightweight forward/reverse dependency graph.
+ *
+ * Separate from full symbol-table retention so it survives entry demotion and
+ * hibernation. Drives dependency-closure indexing, changed-file invalidation,
+ * global candidate discovery, and cross-file diagnostics. See data-model.md
+ * (DependencyMap).
+ */
+export interface DependencyMap {
+  /** Forward edges: source URI to its dependency URI set. */
+  readonly forwardEdges: Map<string, Set<string>>;
+  /** Reverse edges: dependency URI to its dependent URI set. */
+  readonly reverseEdges: Map<string, Set<string>>;
+  /** Monotonic mutation counter, bumped on every edge change. */
+  readonly generation: number;
+}
+
 export interface FileEntry {
   uri: string;
   version: number;
@@ -48,6 +87,16 @@ export interface FileEntry {
    * Set true by upsertFile (full resolution) and ensureDependenciesResolved.
    */
   depsResolved?: boolean;
+  /**
+   * Lifecycle state for memory management. Defaults to "full" for entries
+   * created by upsert paths. See IndexEntryLifecycle.
+   */
+  lifecycle?: IndexEntryLifecycle;
+  /**
+   * Monotonic timestamp of last access, for demotion ordering under memory
+   * pressure. Set/updated on read paths by the memory manager (US3).
+   */
+  lastAccessMonotonicMs?: number;
 }
 
 export interface WorkspaceIndexOptions {

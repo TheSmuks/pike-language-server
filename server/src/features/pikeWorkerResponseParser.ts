@@ -57,6 +57,7 @@ export function processResponseBuffer(
   let remaining = buffer;
   let consecutiveMalformed = 0;
 
+  // Bounded: each iteration consumes one newline-delimited response from remaining.
   while (true) {
     const newlineIdx = remaining.indexOf("\n");
     if (newlineIdx === -1) break;

@@ -188,3 +188,76 @@ describe("lifecycle: parser readiness guard", () => {
     await teardown();
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. Resource-resilience lifecycle (Phase 2 foundational)
+// ---------------------------------------------------------------------------
+
+describe("lifecycle: resource-resilience context", () => {
+  test("server context has resourceConfig with defaults", async () => {
+    const { server, teardown } = await createTestServer();
+    const ctx = server.context;
+    expect(ctx.resourceConfig).toBeDefined();
+    expect(ctx.resourceConfig.indexing.mode).toBe("openFiles");
+    expect(ctx.resourceConfig.memory.budgetMb).toBe(512);
+
+    await teardown();
+  });
+
+  test("server context has resourceState tracker starting in active", async () => {
+    const { server, teardown } = await createTestServer();
+    expect(server.context.resourceState).toBeDefined();
+    expect(server.context.resourceState.getState()).toBe("active");
+
+    await teardown();
+  });
+
+  test("request activity updates resource state tracker", async () => {
+    const { server, client, openDoc, teardown } = await createTestServer();
+
+    const beforeIdle = server.context.resourceState.idleMs();
+    expect(beforeIdle).toBeGreaterThanOrEqual(0);
+
+    // Open a document — this should record activity
+    const uri = openDoc("file:///test/resource-activity.pike", "int x = 1;");
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(server.context.resourceState.getOpenDocumentCount()).toBe(1);
+
+    // Make a request — activity should be recent
+    await client.sendRequest("textDocument/documentSymbol", { textDocument: { uri } });
+    const afterIdle = server.context.resourceState.idleMs();
+    expect(afterIdle).toBeLessThan(500);
+
+    await teardown();
+  });
+
+  test("resource state transition emits notification to client", async () => {
+    const { server, client, teardown } = await createTestServer();
+
+    let receivedState: string | null = null;
+    client.onNotification("pike/resourceState", (params: { state: string }) => {
+      receivedState = params.state;
+    });
+
+    server.context.resourceState.transition("indexing", "test transition");
+
+    // Allow notification to propagate
+    await new Promise((r) => setTimeout(r, 100));
+    expect(receivedState).toBe("indexing");
+
+    await teardown();
+  });
+
+  test("cancellation token is active by default and cancellable", async () => {
+    const { server, teardown } = await createTestServer();
+
+    const cts = server.context.resourceState.getCancellationToken();
+    expect(cts.token.isCancellationRequested).toBe(false);
+
+    server.context.resourceState.cancelBackgroundWork();
+    expect(cts.token.isCancellationRequested).toBe(true);
+
+    await teardown();
+  });
+});

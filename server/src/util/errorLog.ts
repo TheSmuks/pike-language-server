@@ -320,3 +320,53 @@ export function logError(
     // Non-critical — connection may be closed.
   }
 }
+
+// ---------------------------------------------------------------------------
+// T098: Standardized resource-event logging
+// ---------------------------------------------------------------------------
+
+/** Structured details included in resource event log messages. */
+export interface ResourceEventDetails {
+  /** Human-readable reason for the transition. */
+  reason?: string;
+  /** Heap used in MB (when known). */
+  heapUsedMb?: number;
+  /** Total heap in MB (when known). */
+  heapTotalMb?: number;
+  /** Number of demoted entries (for demotion events). */
+  demotedCount?: number;
+  /** Number of retained entries (for demotion events). */
+  retainedCount?: number;
+  /** Crash count (for worker restart events). */
+  crashCount?: number;
+}
+
+/**
+ * Log a standardized resource-state event with structured details.
+ *
+ * Produces a single WARN-level log line with key=value pairs appended,
+ * so operators can grep for resource events in the output channel:
+ *
+ *   [resource] degraded — reason=memory budget exceeded heapUsedMb=450 heapTotalMb=512
+ */
+export function logResourceEvent(
+  connection: Connection,
+  state: string,
+  details: ResourceEventDetails,
+): void {
+  const parts: string[] = [`[resource] ${state}`];
+  if (details.reason) parts.push(`reason=${details.reason}`);
+
+  const metrics: string[] = [];
+  if (details.heapUsedMb !== undefined) metrics.push(`heapUsedMb=${details.heapUsedMb}`);
+  if (details.heapTotalMb !== undefined) metrics.push(`heapTotalMb=${details.heapTotalMb}`);
+  if (details.demotedCount !== undefined) metrics.push(`demotedCount=${details.demotedCount}`);
+  if (details.retainedCount !== undefined) metrics.push(`retainedCount=${details.retainedCount}`);
+  if (details.crashCount !== undefined) metrics.push(`crashCount=${details.crashCount}`);
+
+  const message = metrics.length > 0
+    ? `${parts.join(" — ")} ${metrics.join(" ")}`
+    : parts.join(" — ");
+
+  logWarn(connection, message);
+}

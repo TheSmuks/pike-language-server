@@ -8,7 +8,6 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
-import { join } from "node:path";
 import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import type {
   PikeWorkerConfig,
@@ -18,12 +17,20 @@ import type {
 import {
   DEFAULT_CONFIG,
   PikeUnavailableError,
-  clampPriority,
 } from "./pikeWorkerTypes.js";
 import { shouldEvictIdle, shouldForceRestart as checkForceRestart } from "./pikeWorkerLifecycle.js";
 import { processResponseBuffer } from "./pikeWorkerResponseParser.js";
 import { handlePikeStderr } from "./pikeWorkerStderr.js";
-import { HARNESS_DIR, WORKER_SCRIPT, INTROSPECT_PATH, VSIX_ROOT, DEV_ROOT } from "./pikeWorkerPaths.js";
+import {
+  buildSpawnCommand,
+  assertHarnessReady,
+} from "./pikeWorkerPaths.js";
+import {
+  PikeWorkerHealthMonitor,
+  isIdleEvictionCandidate,
+  CRASH_BACKOFF_THRESHOLD,
+  CRASH_BACKOFF_MS,
+} from "./pikeWorkerHealth.js";
 
 // ---------------------------------------------------------------------------
 // PikeWorkerProcess — base class for subprocess lifecycle
@@ -42,19 +49,13 @@ export abstract class PikeWorkerProcess {
   protected restarting = false;
   protected consecutiveMalformed = 0;
   protected static readonly MALFORMED_RESTART_THRESHOLD = 5;
-  /**
-   * Tracks consecutive Pike process crashes (exit with non-zero, non-127 code).
-   * Used to prevent crash loops: if Pike crashes repeatedly, we stop
-   * auto-restarting until the backoff period expires.
-   */
-  protected consecutiveCrashes = 0;
-  protected static readonly CRASH_BACKOFF_THRESHOLD = 3;
-  protected static readonly CRASH_BACKOFF_MS = 30_000;
-  protected crashBackoffUntil = 0;
+
+  // Health monitoring (heartbeat, crash-backoff, health-checks — US3 ADR 0032)
+  protected readonly health = new PikeWorkerHealthMonitor();
+
   protected readonly config: PikeWorkerConfig;
 
-  // Priority queue — ensures exactly one write to stdin at a time.
-  // Three FIFO sub-queues indexed by PikePriority value. O(1) enqueue and dequeue.
+  // Priority queue — exactly one write to stdin at a time. O(1) enqueue/dequeue.
   protected readonly queues: [QueueItem[], QueueItem[], QueueItem[]] = [[], [], []];
   protected sending = false;
 
@@ -66,59 +67,28 @@ export abstract class PikeWorkerProcess {
   protected requestCount = 0;
   protected startTime = 0;
 
-  /**
-   * Tracks Pike binary availability:
-   * - null = unknown (not yet attempted)
-   * - true = available (spawn succeeded)
-   * - false = unavailable (exit code 127 or pike not found)
-   */
+  // Pike binary availability: null=unknown, true=available, false=not found (exit 127).
   protected pikeAvailable: boolean | null = null;
 
-  /**
-   * Pike version string from the last successful ping. Null until warmUp succeeds.
-   * Used for version-aware feature gating and mismatch warnings.
-   */
   pikeVersion: string | null = null;
 
-  /**
-   * Callback for critical errors that should be routed through the centralized
-   * error log. Set by the server after construction via `setErrorHandler`.
-   * Signature: (ctx: string, err: unknown) => void.
-   */
+  // Callbacks set by the server after construction.
   protected onCriticalError: ((ctx: string, err: unknown) => void) | null = null;
-  /**
-   * Callback for non-fatal warnings that should be routed through the
-   * centralized log. Set by the server after construction.
-   */
   protected onWarning: ((ctx: string, msg: string) => void) | null = null;
-  /**
-   * Tracks whether we have already warned about a missing library warning
-   * from Nettle.so. Used to show the user a one-time actionable message
-   * instead of spamming errors on every stderr line.
-   */
   protected warnedAboutMissingLibs = false;
 
   constructor(config?: Partial<PikeWorkerConfig>) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /**
-   * Install the error handler that routes PikeWorker errors through the
-   * centralized errorLog. Call this once after the server has a Connection.
-   */
   setErrorHandler(handler: (ctx: string, err: unknown) => void): void {
     this.onCriticalError = handler;
   }
 
-  /**
-   * Install the warning handler for non-fatal advisory messages.
-   * Call this once after the server has a Connection.
-   */
   setWarningHandler(handler: (ctx: string, msg: string) => void): void {
     this.onWarning = handler;
   }
 
-  /** Update configuration. Only effective before the worker starts (lazy). */
   updateConfig(config: Partial<PikeWorkerConfig>): void {
     Object.assign(this.config, config);
   }
@@ -127,53 +97,15 @@ export abstract class PikeWorkerProcess {
   start(): void {
     if (this.proc && !this.proc.killed) return;
 
-    // Guard: fail fast if harness is not found in any expected location.
-    if (!HARNESS_DIR) throw new Error(
-      `Pike worker: harness directory not found.\n` +
-      `  Dev layout: ${join(DEV_ROOT, "harness")}\n` +
-      `  VSIX layout: ${join(VSIX_ROOT, "harness")}`,
-    );
-    if (!WORKER_SCRIPT) throw new Error(
-      `Pike worker: worker.pike not found.\n` +
-      `  Dev layout: ${join(DEV_ROOT, "harness", "worker.pike")}\n` +
-      `  VSIX layout: ${join(VSIX_ROOT, "harness", "worker.pike")}`,
+    assertHarnessReady();
+
+    const { cmd, args, cwd, env } = buildSpawnCommand(
+      this.config.pikeBinaryPath,
+      this.config.niceValue,
+      this.config.libraryPath,
     );
 
-    // Build argument list: always include HARNESS_DIR, conditionally include INTROSPECT_PATH.
-    const baseArgs = ["-M", HARNESS_DIR];
-    if (INTROSPECT_PATH) baseArgs.push("-M", INTROSPECT_PATH);
-    baseArgs.push(WORKER_SCRIPT);
-
-    // On Linux, use nice for CPU politeness under contention
-    let finalCmd: string;
-    let finalArgs: string[];
-
-    if (this.config.niceValue > 0 && process.platform === "linux") {
-      finalCmd = "nice";
-      finalArgs = ["-n" + this.config.niceValue, this.config.pikeBinaryPath, ...baseArgs];
-    } else {
-      finalCmd = this.config.pikeBinaryPath;
-      finalArgs = baseArgs;
-    }
-
-    // Use the resolved root as cwd; prefer VSIX root if available.
-    const cwd = VSIX_ROOT || DEV_ROOT;
-    // Build the environment for the Pike worker. Merge libraryPath into
-    // LD_LIBRARY_PATH so Pike's native modules can find shared libraries
-    // that are not on the default linker search path.
-    const spawnEnv = { ...process.env } as typeof process.env;
-    if (this.config.libraryPath) {
-      const base = process.env.LD_LIBRARY_PATH ?? "";
-      spawnEnv.LD_LIBRARY_PATH = base
-        ? `${this.config.libraryPath}:${base}`
-        : this.config.libraryPath;
-    }
-
-    this.proc = spawn(finalCmd, finalArgs, {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd,
-      env: spawnEnv,
-    });
+    this.proc = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"], cwd, env });
 
     const stdout = this.proc.stdout;
     const stderr = this.proc.stderr;
@@ -194,11 +126,11 @@ export abstract class PikeWorkerProcess {
       this.warnedAboutMissingLibs = handlePikeStderr(data.toString().trim(), {
         pikeAvailable: this.pikeAvailable,
         warnedAboutMissingLibs: this.warnedAboutMissingLibs,
-        consecutiveCrashes: this.consecutiveCrashes,
+        consecutiveCrashes: this.health.consecutiveCrashCount,
         config: this.config,
         onCriticalError: this.onCriticalError,
         onWarning: this.onWarning,
-        crashBackoffThreshold: PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD,
+        crashBackoffThreshold: CRASH_BACKOFF_THRESHOLD,
       });
     });
 
@@ -217,13 +149,12 @@ export abstract class PikeWorkerProcess {
         // Track consecutive crashes (non-zero, non-127 exit) to prevent
         // infinite crash loops when Pike hits an internal fatal error.
         if (code !== 0 && code !== 127) {
-          this.consecutiveCrashes++;
-          if (this.consecutiveCrashes >= PikeWorkerProcess.CRASH_BACKOFF_THRESHOLD) {
-            this.crashBackoffUntil = Date.now() + PikeWorkerProcess.CRASH_BACKOFF_MS;
+          const shouldBackoff = this.health.recordCrash();
+          if (shouldBackoff) {
             this.onWarning?.(
               "worker.crashBackoff",
-              `Pike worker crashed ${this.consecutiveCrashes} times in a row — ` +
-              `pausing diagnostics for ${PikeWorkerProcess.CRASH_BACKOFF_MS / 1000}s. ` +
+              `Pike worker crashed ${this.health.consecutiveCrashCount} times in a row — ` +
+              `pausing diagnostics for ${CRASH_BACKOFF_MS / 1000}s. ` +
               `This is likely a Pike compiler bug (check stderr for "Fatal error").`,
             );
           }
@@ -233,19 +164,8 @@ export abstract class PikeWorkerProcess {
         const error = code === 127
           ? new PikeUnavailableError()
           : new Error(`Pike worker exited (code=${code}, signal=${signal})`);
-        for (const [, pending] of this.pending) {
-          clearTimeout(pending.timeout);
-          pending.reject(error);
-        }
-        this.pending.clear();
-        // Also reject everything still in the queue
-        for (const q of this.queues) {
-          for (const item of q) {
-            clearTimeout(item.timeout);
-            item.reject(error);
-          }
-        }
-        for (const q of this.queues) q.length = 0;
+        this.rejectAllPending(error);
+        this.rejectAllQueued(error);
         this.sending = false;
         this.proc = null;
       }
@@ -260,41 +180,25 @@ export abstract class PikeWorkerProcess {
   }
 
   /**
-   * Stop the Pike worker process.
-   * Sends SIGTERM first, then escalates to SIGKILL after 3 seconds if the
-   * process hasn't exited. This prevents zombie Pike processes on shared
-   * development servers when the worker is unresponsive.
+   * Stop the Pike worker. SIGTERM then SIGKILL after 3s to prevent zombies.
    */
   stop(): void {
     this.clearIdleTimer();
+    this.stopHeartbeat();
     if (this.proc && !this.proc.killed) {
       const dying = this.proc;
       dying.kill("SIGTERM");
-
-      // Force-kill after grace period. Node's ChildProcess.kill() is
-      // idempotent — calling it on an already-exited process is a no-op.
+      // Force-kill after grace period. kill() is idempotent on dead processes.
       const forceTimer = setTimeout(() => {
-        if (!dying.killed) {
-          dying.kill("SIGKILL");
-        }
+        if (!dying.killed) dying.kill("SIGKILL");
       }, 3000);
-      // Don't let the timer prevent process exit.
       forceTimer.unref();
     }
     this.proc = null;
 
-    // Reject all pending requests so their Promises don't leak.
-    // The exit handler won't fire for this proc because stop() nulls
-    // this.proc before the async exit event arrives.
-    if (this.pending.size > 0) {
-      const error = new Error("Pike worker stopped");
-      for (const [, pending] of this.pending) {
-        clearTimeout(pending.timeout);
-        pending.reject(error);
-      }
-      this.pending.clear();
-    }
-
+    // Reject all pending requests — the exit handler won't fire because
+    // stop() nulls this.proc before the async exit event arrives.
+    this.rejectAllPending(new Error("Pike worker stopped"));
     for (const q of this.queues) q.length = 0;
     this.sending = false;
   }
@@ -404,7 +308,12 @@ export abstract class PikeWorkerProcess {
   // Idle eviction
   // ---------------------------------------------------------------------------
 
-  protected resetIdleTimer(): void {
+  /**
+   * Reset the idle eviction timer. Called on every request and by the heartbeat
+   * manager to keep the worker alive during active use. Public so external
+   * callers (heartbeat/watchdog) can indicate activity.
+   */
+  resetIdleTimer(): void {
     this.clearIdleTimer();
     this.idleTimer = setTimeout(() => {
       if (shouldEvictIdle(this.proc, this.pending.size, this.queues.map(q => q.length))) {
@@ -412,6 +321,28 @@ export abstract class PikeWorkerProcess {
       }
     }, this.config.idleTimeoutMs);
     if (this.idleTimer?.unref) this.idleTimer.unref();
+    this.lastRequestTime = Date.now();
+  }
+
+  /** Reject all pending requests and clear the pending map. */
+  protected rejectAllPending(error: Error): void {
+    if (this.pending.size === 0) return;
+    for (const [, pending] of this.pending) {
+      clearTimeout(pending.timeout);
+      pending.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  /** Reject all queued items across all priority sub-queues. */
+  protected rejectAllQueued(error: Error): void {
+    for (const q of this.queues) {
+      for (const item of q) {
+        clearTimeout(item.timeout);
+        item.reject(error);
+      }
+      q.length = 0;
+    }
   }
 
   protected clearIdleTimer(): void {
@@ -434,6 +365,76 @@ export abstract class PikeWorkerProcess {
   }
 
   // ---------------------------------------------------------------------------
+  // Force-kill for timeout (T037/T038)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Force-kill the Pike process when a request times out.
+   * A hung process gets SIGKILL — SIGTERM may never deliver under load.
+   * Rejects all pending/queued requests truthfully.
+   */
+  forceKillForTimeout(timedOutRequestId: number): void {
+    if (!this.proc || this.proc.killed) return;
+
+    const dying = this.proc;
+    this.onWarning?.(
+      "worker.timeoutForceKill",
+      `Request id=${timedOutRequestId} timed out — force-killing Pike process (pid=${dying.pid})`,
+    );
+
+    // Null proc so the exit handler knows this is intentional.
+    this.proc = null;
+    try { dying.kill("SIGKILL"); } catch { /* may have already exited */ }
+
+    this.rejectAllPending(
+      new Error(`Pike worker force-killed after timeout on request id=${timedOutRequestId}`),
+    );
+    this.rejectAllQueued(new Error("Pike worker queue cleared after timeout force-kill"));
+    this.sending = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Heartbeat, health-check, and backoff (US3, ADR 0032)
+  // Delegated to PikeWorkerHealthMonitor.
+  // ---------------------------------------------------------------------------
+
+  get isHeartbeatActive(): boolean {
+    return this.health.isHeartbeatActive;
+  }
+
+  startHeartbeat(): void {
+    this.health.startHeartbeat(() => this.proc, this.config.heartbeatIntervalMs ?? 30_000);
+  }
+
+  stopHeartbeat(): void {
+    this.health.stopHeartbeat();
+  }
+
+  get consecutiveHealthCheckFailures(): number {
+    return this.health.consecutiveHealthCheckFailures;
+  }
+
+  recordHealthCheckFailure(): void {
+    this.health.recordHealthCheckFailure();
+  }
+
+  recordHealthCheckSuccess(): void {
+    this.health.recordHealthCheckSuccess();
+  }
+
+  static computeBackoffDelayMs(
+    attempt: number,
+    baseMs: number,
+    maxMs: number,
+  ): number {
+    return PikeWorkerHealthMonitor.computeBackoffDelayMs(attempt, baseMs, maxMs);
+  }
+
+  isIdleEvictionCandidate(thresholdMs: number): boolean {
+    return isIdleEvictionCandidate(this.proc, this.lastRequestTime, thresholdMs);
+  }
+
+  // ---------------------------------------------------------------------------
   // Internal: response parsing
   // ---------------------------------------------------------------------------
 
@@ -447,7 +448,7 @@ export abstract class PikeWorkerProcess {
         onResponse: (response: PikeResponse) => {
           this.consecutiveMalformed = 0;
           // Successful response means the worker is healthy — reset crash counter.
-          this.consecutiveCrashes = 0;
+          this.health.resetCrashes();
           const pending = this.pending.get(response.id);
           if (pending) {
             clearTimeout(pending.timeout);

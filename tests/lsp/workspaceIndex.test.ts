@@ -6,6 +6,7 @@
 
 import { describe, test, expect, beforeAll } from "bun:test";
 import { initParser, parse } from "../../server/src/parser";
+import type { Tree } from "web-tree-sitter";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -326,5 +327,183 @@ int main() { return 0; }
     // B's 'process' must NOT appear — the files are unrelated
     const bRefs = crossRefs.filter(r => r.uri === uriB);
     expect(bRefs.length).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// US3: Index entry demotion and rehydration (Phase 5, T064)
+//
+// Goal: Verify that demoteNonEssentialEntries demotes only non-open,
+// non-closure entries while preserving dependency edges, and that
+// rehydrateEntry restores the symbol table from the on-demand indexer.
+//
+// Methodology: Build a small index with four background-indexed files.
+// Manually set dependency edges via restoreDependencies so the demotion
+// invariant ("dependency map survives demotion") can be asserted without
+// relying on the module resolver.
+// ---------------------------------------------------------------------------
+
+describe("US3: Index entry demotion and rehydration (Phase 5, T064)", () => {
+  let index: WorkspaceIndex;
+
+  beforeAll(async () => {
+    await initParser();
+    index = new WorkspaceIndex({ workspaceRoot: "/tmp" });
+  });
+
+  test("T064: demoteNonEssentialEntries skips open and closure entries", () => {
+    index.clear();
+
+    const content = `int foo() { return 1; }`;
+    const tree = parse(content);
+
+    const uriOpen = "file:///test/us3-open.pike";
+    const uriClosure = "file:///test/us3-closure.pike";
+    const uriExtra1 = "file:///test/us3-extra1.pike";
+    const uriExtra2 = "file:///test/us3-extra2.pike";
+
+    // Background-index four files (lifecycle = "full").
+    index.upsertBackgroundFile(uriOpen, 1, tree, content);
+    index.upsertBackgroundFile(uriClosure, 1, tree, content);
+    index.upsertBackgroundFile(uriExtra1, 1, tree, content);
+    index.upsertBackgroundFile(uriExtra2, 1, tree, content);
+
+    // All four start as "full".
+    expect(index.getEntryLifecycle(uriOpen)).toBe("full");
+    expect(index.getEntryLifecycle(uriExtra1)).toBe("full");
+
+    const openUris = new Set([uriOpen]);
+    const closureUris = new Set([uriOpen, uriClosure]);
+
+    const demoted = index.demoteNonEssentialEntries(openUris, closureUris, 10);
+
+    // Only the two extras should be demoted.
+    expect(demoted.length).toBe(2);
+    expect(demoted).toContain(uriExtra1);
+    expect(demoted).toContain(uriExtra2);
+    expect(demoted).not.toContain(uriOpen);
+    expect(demoted).not.toContain(uriClosure);
+
+    // Open and closure entries remain full.
+    expect(index.getEntryLifecycle(uriOpen)).toBe("full");
+    expect(index.getEntryLifecycle(uriClosure)).toBe("full");
+
+    // Demoted entries have null symbol tables — not stale data presented as success.
+    expect(index.getSymbolTable(uriExtra1)).toBeNull();
+    expect(index.getSymbolTable(uriExtra2)).toBeNull();
+
+    // Open file's symbol table is untouched.
+    expect(index.getSymbolTable(uriOpen)).not.toBeNull();
+  });
+
+  test("T064: demoted entries retain dependency edges", () => {
+    index.clear();
+
+    const content = `int foo() { return 1; }`;
+    const tree = parse(content);
+
+    const uriSrc = "file:///test/us3-depsrc.pike";
+    const uriDep = "file:///test/us3-depdep.pike";
+
+    index.upsertBackgroundFile(uriSrc, 1, tree, content);
+    index.upsertBackgroundFile(uriDep, 1, tree, content);
+
+    // Set up a dependency edge: uriSrc depends on uriDep.
+    index.restoreDependencies(uriSrc, new Set([uriDep]));
+
+    // Verify the edge exists before demotion.
+    const depsBefore = index.getDependencyMap().forwardEdges.get(uriSrc);
+    expect(depsBefore).toBeDefined();
+    expect(depsBefore!.has(uriDep)).toBe(true);
+
+    // Demote uriDep (it is not open and not in any closure).
+    const openUris = new Set([uriSrc]);
+    const closureUris = new Set([uriSrc]);
+    const demoted = index.demoteNonEssentialEntries(openUris, closureUris, 10);
+    expect(demoted).toContain(uriDep);
+
+    // The dependency edge must survive demotion.
+    const depsAfter = index.getDependencyMap().forwardEdges.get(uriSrc);
+    expect(depsAfter).toBeDefined();
+    expect(depsAfter!.has(uriDep)).toBe(true);
+
+    // Reverse edge (dependents) must also survive.
+    const dependents = index.getDependents(uriDep);
+    expect(dependents.has(uriSrc)).toBe(true);
+  });
+
+  test("T064: rehydrateEntry restores symbol table for demoted entries", async () => {
+    index.clear();
+
+    const content = `int foo() { return 42; }`;
+    const tree = parse(content);
+    const uriTarget = "file:///test/us3-rehydrate.pike";
+
+    index.upsertBackgroundFile(uriTarget, 1, tree, content);
+    expect(index.getEntryLifecycle(uriTarget)).toBe("full");
+
+    // Demote the entry.
+    const demoted = index.demoteNonEssentialEntries(new Set(), new Set(), 10);
+    expect(demoted).toContain(uriTarget);
+    expect(index.getEntryLifecycle(uriTarget)).toBe("demoted");
+    expect(index.getSymbolTable(uriTarget)).toBeNull();
+
+    // Set up an on-demand indexer that re-indexes from a stored tree.
+    const storedTrees = new Map<string, { tree: Tree; content: string }>([
+      [uriTarget, { tree, content }],
+    ]);
+    index.setOnDemandIndexFn(async (uri) => {
+      const stored = storedTrees.get(uri);
+      if (!stored) return null;
+      return index.upsertBackgroundFile(uri, 1, stored.tree, stored.content);
+    });
+
+    // Rehydrate — the on-demand indexer should restore the symbol table.
+    const restored = await index.rehydrateEntry(uriTarget);
+    expect(restored).toBe(true);
+    expect(index.getSymbolTable(uriTarget)).not.toBeNull();
+  });
+
+  test("T064: rehydrateEntry returns false for non-demoted or missing entries", async () => {
+    index.clear();
+
+    const content = `int foo() { return 1; }`;
+    const tree = parse(content);
+    const uriFull = "file:///test/us3-full.pike";
+
+    index.upsertBackgroundFile(uriFull, 1, tree, content);
+
+    // Full entry — rehydrate should be a no-op.
+    const result = await index.rehydrateEntry(uriFull);
+    expect(result).toBe(false);
+
+    // Missing entry — rehydrate should return false.
+    const missing = await index.rehydrateEntry("file:///test/us3-missing.pike");
+    expect(missing).toBe(false);
+  });
+
+  test("T064: demoteNonEssentialEntries respects maxToDemote bound", () => {
+    index.clear();
+
+    const content = `int foo() { return 1; }`;
+    const tree = parse(content);
+
+    // Index 10 files, all non-essential.
+    for (let i = 0; i < 10; i++) {
+      index.upsertBackgroundFile(`file:///test/us3-bound-${i}.pike`, 1, tree, content);
+    }
+
+    // Only demote 3.
+    const demoted = index.demoteNonEssentialEntries(new Set(), new Set(), 3);
+    expect(demoted.length).toBe(3);
+
+    // The remaining 7 are still full.
+    let fullCount = 0;
+    for (let i = 0; i < 10; i++) {
+      if (index.getEntryLifecycle(`file:///test/us3-bound-${i}.pike`) === "full") {
+        fullCount++;
+      }
+    }
+    expect(fullCount).toBe(7);
   });
 });

@@ -261,6 +261,51 @@ mapping handle_autodoc(mapping params) {
 }
 
 // ---------------------------------------------------------------------------
+// Heartbeat watchdog (US3, ADR 0032)
+// ---------------------------------------------------------------------------
+
+// Last heartbeat timestamp from the LSP server. Updated on each heartbeat
+// notification. When the watchdog thread detects no heartbeat within the
+// timeout window, the worker exits cleanly to prevent orphan processes.
+int last_heartbeat_time = time();
+
+// Watchdog timeout in seconds. 0 = disabled (backward compat).
+// Set via PIKE_LSP_WATCHDOG_TIMEOUT_SECS environment variable.
+int watchdog_timeout_secs = 0;
+
+// Check interval for the watchdog thread.
+constant WATCHDOG_CHECK_INTERVAL_SECS = 10;
+
+/**
+ * Watchdog thread: periodically checks whether a heartbeat has been received
+ * within the timeout window. If not, exits cleanly.
+ *
+ * This prevents orphan Pike processes on shared SSH dev servers when the
+ * LSP server crashes, is force-killed, or hibernates. The server sends
+ * periodic heartbeat notifications; if they stop, the worker self-terminates.
+ */
+void heartbeat_watchdog_thread(int timeout_secs) {
+  while (1) {
+    sleep(WATCHDOG_CHECK_INTERVAL_SECS);
+    int elapsed = time() - last_heartbeat_time;
+    if (elapsed > timeout_secs) {
+      werror("[worker] Heartbeat watchdog: no heartbeat for %d seconds, exiting.\n", elapsed);
+      exit(0);
+    }
+  }
+}
+
+/**
+ * Handle a heartbeat notification from the LSP server.
+ * Updates the last heartbeat timestamp. Returns 0 (no response) because
+ * heartbeat is a fire-and-forget notification, not a request.
+ */
+mapping handle_heartbeat() {
+  last_heartbeat_time = time();
+  return 0;
+}
+
+// ---------------------------------------------------------------------------
 // Main loop: read requests from stdin, dispatch, write responses
 // ---------------------------------------------------------------------------
 
@@ -268,6 +313,16 @@ int main() {
   // Signal readiness
   Stdio.File stdout = Stdio.stdout;
   Stdio.FILE stdin = Stdio.stdin;
+
+  // Start the heartbeat watchdog thread if a timeout is configured.
+  // The LSP server sets PIKE_LSP_WATCHDOG_TIMEOUT_SECS when it enables
+  // heartbeat scheduling. Without the env var, no watchdog runs (backward
+  // compat for older servers that never send heartbeats).
+  string timeout_env = getenv("PIKE_LSP_WATCHDOG_TIMEOUT_SECS") || "0";
+  watchdog_timeout_secs = (int)timeout_env;
+  if (watchdog_timeout_secs > 0) {
+    Thread.Thread(heartbeat_watchdog_thread, watchdog_timeout_secs);
+  }
 
   string line;
   while ((line = stdin->gets())) {
@@ -297,6 +352,10 @@ int main() {
       } else if (method == "resolve") {
         mapping result = handle_resolve(params);
         response = ([ "id": id, "result": result ]);
+      } else if (method == "heartbeat") {
+        // Heartbeat is a fire-and-forget notification — no response.
+        handle_heartbeat();
+        continue;
       } else {
         response = ([
           "id": id,

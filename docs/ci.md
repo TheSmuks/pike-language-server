@@ -443,3 +443,27 @@ Use specific cache keys to maximize hit rates:
 ```
 
 The exact key (`hashFiles`) gives a cache hit on identical lockfiles. The prefix fallback (`restore-keys`) restores the most recent cache for the OS even when the lockfile changed, then `bun install` fills in the diff.
+
+## 9. Resource-Resilience Test Groups
+
+The `001-resource-resilience` feature adds three test groups that all run under the standard `bun test` invocation in `ci.yml`. No separate workflow is required.
+
+### Regression tests (`tests/lsp/`)
+
+Deterministic, in-process tests using `PassThrough` streams and a fake clock (`PIKE_LSP_FAKE_CLOCK_MS`). They cover cache self-healing/pruning, bounded restore, startup/shutdown deadlines, worker timeout kill/restart, heartbeat watchdog, memory demotion, lazy indexing, hibernation, degraded-mode global-feature unavailability, resource-state notifications, and standardized resource log signals.
+
+```bash
+bun test tests/lsp/
+```
+
+### Performance benchmarks (`tests/perf/`)
+
+Synthetic-workspace benchmarks (`large-workspace.test.ts`, `syntheticWorkspace.ts`) assert that open-files mode time-to-first-hover and time-to-first-semantic-tokens scale with the open dependency closure, not total workspace size. These are pure TypeScript fixtures — no external service, no real `pike` required.
+
+```bash
+bun test tests/perf/
+```
+
+### Pike-gated tests
+
+Tests that spawn a real `pike` worker (`pikeWorker.test.ts`, parts of `shutdown.test.ts`, `sharedServer.test.ts`) are wrapped in `describe.skipIf(!pikeAvailable)`. They skip on hosts without `pike` and run in CI, where `build-pike` produces the binary and `PIKE_BINARY` points at it. The Pike worker protocol and watchdog contract are validated by `scripts/test-pike.sh`, which should be a step in the `test` job after `bun test`.

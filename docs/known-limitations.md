@@ -49,7 +49,7 @@ The `#include` preprocessor directive is used for textual file inclusion (C-styl
 
 **Impact**: Symbols defined in included files are not visible to LSP features when referenced from the including file. Go-to-definition on a symbol in an `#include`-d header file does not navigate to the definition.
 
-**TODO**: Implement include-aware scope merging. When a file uses `#include "foo.h.pi"`, the LSP would need to merge scopes from both the host file and the included file. This requires tracking include directives during parsing and building a combined symbol table scope. Without this, `#include` works for Pike's own preprocessor (which handles it at compile time) but not for LSP features.
+**TODO [#126](https://github.com/TheSmuks/pike-language-server/issues/126)**: Implement include-aware scope merging. When a file uses `#include "foo.h.pi"`, the LSP would need to merge scopes from both the host file and the included file. This requires tracking include directives during parsing and building a combined symbol table scope. Without this, `#include` works for Pike's own preprocessor (which handles it at compile time) but not for LSP features.
 
 ### Diagnostics and Hover (Phase 5/6)
 

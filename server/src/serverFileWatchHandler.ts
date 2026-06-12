@@ -44,6 +44,10 @@ function handleWatchedFilesChange(
   ctx: ServerContext,
   changes: readonly FileEvent[],
 ): void {
+  // Watched-file events do NOT reset the idle timer when no documents are open.
+  // They only count as activity if documents ARE open (the editor is in use).
+  ctx.hibernationManager.onWatchedFileEvent();
+
   for (const event of changes) {
     const uri = event.uri;
     switch (event.type) {
@@ -70,6 +74,12 @@ function handleFileCreatedOrChanged(
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
 
+  // Invalidate global prep — the workspace is no longer guaranteed complete.
+  // The next global query (workspace symbol, references, etc.) will re-scan
+  // to pick up this changed file. Per contracts/lsp-resource-state.md, this
+  // keeps lazy indexing honest: the index reflects the actual workspace state.
+  ctx.index.invalidateGlobalPrep();
+
   // File not open in editor — the on-demand indexer will re-index it
   // when cross-file queries need it (file watchers only provide URIs,
   // not content). Open files are managed by the didChange handler.
@@ -90,6 +100,9 @@ function handleFileDeleted(
   ctx.pikeCache.delete(uri);
   ctx.autodocCache.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
+
+  // Invalidate global prep — the workspace file set has changed.
+  ctx.index.invalidateGlobalPrep();
 
   // Invalidate and refresh open dependents — they now have a broken dependency.
   propagateDependentInvalidation(ctx, dependents);
@@ -151,6 +164,9 @@ async function reindexRenamedFile(
   const dependents = ctx.index.getDependents(rename.oldUri);
   ctx.index.removeFile(rename.oldUri);
   deleteTree(rename.oldUri);
+
+  // Invalidate global prep — the workspace file set has changed (rename).
+  ctx.index.invalidateGlobalPrep();
 
   // Re-index the renamed file if it's currently open.
   const doc = ctx.documents.get(rename.newUri);

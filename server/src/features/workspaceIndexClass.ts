@@ -22,10 +22,23 @@ import {
   registerReverseDeps,
   removeDependencies,
   parsePikeVersion,
+  buildFullFileEntry,
+  buildBackgroundFileEntry,
+  buildCachedFileEntry,
   type SyncIndexAdapter,
 } from "./workspaceIndexImpl";
+import { ScopedResolverCache } from "./versionResolverCache";
+import {
+  invalidateWithDependentsImpl,
+  demoteNonEssentialEntriesImpl,
+  restoreDependenciesImpl,
+  rehydrateEntryImpl,
+  ensureDependenciesResolvedImpl,
+  buildDependencyForwardEdges,
+  indexOnDemand,
+} from "./workspaceLifecycle";
 
-import type { FileEntry, WorkspaceIndexOptions, OnDemandIndexFn, PikeVersionDirective } from "./workspaceTypes";
+import type { FileEntry, WorkspaceIndexOptions, OnDemandIndexFn, PikeVersionDirective, DependencyMap } from "./workspaceTypes";
 import { ModificationSource } from "./workspaceTypes";
 
 // ---------------------------------------------------------------------------
@@ -37,15 +50,15 @@ export class WorkspaceIndex {
   private readonly dependents = new Map<string, Set<string>>();
   private readonly moduleMap = new Map<string, string>();
   private generation = 0;
-  /** Cache of version-scoped resolvers to avoid creating a new ModuleResolver per call. */
-  private readonly versionResolvers = new Map<string, ModuleResolver>();
-  /** Pike version directives are finite in practice; cap the cache to fail-safe. */
-  private static readonly VERSION_RESOLVER_MAX = 16;
+  /** Cache of version-scoped ModuleResolvers, keyed by #pike version. */
+  private readonly scopedResolvers: ScopedResolverCache;
 
   readonly resolver: ModuleResolver;
   readonly workspaceRoot: string;
   readonly pikePaths: PikePaths;
   private onDemandIndex: OnDemandIndexFn | null = null;
+  /** True after a global scan has completed (full mode or on-demand prep). */
+  private globalPrepDone = false;
 
   constructor(options: WorkspaceIndexOptions) {
     this.workspaceRoot = options.workspaceRoot;
@@ -61,6 +74,7 @@ export class WorkspaceIndex {
       pikePaths: this.pikePaths,
       pikeVersion: null,
     });
+    this.scopedResolvers = new ScopedResolverCache(this.resolver, this.workspaceRoot, this.pikePaths);
   }
 
   setOnDemandIndexFn(fn: OnDemandIndexFn): void {
@@ -122,11 +136,7 @@ export class WorkspaceIndex {
         extractDependencies(this.depCtx(), symbolTable, normalizedUri, warmCacheResult),
       );
 
-      const entry: FileEntry = {
-        uri: normalizedUri, version, symbolTable, pikeVersion, dependencies,
-        lastModSource: modSource, contentHash, stale: false,
-        depsResolved: true,
-      };
+      const entry = buildFullFileEntry(normalizedUri, version, symbolTable, pikeVersion, dependencies, modSource, contentHash);
 
       this.files.set(normalizedUri, entry);
       this.generation++;
@@ -162,13 +172,7 @@ export class WorkspaceIndex {
     const pikeVersion = parsePikeVersion(tree, content, this.pikePaths.pikeHome);
     const contentHash = hashContent(content);
 
-    const entry: FileEntry = {
-      uri: normalizedUri, version, symbolTable, pikeVersion,
-      dependencies: new Set(),
-      lastModSource: ModificationSource.BackgroundIndex,
-      contentHash,
-      stale: false,
-    };
+    const entry = buildBackgroundFileEntry(normalizedUri, version, symbolTable, pikeVersion, contentHash);
 
     this.files.set(normalizedUri, entry);
     this.generation++;
@@ -194,27 +198,7 @@ export class WorkspaceIndex {
    */
   async ensureDependenciesResolved(uri: string): Promise<boolean> {
     bump("lazyDepResolutionCalls");
-    const normalizedUri = normUri(uri);
-    const entry = this.files.get(normalizedUri);
-    if (!entry) return false;
-    if (!entry.symbolTable) return false;
-
-    // Already resolved -- distinguish "resolved and found deps" from
-    // "resolved and found nothing" via the depsResolved sentinel flag.
-    if (entry.depsResolved) return false;
-
-    // Resolve dependencies for this entry
-    const deps = await extractDependencies(this.depCtx(), entry.symbolTable, normalizedUri, new Map());
-
-    // Mark as resolved even if no deps found -- avoids re-running resolution
-    // for files that genuinely have no imports/inherits.
-    entry.depsResolved = true;
-
-    if (deps.size > 0) {
-      entry.dependencies = deps;
-      registerReverseDeps(this.dependents, normalizedUri, deps, normUri);
-    }
-    return true;
+    return ensureDependenciesResolvedImpl(this.files, this.dependents, normUri(uri), this.depCtx(), normUri);
   }
 
   /**
@@ -229,12 +213,7 @@ export class WorkspaceIndex {
   ): FileEntry {
     startSpan("upsertCachedFile");
     const normalizedUri = normUri(uri);
-    const entry: FileEntry = {
-      uri: normalizedUri, version, symbolTable,
-      pikeVersion: null,
-      dependencies: new Set(),
-      lastModSource: ModificationSource.DidOpen, contentHash, stale: false,
-    };
+    const entry = buildCachedFileEntry(normalizedUri, version, symbolTable, contentHash);
 
     this.files.set(normalizedUri, entry);
     this.generation++;
@@ -265,23 +244,7 @@ export class WorkspaceIndex {
    * enable M3 pruned invalidation from the first request.
    */
   restoreDependencies(uri: string, dependencies: Set<string>): void {
-    const normalizedUri = normUri(uri);
-    const entry = this.files.get(normalizedUri);
-    if (!entry) return;
-
-    // Only restore if the entry has no deps yet (just cached).
-    if (entry.dependencies.size > 0) return;
-
-    // Normalize dependency URIs too -- they were serialized from a previous
-    // session where the filesystem layout may have changed (symlinks added/removed).
-    const normalizedDeps = new Set<string>();
-    for (const depUri of dependencies) {
-      normalizedDeps.add(normUri(depUri));
-    }
-
-    entry.dependencies = normalizedDeps;
-    entry.depsResolved = true;
-    registerReverseDeps(this.dependents, normalizedUri, normalizedDeps, normUri);
+    restoreDependenciesImpl(this.files, this.dependents, normUri(uri), dependencies, normUri);
   }
 
   getFile(uri: string): FileEntry | undefined {
@@ -300,19 +263,109 @@ export class WorkspaceIndex {
     const normalizedUri = normUri(uri);
     const existing = this.getSymbolTable(normalizedUri);
     if (existing) return existing;
-
-    if (this.onDemandIndex) {
-      try {
-        const indexed = await this.onDemandIndex(normalizedUri);
-        if (indexed?.symbolTable && !indexed.stale) return indexed.symbolTable;
-      } catch (err) { /* on-demand indexing failed */ console.debug(`[workspaceIndex] on-demand indexing failed for ${normalizedUri}:`, err); }
-    }
+    if (!this.onDemandIndex) return null;
+    const indexed = await indexOnDemand(this.onDemandIndex, normalizedUri, "workspaceIndex");
+    if (indexed?.symbolTable && !indexed.stale) return indexed.symbolTable;
     return null;
   }
 
   getDependents(uri: string): Set<string> {
     return this.dependents.get(normUri(uri)) ?? new Set();
   }
+
+  /**
+   * Return a snapshot of the unified dependency graph.
+   *
+   * Forward edges are derived from each entry's `dependencies` field; reverse
+   * edges from the internal `dependents` map. The generation counter reflects
+   * the current mutation count, letting callers detect stale snapshots.
+   *
+   * The returned maps are live references — callers must not mutate them.
+   * Call `getDependencyMap()` fresh each time you need a consistent snapshot.
+   */
+  getDependencyMap(): DependencyMap {
+    return {
+      forwardEdges: buildDependencyForwardEdges(this.files),
+      reverseEdges: this.dependents,
+      generation: this.generation,
+    };
+  }
+
+  /**
+   * Demote an entry under memory pressure: drop the symbol table but retain
+   * identity and dependency edges. The entry can be rehydrated from cache or
+   * source when next queried.
+   *
+   * Returns true if the entry was demoted, false if it doesn't exist or is
+   * already demoted/stub.
+   */
+  demoteEntry(uri: string): boolean {
+    const normalizedUri = normUri(uri);
+    const entry = this.files.get(normalizedUri);
+    if (!entry) return false;
+    if (entry.lifecycle === "demoted" || entry.lifecycle === "stub") return false;
+    entry.symbolTable = null;
+    entry.lifecycle = "demoted";
+    return true;
+  }
+
+  /**
+   * Get the lifecycle state of an entry, or null if not indexed.
+   */
+  getEntryLifecycle(uri: string): string | null {
+    const entry = this.files.get(normUri(uri));
+    return entry?.lifecycle ?? null;
+  }
+
+  /**
+   * Demote non-essential entries under memory pressure.
+   *
+   * Essential entries (open files and their dependency closure) keep their
+   * symbol tables. All other "full" entries have their symbol tables dropped
+   * but retain identity and dependency edges for rehydration.
+   *
+   * Demotion stops after maxToDemote entries — the bound prevents a single
+   * pressure event from dropping the entire index.
+   *
+   * Returns the list of demoted URIs (in iteration order).
+   */
+  demoteNonEssentialEntries(
+    openUris: Set<string>,
+    closureUris: Set<string>,
+    maxToDemote: number,
+  ): string[] {
+    // Build the essential set (normalized) from open + closure.
+    const essential = new Set<string>();
+    for (const uri of openUris) essential.add(normUri(uri));
+    for (const uri of closureUris) essential.add(normUri(uri));
+    return demoteNonEssentialEntriesImpl(this.files, essential, maxToDemote);
+  }
+
+  /**
+   * Rehydrate a demoted entry by re-indexing it via the on-demand indexer.
+   *
+   * Returns true if the entry was rehydrated (symbol table restored), false
+   * if the entry doesn't exist, is not in the "demoted" state, or no on-demand
+   * indexer is registered. Never returns true with a null symbol table.
+   */
+  async rehydrateEntry(uri: string): Promise<boolean> {
+    return rehydrateEntryImpl(this.files, normUri(uri), this.onDemandIndex);
+  }
+
+  /** True if the workspace has been fully scanned at least once. */
+  isGlobalPrepDone(): boolean { return this.globalPrepDone; }
+
+  /** Mark the workspace as fully scanned. Called after global prep completes. */
+  markGlobalPrepDone(): void { this.globalPrepDone = true; }
+
+  /**
+   * Invalidate the global prep flag so the next global query re-scans.
+   *
+   * Called by the file watcher when a workspace file changes on disk — the
+   * index is no longer guaranteed complete, so lazy global preparation must
+   * re-run to pick up the new or changed file.
+   */
+  invalidateGlobalPrep(): void { this.globalPrepDone = false; }
 
   getAllUris(): string[] { return [...this.files.keys()]; }
 
@@ -333,32 +386,7 @@ export class WorkspaceIndex {
    * Stale-marking with lazy rebuild avoids rebuilding entire subtrees on every keystroke.
    */
   invalidateWithDependents(uri: string): string[] {
-    const invalidated: string[] = [];
-    const visited = new Set<string>();
-    const queue = [normUri(uri)];
-
-    while (queue.length > 0) {
-      const current = queue.shift();
-      if (!current) continue;
-      if (visited.has(current)) continue;
-      visited.add(current);
-
-      const entry = this.files.get(current);
-      if (!entry) continue;
-
-      const sourceUri = normUri(uri);
-      if (current === sourceUri) entry.symbolTable = null;
-      entry.stale = true;
-      invalidated.push(current);
-
-      const deps = this.dependents.get(current);
-      if (deps) {
-        for (const depUri of deps) {
-          if (!visited.has(depUri)) queue.push(depUri);
-        }
-      }
-    }
-    return invalidated;
+    return invalidateWithDependentsImpl(this.files, this.dependents, normUri(uri));
   }
 
   isStale(uri: string): boolean { return this.files.get(normUri(uri))?.stale ?? false; }
@@ -373,7 +401,8 @@ export class WorkspaceIndex {
     this.files.clear();
     this.dependents.clear();
     this.moduleMap.clear();
-    this.versionResolvers.clear();
+    this.scopedResolvers.clear();
+    this.globalPrepDone = false;
     this.generation++;
     this.resolver.clearCache();
   }
@@ -462,26 +491,7 @@ export class WorkspaceIndex {
 
   /** Create a resolver scoped to the file's #pike version, or the default resolver. */
   private scopedResolver(entry: FileEntry | undefined): ModuleResolver {
-    if (entry?.pikeVersion && entry.pikeVersion !== this.resolver["pikeVersion"]) {
-      const versionKey = `${entry.pikeVersion.major}.${entry.pikeVersion.minor}`;
-      const cached = this.versionResolvers.get(versionKey);
-      if (cached) return cached;
-      this.evictVersionResolverIfNeeded();
-      const scoped = new ModuleResolver({
-        workspaceRoot: pathToUri(this.workspaceRoot),
-        pikePaths: this.pikePaths,
-        pikeVersion: entry.pikeVersion,
-      });
-      this.versionResolvers.set(versionKey, scoped);
-      return scoped;
-    }
-    return this.resolver;
-  }
-
-  private evictVersionResolverIfNeeded(): void {
-    if (this.versionResolvers.size < WorkspaceIndex.VERSION_RESOLVER_MAX) return;
-    const oldestKey = this.versionResolvers.keys().next().value;
-    if (oldestKey) this.versionResolvers.delete(oldestKey);
+    return this.scopedResolvers.get(entry);
   }
 
   private uriToPath(uri: string): string { return uriToPathUtil(uri); }

@@ -19,6 +19,7 @@ import {
 import { resolveAccessDefinition } from "./accessResolver";
 import { findImplementations } from "./implementation";
 import { resolveIncludeTarget } from "./navigationInclude";
+import { prepareGlobalQuery } from "./workspaceResolution";
 import { logInfo } from "../util/errorLog.js";
 
 /**
@@ -42,7 +43,7 @@ export function registerGoToHandlers(
     handleReferences(ctx, params, token));
 
   connection.onRequest("textDocument/implementation", (params, token) =>
-    handleImplementation(ctx, params, token));
+    handleImplementation(connection, ctx, params, token));
 }
 
 /** Build a source-aware type inferrer factory using PikeWorker.typeof_(). */
@@ -167,6 +168,17 @@ async function handleReferences(
   const table = await ctx.getSymbolTable(params.textDocument.uri);
   if (!table) return [];
 
+  // Ensure the workspace is fully indexed for complete cross-file reference
+  // results. In openFiles mode this triggers a one-time full scan with
+  // progress and cancellation support (contracts/lsp-resource-state.md).
+  await prepareGlobalQuery({
+    connection: ctx.connection,
+    index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot,
+    cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+
   const includeDeclaration = params.context?.includeDeclaration === true;
 
   const crossFileRefs = ctx.index.getCrossFileReferences(
@@ -278,12 +290,21 @@ function prependDeclIfNotDuplicate(
 }
 
 /** Handle textDocument/implementation requests. */
-function handleImplementation(
+async function handleImplementation(
+  connection: Connection,
   ctx: NavigationContext,
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
   token: CancellationToken,
-): Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }> {
+): Promise<Array<{ uri: string; range: { start: { line: number; character: number }; end: { line: number; character: number } } }>> {
   if (token.isCancellationRequested) return [];
+
+  // Implementations span the whole workspace — ensure complete results.
+  await prepareGlobalQuery({
+    connection, index: ctx.index,
+    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  });
+  if (token.isCancellationRequested) return [];
+
   return findImplementations(ctx.index, params.textDocument.uri, params.position.line, params.position.character)
     .map(impl => ({ uri: impl.uri, range: impl.range }));
 }

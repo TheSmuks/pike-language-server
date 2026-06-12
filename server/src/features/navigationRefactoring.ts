@@ -20,7 +20,8 @@ import {
 import { produceCodeActions } from "./codeAction";
 import { produceAutodocTemplateActions } from "./autodocTemplate";
 import { produceGetterSetterActions } from "./getterSetter";
-import { searchWorkspaceSymbols } from "./workspaceSymbol";
+import { searchWorkspaceSymbolsLazy } from "./workspaceSymbol";
+import { prepareGlobalQuery } from "./workspaceResolution";
 import stdlibAutodocIndexRaw from "../data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "../data/predef-builtin-index.json";
 import {
@@ -96,13 +97,12 @@ export function registerRefactoringHandlers(
   connection: Connection,
   ctx: NavigationContext,
 ): void {
-  // -----------------------------------------------------------------------
-  // textDocument/codeAction (US-018)
-  // -----------------------------------------------------------------------
+  registerCodeActionHandler(connection, ctx);
+  registerWorkspaceSymbolHandler(connection, ctx);
+  registerRenameHandlers(connection, ctx);
+}
 
-  // Handlers
-  // -----------------------------------------------------------------------
-
+function registerCodeActionHandler(connection: Connection, ctx: NavigationContext): void {
   connection.onCodeAction(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     const doc = ctx.documents.get(params.textDocument.uri);
@@ -112,12 +112,18 @@ export function registerRefactoringHandlers(
       ...produceAutodocTemplateActions(params, text),
       ...produceGetterSetterActions(params, text, { stdlibModules })];
   });
+}
 
+function registerWorkspaceSymbolHandler(connection: Connection, ctx: NavigationContext): void {
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
-    return searchWorkspaceSymbols(params.query ?? "", ctx.index);
+    return searchWorkspaceSymbolsLazy(
+      params.query ?? "", ctx.index, ctx.connection, token,
+    );
   });
+}
 
+function registerRenameHandlers(connection: Connection, ctx: NavigationContext): void {
   connection.onPrepareRename(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
     const table = await ctx.getSymbolTable(params.textDocument.uri);
@@ -136,6 +142,16 @@ export function registerRefactoringHandlers(
     if (!table) return null;
     const validationError = validateRenameName(params.newName);
     if (validationError) return new ResponseError(ErrorCodes.InvalidRequest, validationError);
+
+    // Renames that miss a reference are destructive — ensure full workspace index.
+    await prepareGlobalQuery({
+      connection: ctx.connection,
+      index: ctx.index,
+      workspaceRoot: ctx.index.workspaceRoot,
+      cancellationToken: token,
+    });
+    if (token.isCancellationRequested) return null;
+
     const renameResult = await getRenameLocations(table, params.textDocument.uri, params.position.line, params.position.character, ctx.index, protectedNames);
     if (!renameResult) return new ResponseError(ErrorCodes.InvalidRequest, "No renamable symbol at the given position");
     if (renameResult.oldName === params.newName) return new ResponseError(ErrorCodes.InvalidRequest, "New name is the same as the current name");

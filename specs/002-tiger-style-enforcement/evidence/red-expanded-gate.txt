@@ -1,0 +1,98 @@
+[WARN] unbounded-map-set server/src/features/callHierarchy.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/query.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/typeHierarchy.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-members.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/workspaceResolution.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/getterSetter.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/diagnosticUtils.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-scopeAccess.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/semanticTokens.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/navigationRefactoring.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-scope.ts:1 — no eviction logic found in file
+[FAIL] max-nesting-depth server/src/features/scopeBuilder.ts:211 — nesting depth 5 exceeds limit 4
+[FAIL] max-nesting-depth server/src/features/typeResolver.ts:220 — nesting depth 5 exceeds limit 4
+[FAIL] max-nesting-depth server/src/features/workspaceResolution.ts:352 — nesting depth 5 exceeds limit 4
+[FAIL] max-nesting-depth server/src/features/workspaceResolution.ts:353 — nesting depth 6 exceeds limit 4
+[FAIL] max-module-exports server/src/features/scope-helpers.ts:1 — 24 exports exceeds limit 20
+[FAIL] bounded-loops server/src/parser.ts:123 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/parser.ts:130 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/scope-helpers.ts:162 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/scope-helpers.ts:215 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/scope-helpers.ts:238 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/scope-helpers.ts:337 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/accessResolver.ts:88 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/selectionRange.ts:124 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/query.ts:104 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/query.ts:119 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completion-chain.ts:147 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/formattingHandler.ts:188 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/formattingHandler.ts:204 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/scope-helpers-lookup.ts:52 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/hoverContent.ts:368 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/documentLink.ts:249 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completionTrigger.ts:101 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/hoverHandler.ts:114 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/navigationInclude.ts:46 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/navigationInclude.ts:147 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/referenceCollector.ts:151 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/referenceCollector.ts:266 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:31 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:47 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:55 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:63 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:82 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/xmlParser.ts:129 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/workspaceLifecycle.ts:38 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/pikeWorkerResponseParser.ts:60 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completionTriggerResolve.ts:290 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/diagnosticUtils.ts:168 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/diagnosticUtils.ts:230 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/semanticTokens.ts:183 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completion-stdlib.ts:196 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completion-scope.ts:108 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/completion-scope.ts:145 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/signatureHelp.ts:157 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/features/lintRules/missingReturn.ts:91 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/util/offsetMap.ts:64 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/util/lruCache.ts:71 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/util/lruCache.ts:76 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/util/positionConverter.ts:33 — loop lacks finite collection/range form or proof comment
+[FAIL] bounded-loops server/src/util/stripScope.ts:20 — loop lacks finite collection/range form or proof comment
+[FAIL] linked-markers docs/known-limitations.md:52 — marker must reference a tracked issue
+=== TigerStyle: Functions over 50 lines ===
+[PASS] All functions under 55 lines
+
+=== Non-null assertions on tree-sitter/array access ===
+[PASS] No non-null assertions on tree-sitter/array access
+
+=== Silent catch blocks ===
+[PASS] No silent catch blocks without explanatory comments
+
+=== rootNode.text / root.text materialization ===
+[PASS] No rootNode.text usage
+
+=== Unbounded Map/Set (no eviction logic in file) ===
+
+=== import.meta non-null assertions ===
+[PASS] No import.meta non-null assertions
+
+=== TigerStyle: Files over 500 lines ===
+[PASS] All files under 500 lines
+
+=== TigerStyle: Nesting depth over 4 ===
+
+=== TigerStyle: Module exports over 20 ===
+
+=== TigerStyle: Loops without explicit bounds ===
+
+=== TigerStyle: Bare TODO/FIXME/HACK/XXX markers ===
+
+=== TigerStyle: Skipped tests without documented reasons ===
+[PASS] All skipped tests document a reason
+
+=== TigerStyle: Rule catalog and suppressions ===
+[PASS] Rule catalog and suppression registry valid
+
+=== 50 failure(s), 12 warning(s) ===
+exit=1

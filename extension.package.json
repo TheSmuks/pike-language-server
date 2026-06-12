@@ -264,6 +264,65 @@
           ],
           "description": "Controls the verbosity of LSP protocol tracing to the Output channel. Useful for debugging.",
           "scope": "window"
+        },
+        "pike.languageServer.indexing.mode": {
+          "type": "string",
+          "default": "openFiles",
+          "enum": ["openFiles", "full", "auto"],
+          "enumDescriptions": [
+            "Index only open files and their dependency closure (fast startup)",
+            "Index the entire workspace on startup (immediate global features)",
+            "Index open files first, then background-scan the rest (balanced)"
+          ],
+          "description": "Startup indexing strategy. 'openFiles' gives the fastest startup; 'full' provides immediate global features.",
+          "scope": "window"
+        },
+        "pike.languageServer.indexing.ignoreGlobs": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Glob patterns for files to exclude from workspace indexing (e.g. [\"**/vendor/**\", \"**/.git/**\"]).",
+          "scope": "window"
+        },
+        "pike.languageServer.indexing.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum file size in bytes for indexing. Files larger than this are skipped.",
+          "minimum": 1024,
+          "maximum": 52428800,
+          "scope": "window"
+        },
+        "pike.languageServer.memory.budgetMb": {
+          "type": "number",
+          "default": 512,
+          "description": "Maximum heap in MB before the server enters degraded mode and demotes non-essential index entries.",
+          "minimum": 64,
+          "maximum": 8192,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.heartbeatIntervalMs": {
+          "type": "number",
+          "default": 10000,
+          "description": "Interval (ms) between heartbeat signals to the Pike worker. The worker self-terminates if heartbeats stop.",
+          "minimum": 1000,
+          "maximum": 120000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.watchdogTimeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "description": "Timeout (ms) after which the Pike worker self-terminates if no heartbeat is received.",
+          "minimum": 5000,
+          "maximum": 600000,
+          "scope": "window"
+        },
+        "pike.languageServer.hibernation.idleThresholdMs": {
+          "type": "number",
+          "default": 600000,
+          "description": "Idle period (ms) before the server hibernates: stops Pike, clears non-essential index entries, stays alive.",
+          "minimum": 10000,
+          "maximum": 86400000,
+          "scope": "window"
         }
       }
     }

@@ -27,6 +27,8 @@ interface FormattingContext {
     insertFinalNewline: boolean;
     operatorSpacing: boolean;
   };
+  /** Called before each request — records activity and gates on wake. */
+  beforeRequest?: () => Promise<void>;
 }
 
 /**
@@ -72,10 +74,16 @@ export function registerFormattingHandler(
   ctx: FormattingContext,
 ): void {
   connection.onDocumentFormatting(
-    (params, token) => handleFormatting(connection, ctx, params, token),
+    async (params, token) => {
+      await ctx.beforeRequest?.();
+      return handleFormatting(connection, ctx, params, token);
+    },
   );
   connection.onDocumentOnTypeFormatting(
-    (params, token) => handleOnTypeFormatting(connection, ctx, params, token),
+    async (params, token) => {
+      await ctx.beforeRequest?.();
+      return handleOnTypeFormatting(connection, ctx, params, token);
+    },
   );
 }
 

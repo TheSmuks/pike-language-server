@@ -8,9 +8,11 @@
 
 import type { Tree } from "web-tree-sitter";
 import type { PikeVersionDirective } from "./workspaceTypes";
+import type { FileEntry } from "./workspaceTypes";
+import { ModificationSource } from "./workspaceTypes";
+import type { SymbolTable } from "./symbolTable";
 import { hashContent } from "./cacheHash";
 import { uriToPath as uriToPathUtil, normalizeUri } from "../util/uri";
-import type { FileEntry } from "./workspaceTypes";
 
 // ---------------------------------------------------------------------------
 // URI normalization
@@ -151,6 +153,71 @@ export function parsePikeVersion(
 /** Content hash for cache validity -- delegates to shared DJB2. */
 export function hashContentFile(content: string): string {
   return hashContent(content);
+}
+
+// ---------------------------------------------------------------------------
+// FileEntry construction (pure builders)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a fully-resolved file entry (didOpen / didChange path).
+ * Dependencies are already computed; the entry is query-ready.
+ */
+export function buildFullFileEntry(
+  uri: string,
+  version: number,
+  symbolTable: SymbolTable,
+  pikeVersion: PikeVersionDirective | null,
+  dependencies: Set<string>,
+  modSource: ModificationSource,
+  contentHash: string,
+): FileEntry {
+  return {
+    uri, version, symbolTable, pikeVersion, dependencies,
+    lastModSource: modSource, contentHash, stale: false,
+    depsResolved: true, lifecycle: "full",
+  };
+}
+
+/**
+ * Build a background-indexed entry.
+ *
+ * Skips dependency resolution for speed; depsResolved is left unset so
+ * ensureDependenciesResolved upgrades the entry lazily on first cross-file query.
+ */
+export function buildBackgroundFileEntry(
+  uri: string,
+  version: number,
+  symbolTable: SymbolTable,
+  pikeVersion: PikeVersionDirective | null,
+  contentHash: string,
+): FileEntry {
+  return {
+    uri, version, symbolTable, pikeVersion,
+    dependencies: new Set(),
+    lastModSource: ModificationSource.BackgroundIndex,
+    contentHash, stale: false, lifecycle: "full",
+  };
+}
+
+/**
+ * Build a cache-restored entry.
+ *
+ * Deserialization must be fast, so no dependency resolution or version parse;
+ * both are resolved lazily. pikeVersion is unknown until the file is parsed.
+ */
+export function buildCachedFileEntry(
+  uri: string,
+  version: number,
+  symbolTable: SymbolTable,
+  contentHash: string,
+): FileEntry {
+  return {
+    uri, version, symbolTable, pikeVersion: null,
+    dependencies: new Set(),
+    lastModSource: ModificationSource.DidOpen,
+    contentHash, stale: false, lifecycle: "full",
+  };
 }
 
 // ---------------------------------------------------------------------------

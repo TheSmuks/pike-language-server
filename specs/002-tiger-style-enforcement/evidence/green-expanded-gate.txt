@@ -1,0 +1,52 @@
+[WARN] unbounded-map-set server/src/features/callHierarchy.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/query.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/typeHierarchy.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-members.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/workspaceResolution.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/getterSetter.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/diagnosticUtils.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-scopeAccess.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/semanticTokens.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/navigationRefactoring.ts:1 — no eviction logic found in file
+[WARN] unbounded-map-set server/src/features/completion-scope.ts:1 — no eviction logic found in file
+=== TigerStyle: Functions over 50 lines ===
+[PASS] All functions under 55 lines
+
+=== Non-null assertions on tree-sitter/array access ===
+[PASS] No non-null assertions on tree-sitter/array access
+
+=== Silent catch blocks ===
+[PASS] No silent catch blocks without explanatory comments
+
+=== rootNode.text / root.text materialization ===
+[PASS] No rootNode.text usage
+
+=== Unbounded Map/Set (no eviction logic in file) ===
+
+=== import.meta non-null assertions ===
+[PASS] No import.meta non-null assertions
+
+=== TigerStyle: Files over 500 lines ===
+[PASS] All files under 500 lines
+
+=== TigerStyle: Nesting depth over 4 ===
+[PASS] Nesting depth within limit
+
+=== TigerStyle: Module exports over 20 ===
+[PASS] Module export counts within limit
+
+=== TigerStyle: Loops without explicit bounds ===
+[PASS] Loops are bounded or documented
+
+=== TigerStyle: Bare TODO/FIXME/HACK/XXX markers ===
+[PASS] All markers link to tracked issues
+
+=== TigerStyle: Skipped tests without documented reasons ===
+[PASS] All skipped tests document a reason
+
+=== TigerStyle: Rule catalog and suppressions ===
+[PASS] Rule catalog and suppression registry valid
+
+=== 12 warning(s), 0 failures ===
+exit=0

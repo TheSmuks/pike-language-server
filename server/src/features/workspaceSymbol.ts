@@ -13,6 +13,9 @@ import type {
 } from "vscode-languageserver/node";
 import type { WorkspaceIndex, FileEntry } from "./workspaceIndex";
 import type { Declaration, DeclKind } from "./symbolTable";
+import type { Connection } from "vscode-languageserver/node";
+import type { CancellationToken } from "vscode-jsonrpc";
+import { prepareGlobalQuery } from "./workspaceResolution";
 
 // ---------------------------------------------------------------------------
 // DeclKind → LSP SymbolKind mapping
@@ -66,6 +69,35 @@ export function searchWorkspaceSymbols(
   }
 
   return results;
+}
+
+/**
+ * Lazy workspace symbol search — ensures the workspace is indexed before searching.
+ *
+ * In `openFiles` mode, the first call triggers a full workspace scan via
+ * prepareGlobalQuery, reporting progress and supporting cancellation. Once the
+ * scan completes, the search runs against the full index.
+ *
+ * Per contracts/lsp-resource-state.md: results are always complete — never
+ * partial. If the caller cancels, returns an empty array.
+ */
+export async function searchWorkspaceSymbolsLazy(
+  query: string,
+  index: WorkspaceIndex,
+  connection: Connection,
+  cancellationToken?: CancellationToken,
+): Promise<SymbolInformation[]> {
+  await prepareGlobalQuery({
+    connection,
+    index,
+    workspaceRoot: index.workspaceRoot,
+    cancellationToken,
+  });
+
+  // Cancellation during preparation — return empty (protocol allows this).
+  if (cancellationToken?.isCancellationRequested) return [];
+
+  return searchWorkspaceSymbols(query, index);
 }
 
 // ---------------------------------------------------------------------------

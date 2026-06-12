@@ -1,0 +1,23 @@
+=== TigerStyle: Functions over 50 lines ===
+[PASS] All functions under 55 lines
+
+=== Non-null assertions on tree-sitter/array access ===
+[PASS] No non-null assertions on tree-sitter/array access
+
+=== Silent catch blocks ===
+[PASS] No silent catch blocks without explanatory comments
+
+=== rootNode.text / root.text materialization ===
+[PASS] No rootNode.text usage
+
+=== Unbounded Map/Set (no eviction logic in file) ===
+[PASS] All Maps/Sets appear to have eviction logic
+
+=== import.meta non-null assertions ===
+[PASS] No import.meta non-null assertions
+
+=== TigerStyle: Files over 500 lines ===
+[PASS] All files under 500 lines
+
+=== All checks passed ===
+exit=0

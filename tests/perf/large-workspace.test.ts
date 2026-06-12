@@ -26,6 +26,9 @@ import { produceCodeLenses } from "../../server/src/features/codeLens";
 import { getCrossFileReferences } from "../../server/src/features/workspaceResolution";
 import { initParser, parse } from "../../server/src/parser";
 import type { Tree } from "web-tree-sitter";
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -326,5 +329,190 @@ describe("Large workspace profiling (1000 files)", () => {
     for (const t of timings) {
       expect(t.ms).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+// ===========================================================================
+// T049: Time-to-first-hover benchmark over indexing modes (US2)
+//
+// Goal: openFiles mode must keep time-to-first-hover bounded by the number of
+// open files and dependency closure, NOT the total workspace size. Full mode
+// indexes everything up front but must still be practical.
+//
+// RED state: the lazy indexing pipeline (T054-T061) is not yet wired, so these
+// benchmarks measure current behaviour. After implementation, openFiles mode
+// must meet the budgets asserted here.
+// ===========================================================================
+
+const BENCH_FILE_COUNT = 200;
+const BUDGET_FIRST_HOVER_OPENFILES_MS = 50;
+
+function hrMs2(start: bigint): number {
+  return Number(process.hrtime.bigint() - start) / 1_000_000;
+}
+
+describe("T049: time-to-first-hover benchmark (US2)", () => {
+  let benchDir: string;
+  let benchIndex: WorkspaceIndex;
+
+  beforeAll(async () => {
+    await initParser();
+    benchDir = mkdtempSync(join(tmpdir(), "pike-bench-"));
+    // Create synthetic workspace of N independent files.
+    for (let i = 0; i < BENCH_FILE_COUNT; i++) {
+      writeFileSync(
+        join(benchDir, `file${i}.pike`),
+        `class File${i} {\n  int value = ${i};\n  int get_value() { return value; }\n}\n`,
+      );
+    }
+  });
+
+  afterAll(() => {
+    try { rmSync(benchDir, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  test("openFiles mode: indexing a single file is fast regardless of workspace size", () => {
+    benchIndex = new WorkspaceIndex({ workspaceRoot: benchDir });
+
+    const uri = `file://${join(benchDir, "file0.pike")}`;
+    const content = readFileSync(join(benchDir, "file0.pike"), "utf-8");
+    const tree = parse(content);
+
+    const start = process.hrtime.bigint();
+    benchIndex.upsertBackgroundFile(uri, 1, tree, content);
+    const elapsedMs = hrMs2(start);
+
+    console.log(`  [T049] openFiles single-file upsert: ${elapsedMs.toFixed(2)}ms (workspace: ${BENCH_FILE_COUNT} files)`);
+    expect(elapsedMs).toBeLessThan(BUDGET_FIRST_HOVER_OPENFILES_MS);
+
+    // The table must be immediately queryable (time-to-first-hover proxy).
+    const startQuery = process.hrtime.bigint();
+    const table = benchIndex.getSymbolTable(uri);
+    const queryMs = hrMs2(startQuery);
+    expect(table).not.toBeNull();
+    expect(queryMs).toBeLessThan(5);
+
+    console.log(`  [T049] time-to-first-query: ${queryMs.toFixed(2)}ms`);
+    try { tree.delete(); } catch { /* ignore */ }
+  });
+
+  test("openFiles mode: workspace symbol searches only indexed files", () => {
+    // Only file0.pike is indexed; search must be fast despite 200 unindexed files.
+    const start = process.hrtime.bigint();
+    const uri = `file://${join(benchDir, "file0.pike")}`;
+    const table = benchIndex.getSymbolTable(uri);
+    expect(table).not.toBeNull();
+
+    // Simulate workspace symbol search across the index.
+    const decls = table!.declarations.filter(
+      d => d.kind === "class" && d.name.includes("File"),
+    );
+    const elapsedMs = hrMs2(start);
+
+    console.log(`  [T049] workspace symbol on 1/${BENCH_FILE_COUNT} files: ${elapsedMs.toFixed(2)}ms`);
+    expect(elapsedMs).toBeLessThan(10);
+    expect(decls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("full mode: background-indexes all workspace files", () => {
+    // Create a fresh index for full-mode indexing.
+    const fullIndex = new WorkspaceIndex({ workspaceRoot: benchDir });
+
+    const start = process.hrtime.bigint();
+
+    // Synchronously index all files (simulating full-mode bulk upsert).
+    for (let i = 0; i < BENCH_FILE_COUNT; i++) {
+      const content = readFileSync(join(benchDir, `file${i}.pike`), "utf-8");
+      const tree = parse(content);
+      const uri = `file://${join(benchDir, `file${i}.pike`)}`;
+      fullIndex.upsertBackgroundFile(uri, 1, tree, content);
+      try { tree.delete(); } catch { /* ignore */ }
+    }
+
+    const elapsedMs = hrMs2(start);
+    const perFile = elapsedMs / BENCH_FILE_COUNT;
+
+    console.log(`  [T049] full-mode index ${BENCH_FILE_COUNT} files: ${elapsedMs.toFixed(1)}ms (${perFile.toFixed(2)}ms/file)`);
+    expect(fullIndex.size).toBe(BENCH_FILE_COUNT);
+
+    // After full indexing, workspace symbol for File0 should return a result.
+    const file0Uri = `file://${join(benchDir, "file0.pike")}`;
+    const table = fullIndex.getSymbolTable(file0Uri);
+    expect(table).not.toBeNull();
+    const cls = table!.declarations.find(d => d.name === "File0");
+    expect(cls).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// US3: Memory-pressure demotion benchmark (Phase 5, T066)
+//
+// Goal: Verify that heap-pressure triggers demotion of non-essential entries
+// and that open-file features remain correct after demotion. The benchmark
+// uses a synthetic workspace with demotion applied to a subset of entries.
+//
+// Methodology: Index N files, mark a few as open, run demotion, assert open
+// files retain symbol tables and non-open files are demoted.
+// ---------------------------------------------------------------------------
+
+describe("US3: Memory-pressure demotion (Phase 5, T066)", () => {
+  test("T066: demotion preserves open-file symbol tables", () => {
+    const demoteIndex = new WorkspaceIndex({ workspaceRoot: "/tmp" });
+    const DEMO_FILES = 50;
+
+    const content = `int foo() { return 1; }`;
+
+    for (let i = 0; i < DEMO_FILES; i++) {
+      const tree = parse(content);
+      demoteIndex.upsertBackgroundFile(
+        `file:///test/demo-${i}.pike`, 1, tree, content,
+      );
+      try { tree.delete(); } catch { /* ignore */ }
+    }
+
+    expect(demoteIndex.size).toBe(DEMO_FILES);
+
+    // Mark 5 files as open + closure.
+    const openUris = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      openUris.add(`file:///test/demo-${i}.pike`);
+    }
+
+    const demoted = demoteIndex.demoteNonEssentialEntries(openUris, openUris, 100);
+    expect(demoted.length).toBe(DEMO_FILES - 5);
+
+    // Open files still have symbol tables.
+    for (let i = 0; i < 5; i++) {
+      expect(demoteIndex.getSymbolTable(`file:///test/demo-${i}.pike`)).not.toBeNull();
+    }
+
+    // Demoted files do not.
+    for (let i = 5; i < 10; i++) {
+      expect(demoteIndex.getSymbolTable(`file:///test/demo-${i}.pike`)).toBeNull();
+      expect(demoteIndex.getEntryLifecycle(`file:///test/demo-${i}.pike`)).toBe("demoted");
+    }
+  });
+
+  test("T066: demoted entries can be rehydrated on demand", async () => {
+    const rehydrateIndex = new WorkspaceIndex({ workspaceRoot: "/tmp" });
+
+    const content = `int bar() { return 2; }`;
+    const uri = "file:///test/rehydrate-bench.pike";
+    const tree = parse(content);
+    rehydrateIndex.upsertBackgroundFile(uri, 1, tree, content);
+
+    // Demote.
+    rehydrateIndex.demoteNonEssentialEntries(new Set(), new Set(), 1);
+    expect(rehydrateIndex.getSymbolTable(uri)).toBeNull();
+
+    // Rehydrate via on-demand indexer.
+    rehydrateIndex.setOnDemandIndexFn(async (u) => {
+      return rehydrateIndex.upsertBackgroundFile(u, 1, tree, content);
+    });
+    const restored = await rehydrateIndex.rehydrateEntry(uri);
+    expect(restored).toBe(true);
+    expect(rehydrateIndex.getSymbolTable(uri)).not.toBeNull();
+
+    try { tree.delete(); } catch { /* ignore */ }
   });
 });

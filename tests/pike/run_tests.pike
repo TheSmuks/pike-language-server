@@ -21,20 +21,20 @@ int main(int argc, array(string) argv) {
   } else if (has_suffix(project_root, "/tests")) {
     project_root = project_root[..sizeof(project_root)-sizeof("/tests")+1];
   }
-  
+
   // Add paths to the Pike master so compiled test files can find modules
   master()->add_module_path(project_root + "/harness");
   master()->add_module_path(project_root + "/modules");
   master()->add_module_path(project_root + "/tests/pike");
-  
+
   array(string) test_dirs = argc > 1 ? ({ argv[1] }) : ({ "." });
-  
+
   // Create test runner with verbose output
   object runner = TestRunner((["verbose": 1]));
-  
+
   // Run tests
   int result = runner->run(test_dirs);
-  
+
   // Exit with appropriate code
   return result;
 }

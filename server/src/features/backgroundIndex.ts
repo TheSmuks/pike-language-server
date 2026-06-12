@@ -12,11 +12,14 @@
 import type { Connection } from "vscode-languageserver/node";
 import type { CancellationToken } from "vscode-jsonrpc";
 import { ProgressType } from "vscode-jsonrpc";
-import { readdir, readFile } from "node:fs/promises";
-import { join, extname } from "node:path";
+import { readdir, readFile, stat } from "node:fs/promises";
+import { join, extname, relative } from "node:path";
 import { pathToFileURL } from "node:url";
+import { minimatch } from "minimatch";
 import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import type { IndexingMode } from "./resourceTypes";
+import { resolveAutoMode } from "./resourceConfiguration";
 import { logError, logInfo, logWarn, ErrorCategory } from "../util/errorLog.js";
 import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
 
@@ -45,6 +48,18 @@ export interface BackgroundIndexOptions {
    * UI refresh work so workspace scans remain O(batches), not O(files).
    */
   onFileIndexed?: (uri: string) => void;
+  /**
+   * Startup indexing mode. Default: "openFiles" (no full scan).
+   * "full": discover and index all workspace files.
+   * "auto": full only when discovery count <= fullScanFileLimit.
+   */
+  indexingMode?: IndexingMode;
+  /** Glob patterns to exclude from discovery. */
+  ignoreGlobs?: string[];
+  /** Skip files larger than this many bytes. 0 = no limit. */
+  maxFileSizeBytes?: number;
+  /** Max files to index in full/auto mode. 0 = no cap. */
+  fullScanFileLimit?: number;
 }
 
 /** Parsed file ready for insertion into the index. */
@@ -56,6 +71,7 @@ interface ParsedFile {
 }
 
 // ---------------------------------------------------------------------------
+
 // Tuning
 // ---------------------------------------------------------------------------
 
@@ -67,6 +83,58 @@ interface ParsedFile {
  * is small — typically 10–500 KB).
  */
 const BATCH_SIZE = 8;
+
+/**
+ * Yield to the event loop between batches.
+ *
+ * Uses setImmediate so I/O callbacks (hover, completion, diagnostics
+ * requests sitting in the JSON-RPC transport) are serviced before the next
+ * batch begins. setImmediate fires after the I/O polling phase, whereas
+ * setTimeout(0) fires after a minimum 1ms timer — setImmediate is the
+ * correct primitive for yielding between I/O-heavy batches.
+ *
+ * In on-demand mode (triggered by prepareGlobalQuery), this yield is what
+ * keeps the server responsive while a full workspace scan is in progress.
+ */
+function yieldToEventLoop(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
+// ---------------------------------------------------------------------------
+// T052: Ignore-glob and file-size filtering (US2)
+// ---------------------------------------------------------------------------
+
+/** Check if a relative path matches any ignore-glob pattern. */
+function isIgnored(relPath: string, ignoreGlobs?: string[]): boolean {
+  if (!ignoreGlobs || ignoreGlobs.length === 0) return false;
+  return ignoreGlobs.some(glob => minimatch(relPath, glob));
+}
+
+/**
+ * Filter out files larger than maxBytes.
+ * Stats each file in parallel; unstatable files are excluded.
+ */
+async function filterByFileSize(
+  files: string[],
+  maxBytes: number,
+  connection: Connection,
+): Promise<string[]> {
+  const checks = await Promise.all(
+    files.map(async (fp) => {
+      try {
+        const s = await stat(fp);
+        if (s.size > maxBytes) {
+          logInfo(connection, `skipping ${fp}: ${s.size} bytes exceeds limit ${maxBytes}`);
+          return null;
+        }
+        return fp;
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return checks.filter((fp): fp is string => fp !== null);
+}
 
 // ---------------------------------------------------------------------------
 // Progress helpers
@@ -251,8 +319,17 @@ async function processBatches(
 
     reportProgress(connection, progressToken, indexed, totalFiles);
 
-    // Yield to the event loop between batches
-    await new Promise(resolve => setTimeout(resolve, 0));
+    // Yield to the event loop between batches so interactive requests
+    // (hover, completion, diagnostics) remain responsive during both
+    // background startup scans and on-demand global query preparation.
+    await yieldToEventLoop();
+
+    // Re-check cancellation after yielding — the client may have cancelled
+    // while we were waiting for the event loop.
+    if (cancellationToken?.isCancellationRequested) {
+      logInfo(connection, `background indexing cancelled after ${indexed}/${totalFiles} files (post-yield)`);
+      return { indexed, errors, cancelled: true };
+    }
   }
   return { indexed, errors, cancelled: false };
 }
@@ -262,10 +339,17 @@ async function processBatches(
 // ---------------------------------------------------------------------------
 
 /**
- * Index all .pike and .pmod files in the workspace.
+ * Index .pike and .pmod files in the workspace.
+ *
+ * Behavior depends on indexingMode:
+ * - "openFiles" (default): no workspace scan. Files are indexed on-demand
+ *   when opened. Safe for arbitrarily large workspaces.
+ * - "full": discover and index all files subject to ignoreGlobs,
+ *   maxFileSizeBytes, and fullScanFileLimit caps.
+ * - "auto": discover first, then resolve to "full" only when the discovered
+ *   count is at or below fullScanFileLimit; otherwise fall back to "openFiles".
  *
  * This is fire-and-forget — errors are logged to the connection console.
- * Does not block the caller; runs asynchronously.
  */
 export async function indexWorkspaceFiles(
   options: BackgroundIndexOptions,
@@ -275,59 +359,110 @@ export async function indexWorkspaceFiles(
   const { connection, index, workspaceRoot } = options;
   const batchSize = options.batchSize ?? BATCH_SIZE;
   const onFileIndexed = options.onFileIndexed;
+  const mode = options.indexingMode ?? "openFiles";
+  const ignoreGlobs = options.ignoreGlobs;
+  const maxFileSizeBytes = options.maxFileSizeBytes ?? 0;
+  const fullScanFileLimit = options.fullScanFileLimit ?? 0;
 
-  if (!workspaceRoot) {
-    logInfo(connection, "no workspace root, skipping background indexing");
+  if (!workspaceRoot || mode === "openFiles") {
+    if (!workspaceRoot) {
+      logInfo(connection, "no workspace root, skipping background indexing");
+    } else {
+      logInfo(connection, "openFiles indexing mode — skipping workspace scan");
+    }
+    stopSpan("backgroundIndex");
     return;
   }
 
-  // Discover files via recursive directory walk
-  const files: string[] = [];
-  try {
-    await measureAsync("discoverFiles", () => discoverFiles(workspaceRoot, files));
-  } catch (err) {
-    logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:discoverFiles(${workspaceRoot})`, err);
-    return;
-  }
-
-  if (files.length === 0) {
-    logInfo(connection, "no .pike/.pmod files found in workspace");
+  const files = await discoverAndFilterFiles(
+    connection, workspaceRoot, ignoreGlobs, mode, fullScanFileLimit,
+  );
+  if (files === null) {
+    stopSpan("backgroundIndex");
     return;
   }
 
   logInfo(connection, `indexing ${files.length} workspace files (batch size ${batchSize})`);
-
   const progressToken = await createProgressReporter(connection, files.length);
 
-  // Filter out already-indexed files (open documents) before batching
-  const pending = files.filter(fp => !index.getFile(pathToFileURL(fp).href));
+  let pending = files.filter(fp => !index.getFile(pathToFileURL(fp).href));
+  if (maxFileSizeBytes > 0) {
+    pending = await filterByFileSize(pending, maxFileSizeBytes, connection);
+  }
 
   const { indexed, errors } = await processBatches(
     connection, index, pending, batchSize, progressToken, files.length,
-    options.cancellationToken,
-    onFileIndexed,
+    options.cancellationToken, onFileIndexed,
   );
 
   reportProgressDone(connection, progressToken, indexed, errors);
-
-  logInfo(
-    connection,
-    `background indexing complete — ${indexed} files indexed, ${errors} errors`,
-  );
-
+  logInfo(connection, `background indexing complete — ${indexed} files indexed, ${errors} errors`);
   bump("filesDiscovered", files.length);
   stopSpan("backgroundIndex");
 }
 
 /**
- * Recursively discover .pike and .pmod files in a directory.
+ * Discover files, resolve auto mode, and apply fullScanFileLimit cap.
+ * Returns null if indexing should be skipped (no files, or auto→openFiles).
  */
-async function discoverFiles(dir: string, results: string[]): Promise<void> {
+async function discoverAndFilterFiles(
+  connection: Connection,
+  workspaceRoot: string,
+  ignoreGlobs: string[] | undefined,
+  mode: string,
+  fullScanFileLimit: number,
+): Promise<string[] | null> {
+  const files: string[] = [];
+  try {
+    await measureAsync("discoverFiles", () =>
+      discoverFiles(workspaceRoot, files, workspaceRoot, ignoreGlobs),
+    );
+  } catch (err) {
+    logError(connection, ErrorCategory.Index, `indexWorkspaceFiles:discoverFiles(${workspaceRoot})`, err);
+    return null;
+  }
+
+  if (files.length === 0) {
+    logInfo(connection, "no .pike/.pmod files found in workspace");
+    return null;
+  }
+
+  // auto mode: resolve based on discovered count vs. fullScanFileLimit.
+  if (mode === "auto") {
+    const resolved = resolveAutoMode("auto", files.length, fullScanFileLimit);
+    if (resolved === "openFiles") {
+      logInfo(
+        connection,
+        `auto mode: ${files.length} files exceed fullScanFileLimit ${fullScanFileLimit} — falling back to openFiles`,
+      );
+      return null;
+    }
+  }
+
+  // full mode (or auto resolved to full): cap discovered file count.
+  if (fullScanFileLimit > 0 && files.length > fullScanFileLimit) {
+    logInfo(connection, `capping full scan to ${fullScanFileLimit} of ${files.length} discovered files`);
+    files.length = fullScanFileLimit;
+  }
+
+  return files;
+}
+
+/**
+ * Recursively discover .pike and .pmod files in a directory.
+ * Skip dot-files, dot-directories, and paths matching ignoreGlobs.
+ */
+async function discoverFiles(
+  dir: string,
+  results: string[],
+  workspaceRoot: string,
+  ignoreGlobs?: string[],
+): Promise<void> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
   } catch {
-    // Directory unreadable (permissions, deleted during scan) — skip silently
+    // Directory unreadable (permissions, deleted during scan) — skip silently.
     return;
   }
 
@@ -335,14 +470,16 @@ async function discoverFiles(dir: string, results: string[]): Promise<void> {
     if (entry.name.startsWith(".")) continue;
 
     const fullPath = join(dir, entry.name);
+    const relPath = relative(workspaceRoot, fullPath);
 
     if (entry.isDirectory()) {
-      await discoverFiles(fullPath, results);
+      if (isIgnored(relPath, ignoreGlobs)) continue;
+      await discoverFiles(fullPath, results, workspaceRoot, ignoreGlobs);
     } else if (entry.isFile()) {
       const ext = extname(entry.name);
-      if (ext === ".pike" || ext === ".pmod") {
-        results.push(fullPath);
-      }
+      if (ext !== ".pike" && ext !== ".pmod") continue;
+      if (isIgnored(relPath, ignoreGlobs)) continue;
+      results.push(fullPath);
     }
   }
 }

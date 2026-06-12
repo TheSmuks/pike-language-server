@@ -220,3 +220,9 @@
    220|
    221|This project was generated from `ai-project-template` version **0.8.29**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect.
    222|
+
+<!-- SPECKIT START -->
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan:
+`specs/002-tiger-style-enforcement/plan.md`
+<!-- SPECKIT END -->

@@ -8,7 +8,7 @@
 # and verify with:
 #   diff -u ~/.hermes/skills/pike-lsp/pike-lsp-quality-gates/scripts/detect.sh .omp/skills/quality-gates/scripts/detect.sh
 #
-# Usage: bash scripts/quality-gates.sh [--all|--functions|--nonnull|--catch|--roottext|--unbounded|--importmeta|--filelen]
+# Usage: bash scripts/quality-gates.sh [--all|--functions|--nonnull|--catch|--roottext|--unbounded|--importmeta|--filelen|--nesting|--exports|--loops|--markers|--skips|--catalog]
 
 set -euo pipefail
 

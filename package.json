@@ -43,6 +43,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "minimatch": "^10.2.5",
     "pike-fmt": "^0.1.7",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
@@ -153,21 +154,27 @@
         },
         "pike.languageServer.modulePaths": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional module search paths (-M). Prepended to auto-detected paths. The workspace root is always included automatically.",
           "scope": "machine-overridable"
         },
         "pike.languageServer.includePaths": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional include search paths (-I). Prepended to auto-detected paths. The workspace root is always included automatically.",
           "scope": "machine-overridable"
         },
         "pike.languageServer.programPaths": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Additional program search paths (for inherit string resolution). Prepended to auto-detected paths. The workspace root is always included automatically.",
           "scope": "machine-overridable"
