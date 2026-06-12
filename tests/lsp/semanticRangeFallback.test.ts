@@ -90,6 +90,35 @@ describe("semantic token range fallback", () => {
     expect(data).toEqual(deltaEncodeTokens(cachedTokens));
   });
 
+  test("builds same-version tokens directly when a reopened document is not indexed yet", async () => {
+    const uri = "file:///semantic-reopen-cold-index.pike";
+    const source = [
+      "int main() {",
+      "  string local = #\"hello",
+      "world\";",
+      "  write(local);",
+      "}",
+    ].join("\n");
+    const doc = TextDocument.create(uri, "pike", 1, source);
+    const expectedTable = buildSymbolTable(parse(source, uri), uri, doc.version, undefined, source);
+    const expectedTokens = produceSemanticTokens(expectedTable);
+    const ctx = {
+      documents: { get: (requestedUri: string) => requestedUri === uri ? doc : undefined },
+      semanticTokensCache: new Map(),
+      getSymbolTable: async () => null,
+      predefBuiltins: {},
+      stdlibIndex: {},
+      debugTelemetry: false,
+      connection: {},
+    } as any;
+
+    const data = await buildSemanticTokenData(ctx, uri, CancellationToken.None);
+
+    expect(expectedTokens.length).toBeGreaterThan(0);
+    expect(data).toEqual(deltaEncodeTokens(expectedTokens));
+    expect(ctx.semanticTokensCache.get(uri)?.data).toEqual(data);
+  });
+
   test("does not return tokens from a table stale relative to the latest open document", async () => {
     const uri = "file:///semantic-table-version-race.pike";
     const sourceV1 = [

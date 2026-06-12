@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Semantic tokens now self-heal on file re-open/file-switch races by building
+    same-version tokens directly from the live document when the workspace index
+    is temporarily cold. This prevents VS Code from clearing colors without any
+    edit, and covers multiline hash-string documents in the cold path.
+
 ## [0.8.27] — 2026-06-11
 
 ### Fixed
