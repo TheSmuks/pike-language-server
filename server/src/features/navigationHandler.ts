@@ -16,7 +16,6 @@ import type { Connection } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { SymbolTable } from "./symbolTable";
-import type { SemanticToken } from "./semanticTokens";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import type { PikeWorker } from "./pikeWorker";
 import type { LRUCache } from "../util/lruCache";
@@ -40,8 +39,8 @@ export interface NavigationContext {
   autodocCache: LRUCache<{ xml: string; hash: string; timestamp: number }>;
   diagnosticManager: DiagnosticManager;
   stdlibIndex: Record<string, { signature: string; markdown: string }>;
-  /** Last successful semantic token payload by URI (transient-race fallback). */
-  semanticTokensCache: Map<string, { version: number; data: number[]; tokens: SemanticToken[] }>;
+  /** Current per-URI index updates; semantic tokens await one bounded attempt. */
+  upsertInFlight: Map<string, Promise<any>>;
   predefBuiltins: Record<string, string>;
   predefAutodoc: Record<string, { signature: string; markdown: string; params?: Array<{ name: string; type: string }>; returnType?: string }>;
   /** Enables verbose internal telemetry logs for race/staleness debugging. */

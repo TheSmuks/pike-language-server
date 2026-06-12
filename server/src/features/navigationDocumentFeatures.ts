@@ -11,7 +11,9 @@ import {
   type DocumentHighlight,
   type Position,
   DocumentHighlightKind,
+  ResponseError,
 } from "vscode-languageserver/node";
+import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import type { NavigationContext } from "./navigationHandler";
 import { initParser, isParserReady, parse } from "../parser";
 import { getDocumentSymbols } from "./documentSymbol";
@@ -26,7 +28,6 @@ import {
   deltaEncodeTokens,
   getExternalLookup,
   sliceSemanticTokens,
-  type SemanticToken,
   type SemanticTokenRange,
 } from "./semanticTokens";
 import { produceFoldingRanges } from "./foldingRange";
@@ -138,63 +139,52 @@ export async function buildSemanticTokenData(
   range?: SemanticTokenRange,
 ): Promise<number[]> {
   let doc = ctx.documents.get(uri);
-  const docVersion = doc?.version;
-  const cached = ctx.semanticTokensCache.get(uri);
 
   if (token.isCancellationRequested) {
-    const fallback = getCachedSemanticTokenData(cached, docVersion, range);
-    if (fallback) return fallback;
-    return [];
+    throwSemanticTokensCancelled();
   }
 
   if (!doc) {
     await Promise.resolve();
     doc = ctx.documents.get(uri);
   }
-  if (!doc) return [];
+  if (!doc) throwSemanticTokensContentModified();
 
   const parserReady = await ensureParserReadyForSemanticTokens(ctx);
   if (!parserReady) {
-    const fallback = getCachedSemanticTokenData(cached, doc.version, range);
-    if (fallback) return fallback;
-    return [];
+    throwSemanticTokensContentModified();
   }
 
+  await awaitInFlightUpsert(ctx, uri, token);
   const table = await ctx.getSymbolTable(uri);
+  if (token.isCancellationRequested) {
+    throwSemanticTokensCancelled();
+  }
   const currentDoc = ctx.documents.get(uri);
-  if (!currentDoc) return [];
+  if (!currentDoc) throwSemanticTokensContentModified();
   if (!table) {
-    const fallback = getCachedSemanticTokenData(cached, currentDoc.version, range);
-    if (fallback) return fallback;
     return buildDirectSemanticTokenData(ctx, uri, currentDoc, range);
   }
   if (table.version !== currentDoc.version) {
-    const fallback = getCachedSemanticTokenData(cached, currentDoc.version, range);
-    if (fallback) return fallback;
-    return [];
+    throwSemanticTokensContentModified();
+  }
+  if (documentHasParseError(uri, currentDoc)) {
+    throwSemanticTokensContentModified();
   }
 
-  return encodeSemanticTokenData(ctx, uri, doc.version, table, cached, range);
+  return encodeSemanticTokenData(ctx, table, range);
 }
 
 function encodeSemanticTokenData(
   ctx: NavigationContext,
-  uri: string,
-  docVersion: number,
   table: SymbolTable,
-  cached: { version: number; data: number[]; tokens: SemanticToken[] } | undefined,
   range?: SemanticTokenRange,
 ): number[] {
   const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
   const tokens = produceSemanticTokens(table, externalLookup);
   const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
-  if (data.length === 0) {
-    const fallback = getCachedSemanticTokenData(cached, docVersion, range);
-    if (fallback) return fallback;
-  }
-  if (!range) ctx.semanticTokensCache.set(uri, { version: docVersion, data, tokens });
   if (ctx.debugTelemetry) {
-    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${uri} version=${docVersion} tokens=${data.length} range=${range ? "yes" : "no"}`);
+    logInfo(ctx.connection, `[telemetry] semanticTokens fresh uri=${table.uri} version=${table.version} tokens=${data.length} range=${range ? "yes" : "no"}`);
   }
   return data;
 }
@@ -207,28 +197,30 @@ function buildDirectSemanticTokenData(
 ): number[] {
   try {
     const source = doc.getText();
-    const table = buildSymbolTable(parse(source, uri), uri, doc.version, undefined, source);
+    const tree = parse(source, uri);
+    if (treeHasError(tree)) {
+      throwSemanticTokensContentModified();
+    }
+    const table = buildSymbolTable(tree, uri, doc.version, undefined, source);
     const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
     const tokens = produceSemanticTokens(table, externalLookup);
     const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
-    if (!range) ctx.semanticTokensCache.set(uri, { version: doc.version, data, tokens });
     return data;
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.direct", err);
-    return [];
+    throwSemanticTokensContentModified();
   }
 }
 
-function getCachedSemanticTokenData(
-  cached: { version: number; data: number[]; tokens: SemanticToken[] } | undefined,
-  docVersion: number | undefined,
-  range?: SemanticTokenRange,
-): number[] | null {
-  if (!cached) return null;
-  if (docVersion === undefined) return null;
-  if (cached.version !== docVersion) return null;
-  if (!range) return cached.data;
-  return deltaEncodeTokens(sliceSemanticTokens(cached.tokens, range));
+function documentHasParseError(
+  uri: string,
+  doc: { getText(): string },
+): boolean {
+  return treeHasError(parse(doc.getText(), uri));
+}
+
+function treeHasError(tree: { rootNode?: { hasError?: boolean } }): boolean {
+  return tree.rootNode?.hasError === true;
 }
 
 async function ensureParserReadyForSemanticTokens(ctx: NavigationContext): Promise<boolean> {
@@ -240,6 +232,27 @@ async function ensureParserReadyForSemanticTokens(ctx: NavigationContext): Promi
     logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.initParser", err);
     return false;
   }
+}
+
+async function awaitInFlightUpsert(
+  ctx: NavigationContext,
+  uri: string,
+  token: CancellationToken,
+): Promise<void> {
+  const inFlight = ctx.upsertInFlight?.get(uri);
+  if (!inFlight) return;
+  await inFlight;
+  if (token.isCancellationRequested) {
+    throwSemanticTokensCancelled();
+  }
+}
+
+function throwSemanticTokensContentModified(): never {
+  throw new ResponseError(LSPErrorCodes.ContentModified, "content modified");
+}
+
+function throwSemanticTokensCancelled(): never {
+  throw new ResponseError(LSPErrorCodes.RequestCancelled, "request cancelled");
 }
 
 /** Handle textDocument/documentHighlight requests. */

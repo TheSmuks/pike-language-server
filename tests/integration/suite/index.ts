@@ -211,6 +211,18 @@ describe("Pike Language Server — Runtime E2E Features", function () {
     assert.ok(decoded.some((token) => token.line === 10 && token.character === 7 && token.typeId === 4), tokenDump(decoded));
   });
 
+  it("converges semantic tokens after a real editor edit", async function () {
+    this.timeout(20_000);
+    const editor = await vscode.window.showTextDocument(runtimeDoc, { preview: false });
+    const editApplied = await editor.edit((builder) => {
+      builder.insert(new vscode.Position(12, 0), "  int editedSemanticToken = total;\n");
+    });
+    assert.equal(editApplied, true, "TextEditor.edit should apply");
+
+    const tokens = await waitForSemanticTokens(runtimeUri, (result) => result.data.length > 0);
+    assert.ok(tokens.data.length > 0, "semantic tokens should converge after edit");
+  });
+
   it("supports definition, references, document symbols, call hierarchy, and type hierarchy", async function () {
     const definition = await execute<vscode.Location[]>(
       "vscode.executeDefinitionProvider",
@@ -379,7 +391,24 @@ async function semanticTokens(command: string, uri: vscode.Uri, range?: vscode.R
     ? await execute<SemanticTokensLike | Uint32Array | number[]>(command, uri, range)
     : await execute<SemanticTokensLike | Uint32Array | number[]>(command, uri);
   assert.ok(result, `${command} returned no semantic tokens`);
+  return normalizeSemanticTokens(command, result);
+}
 
+async function waitForSemanticTokens(
+  uri: vscode.Uri,
+  predicate: (result: { data: number[] }) => boolean,
+): Promise<{ data: number[] }> {
+  const start = Date.now();
+  let lastTokens: { data: number[] } | undefined;
+  while (Date.now() - start < SERVER_READY_TIMEOUT_MS) {
+    lastTokens = await semanticTokens("_provideDocumentSemanticTokens", uri);
+    if (predicate(lastTokens)) return lastTokens;
+    await sleep(250);
+  }
+  throw new Error(`Timed out waiting for semantic tokens. Last count: ${lastTokens?.data.length ?? 0}`);
+}
+
+function normalizeSemanticTokens(command: string, result: SemanticTokensLike | Uint32Array | number[]): { data: number[] } {
   if (Array.isArray(result) || result instanceof Uint32Array) {
     return { data: Array.from(result) };
   }

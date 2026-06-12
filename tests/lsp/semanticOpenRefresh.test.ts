@@ -1,35 +1,32 @@
 /**
- * Source-level regression for semantic refresh on open.
+ * Source-level regression for semantic refresh lifecycle.
  *
- * Visual coloring used to appear only after the first edit. That means the
- * change path refreshed semantic tokens, but the open path did not explicitly
- * do the same. Keep an explicit didOpen handler so opened files are indexed and
- * refreshed without requiring a user edit.
+ * VSCode already requests semantic tokens for opened and changed documents. The
+ * server must index same-file changes, but it must not manufacture extra
+ * workspace/semanticTokens/refresh rounds for plain typing because those races
+ * can make VSCode ask while the index is stale.
  */
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 describe("semantic tokens for opened files", () => {
-  test("didOpen handler indexes and refreshes semantic tokens", async () => {
+  test("didOpen handler indexes without per-open semantic-token refresh", async () => {
     const source = readFileSync("server/src/serverDocumentHandler.ts", "utf8");
 
-    // didOpen should index immediately on the fast local path, then schedule
-    // semantic token refresh. Full dependency resolution stays lazy so an
-    // `inherit` cannot block first paint.
     expect(source).toContain("documents.onDidOpen");
     expect(source).toContain("handleDidOpen");
     expect(source).toContain("indexOpenedDocumentFast");
     expect(source).toContain("upsertBackgroundFile");
-    expect(source).toContain("scheduleSemanticTokensRefresh");
+    expect(source).not.toContain("scheduleSemanticTokensRefresh");
   });
 
-  test("empty semantic token responses preserve last good full response", () => {
+  test("semantic token requests use ContentModified for lifecycle unavailability", () => {
     const source = readFileSync("server/src/features/navigationDocumentFeatures.ts", "utf8");
 
-    expect(source).toContain("data.length === 0");
-    expect(source).toContain("getCachedSemanticTokenData(cached, doc.version, range)");
-    expect(source).toContain("return fallback");
+    expect(source).toContain("LSPErrorCodes.ContentModified");
+    expect(source).toContain("ResponseError");
+    expect(source).not.toContain("getCachedSemanticTokenData");
   });
 
   test("semantic token requests wait for parser readiness on first open", () => {
