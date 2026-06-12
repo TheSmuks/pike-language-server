@@ -16,6 +16,7 @@ import { logInfo, logWarn, logError, ErrorCategory, setLogPathRedactionEnabled }
 import { getPikePaths } from "./features/pikeDetection.js";
 import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
+import { parseResourceConfig, type RawResourceSettings } from "./features/resourceConfiguration";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +44,22 @@ interface InitOptions {
   modulePaths?: string[];
   includePaths?: string[];
   programPaths?: string[];
+  // Resource-resilience settings
+  indexingMode?: string;
+  indexIgnoreGlobs?: string[];
+  indexMaxFileSizeBytes?: number;
+  indexDependencyClosureDepth?: number;
+  indexDependencyClosureCount?: number;
+  memoryBudgetMb?: number;
+  workerHeartbeatIntervalMs?: number;
+  workerWatchdogTimeoutMs?: number;
+  workerIdleEvictionMs?: number;
+  workerHealthCheckIntervalMs?: number;
+  workerMaxConsecutiveFailures?: number;
+  workerBackoffInitialMs?: number;
+  workerBackoffMaxMs?: number;
+  hibernationIdleThresholdMs?: number;
+  hibernationSustainedActivityMs?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +105,7 @@ async function handleInitialize(
   applyBackgroundIndexOptions(ctx, initOpts);
   applyFormattingOptions(ctx, initOpts);
   applyDebugOptions(ctx, initOpts);
+  applyResourceConfig(ctx, initOpts);
 
   return buildServerCapabilities();
 }
@@ -250,4 +268,28 @@ function applyLogOptions(initOpts?: InitOptions): void {
   if (typeof initOpts.logPathRedactionEnabled === "boolean") {
     setLogPathRedactionEnabled(initOpts.logPathRedactionEnabled);
   }
+}
+
+function applyResourceConfig(ctx: ServerContext, initOpts?: InitOptions): void {
+  if (!initOpts) return;
+  const raw: RawResourceSettings = {
+    indexingMode: initOpts.indexingMode,
+    indexIgnoreGlobs: initOpts.indexIgnoreGlobs,
+    indexMaxFileSizeBytes: initOpts.indexMaxFileSizeBytes,
+    indexDependencyClosureDepth: initOpts.indexDependencyClosureDepth,
+    indexDependencyClosureCount: initOpts.indexDependencyClosureCount,
+    memoryBudgetMb: initOpts.memoryBudgetMb,
+    workerRequestTimeoutMs: initOpts.workerRequestTimeoutMs,
+    workerHeartbeatIntervalMs: initOpts.workerHeartbeatIntervalMs,
+    workerWatchdogTimeoutMs: initOpts.workerWatchdogTimeoutMs,
+    workerIdleEvictionMs: initOpts.workerIdleEvictionMs,
+    workerHealthCheckIntervalMs: initOpts.workerHealthCheckIntervalMs,
+    workerMaxConsecutiveFailures: initOpts.workerMaxConsecutiveFailures,
+    workerBackoffInitialMs: initOpts.workerBackoffInitialMs,
+    workerBackoffMaxMs: initOpts.workerBackoffMaxMs,
+    hibernationIdleThresholdMs: initOpts.hibernationIdleThresholdMs,
+    hibernationSustainedActivityMs: initOpts.hibernationSustainedActivityMs,
+  };
+  ctx.resourceConfig = parseResourceConfig(raw);
+  logInfo(ctx.connection, `[init] resource config: mode=${ctx.resourceConfig.indexing.mode} budget=${ctx.resourceConfig.memory.budgetMb}MB`);
 }

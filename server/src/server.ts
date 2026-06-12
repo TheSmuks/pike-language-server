@@ -47,6 +47,8 @@ export interface PikeServer {
   worker: PikeWorker;
   autodocCache: LRUCache<AutodocEntry>;
   diagnosticManager: DiagnosticManager;
+  /** Server context for test inspection (resource state, config, etc.). */
+  context: ServerContext;
 }
 
 export function createPikeServer(connection: Connection): PikeServer {
@@ -155,6 +157,7 @@ function buildReturn(ctx: ServerContext): PikeServer {
     worker: ctx.worker,
     autodocCache: ctx.autodocCache,
     diagnosticManager: ctx.diagnosticManager,
+    context: ctx,
   };
 }
 

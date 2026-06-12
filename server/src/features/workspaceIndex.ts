@@ -14,3 +14,7 @@ export type {
   OnDemandIndexFn,
 } from "./workspaceTypes";
 export { ModificationSource, ModificationSource as ModificationSourceValue } from "./workspaceTypes";
+export type { ResourceConfiguration, ResourceStateValue, ResourceStateNotification, IndexingMode, MemoryBudget, HibernationStateValue } from "./resourceTypes";
+export { DEFAULT_RESOURCE_CONFIG, parseResourceConfig } from "./resourceConfiguration";
+export type { RawResourceSettings } from "./resourceConfiguration";
+export { ResourceStateTracker, createResourceStateSender } from "./resourceState";

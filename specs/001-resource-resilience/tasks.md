@@ -43,22 +43,22 @@
 
 ### Tests First
 
-- [ ] T011 [P] Add RED configuration validation tests for indexing, memory, worker, and hibernation settings in `tests/lsp/configuration.test.ts`
-- [ ] T012 [P] Add RED resource-state notification tests for non-modal `pike/resourceState` payloads in `tests/lsp/resourceState.test.ts`
-- [ ] T013 [P] Add RED lifecycle context tests for request activity, watched-file activity, cancellation, and degraded-state transitions in `tests/lsp/lifecycle.test.ts`
+- [X] T011 [P] Add RED configuration validation tests for indexing, memory, worker, and hibernation settings in `tests/lsp/configuration.test.ts`
+- [X] T012 [P] Add RED resource-state notification tests for non-modal `pike/resourceState` payloads in `tests/lsp/resourceState.test.ts`
+- [X] T013 [P] Add RED lifecycle context tests for request activity, watched-file activity, cancellation, and degraded-state transitions in `tests/lsp/lifecycle.test.ts`
 
 ### Implementation
 
-- [ ] T014 Define `ResourceState`, `IndexingMode`, `MemoryBudget`, and `HibernationState` types in `server/src/features/resourceTypes.ts`
-- [ ] T015 Implement configuration defaults and validation helpers in `server/src/features/resourceConfiguration.ts`
-- [ ] T016 Wire resource configuration from initialization options and workspace settings in `server/src/serverInitHandler.ts`
-- [ ] T017 Add `pike.languageServer.*` resource configuration contributions in `extension.package.json`
-- [ ] T018 Implement resource-state ownership, activity tracking, and cancellation registration in `server/src/serverContext.ts`
-- [ ] T019 Implement `pike/resourceState` server notification sender in `server/src/features/resourceState.ts`
-- [ ] T020 Register resource-state notification handling and non-modal status bar updates in `client/extension.ts`
-- [ ] T021 Reuse the existing listener pattern for resource-state disposal in `client/errorNotificationState.ts`
-- [ ] T022 Export shared resource helpers from `server/src/features/workspaceIndex.ts`
-- [ ] T023 Run foundational validation with `bun test tests/lsp/configuration.test.ts tests/lsp/resourceState.test.ts tests/lsp/lifecycle.test.ts`
+- [X] T014 Define `ResourceState`, `IndexingMode`, `MemoryBudget`, and `HibernationState` types in `server/src/features/resourceTypes.ts`
+- [X] T015 Implement configuration defaults and validation helpers in `server/src/features/resourceConfiguration.ts`
+- [X] T016 Wire resource configuration from initialization options and workspace settings in `server/src/serverInitHandler.ts`
+- [X] T017 Add `pike.languageServer.*` resource configuration contributions in `extension.package.json`
+- [X] T018 Implement resource-state ownership, activity tracking, and cancellation registration in `server/src/serverContext.ts`
+- [X] T019 Implement `pike/resourceState` server notification sender in `server/src/features/resourceState.ts`
+- [X] T020 Register resource-state notification handling and non-modal status bar updates in `client/extension.ts`
+- [X] T021 Reuse the existing listener pattern for resource-state disposal in `client/errorNotificationState.ts`
+- [X] T022 Export shared resource helpers from `server/src/features/workspaceIndex.ts`
+- [X] T023 Run foundational validation with `bun test tests/lsp/configuration.test.ts tests/lsp/resourceState.test.ts tests/lsp/lifecycle.test.ts`
 
 **Checkpoint**: Resource state and configuration plumbing is test-covered and ready for story implementation.
 

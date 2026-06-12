@@ -25,6 +25,10 @@ import predefAutodocIndexRaw from "./data/predef-autodoc.json";
 import { logError, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
+import { DEFAULT_RESOURCE_CONFIG } from "./features/resourceConfiguration";
+import type { ResourceConfiguration } from "./features/resourceTypes";
+import { ResourceStateTracker, createResourceStateSender } from "./features/resourceState";
+import { CancellationTokenSource } from "vscode-languageserver/node";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -69,6 +73,10 @@ export interface ServerContext {
   debugTelemetry: boolean;
   /** Latest document version dropped while parser initialization was pending. */
   pendingParserDocuments: Map<string, TextDocument>;
+  /** Resource-resilience configuration (indexing, memory, worker, hibernation). */
+  resourceConfig: ResourceConfiguration;
+  /** Resource-state tracker (activity, hibernation, state transitions). */
+  resourceState: ResourceStateTracker;
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +188,10 @@ export function createServerContext(
   );
   const { stdlibIndex, predefBuiltins, predefAutodoc } = loadStaticIndices(connection);
 
+  const resourceStateSender = createResourceStateSender(connection);
+  const resourceCts = new CancellationTokenSource();
+  const resourceState = new ResourceStateTracker(resourceStateSender, resourceCts);
+
   return {
     connection,
     documents,
@@ -199,6 +211,8 @@ export function createServerContext(
     predefAutodoc,
     debugTelemetry: false,
     pendingParserDocuments: new Map<string, TextDocument>(),
+    resourceConfig: DEFAULT_RESOURCE_CONFIG,
+    resourceState,
   };
 }
 
