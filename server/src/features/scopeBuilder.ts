@@ -14,7 +14,7 @@
 // are intentional — they provide a stable API surface for the
 // symbol table and completion systems.
  */
-import type { Declaration, SymbolTable } from './symbolTable';
+import type { BuildState, Declaration, Scope, SymbolTable } from './symbolTable';
 
 // Re-export all helpers from the extracted modules
 export {
@@ -28,11 +28,6 @@ export {
   PRIMITIVE_TYPES,
   resolveTypeName,
   extractInitializerType,
-  freshId,
-  currentScopeId,
-  pushScope,
-  popScope,
-  addDeclaration,
   containsPosition,
   rangeSize,
   containsRange,
@@ -41,14 +36,28 @@ export {
   findEnclosingClassDecl,
   findDeclInScope,
 } from './scope-helpers';
+import {
+  freshId,
+  currentScopeId,
+  pushScope,
+  popScope,
+  addDeclaration,
+} from './scope-helpers-state';
+import { containsRange } from './scope-helpers';
+
+export {
+  freshId,
+  currentScopeId,
+  pushScope,
+  popScope,
+  addDeclaration,
+} from './scope-helpers-state';
 
 export {
   getSymbolsInScope,
   getDeclarationsInScope,
   findClassScopeAt,
 } from './completion-scope';
-
-import { containsRange } from './scope-helpers';
 
 // ---------------------------------------------------------------------------
 // Inheritance wiring
@@ -193,29 +202,33 @@ function wireCrossFileInheritance(
     return createSyntheticScope(table, scope, targetClass, targetClassScope, targetTable, targetUri, startId);
   }
 
-  // Second resolution path: bare identifier inherits
-  if (!inheritName.startsWith('"')) {
-    const resolvedUri = index.resolveImport(inheritName, fromUri)
-      ?? index.resolveInherit(inheritName, false, fromUri);
-    if (resolvedUri) {
-      const targetTable = index.getSymbolTable(resolvedUri);
-      if (targetTable) {
-        const targetClass = targetTable.declarations.find(
-          d => d.kind === 'class' && d.name === inheritName,
-        );
-        if (targetClass) {
-          const targetClassScope = targetTable.scopes.find(s =>
-            s.kind === 'class' && s.parentId === targetClass.scopeId &&
-            containsRange(s.range, targetClass.range),
-          );
-          if (targetClassScope) {
-            return createSyntheticScope(table, scope, targetClass, targetClassScope, targetTable, resolvedUri, startId);
-          }
-        }
-      }
-    }
-  }
-  return null;
+  if (inheritName.startsWith('"')) return null;
+  const resolvedUri = index.resolveImport(inheritName, fromUri)
+    ?? index.resolveInherit(inheritName, false, fromUri);
+  if (!resolvedUri) return null;
+  const targetTable = index.getSymbolTable(resolvedUri);
+  if (!targetTable) return null;
+  const target = findTargetClassScope(targetTable, inheritName);
+  if (!target) return null;
+  return createSyntheticScope(
+    table, scope, target.decl, target.scope, targetTable, resolvedUri, startId,
+  );
+}
+
+function findTargetClassScope(
+  targetTable: SymbolTable,
+  inheritName: string,
+): { decl: Declaration; scope: Scope } | null {
+  const targetClass = targetTable.declarations.find(
+    d => d.kind === 'class' && d.name === inheritName,
+  );
+  if (!targetClass) return null;
+  const targetClassScope = targetTable.scopes.find(s =>
+    s.kind === 'class' && s.parentId === targetClass.scopeId &&
+    containsRange(s.range, targetClass.range),
+  );
+  if (!targetClassScope) return null;
+  return { decl: targetClass, scope: targetClassScope };
 }
 
 /**

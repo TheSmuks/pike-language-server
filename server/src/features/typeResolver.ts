@@ -209,22 +209,37 @@ async function resolveQualifiedType(
 
   // Try resolving first segment as a module via WorkspaceIndex
   const moduleUri = await context.index.resolveModule(segments[0], context.uri);
-  if (moduleUri) {
-    const moduleTable = context.index.getSymbolTable(moduleUri);
-    if (moduleTable) {
-      for (let i = 1; i < segments.length; i++) {
-        const classDecl = moduleTable.declarations.find(
-          d => d.kind === "class" && d.name === segments[i],
-        );
-        if (classDecl) {
-          if (i === segments.length - 1) {
-            return { decl: classDecl, uri: moduleUri, table: moduleTable };
-          }
-        }
-      }
-    }
+  if (!moduleUri) {
+    return resolveQualifiedStdlibType(typeName, segments, context);
   }
+  const moduleTable = context.index.getSymbolTable(moduleUri);
+  if (moduleTable) {
+    const result = resolveQualifiedModuleType(moduleUri, moduleTable, segments);
+    if (result) return result;
+  }
+  return resolveQualifiedStdlibType(typeName, segments, context);
+}
 
+function resolveQualifiedModuleType(
+  moduleUri: string,
+  moduleTable: SymbolTable,
+  segments: string[],
+): TypeResolutionResult | null {
+  for (let i = 1; i < segments.length; i++) {
+    const classDecl = moduleTable.declarations.find(
+      d => d.kind === "class" && d.name === segments[i],
+    );
+    if (!classDecl) continue;
+    if (i === segments.length - 1) return { decl: classDecl, uri: moduleUri, table: moduleTable };
+  }
+  return null;
+}
+
+function resolveQualifiedStdlibType(
+  typeName: string,
+  segments: string[],
+  context: TypeResolutionContext,
+): TypeResolutionResult | null {
   // Fallback: check stdlib index for predef.<typeName>
   const stdlibKey = "predef." + typeName;
   if (context.stdlibIndex[stdlibKey]) {

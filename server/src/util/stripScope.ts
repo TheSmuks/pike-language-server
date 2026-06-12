@@ -17,6 +17,7 @@ const SCOPE_PREFIX_RE = /^scope\(\d+,/;
 export function stripScopeWrapper(sig: string): string {
   let result = sig.trim();
 
+  // Bounded: each iteration removes one outer scope(...) wrapper from result.
   while (true) {
     const match = result.match(SCOPE_PREFIX_RE);
     if (!match) break;

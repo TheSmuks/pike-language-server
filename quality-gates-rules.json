@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "max-function-lines",
+      "source": "AGENTS.md:106-109",
+      "checkName": "max-function-lines",
+      "description": "Functions should stay under the Tiger Style screen-sized function limit.",
+      "severity": "blocking",
+      "flags": ["--functions"],
+      "limit": "55 detector lines"
+    },
+    {
+      "id": "tree-sitter-nonnull",
+      "source": "AGENTS.md:45-60",
+      "checkName": "tree-sitter-nonnull",
+      "description": "Tree-sitter and array access must not use unsafe non-null assertions.",
+      "severity": "blocking",
+      "flags": ["--nonnull"]
+    },
+    {
+      "id": "silent-catch",
+      "source": "AGENTS.md:60,146-152",
+      "checkName": "silent-catch",
+      "description": "Catch blocks must not silently suppress errors.",
+      "severity": "blocking",
+      "flags": ["--catch"]
+    },
+    {
+      "id": "root-text-materialization",
+      "source": "AGENTS.md:70-75",
+      "checkName": "root-text-materialization",
+      "description": "Avoid materializing full tree-sitter root text.",
+      "severity": "blocking",
+      "flags": ["--roottext"]
+    },
+    {
+      "id": "unbounded-map-set",
+      "source": "AGENTS.md:49",
+      "checkName": "unbounded-map-set",
+      "description": "Maps and Sets must have visible eviction or bounds.",
+      "severity": "blocking",
+      "flags": ["--unbounded"]
+    },
+    {
+      "id": "import-meta-nonnull",
+      "source": "AGENTS.md:45-60",
+      "checkName": "import-meta-nonnull",
+      "description": "import.meta path fields must not use non-null assertions.",
+      "severity": "blocking",
+      "flags": ["--importmeta"]
+    },
+    {
+      "id": "max-file-lines",
+      "source": "AGENTS.md:113-119",
+      "checkName": "max-file-lines",
+      "description": "Files must stay under the 500-line Tiger Style module limit.",
+      "severity": "blocking",
+      "flags": ["--filelen"],
+      "limit": "500 lines"
+    },
+    {
+      "id": "max-nesting-depth",
+      "source": "AGENTS.md:120",
+      "checkName": "max-nesting-depth",
+      "description": "Nesting depth must not exceed four levels.",
+      "severity": "blocking",
+      "flags": ["--nesting"],
+      "limit": "4 levels"
+    },
+    {
+      "id": "max-module-exports",
+      "source": "AGENTS.md:113-119",
+      "checkName": "max-module-exports",
+      "description": "Modules must not export more than twenty public symbols.",
+      "severity": "blocking",
+      "flags": ["--exports"],
+      "limit": "20 exports"
+    },
+    {
+      "id": "bounded-loops",
+      "source": "AGENTS.md:49",
+      "checkName": "bounded-loops",
+      "description": "Loops must be finite collection/range iteration or carry an explicit bound/proof.",
+      "severity": "blocking",
+      "flags": ["--loops"]
+    },
+    {
+      "id": "linked-markers",
+      "source": "AGENTS.md:191-192",
+      "checkName": "linked-markers",
+      "description": "Maintenance markers must link to tracked issues.",
+      "severity": "blocking",
+      "flags": ["--markers"]
+    },
+    {
+      "id": "documented-skips",
+      "source": "AGENTS.md:139-144,191-192",
+      "checkName": "documented-skips",
+      "description": "Skipped tests must document the reason for the skip.",
+      "severity": "blocking",
+      "flags": ["--skips"]
+    }
+  ],
+  "advisorySignals": []
+}

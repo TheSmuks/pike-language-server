@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+  - Tiger Style quality gate coverage for nesting depth, module export counts,
+    bounded loops, linked maintenance markers, documented skipped tests, rule
+    catalog validation, and auditable suppressions.
+
   - Resource resilience (ADR 0032–0033): memory-pressure handling demotes
     non-essential index entries and enters degraded mode when the heap budget
     is exceeded. The Pike worker uses a heartbeat/watchdog protocol with

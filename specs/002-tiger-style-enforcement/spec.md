@@ -8,6 +8,16 @@
 
 **Input**: User description: "enforce tiger style and fix pending work"
 
+## Clarifications
+
+### Session 2026-06-12
+
+- Q: What form must the documented, auditable suppression mechanism take? → A: Repository-level suppressions registry listing rule, path/range, justification, and reviewer/date.
+- Q: When is a loop considered bounded for Tiger Style gate enforcement? → A: Finite collection/range iteration is compliant; other loops need explicit bound or proof comment.
+- Q: How must the gate make rule coverage auditable against AGENTS.md? → A: Machine-readable rule catalog mapping each enforceable AGENTS.md rule to detector check name.
+- Q: Which severities should block pull requests? → A: Machine-verifiable violations fail; advisory/drift signals may warn locally but not block PRs.
+- Q: What is the local full-gate performance target? → A: Full gate completes in under 5 seconds.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -51,8 +61,9 @@ with the rule name and location.
    depth as a failure.
 2. **Given** a source file exporting twenty-one public symbols, **When** the gate
    runs, **Then** it reports the file and export count as a failure.
-3. **Given** a loop with no explicit upper bound and no proven termination, **When**
-   the gate runs, **Then** it flags the loop for a missing bound.
+3. **Given** a loop that is not finite collection/range iteration and has no
+   explicit upper bound or proof comment, **When** the gate runs, **Then** it
+   flags the loop for a missing bound.
 4. **Given** a source line containing a bare `TODO` with no linked issue, **When**
    the gate runs, **Then** it reports the location and requires an issue
    reference, without false-matching identifiers that merely contain the
@@ -122,7 +133,7 @@ copies are byte-identical.
 **Acceptance Scenarios**:
 
 1. **Given** a clean working tree, **When** the maintainer runs the gate locally,
-   **Then** it completes in under a few seconds, reports success, and names no
+   **Then** it completes in under five seconds, reports success, and names no
    false violations.
 2. **Given** the two detector copies, **When** compared, **Then** they are
    byte-identical, and the project documents that they must be updated together.
@@ -136,15 +147,15 @@ copies are byte-identical.
 
 - What happens when a rule has a legitimate, documented exception (for example a
   module that must export more than twenty symbols by design)? The gate must
-  offer a documented, auditable suppression mechanism rather than a silent
-  inline disable, so exceptions are visible and reviewable.
+  use a repository-level suppressions registry listing rule, path/range,
+  justification, and reviewer/date, so exceptions are visible and reviewable.
 - What happens when a substring inside an identifier matches a banned pattern
   (for example `AUTODOC` containing `TODO`)? The detector must match whole
   markers, not substrings, to avoid false positives.
 - What happens when a loop terminates because its input is finite (for example
-  consuming a buffer line by line)? The gate must treat proven-termination loops
-  as compliant, requiring only an explicit bound where termination is not
-  self-evident.
+  iterating over a collection or range)? The gate must treat finite
+  collection/range iteration as compliant, requiring an explicit bound or proof
+  comment for other loops.
 - What happens when a test is skipped because an external dependency (the Pike
   runtime) is absent? The skip must carry a comment naming the dependency and
   the condition, satisfying the "documented reason" rule without counting as a
@@ -166,9 +177,9 @@ copies are byte-identical.
   without further investigation.
 - **FR-003**: The gate MUST NOT produce false positives, including substring
   matches inside unrelated identifiers.
-- **FR-004**: The gate MUST exit non-zero when any violation is present and zero
-  only when all checks pass, so continuous integration can gate pull requests on
-  its result.
+- **FR-004**: The gate MUST exit non-zero when any machine-verifiable violation
+  is present and zero when no blocking violations are present, so continuous
+  integration can gate pull requests on its result.
 - **FR-005**: The gate MUST allow each rule to be run independently and all rules
   together, preserving the existing per-flag and `--all` invocation contract.
 - **FR-006**: The existing codebase MUST pass the expanded gate with zero
@@ -177,38 +188,47 @@ copies are byte-identical.
 - **FR-007**: Any module exceeding the export limit MUST be split into focused
   modules without breaking existing import sites, mirroring the established
   extract-and-re-export pattern already used in the codebase.
-- **FR-008**: Any loop lacking a self-evident termination MUST gain an explicit
-  upper-bound guard or a comment proving termination.
-- **FR-009**: The gate MUST provide a documented, reviewable suppression mechanism
-  for legitimate rule exceptions, distinct from a silent inline disable.
+- **FR-008**: Finite collection/range iteration MUST be treated as bounded;
+  every other loop MUST have an explicit upper-bound guard or a comment proving
+  termination.
+- **FR-009**: The gate MUST provide a repository-level suppressions registry for
+  legitimate rule exceptions, recording the rule, path/range, justification, and
+  reviewer/date for each suppression.
 - **FR-010**: The detector's two synchronized copies (project-local vendored copy
   and shared agent skill) MUST remain byte-identical, and any rule change MUST
   update both in the same change.
 - **FR-011**: The gate MUST remain wired into continuous integration as a
-  required check on pull requests targeting the default branch.
-- **FR-012**: The gate's rule set MUST be auditable against the documented Tiger
-  Style standard, so any future divergence between the standard and the detector
-  is detectable.
+  required check on pull requests targeting the default branch, blocking on
+  machine-verifiable violations while allowing advisory/drift signals to warn
+  locally without blocking pull requests.
+- **FR-012**: The gate MUST provide a machine-readable rule catalog mapping each
+  enforceable AGENTS.md rule to a detector check name, so future divergence
+  between the standard and the detector is detectable.
 
 ### Key Entities *(include if feature involves data)*
 
 - **Style Rule**: A single machine-verifiable Tiger Style injunction (for example
-  "function length at most fifty lines"), carrying a stable name, a severity
-  (failure or warning), and a description. Rules are the unit of enforcement and
-  reporting.
+  "function length at most fifty lines"), carrying a stable name, a blocking
+  severity, and a description. Rules are the unit of enforcement and reporting.
+- **Rule Catalog**: A machine-readable mapping from each enforceable AGENTS.md
+  Tiger Style rule to its detector check name, used to audit coverage and detect
+  drift between the standard and the gate.
+- **Advisory Signal**: A non-blocking local warning for drift or review-only
+  style guidance that should inform maintainers without failing pull-request CI.
 - **Finding**: A single detected violation, tying a Style Rule to a file and line.
   Findings are the gate's output and the developer's unit of work.
 - **Suppression**: A documented, reviewable exception attaching a Style Rule to a
-  location with a recorded justification, so the gate can skip a known-acceptable
-  case without silencing future violations elsewhere.
+  path/range in the repository-level suppressions registry with a justification
+  and reviewer/date, so the gate can skip a known-acceptable case without
+  silencing future violations elsewhere.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
 - **SC-001**: Every machine-verifiable rule in the project's Tiger Style standard
-  has a corresponding gate check, verifiable by mapping each documented rule to a
-  named check.
+  has a corresponding gate check in the machine-readable rule catalog, verifiable
+  by mapping each documented rule to a named check.
 - **SC-002**: The expanded gate reports zero failures when run with all checks
   enabled against the full source tree on the default branch.
 - **SC-003**: A fixture breaking each previously-uncovered rule is flagged by the
@@ -217,7 +237,7 @@ copies are byte-identical.
 - **SC-004**: No module in the source tree exports more than twenty public
   symbols after the codebase is brought into compliance.
 - **SC-005**: Developers can run the full gate locally and receive a definitive
-  pass or fail result within a few seconds on a typical development machine.
+  pass or fail result within five seconds on a typical development machine.
 - **SC-006**: The two detector copies are byte-identical and remain so after the
   change, verifiable by a direct comparison.
 
