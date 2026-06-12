@@ -34,10 +34,6 @@ export function registerShutdownHandler(
       clearInterval(ctx.memoryTimer);
       ctx.memoryTimer = undefined;
     }
-    if (ctx.semanticTokensRefreshTimer) {
-      clearTimeout(ctx.semanticTokensRefreshTimer);
-      ctx.semanticTokensRefreshTimer = undefined;
-    }
 
     ctx.diagnosticManager.dispose();
 

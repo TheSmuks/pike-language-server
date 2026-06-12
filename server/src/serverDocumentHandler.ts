@@ -124,32 +124,6 @@ function triggerDiagnostics(ctx: ServerContext, uri: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Semantic tokens refresh scheduler
-// ---------------------------------------------------------------------------
-
-function requestSemanticTokensRefresh(ctx: ServerContext): void {
-  try {
-    const refreshResult = ctx.connection.languages.semanticTokens.refresh() as unknown;
-    if (refreshResult && typeof (refreshResult as Promise<void>).catch === "function") {
-      void (refreshResult as Promise<void>).catch((err: unknown) => {
-        logError(ctx.connection, ErrorCategory.System, "semanticTokens.refresh", err);
-      });
-    }
-  } catch (err) {
-    logError(ctx.connection, ErrorCategory.System, "semanticTokens.refresh", err);
-  }
-}
-
-function scheduleSemanticTokensRefresh(ctx: ServerContext): void {
-  if (ctx.semanticTokensRefreshTimer) return;
-  ctx.semanticTokensRefreshTimer = setTimeout(() => {
-    ctx.semanticTokensRefreshTimer = undefined;
-    requestSemanticTokensRefresh(ctx);
-  }, 50);
-}
-
-
-// ---------------------------------------------------------------------------
 // Implementation
 // ---------------------------------------------------------------------------
 
@@ -179,7 +153,6 @@ async function handleOpenedOrChangedContent(
   }
 
   triggerDiagnostics(ctx, doc.uri);
-  scheduleSemanticTokensRefresh(ctx);
 }
 
 async function indexOpenedDocumentFast(
@@ -215,7 +188,6 @@ async function handleDidOpen(
     return;
   }
 
-  scheduleSemanticTokensRefresh(ctx);
 }
 
 async function handleDidChangeContent(
@@ -232,7 +204,6 @@ function handleDidClose(
   deleteTree(uri);
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
-  ctx.semanticTokensCache.delete(uri);
   ctx.pendingParserDocuments.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
 }
