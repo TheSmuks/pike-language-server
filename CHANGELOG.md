@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.29] — 2026-06-12
+
 ### Fixed
 
   - Semantic-token lifecycle races now return protocol errors (`ContentModified`
