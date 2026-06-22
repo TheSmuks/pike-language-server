@@ -14,7 +14,8 @@
 
 import { describe, test, expect, afterEach } from "bun:test";
 import { CancellationTokenSource } from "vscode-languageserver/node";
-import { ResourceStateTracker } from "../../server/src/features/resourceState";
+import { ResourceStateTracker, sampleResourceMetrics } from "../../server/src/features/resourceState";
+import { resourceMetricsLabel, setResourceState, getResourceMetrics } from "../../client/resourceNotificationState";
 import type { ResourceStateNotification } from "../../server/src/features/resourceTypes";
 
 // ---------------------------------------------------------------------------
@@ -222,5 +223,47 @@ describe("US5: Status-bar resource-state details (Phase 7, T096)", () => {
     tracker.transition("degraded", "test");
     expect(notifications[0]).toHaveProperty("timestamp");
     expect(typeof notifications[0].timestamp).toBe("number");
+  });
+
+  test("notification includes heap, RSS, and CPU metrics", () => {
+    const { tracker, notifications } = createTracker();
+    tracker.transition("degraded", "resource pressure");
+
+    expect(notifications[0].heapMb).toBeGreaterThan(0);
+    expect(notifications[0].rssMb).toBeGreaterThan(0);
+    expect(notifications[0].cpuUserMs).toBeGreaterThanOrEqual(0);
+    expect(notifications[0].cpuSystemMs).toBeGreaterThanOrEqual(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Resource process metrics tests
+// ---------------------------------------------------------------------------
+
+describe("Resource metrics sampling", () => {
+  test("sampleResourceMetrics reports heap, RSS, and CPU fields", () => {
+    const metrics = sampleResourceMetrics();
+
+    expect(metrics.heapMb).toBeGreaterThan(0);
+    expect(metrics.rssMb).toBeGreaterThan(0);
+    expect(metrics.cpuUserMs).toBeGreaterThanOrEqual(0);
+    expect(metrics.cpuSystemMs).toBeGreaterThanOrEqual(0);
+  });
+
+  test("client stores and renders heap, RSS, and CPU status metrics", () => {
+    setResourceState({
+      state: "degraded",
+      detail: "resource pressure",
+      heapMb: 42,
+      rssMb: 128,
+      cpuUserMs: 100,
+      cpuSystemMs: 25,
+      timestamp: 123,
+    });
+
+    const metrics = getResourceMetrics();
+    expect(metrics?.heapMb).toBe(42);
+    expect(metrics?.rssMb).toBe(128);
+    expect(resourceMetricsLabel(metrics)).toBe("heap 42MB · rss 128MB · cpu 125ms");
   });
 });

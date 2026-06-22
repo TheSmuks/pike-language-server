@@ -46,12 +46,29 @@ export interface ResourceStateNotification {
   state: ResourceStateValue;
   /** Human-readable detail (e.g. "reindexing after dependency change"). */
   detail?: string;
-  /** Approximate heap usage in MB, when known. */
+  /** Approximate V8 heap usage in MB, when known. */
   heapMb?: number;
+  /** Approximate resident set size in MB, when known. */
+  rssMb?: number;
+  /** Process user CPU time in milliseconds, when known. */
+  cpuUserMs?: number;
+  /** Process system CPU time in milliseconds, when known. */
+  cpuSystemMs?: number;
   /** Number of indexed entries, when relevant. */
   entryCount?: number;
   /** Epoch milliseconds when the notification was emitted. */
   timestamp: number;
+}
+
+export interface ResourceProcessMetrics {
+  /** Approximate V8 heap usage in MB. */
+  heapMb: number;
+  /** Approximate resident set size in MB. */
+  rssMb: number;
+  /** Process user CPU time in milliseconds. */
+  cpuUserMs: number;
+  /** Process system CPU time in milliseconds. */
+  cpuSystemMs: number;
 }
 
 // ---------------------------------------------------------------------------
