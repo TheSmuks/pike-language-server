@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.31] — 2026-06-22
+
+### Changed
+
+  - Resource-state notifications and the VS Code status bar now expose process
+    heap, RSS, and CPU metrics, making degraded/hibernating LSP sessions easier
+    to diagnose on shared SSH hosts.
+
 ## [0.8.30] — 2026-06-13
 
 ### Added

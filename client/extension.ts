@@ -31,6 +31,7 @@ import {
   setResourceState,
   onResourceStateChange,
   resetResourceListeners,
+  resourceMetricsLabel,
   resourceStateLabel,
 } from "./resourceNotificationState";
 
@@ -416,8 +417,8 @@ export function activate(context: vscode.ExtensionContext): void {
 
   client.onNotification(
     "pike/resourceState",
-    (params: { state: string; detail?: string }) => {
-      setResourceState(params.state as any, params.detail);
+    (params: import("../server/src/features/resourceTypes").ResourceStateNotification) => {
+      setResourceState(params);
     },
   );
 
@@ -480,10 +481,12 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: unsubscribeErrors });
 
   // Update status bar with resource state (non-modal indicator).
-  const unsubscribeResource = onResourceStateChange((state, detail) => {
+  const unsubscribeResource = onResourceStateChange((state, detail, metrics) => {
     const label = resourceStateLabel(state);
     if (label) {
+      const metricLabel = resourceMetricsLabel(metrics);
       statusBarItem.text = `$(server) Pike LSP (${label})`;
+      statusBarItem.tooltip = [detail, metricLabel].filter(Boolean).join("\n");
     }
   });
   context.subscriptions.push({ dispose: unsubscribeResource });
@@ -528,8 +531,8 @@ export function activate(context: vscode.ExtensionContext): void {
           context.subscriptions.push(
             client.onNotification(
               "pike/resourceState",
-              (params: { state: string; detail?: string }) => {
-                setResourceState(params.state as any, params.detail);
+              (params: import("../server/src/features/resourceTypes").ResourceStateNotification) => {
+                setResourceState(params);
               },
             ),
           );
