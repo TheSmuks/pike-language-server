@@ -9,7 +9,7 @@ Payload fields:
 - `message`: short user-facing text for status bar.
 - `reason`: machine-readable reason.
 - `startedAtMs`: timestamp.
-- `details`: optional object for metrics such as `heapUsedBytes`, `heapLimitBytes`, `entriesDemoted`, `filesIndexed`, `filesTotal`.
+- `details`: optional object for metrics such as `heapUsedBytes`, `rssBytes`, `cpuUserMs`, `cpuSystemMs`, `heapLimitBytes`, `entriesDemoted`, `filesIndexed`, `filesTotal`.
 
 Client behavior:
 - Show persistent states in a non-intrusive status-bar item.

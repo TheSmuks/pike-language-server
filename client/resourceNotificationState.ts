@@ -11,14 +11,37 @@ import type { ResourceStateValue, ResourceStateNotification } from "../server/sr
 
 let currentState: ResourceStateValue = "active";
 let currentDetail: string | undefined;
+let currentMetrics: ResourceStateMetrics | undefined;
 
-type ChangeCallback = (state: ResourceStateValue, detail?: string) => void;
+type ResourceStateMetrics = Pick<
+  ResourceStateNotification,
+  "heapMb" | "rssMb" | "cpuUserMs" | "cpuSystemMs"
+>;
+
+type ChangeCallback = (state: ResourceStateValue, detail?: string, metrics?: ResourceStateMetrics) => void;
 const listeners: ChangeCallback[] = [];
 
-export function setResourceState(state: ResourceStateValue, detail?: string): void {
-  currentState = state;
-  currentDetail = detail;
-  for (const cb of listeners) cb(currentState, currentDetail);
+export function setResourceState(notification: ResourceStateNotification): void;
+export function setResourceState(state: ResourceStateValue, detail?: string): void;
+export function setResourceState(
+  stateOrNotification: ResourceStateValue | ResourceStateNotification,
+  detail?: string,
+): void {
+  if (typeof stateOrNotification === "string") {
+    currentState = stateOrNotification;
+    currentDetail = detail;
+    currentMetrics = undefined;
+  } else {
+    currentState = stateOrNotification.state;
+    currentDetail = stateOrNotification.detail;
+    currentMetrics = {
+      heapMb: stateOrNotification.heapMb,
+      rssMb: stateOrNotification.rssMb,
+      cpuUserMs: stateOrNotification.cpuUserMs,
+      cpuSystemMs: stateOrNotification.cpuSystemMs,
+    };
+  }
+  for (const cb of listeners) cb(currentState, currentDetail, currentMetrics);
 }
 
 export function getResourceState(): ResourceStateValue {
@@ -27,6 +50,20 @@ export function getResourceState(): ResourceStateValue {
 
 export function getResourceDetail(): string | undefined {
   return currentDetail;
+}
+
+export function getResourceMetrics(): ResourceStateMetrics | undefined {
+  return currentMetrics;
+}
+
+export function resourceMetricsLabel(metrics: ResourceStateMetrics | undefined): string {
+  if (!metrics) return "";
+  const parts: string[] = [];
+  if (metrics.heapMb !== undefined) parts.push(`heap ${metrics.heapMb}MB`);
+  if (metrics.rssMb !== undefined) parts.push(`rss ${metrics.rssMb}MB`);
+  const cpuMs = (metrics.cpuUserMs ?? 0) + (metrics.cpuSystemMs ?? 0);
+  if (cpuMs > 0) parts.push(`cpu ${cpuMs}ms`);
+  return parts.join(" · ");
 }
 
 /** Register a callback for resource state changes. Returns a dispose function. */

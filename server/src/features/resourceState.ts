@@ -15,6 +15,7 @@ import type { CancellationTokenSource } from "vscode-languageserver/node";
 import type {
   ResourceStateValue,
   ResourceStateNotification,
+  ResourceProcessMetrics,
   MemoryBudget,
 } from "./resourceTypes";
 
@@ -52,9 +53,11 @@ export class ResourceStateTracker {
     if (this.currentState === newState) return false;
     const oldState = this.currentState;
     this.currentState = newState;
+    const metrics = sampleResourceMetrics();
     this.send({
       state: newState,
       detail: detail ?? `transitioned from ${oldState} to ${newState}`,
+      ...metrics,
       timestamp: nowMs(),
     });
     return true;
@@ -126,6 +129,21 @@ export function createResourceStateSender(connection: Connection): (n: ResourceS
     } catch {
       // Connection may be closed during teardown — swallow.
     }
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Process resource metrics
+// ---------------------------------------------------------------------------
+
+export function sampleResourceMetrics(): ResourceProcessMetrics {
+  const memory = process.memoryUsage();
+  const cpu = process.cpuUsage();
+  return {
+    heapMb: bytesToMegabytes(memory.heapUsed),
+    rssMb: bytesToMegabytes(memory.rss),
+    cpuUserMs: microsecondsToMilliseconds(cpu.user),
+    cpuSystemMs: microsecondsToMilliseconds(cpu.system),
   };
 }
 
@@ -208,4 +226,12 @@ function nowMs(): number {
     if (Number.isFinite(parsed)) return parsed;
   }
   return Date.now();
+}
+
+function bytesToMegabytes(bytes: number): number {
+  return Math.round(bytes / 1024 / 1024);
+}
+
+function microsecondsToMilliseconds(microseconds: number): number {
+  return Math.round(microseconds / 1000);
 }
