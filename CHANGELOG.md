@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Modernized the README** (which renders on the Marketplace page): user-facing first, accurate counts (90-file corpus, ~490 Pike tests, 5,500+ stdlib symbols), curated configuration table, and dev/test detail moved to links. Replaced the broken Marketplace version badge — shields.io's `visual-studio-marketplace` badge type is retired — with a GitHub-release badge labelled "marketplace", which is accurate because the release workflow now publishes the same version to GitHub and the Marketplace.
+
 ## [0.8.37] — 2026-07-07
 
 ### Added
