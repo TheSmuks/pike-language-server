@@ -12,6 +12,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { initParser, isParserReady, parse, deleteTree } from "./parser";
 import { ModificationSource } from "./features/workspaceIndex";
+import { hydrateFromCache } from "./features/cacheHydrate";
 import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
 import type { ServerContext } from "./serverContext";
 
@@ -217,11 +218,12 @@ export async function indexDependencyClosure(
         if (visited.has(depUri)) continue;
         visited.add(depUri);
 
-        // Already indexed by background scan or another closure.
-        if (index.getFile(depUri)) continue;
+        // Already fully indexed (full symbol table). Stubs fall through to be
+        // hydrated from cache below rather than skipped.
+        if (index.getFile(depUri)?.symbolTable) continue;
         if (indexedCount >= countMax) return indexedCount;
 
-        // Read dependency from disk and index it.
+        // Hydrate from cache when possible, else read + parse from disk.
         const indexed = await indexDependencyFromDisk(ctx, depUri);
         if (indexed) {
           indexedCount++;
@@ -266,6 +268,10 @@ async function indexDependencyFromDisk(
     // File may not exist on disk (resolved import that's a built-in module).
     return false;
   }
+
+  // Fast path: hydrate a stub's symbol table from cache when the source is
+  // unchanged — avoids a parse + full cross-file resolution.
+  if (await hydrateFromCache(ctx.index, ctx.index.workspaceRoot, uri, content)) return true;
 
   try {
     const tree = parse(content, uri);

@@ -21,13 +21,20 @@ import type { SymbolTable, Declaration, Scope } from "../../server/src/features/
 
 let tempDir: string;
 let index: WorkspaceIndex;
+let origCacheHome: string | undefined;
 
 beforeAll(() => {
   tempDir = mkdtempSync(join(tmpdir(), "pike-lsp-cache-test-"));
+  // Isolate the global cache under tempDir so tests never touch the real
+  // user cache and everything is cleaned up with tempDir.
+  origCacheHome = process.env.XDG_CACHE_HOME;
+  process.env.XDG_CACHE_HOME = tempDir;
   index = new WorkspaceIndex({ workspaceRoot: tempDir });
 });
 
 afterAll(() => {
+  if (origCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+  else process.env.XDG_CACHE_HOME = origCacheHome;
   rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -199,7 +206,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
   // T024: Old-format entries (no mtimeMs/sizeBytes) are loaded successfully.
   test("T024: loads old-format entries lacking mtimeMs/sizeBytes", async () => {
     const wasmHash = "migration-hash";
-    const cacheDir = join(migrationDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(migrationDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     // Write an old-format entry (no mtimeMs/sizeBytes fields).
@@ -220,7 +227,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
 
     // Write the cacheIndex.json to match.
     writeFileSync(
-      join(migrationDir, ".pike-lsp", "cacheIndex.json"),
+      join(getCachePath(migrationDir), "cacheIndex.json"),
       JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
     );
 
@@ -235,7 +242,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
   // T024: Corrupt entries (invalid JSON) are skipped, not fatal.
   test("T024: corrupt entries are skipped, valid ones are loaded", async () => {
     const wasmHash = "corrupt-test-hash";
-    const cacheDir = join(migrationDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(migrationDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     // Write one valid entry.
@@ -258,7 +265,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     writeFileSync(join(cacheDir, "corrupt-hash.json"), "{{invalid json");
 
     writeFileSync(
-      join(migrationDir, ".pike-lsp", "cacheIndex.json"),
+      join(getCachePath(migrationDir), "cacheIndex.json"),
       JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 2 }),
     );
 
@@ -271,7 +278,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
   // T024: Duplicate URIs — first entry wins, second is skipped.
   test("T024: duplicate URIs are deduplicated", async () => {
     const wasmHash = "dup-test-hash";
-    const cacheDir = join(migrationDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(migrationDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     const makeEntry = (hash: string) => ({
@@ -292,7 +299,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     writeFileSync(join(cacheDir, "dup-b.json"), JSON.stringify(makeEntry("dup-b")));
 
     writeFileSync(
-      join(migrationDir, ".pike-lsp", "cacheIndex.json"),
+      join(getCachePath(migrationDir), "cacheIndex.json"),
       JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 2 }),
     );
 
@@ -304,7 +311,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
   // T025: Cache file count equals live entry count after save.
   test("T025: stale entries are pruned on save", async () => {
     const wasmHash = "prune-test-hash";
-    const cacheDir = join(migrationDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(migrationDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     // Pre-populate with a stale entry.
@@ -358,6 +365,37 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     expect(loaded!.length).toBe(1);
     expect(loaded![0].symbolTable).not.toBeNull();
     expect(loaded![0].symbolTable!.declarations[0].name).toBe("Cached");
+
+    await deleteCache(migrationDir);
+  });
+
+  // Legacy in-workspace .pike-lsp/ is migrated to the global cache on load.
+  test("migrates a legacy in-workspace .pike-lsp/ cache to the global cache", async () => {
+    const wasmHash = "legacy-migration-hash";
+
+    // Write a valid cache in the OLD in-workspace location.
+    const legacyCache = join(migrationDir, ".pike-lsp", "cache");
+    mkdirSync(legacyCache, { recursive: true });
+    writeFileSync(join(legacyCache, "leg-hash.json"), JSON.stringify({
+      uri: "file:///test/legacy.pike",
+      version: 1,
+      contentHash: "leg-hash",
+      dependencies: [],
+      symbolTable: makeTestSymbolTable("file:///test/legacy.pike", ["Legacy"]),
+    }));
+    writeFileSync(
+      join(migrationDir, ".pike-lsp", "cacheIndex.json"),
+      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
+    );
+
+    const loaded = await loadCache(migrationDir, wasmHash);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.length).toBe(1);
+    expect(loaded![0].uri).toBe("file:///test/legacy.pike");
+
+    // Legacy dir is gone; global cache now holds the entries.
+    expect(existsSync(join(migrationDir, ".pike-lsp"))).toBe(false);
+    expect(existsSync(getCachePath(migrationDir))).toBe(true);
 
     await deleteCache(migrationDir);
   });
