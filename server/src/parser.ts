@@ -201,6 +201,17 @@ export function parse(source: string, uri?: string): Tree {
     if (uri) {
       const cached = treeCache.get(uri);
       if (cached) {
+        // Fast path: the source is unchanged since the last parse. Many
+        // feature handlers (hover, completion, definition, links…) call
+        // parse(doc.getText(), uri) on every request even when the document
+        // has not changed. Return the cached tree directly instead of
+        // re-running tree-sitter and allocating a new Tree. We must NOT
+        // re-store it: treeCache.set() on the same key deletes the previous
+        // tree via onEvict, which would free the tree we are handing back.
+        if (cached.source === source) {
+          bump("parseCacheHits");
+          return cached.tree;
+        }
         // Edit the old tree so tree-sitter's ReusableNode has correct positions.
         const edit = computeEdit(cached.source, source);
         if (edit) {

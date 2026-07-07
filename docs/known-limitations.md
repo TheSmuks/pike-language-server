@@ -161,6 +161,20 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 **LSP impact**: None currently. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) provides hover coverage for these symbols. When pike-ai-kb adds the fallback, the LSP could route additional type queries through it for richer signatures.
 
+### `typeof` type inference instantiates the user's program — INHERENT
+
+The worker's `typeof` handler (`harness/worker.pike`) evaluates an expression's type by compiling the user's source together with a `typeof(expr)` wrapper and then **instantiating the resulting program** (`prog()`). Instantiation runs the file's class `create()` / module initialization. For a file whose top-level construction has side effects (opening files or sockets, spawning processes), a hover or completion that triggers type inference will execute those side effects.
+
+**Scope**: The dangerous-identifier whitelist guards only the interpolated *expression*, not the surrounding source. The source is the user's own file, so this is not a privilege-escalation risk, but it is a surprising cost — inference is now cached per `(content-hash, expression)` (see `PikeWorker.typeof_`), so repeated hovers on unchanged content run it at most once.
+
+**Mitigation / future work**: Prefer the runtime-introspection path used by `resolve` (which does not instantiate user programs) where it can answer the query, and consider a `--sandbox`-style restricted master for `typeof` instantiation. Type inference already degrades to `mixed` on any compilation/instantiation failure, so correctness is unaffected — only side effects and latency.
+
+### Incremental parse collapses multi-region edits into one span — INHERENT
+
+`computeEdit` in `server/src/parser.ts` derives a single tree-sitter edit from the common prefix/suffix of the old and new source. A change that touches two disjoint regions in one document version (multi-cursor edit, find-and-replace-all) is represented as one edit spanning everything between the first and last change, which reduces tree-sitter's subtree reuse for that single reparse. Correctness is unaffected — tree-sitter always produces a correct tree — only reuse efficiency for that reparse.
+
+**Mitigation**: Single-cursor typing (the overwhelmingly common case) produces one contiguous edit and reuses optimally. Unchanged reparses are now short-circuited entirely (`parse()` returns the cached tree when the source is byte-identical). A future improvement is to consume the LSP incremental change ranges directly (they already describe each disjoint edit) instead of re-deriving a single span from full text.
+
 ---
 
 ## Resolved Limitations
