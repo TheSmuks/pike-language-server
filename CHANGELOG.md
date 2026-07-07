@@ -9,9 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.38] — 2026-07-07
+
+### Added
+
+- **Go to Type Definition** (`textDocument/typeDefinition`) — jump from a variable to the class that defines its type, resolved same-file, qualified, and cross-file.
+- **Go to Declaration** (`textDocument/declaration`) — aliased to definition (Pike has no header/prototype split).
+- **Semantic tokens delta** — the server now advertises and serves `textDocument/semanticTokens/full/delta`, sending only the changed slice of the token array instead of the whole file on every keystroke.
+- **Range formatting** (`textDocument/rangeFormatting`) — "Format Selection" now works (whole-document fallback, since pike-fmt is document-level).
+- **Diagnostic related information** — unreachable-code warnings now link back to the `return`/`break`/`continue` that makes the code dead.
+- **sprintf/format-specifier highlighting** inside strings (`%d`, `%O`, `%-20s`, `%.2f`, `%{…%}`) plus backslash line-continuation, guarded against prose false positives.
+- **Truncation notice** — when a file exceeds `maxNumberOfProblems`, a visible notice replaces the previously silent drop.
+- **`scripts/bump-version.sh`** — sets the template/release version across all six files that record it and rolls the CHANGELOG in one step, so a release cut can't drift.
+
 ### Changed
 
+- **Completion auto-triggers on `->` and `::`** — added `>` and `:` to the trigger characters so member and inherit-scope access pop IntelliSense (the engine already disambiguated these).
+- **Unused variables/parameters and unreachable code are tagged `Unnecessary`** — editors now fade them grey.
+- **Code lenses resolve lazily** — reference counts are computed only for the lenses the client renders; unreferenced functions now show "0 references" (as in TypeScript/C#) rather than being hidden.
+- **Signature help re-triggers on `,`** so the active parameter updates while the popup is open.
 - **Modernized the README** (which renders on the Marketplace page): user-facing first, accurate counts (90-file corpus, ~490 Pike tests, 5,500+ stdlib symbols), curated configuration table, and dev/test detail moved to links. Replaced the broken Marketplace version badge — shields.io's `visual-studio-marketplace` badge type is retired — with a GitHub-release badge labelled "marketplace", which is accurate because the release workflow now publishes the same version to GitHub and the Marketplace.
+- Dropped the inaccurate "supports pull diagnostics" README claim; the server is push-only by design (version-gated supersession + cross-file propagation).
 
 ## [0.8.37] — 2026-07-07
 
