@@ -52,7 +52,7 @@ export function registerAdvancedHandlers(
   registerCodeLensHandler(connection, ctx);
   registerDidOpenHandler(ctx);
   registerDidSaveHandler(ctx);
-  registerDocumentLinkHandler(connection, ctx.documents, ctx.index, ctx.index.resolver);
+  registerDocumentLinkHandler(connection, ctx.documents, ctx.index.resolver);
 }
 
 // ---------------------------------------------------------------------------

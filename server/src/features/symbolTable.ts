@@ -28,8 +28,10 @@ export interface Declaration {
   declaredType?: string;
   /** For variables: type inferred from assignment initializer (e.g., Dog d = makeDog()). */
   assignedType?: string;
-  /** For synthetic declarations from cross-file inheritance: URI of the origin file. */
+  /** For synthetic declarations from cross-file inheritance/includes: URI of the origin file. */
   sourceUri?: string;
+  /** For macro declarations: true when defined function-like, i.e. `NAME(args)`. */
+  functionLike?: boolean;
 }
 
 export type DeclKind =
@@ -43,7 +45,12 @@ export type DeclKind =
   | 'typedef'
   | 'parameter'
   | 'inherit'
-  | 'import';
+  | 'import'
+  // Preprocessor `#include "file.h"` / `#include <file.h>` directive. `name`
+  // holds the raw path text (with quotes/brackets); resolved by wireIncludes.
+  | 'include'
+  // Preprocessor `#define NAME ...` macro. `functionLike` set for `NAME(args)`.
+  | 'macro';
 
 export interface Reference {
   name: string;
@@ -133,6 +140,7 @@ export {
   resolveTypeName,
 } from './scope-helpers';
 export { wireInheritance } from './scopeBuilder';
+export { wireIncludes } from './includeWiring';
 
 // ---------------------------------------------------------------------------
 // Internal imports (not re-exported)
@@ -141,6 +149,7 @@ export { wireInheritance } from './scopeBuilder';
 import { toRangeUtf16, resolveTypeName } from './scope-helpers';
 import { pushScope, popScope } from './scope-helpers-state';
 import { wireInheritance } from './scopeBuilder';
+import { wireIncludes } from './includeWiring';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 import { startSpan, stopSpan, bump, measureSync } from './profiler';
@@ -150,13 +159,20 @@ import { buildOffsetMap } from '../util/offsetMap';
 // Build orchestrator
 // ---------------------------------------------------------------------------
 
+/**
+ * Cross-file resolution surface used during symbol-table build. Shared by
+ * BuildOptions, wireInheritance, and wireIncludes so all three stay in sync.
+ */
+export interface BuildIndex {
+  getSymbolTable(uri: string): SymbolTable | null;
+  resolveImport(mod: string, from: string): string | null;
+  resolveInherit(path: string, isString: boolean, from: string): string | null;
+  resolveInclude(path: string, isSystem: boolean, from: string): string | null;
+}
+
 export interface BuildOptions {
-  /** WorkspaceIndex for cross-file inheritance resolution. */
-  index?: {
-    getSymbolTable(uri: string): SymbolTable | null;
-    resolveImport(mod: string, from: string): string | null;
-    resolveInherit(path: string, isString: boolean, from: string): string | null;
-  };
+  /** WorkspaceIndex for cross-file inheritance/include resolution. */
+  index?: BuildIndex;
 }
 
 /**
@@ -177,22 +193,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     if (!root) return emptySymbolTable(uri, version);
 
     bump("symbolTablesBuilt");
-    // Callers MUST pass the pre-split source. Materializing rootNode.text
-    // inside this hot path is O(N) and the source is already available from
-    // the LSP document change notification. Passing an empty string for a
-    // non-empty tree silently produces wrong character offsets: every position
-    // on line 0 collapses to column 0, the file scope becomes a zero-width
-    // [0,0]-[0,0] range, and getSymbolsInScope/completion return nothing at
-    // end-of-line positions. Fail fast instead of lying (TigerStyle). The type
-    // makes sourceText required, but bun runs tests without type-checking, so
-    // this runtime guard is what protects the (untyped) test call sites too.
-    // endIndex is an O(1) getter, so the guard adds no measurable hot-path cost.
-    if ((sourceText === undefined || sourceText.length === 0) && root.endIndex > 0) {
-      throw new Error(
-        `buildSymbolTable(${uri}): sourceText is required for a non-empty tree ` +
-          `(endIndex=${root.endIndex}); omitting it would corrupt every position.`,
-      );
-    }
+    assertSourceCoversTree(sourceText, root, uri);
     const state = initBuildState(sourceText ?? '');
 
     startSpan("declarationPass");
@@ -217,12 +218,37 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     bump("inheritanceWiringOps");
     stopSpan("wireInheritance");
 
+    // Merge `#include`d files' top-level symbols (declarations + macros) into
+    // this file's scope, so references below can resolve to them.
+    startSpan("wireIncludes");
+    wireIncludes(table, options?.index, uri);
+    stopSpan("wireIncludes");
+
     startSpan("referencePass");
     runReferencePass(tree.rootNode, state, table);
     stopSpan("referencePass");
 
     return table;
   });
+}
+
+/**
+ * Fail fast when a non-empty tree is built without its source text. Callers MUST
+ * pass the pre-split source: materializing rootNode.text here is O(N) and the
+ * source is already available from the LSP change notification. An empty string
+ * for a non-empty tree silently corrupts every position — line 0 collapses to
+ * column 0 and the file scope becomes a zero-width range, so getSymbolsInScope
+ * and completion return nothing at end-of-line positions. The type makes
+ * sourceText required, but bun runs tests without type-checking, so this runtime
+ * guard protects the untyped test call sites too. endIndex is an O(1) getter.
+ */
+function assertSourceCoversTree(sourceText: string, root: { endIndex: number }, uri: string): void {
+  if ((sourceText === undefined || sourceText.length === 0) && root.endIndex > 0) {
+    throw new Error(
+      `buildSymbolTable(${uri}): sourceText is required for a non-empty tree ` +
+        `(endIndex=${root.endIndex}); omitting it would corrupt every position.`,
+    );
+  }
 }
 
 /** Create an empty symbol table for failed parses. */

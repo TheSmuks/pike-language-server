@@ -49,6 +49,7 @@ export interface SyncIndexAdapter {
   getSymbolTable(uri: string): import("./symbolTable").SymbolTable | null;
   resolveImport(mod: string, from: string): string | null;
   resolveInherit(path: string, isString: boolean, from: string): string | null;
+  resolveInclude(path: string, isSystem: boolean, from: string): string | null;
 }
 
 /**
@@ -64,6 +65,7 @@ export function createSyncIndexAdapter(
     getSymbolTable(uri: string): import("./symbolTable").SymbolTable | null;
     resolveImportSync(importPath: string, fromUri: string): string | null;
     resolveInheritSync(pathText: string, isStringLiteral: boolean, fromUri: string): string | null;
+    resolveIncludeSync(pathText: string, isSystem: boolean, fromUri: string): string | null;
   },
   _fromUri: string,
 ): SyncIndexAdapter {
@@ -71,6 +73,7 @@ export function createSyncIndexAdapter(
     getSymbolTable(uri: string) { return self.getSymbolTable(uri); },
     resolveImport(mod: string, from: string) { return self.resolveImportSync(mod, from); },
     resolveInherit(path: string, isString: boolean, from: string) { return self.resolveInheritSync(path, isString, from); },
+    resolveInclude(path: string, isSystem: boolean, from: string) { return self.resolveIncludeSync(path, isSystem, from); },
   };
 }
 

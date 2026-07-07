@@ -17,9 +17,18 @@
  * (.so skipped — not parseable by tree-sitter)
  */
 
-import { join, dirname, resolve, basename, sep } from "node:path";
-import { stat } from "node:fs/promises";
+import { join, dirname, resolve, sep } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
+import {
+  pathExists,
+  isDir,
+  isFile,
+  findWithExtension,
+  resolveIncludeUncached,
+  resolveRelativeInheritTarget,
+  resolveDirectoryModulePmod,
+  type IncludeDeps,
+} from "./moduleResolverInternal";
 
 // Re-export pike detection utilities for backward compatibility
 export { detectPikePaths, getPikePaths } from "./pikeDetection";
@@ -121,6 +130,14 @@ export class ModuleResolver {
   }
 
   /**
+   * Synchronous cache-only lookup for an #include path.
+   * Returns the cached ResolveResult or undefined if not cached.
+   */
+  getCachedInclude(pathText: string, isSystem: boolean, currentFile: string): ResolveResult | null | undefined {
+    return this.cache.get(`inc:${pathText}:${isSystem}:${currentFile}`);
+  }
+
+  /**
    * Resolve a module path like "Stdio.File" or "cross_import_a".
    * Returns null if unresolvable.
    */
@@ -174,6 +191,36 @@ export class ModuleResolver {
   async resolveImport(importPath: string, currentFile: string): Promise<ResolveResult | null> {
     // Import resolution is the same as module resolution
     return this.resolveModule(importPath, currentFile);
+  }
+
+  /**
+   * Resolve a preprocessor `#include` target to a file URI.
+   * - `#include <file.h>` (isSystem): search Pike's include directories (-I).
+   * - `#include "file.h"`: resolve relative to the current file's directory,
+   *   allowing upward (`../`) traversal — Pike splices the file in textually and
+   *   resolves it relative to the includer, so a sibling/ancestor header is a
+   *   legitimate target even outside the workspace root.
+   *
+   * `pathText` may be the raw path node text (with quotes or angle brackets) or
+   * the already-stripped inner path; both are handled.
+   */
+  async resolveInclude(pathText: string, isSystem: boolean, currentFile: string): Promise<ResolveResult | null> {
+    const cacheKey = `inc:${pathText}:${isSystem}:${currentFile}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const result = await resolveIncludeUncached(this.includeDeps(), pathText, isSystem, currentFile);
+    this.cache.set(cacheKey, result);
+    this.evictIfNeeded();
+    return result;
+  }
+
+  /** Boundary/context the free include+relative resolvers need from this instance. */
+  private includeDeps(): IncludeDeps {
+    return {
+      includePaths: this.includePaths,
+      checkRoot: (p) => this.normalizeAndCheck(p),
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -243,12 +290,25 @@ export class ModuleResolver {
       return this.tryInheritCandidate(this.normalizeAndCheck(rawPath));
     }
     if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
-      // Relative to current file — normalize and check boundary.
+      // Relative to current file — allow `../` traversal. Pike resolves an
+      // inherit string relative to the includer, so an ancestor/sibling program
+      // is a legitimate target even outside the workspace root. The boundary is
+      // applied to the file actually found (after extension resolution).
       const resolved = resolve(currentDir, rawPath);
-      return this.tryInheritCandidate(this.normalizeAndCheck(resolved, currentDir));
+      return this.tryRelativeInheritCandidate(resolved);
     }
     // Pike's cast_to_program: search current dir first, then program paths
     return this.searchInheritProgramPaths(rawPath, currentDir);
+  }
+
+  /**
+   * Resolve a relative inherit target (with optional extension append),
+   * applying the relaxed boundary to whatever file is actually found. Permits
+   * ancestor/sibling programs outside the workspace while refusing non-source
+   * system files reached by upward traversal.
+   */
+  private tryRelativeInheritCandidate(resolvedBase: string): Promise<ResolveResult | null> {
+    return resolveRelativeInheritTarget(this.includeDeps(), resolvedBase);
   }
 
   private async tryInheritCandidate(candidate: string | null): Promise<ResolveResult | null> {
@@ -256,7 +316,7 @@ export class ModuleResolver {
     if (await pathExists(candidate)) {
       return { uri: pathToFileURL(candidate).href, source: "relative" };
     }
-    const withExt = await this.findWithExtension(candidate);
+    const withExt = await findWithExtension(candidate);
     if (withExt) {
       return { uri: pathToFileURL(withExt).href, source: "relative" };
     }
@@ -272,7 +332,7 @@ export class ModuleResolver {
       if (await pathExists(checkedRelative)) {
         return { uri: pathToFileURL(checkedRelative).href, source: "relative" };
       }
-      const withExtDir = await this.findWithExtension(checkedRelative);
+      const withExtDir = await findWithExtension(checkedRelative);
       if (withExtDir) {
         return { uri: pathToFileURL(withExtDir).href, source: "relative" };
       }
@@ -292,7 +352,7 @@ export class ModuleResolver {
       const full = resolve(progPath, rawPath);
       const checked = this.normalizeAndCheck(full);
       if (!checked) continue;
-      const found = await this.findWithExtension(checked);
+      const found = await findWithExtension(checked);
       if (found) {
         return { uri: pathToFileURL(found).href, source: "workspace_program" };
       }
@@ -403,42 +463,12 @@ export class ModuleResolver {
   }
 
   /**
-   * Try to find a file with .pike or .pmod extension appended.
+   * If the given file is inside a `.pmod/` directory, return the URI of its
+   * `module.pmod` (the implicit directory-module inherit). See
+   * resolveDirectoryModulePmod.
    */
-  private async findWithExtension(basePath: string): Promise<string | null> {
-    for (const ext of [".pike", ".pmod"]) {
-      const candidate = basePath + ext;
-      if (await pathExists(candidate)) return candidate;
-    }
-    return null;
-  }
-
-  /**
-   * If the given file is inside a `.pmod/` directory, return the URI of
-   * `module.pmod` in that directory (if it exists). In Pike, files inside a
-   * `Foo.pmod/` directory automatically inherit from `Foo.pmod/module.pmod` —
-   * its symbols are visible to siblings without explicit import/inherit.
-   *
-   * Returns `null` if the file is not inside a `.pmod/` directory or no
-   * `module.pmod` exists.
-   */
-  async findDirectoryModulePmod(fileUri: string): Promise<string | null> {
-    const filePath = fileURLToPath(fileUri);
-    const dir = dirname(filePath);
-    const dirName = basename(dir);
-
-    // Parent directory must be named `*.pmod`.
-    if (!dirName.endsWith(".pmod")) return null;
-
-    // Don't match module.pmod itself — it doesn't inherit from itself.
-    if (basename(filePath) === "module.pmod") return null;
-
-    const modulePmodPath = join(dir, "module.pmod");
-    if (await pathExists(modulePmodPath)) {
-      return pathToFileURL(modulePmodPath).href;
-    }
-
-    return null;
+  findDirectoryModulePmod(fileUri: string): Promise<string | null> {
+    return resolveDirectoryModulePmod(fileUri);
   }
 
   /**
@@ -457,23 +487,4 @@ export class ModuleResolver {
       evicted++;
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Async fs helpers (module-level)
-// ---------------------------------------------------------------------------
-
-/** Check that a path exists on disk (file or directory). */
-async function pathExists(p: string): Promise<boolean> {
-  try { await stat(p); return true; } catch { /* stat() throws if path doesn't exist */ return false; }
-}
-
-/** Check that a path exists and is a directory. */
-async function isDir(p: string): Promise<boolean> {
-  try { const s = await stat(p); return s.isDirectory(); } catch { /* stat() throws if path doesn't exist */ return false; }
-}
-
-/** Check that a path exists and is a regular file. */
-async function isFile(p: string): Promise<boolean> {
-  try { const s = await stat(p); return s.isFile(); } catch { /* stat() throws if path doesn't exist */ return false; }
 }
