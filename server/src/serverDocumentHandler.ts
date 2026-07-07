@@ -226,6 +226,13 @@ export async function indexDependencyClosure(
         if (indexed) {
           indexedCount++;
           nextFrontier.push(depUri);
+          // Invalidate dependents now that the target table exists, so the
+          // synchronous build-time wiring (wireInheritance / wireIncludes)
+          // re-runs and merges the newly-available symbols on the next query.
+          // The background scan does this via onFileIndexed; the on-demand
+          // closure must do it too, or `#include` symbols from out-of-workspace
+          // headers never appear until an unrelated edit.
+          ctx.index.rewireDependents(depUri);
         }
       }
     }

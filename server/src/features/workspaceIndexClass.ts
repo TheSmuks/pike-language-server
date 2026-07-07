@@ -104,6 +104,7 @@ export class WorkspaceIndex {
       resolver: this.resolver,
       resolveImport: (p, f) => this.resolveImport(p, f),
       resolveInherit: (p, s, f) => this.resolveInherit(p, s, f),
+      resolveInclude: (p, s, f) => this.resolveInclude(p, s, f),
     };
   }
 
@@ -411,27 +412,26 @@ export class WorkspaceIndex {
   // Module resolution
   // ---------------------------------------------------------------------------
 
+  /** Path of the version-scoped resolver for a file (respects its #pike directive). */
+  private fromPath(fromUri: string): string {
+    return this.uriToPath(normUri(fromUri));
+  }
+
   async resolveModule(modulePath: string, fromUri: string): Promise<string | null> {
-    const normalizedFromUri = normUri(fromUri);
-    const entry = this.files.get(normalizedFromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    const resolver = this.scopedResolver(entry);
-    const result = await resolver.resolveModule(modulePath, fromPath);
-    return result?.uri ?? null;
+    const resolver = this.scopedResolver(this.files.get(normUri(fromUri)));
+    return (await resolver.resolveModule(modulePath, this.fromPath(fromUri)))?.uri ?? null;
   }
 
   async resolveInherit(pathText: string, isStringLiteral: boolean, fromUri: string): Promise<string | null> {
-    const normalizedFromUri = normUri(fromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    const result = await this.resolver.resolveInherit(pathText, isStringLiteral, fromPath);
-    return result?.uri ?? null;
+    return (await this.resolver.resolveInherit(pathText, isStringLiteral, this.fromPath(fromUri)))?.uri ?? null;
   }
 
   async resolveImport(importPath: string, fromUri: string): Promise<string | null> {
-    const normalizedFromUri = normUri(fromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    const result = await this.resolver.resolveImport(importPath, fromPath);
-    return result?.uri ?? null;
+    return (await this.resolver.resolveImport(importPath, this.fromPath(fromUri)))?.uri ?? null;
+  }
+
+  async resolveInclude(pathText: string, isSystem: boolean, fromUri: string): Promise<string | null> {
+    return (await this.resolver.resolveInclude(pathText, isSystem, this.fromPath(fromUri)))?.uri ?? null;
   }
 
   // ---------------------------------------------------------------------------
@@ -439,23 +439,20 @@ export class WorkspaceIndex {
   // ---------------------------------------------------------------------------
 
   resolveModuleSync(modulePath: string, fromUri: string): string | null {
-    const normalizedFromUri = normUri(fromUri);
-    const entry = this.files.get(normalizedFromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    const resolver = this.scopedResolver(entry);
-    return resolver.getCachedModule(modulePath, fromPath)?.uri ?? null;
+    const resolver = this.scopedResolver(this.files.get(normUri(fromUri)));
+    return resolver.getCachedModule(modulePath, this.fromPath(fromUri))?.uri ?? null;
   }
 
   resolveInheritSync(pathText: string, isStringLiteral: boolean, fromUri: string): string | null {
-    const normalizedFromUri = normUri(fromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    return this.resolver.getCachedInherit(pathText, isStringLiteral, fromPath)?.uri ?? null;
+    return this.resolver.getCachedInherit(pathText, isStringLiteral, this.fromPath(fromUri))?.uri ?? null;
   }
 
   resolveImportSync(importPath: string, fromUri: string): string | null {
-    const normalizedFromUri = normUri(fromUri);
-    const fromPath = this.uriToPath(normalizedFromUri);
-    return this.resolver.getCachedModule(importPath, fromPath)?.uri ?? null;
+    return this.resolver.getCachedModule(importPath, this.fromPath(fromUri))?.uri ?? null;
+  }
+
+  resolveIncludeSync(pathText: string, isSystem: boolean, fromUri: string): string | null {
+    return this.resolver.getCachedInclude(pathText, isSystem, this.fromPath(fromUri))?.uri ?? null;
   }
 
   // ---------------------------------------------------------------------------

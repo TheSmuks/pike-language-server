@@ -24,6 +24,7 @@ import {
   collectCatchExpr,
   collectSimpleDecl,
 } from './declarationBlockCollectors';
+import { collectPreprocDirective, collectPreprocInclude } from './preprocMacros';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -86,6 +87,15 @@ function dispatchBlockStatement(node: Node, state: BuildState): boolean {
 
 /** Dispatch collectDeclarations to the appropriate handler based on node type. */
 function dispatchCollectDeclarations(node: Node, state: BuildState): void {
+  // Handle preprocessor directives: `#include` targets and `#define` macros.
+  if (node.type === 'preproc_include') { collectPreprocInclude(node, state); return; }
+  if (node.type === 'preprocessor_directive') {
+    // Only `#define` produces a symbol; other directives are ignored. Either
+    // way there is nothing to descend into (the node is a flat text token).
+    collectPreprocDirective(node, state);
+    return;
+  }
+
   // Handle scope introducers
   if (node.type === 'class_decl') { collectClassDecl(node, state); return; }
   if (node.type === 'function_decl' || node.type === 'local_function_decl') {

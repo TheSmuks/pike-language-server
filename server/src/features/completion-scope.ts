@@ -18,8 +18,8 @@ function collectScopeDecls(scopeId: number, table: SymbolTable, seen: Set<number
   for (const declId of scope.declarations) {
     const decl = table.declById.get(declId);
     if (decl && !seen.has(decl.id)) {
-      // Skip inherit declarations themselves — they're not completable symbols
-      if (decl.kind !== 'inherit') {
+      // Skip inherit/include directives themselves — not completable symbols
+      if (decl.kind !== 'inherit' && decl.kind !== 'include') {
         results.push(decl);
       }
     }
@@ -55,7 +55,7 @@ function collectDeclarationsFromScope(
   for (const declId of scope.declarations) {
     const decl = table.declById.get(declId);
     if (!decl) continue;
-    if (decl.kind === 'inherit' || decl.kind === 'import') continue;
+    if (decl.kind === 'inherit' || decl.kind === 'import' || decl.kind === 'include') continue;
     if (!declIsVisibleAtPosition(decl, scope.kind, line, character)) continue;
     if (!seenNames.has(decl.name)) {
       seenNames.add(decl.name);
@@ -78,7 +78,7 @@ function collectInheritedDeclarations(
     if (!inheritedScope) continue;
     for (const declId of inheritedScope.declarations) {
       const decl = table.declById.get(declId);
-      if (!decl || decl.kind === 'inherit' || decl.kind === 'import') continue;
+      if (!decl || decl.kind === 'inherit' || decl.kind === 'import' || decl.kind === 'include') continue;
       if (!seenNames.has(decl.name)) {
         seenNames.add(decl.name);
         results.push(decl);

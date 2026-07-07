@@ -9,18 +9,12 @@
 import {
   type Connection,
   type DocumentLink,
-  type DocumentLinkParams,
-  type CancellationToken,
 } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
 import type { TextDocument } from "vscode-languageserver-textdocument";
-import type { WorkspaceIndex } from "./workspaceIndex";
 import type { ModuleResolver } from "./moduleResolver";
 import { parse } from "../parser";
-import type { Tree, Node } from "web-tree-sitter";
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import type { Node } from "web-tree-sitter";
 import { uriToPath } from "../util/uri";
 import { utf8ToUtf16 } from "../util/positionConverter";
 
@@ -35,7 +29,6 @@ import { utf8ToUtf16 } from "../util/positionConverter";
 export function registerDocumentLinkHandler(
   connection: Connection,
   documents: TextDocuments<TextDocument>,
-  index: WorkspaceIndex,
   resolver: ModuleResolver,
 ): void {
   connection.onDocumentLinks(async (params, token): Promise<DocumentLink[]> => {
@@ -45,7 +38,7 @@ export function registerDocumentLinkHandler(
     const doc = documents.get(uri);
     if (!doc) return [];
 
-    return produceDocumentLinks(doc, uri, resolver, index.workspaceRoot);
+    return produceDocumentLinks(doc, uri, resolver);
   });
 }
 
@@ -56,56 +49,65 @@ export function registerDocumentLinkHandler(
 /**
  * Produce DocumentLinks for a Pike document.
  * Walks the tree-sitter AST looking for import, inherit, and include nodes.
+ *
+ * Path resolution is delegated to ModuleResolver so links match how the symbol
+ * table itself resolves targets — including `#include`/inherit strings that
+ * point outside the workspace (e.g. `#include "../defs.h"`).
  */
 async function produceDocumentLinks(
   doc: TextDocument,
   uri: string,
   resolver: ModuleResolver,
-  workspaceRoot: string,
 ): Promise<DocumentLink[]> {
-  const links: DocumentLink[] = [];
-
   const source = doc.getText();
   const tree = parse(source, uri);
   if (!tree?.rootNode) return [];
 
   const lines = source.split('\n');
-  walkForLinks(tree.rootNode, uri, links, resolver, workspaceRoot, lines);
+  const fromPath = uriToPath(uri);
+  const links: DocumentLink[] = [];
+  const pending: Promise<void>[] = [];
+
+  collectLinks(tree.rootNode, fromPath, links, pending, resolver, lines);
+  await Promise.all(pending);
 
   return links;
 }
 
 /**
  * Walk the tree recursively, collecting import/inherit/include links.
+ * Module/import targets resolve synchronously from the warm resolver cache;
+ * inherit-string and #include targets resolve asynchronously (pushed onto
+ * `pending`) so out-of-workspace relative paths hit the filesystem via the
+ * resolver's relaxed boundary.
  */
-function walkForLinks(
+function collectLinks(
   node: Node,
-  currentUri: string,
+  fromPath: string,
   links: DocumentLink[],
+  pending: Promise<void>[],
   resolver: ModuleResolver,
-  workspaceRoot: string,
   lines: string[],
 ): void {
   if (node.isError || node.isMissing) return;
 
   switch (node.type) {
     case "import_decl": {
-      collectImportLink(node, currentUri, links, resolver, lines);
+      collectModuleLink(node, fromPath, links, resolver, lines);
       break;
     }
     case "inherit_decl": {
-      collectInheritLink(node, currentUri, links, resolver, workspaceRoot, lines);
+      collectInheritLink(node, fromPath, links, pending, resolver, lines);
       break;
     }
     case "preproc_include": {
-      collectIncludeLink(node, currentUri, links, resolver, workspaceRoot, lines);
+      collectIncludeLink(node, fromPath, links, pending, resolver, lines);
       break;
     }
   }
 
-  // Recurse into children.
   for (const child of node.children) {
-    walkForLinks(child, currentUri, links, resolver, workspaceRoot, lines);
+    collectLinks(child, fromPath, links, pending, resolver, lines);
   }
 }
 
@@ -113,12 +115,10 @@ function walkForLinks(
 // Link collectors
 // ---------------------------------------------------------------------------
 
-/**
- * Collect DocumentLink for import statements: `import Stdio;`
- */
-function collectImportLink(
+/** DocumentLink for a module reference: `import Stdio;` (sync cache lookup). */
+function collectModuleLink(
   node: Node,
-  currentUri: string,
+  fromPath: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
   lines: string[],
@@ -126,144 +126,68 @@ function collectImportLink(
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
-  const moduleName = pathNode.text;
-  const range = toLinkRange(pathNode, lines);
-
-  const cached = resolver.getCachedModule(moduleName, currentUri);
-  if (cached && cached.uri) {
-    links.push({
-      range,
-      target: cached.uri,
-    });
+  const cached = resolver.getCachedModule(pathNode.text, fromPath);
+  if (cached?.uri) {
+    links.push({ range: toLinkRange(pathNode, lines), target: cached.uri });
   }
 }
 
 /**
- * Collect DocumentLink for inherit statements:
- * - String literal: `inherit "path.pike"` or `inherit "../lib.pike"`
- * - Module name: `inherit Stdio` or `inherit Calendar.ISO`
+ * DocumentLink for inherit statements:
+ * - String literal: `inherit "path.pike"` / `inherit "../lib.pike"` (async).
+ * - Module name: `inherit Stdio` / `inherit Calendar.ISO` (sync cache).
  */
 function collectInheritLink(
   node: Node,
-  currentUri: string,
+  fromPath: string,
   links: DocumentLink[],
+  pending: Promise<void>[],
   resolver: ModuleResolver,
-  workspaceRoot: string,
   lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
-  const pathText = pathNode.text;
   const range = toLinkRange(pathNode, lines);
 
-  const isStringLiteral = pathNode.type === "string";
-
-  if (isStringLiteral) {
-    const resolved = resolveRelativePath(pathText, currentUri, workspaceRoot);
-    if (resolved) {
-      links.push({ range, target: resolved });
-    }
-  } else {
-    const cached = resolver.getCachedModule(pathText, currentUri);
-    if (cached && cached.uri) {
-      links.push({ range, target: cached.uri });
-    }
-  }
-}
-
-/**
- * Collect DocumentLink for #include directives:
- * `#include "path"` or `#include <path>`
- *
- * tree-sitter-pike provides a structured `preproc_include` node with a `path`
- * field containing either a `string_literal` or `system_lib_string` child.
- *
- * For `"..."` includes: resolve relative to current file directory.
- * For `<...>` includes: search Pike's include paths (from `pike --show-paths`).
- */
-function collectIncludeLink(
-  node: Node,
-  currentUri: string,
-  links: DocumentLink[],
-  resolver: ModuleResolver,
-  workspaceRoot: string,
-  lines: string[],
-): void {
-  const pathNode = node.childForFieldName("path");
-  if (!pathNode) return;
-
-  if (pathNode.type === "system_lib_string") {
-    // Angle-bracket include: strip < and >, search include directories.
-    const pathText = pathNode.text.replace(/^<|>$/g, "");
-    if (pathText.length === 0) return;
-
-    const range = toLinkRange(pathNode, lines);
-    for (const dir of resolver.includePaths) {
-      const candidate = join(dir, pathText);
-      if (existsSync(candidate)) {
-        links.push({ range, target: pathToFileURL(candidate).href });
-        return;
-      }
-    }
-    // File not found in any include directory — no link.
+  if (pathNode.type === "string") {
+    pending.push(
+      resolver.resolveInherit(pathNode.text, true, fromPath).then((res) => {
+        if (res?.uri) links.push({ range, target: res.uri });
+      }),
+    );
     return;
   }
 
-  // String literal include: resolve relative to current file directory.
-  const pathText = pathNode.text.replace(/^["]+|["]+$/g, "");
-  if (pathText.length === 0) return;
-
-  const range = toLinkRange(pathNode, lines);
-  const resolved = resolveRelativePath(pathText, currentUri, workspaceRoot);
-  if (resolved) {
-    links.push({ range, target: resolved });
+  const cached = resolver.getCachedModule(pathNode.text, fromPath);
+  if (cached?.uri) {
+    links.push({ range, target: cached.uri });
   }
 }
 
-// ---------------------------------------------------------------------------
-// Path resolution helpers
-// ---------------------------------------------------------------------------
-
 /**
- * Convert a Pike relative path to a file:// URI.
- * Handles paths like "foo/bar.pike", "../lib.pike", "./helper.pike".
+ * DocumentLink for #include directives: `#include "path"` / `#include <path>`.
+ * Resolution (including out-of-workspace relative paths and the -I search for
+ * `<...>`) is delegated to ModuleResolver.resolveInclude.
  */
-function resolveRelativePath(
-  pathText: string,
-  currentUri: string,
-  workspaceRoot: string,
-): string | null {
-  const cleanPath = pathText.replace(/^["]+|["]+$/g, "");
-  if (cleanPath.length === 0) return null;
+function collectIncludeLink(
+  node: Node,
+  fromPath: string,
+  links: DocumentLink[],
+  pending: Promise<void>[],
+  resolver: ModuleResolver,
+  lines: string[],
+): void {
+  const pathNode = node.childForFieldName("path");
+  if (!pathNode) return;
 
-  // Compute absolute path relative to current file's directory.
-  // currentUri is like "file:///path/to/file.pike"
-  const currentPath = uriToPath(currentUri);
-  const currentDir = currentPath.substring(0, currentPath.lastIndexOf("/"));
-
-  let targetPath: string;
-  if (cleanPath.startsWith("../")) {
-    let upCount = 0;
-    let remaining = cleanPath;
-    while (remaining.startsWith("../")) {
-      upCount++;
-      remaining = remaining.substring(3);
-    }
-    const parts = currentDir.split("/");
-    if (upCount >= parts.length) return null;
-    targetPath = parts.slice(0, -upCount).join("/") + "/" + remaining;
-  } else if (cleanPath.startsWith("./")) {
-    targetPath = currentDir + "/" + cleanPath.substring(2);
-  } else {
-    targetPath = currentDir + "/" + cleanPath;
-  }
-
-  // Security: reject paths that escaped the workspace.
-  const normalized = resolve(targetPath);
-  if (!normalized.startsWith(workspaceRoot)) return null;
-
-  return pathToFileURL(normalized).href;
+  const isSystem = pathNode.type === "system_lib_string";
+  const range = toLinkRange(pathNode, lines);
+  pending.push(
+    resolver.resolveInclude(pathNode.text, isSystem, fromPath).then((res) => {
+      if (res?.uri) links.push({ range, target: res.uri });
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------

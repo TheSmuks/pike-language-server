@@ -22,15 +22,47 @@ export interface DependencyContext {
   readonly resolver: ModuleResolver;
   readonly resolveImport: (importPath: string, fromUri: string) => Promise<string | null>;
   readonly resolveInherit: (pathText: string, isStringLiteral: boolean, fromUri: string) => Promise<string | null>;
+  readonly resolveInclude: (pathText: string, isSystem: boolean, fromUri: string) => Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
 // Dependency extraction
 // ---------------------------------------------------------------------------
 
+type WarmPromise = { key: string; promise: Promise<import("./moduleResolver").ResolveResult | null> };
+
 /**
- * Pre-warm the ModuleResolver cache by resolving all inherit/import declarations.
- * Returns a map from (name, isStringLit) to resolved URI for use by extractDependencies.
+ * Queue resolution promises for the inherit/import/include references on a
+ * single node, keyed identically to how extractDependencies reads them back.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function collectWarmPromises(node: any, ctx: DependencyContext, fromPath: string, promises: WarmPromise[]): void {
+  if (node.type === 'inherit_decl' || node.type === 'import_decl') {
+    const name = node.childForFieldName('path')?.text;
+    if (name === undefined) return;
+    if (name.startsWith('"') && name.endsWith('"')) {
+      promises.push({ key: `inh:${name}:true`, promise: ctx.resolver.resolveInherit(name, true, fromPath) });
+    } else {
+      promises.push({ key: `imp:${name}`, promise: ctx.resolver.resolveImport(name, fromPath) });
+      promises.push({ key: `inh:${name}:false`, promise: ctx.resolver.resolveInherit(name, false, fromPath) });
+    }
+  } else if (node.type === 'inherit') {
+    const name = node.childForFieldName('path')?.text;
+    if (name === undefined || name.startsWith('"')) return;
+    promises.push({ key: `imp:${name}`, promise: ctx.resolver.resolveImport(name, fromPath) });
+    promises.push({ key: `inh:${name}:false`, promise: ctx.resolver.resolveInherit(name, false, fromPath) });
+  } else if (node.type === 'preproc_include') {
+    const name = node.childForFieldName('path')?.text;
+    if (name === undefined) return;
+    const isSystem = name.startsWith('<');
+    promises.push({ key: `inc:${name}:${isSystem}`, promise: ctx.resolver.resolveInclude(name, isSystem, fromPath) });
+  }
+}
+
+/**
+ * Pre-warm the ModuleResolver cache by resolving all inherit/import/include
+ * declarations. Returns a map from resolution key to resolved URI for
+ * extractDependencies.
  */
 export async function warmResolverCache(
   ctx: DependencyContext,
@@ -38,33 +70,12 @@ export async function warmResolverCache(
   uri: string,
 ): Promise<Map<string, string | null>> {
   const fromPath = uriToPathUtil(uri);
-  const promises: { key: string; promise: Promise<import("./moduleResolver").ResolveResult | null> }[] = [];
+  const promises: WarmPromise[] = [];
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const walk = (node: any): void => {
     if (!node) return;
-    if (node.type === 'inherit_decl' || node.type === 'import_decl') {
-      const pathNode = node.childForFieldName('path');
-      if (pathNode) {
-        const name = pathNode.text;
-        const isStringLit = name.startsWith('"') && name.endsWith('"');
-        if (isStringLit) {
-          promises.push({ key: `inh:${name}:true`, promise: ctx.resolver.resolveInherit(name, true, fromPath) });
-        } else {
-          promises.push({ key: `imp:${name}`, promise: ctx.resolver.resolveImport(name, fromPath) });
-          promises.push({ key: `inh:${name}:false`, promise: ctx.resolver.resolveInherit(name, false, fromPath) });
-        }
-      }
-    } else if (node.type === 'inherit') {
-      const pathNode = node.childForFieldName('path');
-      if (pathNode) {
-        const name = pathNode.text;
-        if (!name.startsWith('"')) {
-          promises.push({ key: `imp:${name}`, promise: ctx.resolver.resolveImport(name, fromPath) });
-          promises.push({ key: `inh:${name}:false`, promise: ctx.resolver.resolveInherit(name, false, fromPath) });
-        }
-      }
-    }
+    collectWarmPromises(node, ctx, fromPath, promises);
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
       if (child) walk(child);
@@ -95,10 +106,17 @@ export async function extractDependencies(
 ): Promise<Set<string>> {
   const deps = new Set<string>();
 
-  // Collect all inherit/import declarations and resolve them in parallel.
+  // Collect all inherit/import/include declarations and resolve them in parallel.
   const resolutions = table.declarations
-    .filter(decl => decl.kind === "inherit" || decl.kind === "import")
+    .filter(decl => decl.kind === "inherit" || decl.kind === "import" || decl.kind === "include")
     .map(async (decl): Promise<string | null> => {
+      if (decl.kind === "include") {
+        const isSystem = decl.name.startsWith('<');
+        const cached = warmCache.get(`inc:${decl.name}:${isSystem}`);
+        if (cached !== undefined) return cached;
+        return ctx.resolveInclude(decl.name, isSystem, currentUri);
+      }
+
       const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
 
       if (isStringLit) {

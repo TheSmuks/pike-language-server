@@ -14,7 +14,7 @@
 // are intentional — they provide a stable API surface for the
 // symbol table and completion systems.
  */
-import type { BuildState, Declaration, Scope, SymbolTable } from './symbolTable';
+import type { Declaration, Scope, SymbolTable } from './symbolTable';
 
 // Re-export all helpers from the extracted modules
 export {

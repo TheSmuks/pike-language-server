@@ -76,10 +76,10 @@ async function handleDefinition(
 
   const includeDoc = ctx.documents.get(params.textDocument.uri);
   if (includeDoc) {
-    const includeResult = resolveIncludeTarget(
+    const includeResult = await resolveIncludeTarget(
       includeDoc, params.textDocument.uri,
       params.position.line, params.position.character,
-      ctx.index.pikePaths.includePaths, ctx.index.workspaceRoot,
+      (pathText, isSystem) => ctx.index.resolveInclude(pathText, isSystem, params.textDocument.uri),
     );
     if (includeResult) return includeResult;
   }

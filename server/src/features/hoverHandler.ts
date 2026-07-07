@@ -192,7 +192,10 @@ async function resolveHoverForDecl(
     );
     if (crossFile) return crossFileHover(crossFile, ctx, params.position);
   }
-  return formatHover(declForHover(decl, params.textDocument.uri, ctx));
+  // Symbols merged from a `#include`d file carry the header's coordinates in
+  // their ranges, so render the signature against the header's source.
+  const declUri = decl.sourceUri ?? params.textDocument.uri;
+  return formatHover(declForHover(decl, declUri, ctx));
 }
 
 /** Resolve hover when no local declaration is found (cross-file, access, predef). */
