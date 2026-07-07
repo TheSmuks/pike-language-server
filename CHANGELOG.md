@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.36] — 2026-07-07
+
+### Fixed
+
+- **Packaged VSIX version now tracks the release version.** `build-vsix.sh` read the version from `extension.package.json`, which manual release cuts had left frozen at `0.8.32` — so the VSIX attached to the `v0.8.33`–`v0.8.35` releases was mislabelled `0.8.32-build…`. The VSIX version is now derived from `.template-version` (the single source of truth every cut bumps and the git tag mirrors), and `release.yml` now fails the release if the tag does not match `.template-version`. `extension.package.json` and `package.json` were also reconciled from the stale `0.8.32` to the current release version.
+
 ## [0.8.35] — 2026-07-07
 
 ### Changed
