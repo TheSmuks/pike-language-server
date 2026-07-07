@@ -49,7 +49,7 @@
   },
   "dependencies": {
     "minimatch": "^10.2.5",
-    "pike-fmt": "^0.1.7",
+    "pike-fmt": "^0.1.9",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.0",

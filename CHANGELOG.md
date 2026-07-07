@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bumped `pike-fmt` to `^0.1.9`, which formats large files in linear time (~20× faster on big files) with byte-identical output. Reformatted `corpus/files/enum-basic.pike` to match the newer formatter's corrected switch/case indentation.
+
 ## [0.8.34] — 2026-07-07
 
 ### Added
