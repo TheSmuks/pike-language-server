@@ -101,8 +101,6 @@ This project uses AI agent skills stored in `.omp/skills/`. Each skill is a self
 | `pike-language-reference/` | Pike language syntax, semantics, and type system |
 | `pike-stdlib-api/` | Pike 8.0.1116 standard library API surface |
 | `pike-debugging/` | Debugging Pike code, introspecting the runtime |
-| `cut-release/` | Cutting a clean release (version bump, changelog, VSIX) |
-| `merge-to-main/` | Automating the PR lifecycle (create, monitor, merge) |
 | `setup/` | Interactive project setup workflow |
 
 ### Using Skills

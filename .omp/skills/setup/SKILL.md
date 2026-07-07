@@ -35,7 +35,7 @@ The setup workflow operates on **opt-in feature groups**. Each group can be acce
 |[CI Workflows](#ci-workflows)|On|commit-lint, changelog-check, blob-size-policy, ci.yml|
 |[Agent Config](#agent-config)|On|.omp/agents/ (code-reviewer, adr-writer, changelog-updater)|
 |[OMP Extensions](#omp-extensions)|On|.omp/rules/, .omp/hooks/, .omp/tools/|
-|[OMP Skills](#omp-skills)|On|.omp/skills/ (cut-release, merge-to-main, template-guide)|
+|[OMP Skills](#omp-skills)|On|.omp/skills/ (template-guide, quality-gates, setup, pmp-guide)|
 |[Dev Container](#dev-container)|Off|.devcontainer/ configuration|
 |[Code Quality](#code-quality)|On|.editorconfig, code style thresholds|
 |[ADR Process](#adr-process)|On|docs/decisions/, initial ADR template|
