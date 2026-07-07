@@ -188,7 +188,7 @@ describe("getSymbolsInScope", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/scope.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/scope.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Line 3 (0-indexed), character 2 — inside the function body after both decls
@@ -204,7 +204,7 @@ describe("getSymbolsInScope", () => {
   test("returns function parameters", () => {
     const src = "void foo(int a, string b) { /* cursor */ }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/params.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/params.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Line 0, character 30 — inside function body
@@ -226,7 +226,7 @@ describe("getSymbolsInScope", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/class.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/class.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Line 4, character 4 — inside baz() method body
@@ -248,7 +248,7 @@ describe("getSymbolsInScope", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/shadow.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/shadow.pike", 1, undefined, src);
     wireInheritance(table);
 
     const symbols = getSymbolsInScope(table, 3, 2);
@@ -267,7 +267,7 @@ describe("getSymbolsInScope", () => {
       "// cursor",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/top-level.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/top-level.pike", 1, undefined, src);
     wireInheritance(table);
 
     const symbols = getSymbolsInScope(table, 3, 0);
@@ -287,7 +287,7 @@ describe("getSymbolsInScope", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ordering.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ordering.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Line 2, char 2 — after 'before' but before 'after'
@@ -317,7 +317,7 @@ describe("getCompletions — unqualified", () => {
     const ctx = makeCtx();
 
     // Build the actual symbol table
-    const table = buildSymbolTable(tree, "file:///test/unqual.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/unqual.pike", 1, undefined, src);
     wireInheritance(table);
 
     const realResult = await getCompletions(table, tree, 4, 3, ctx);
@@ -332,7 +332,7 @@ describe("getCompletions — unqualified", () => {
   test("includes predef builtins", async () => {
     const src = "void foo() { wr }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/predef.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/predef.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -349,7 +349,7 @@ describe("getCompletions — unqualified", () => {
   test("includes stdlib top-level module names", async () => {
     const src = "void foo() { Std }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/stdlib.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/stdlib.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -370,7 +370,7 @@ describe("getCompletions — unqualified", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/shadow-predef.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/shadow-predef.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -616,7 +616,7 @@ describe("Audit fixes", () => {
   test("no operator symbols in completion list", async () => {
     const src = "void foo(int a) { }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ops.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ops.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -632,7 +632,7 @@ describe("Audit fixes", () => {
   test("Stdio. returns module members (not unqualified)", async () => {
     const src = 'void test() { Stdio.\n }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/stdio-dot.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/stdio-dot.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -649,7 +649,7 @@ describe("Audit fixes", () => {
   test("Array. returns module members", async () => {
     const src = 'void test() { Array.\n }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/array-dot.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/array-dot.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -668,7 +668,7 @@ describe("Audit fixes", () => {
   test("foreach loop variables are visible in scope", () => {
     const src = 'void test() { array(int) items = ({}); foreach(items; int idx; int val) { } }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/foreach.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/foreach.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Cursor inside foreach body
@@ -682,7 +682,7 @@ describe("Audit fixes", () => {
   test("arrow access on trailing line does not fall through to unqualified", async () => {
     const src = 'void test() { mixed x = "hello"; x->\n }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/arrow-trail.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/arrow-trail.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -703,7 +703,7 @@ describe("Audit fixes", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/scope-access.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/scope-access.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -722,7 +722,7 @@ describe("Audit fixes", () => {
       'void test() { Animal. }',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/class-dot.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/class-dot.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -751,7 +751,7 @@ describe("Completion ranking", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ranking.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ranking.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -775,7 +775,7 @@ describe("Completion ranking", () => {
   test("ranking uses sortText with priority tiers", async () => {
     const src = 'void foo(int x) { }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/sort.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/sort.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -803,7 +803,7 @@ describe("stdlib secondary index", () => {
     // Trigger a completion that forces index building
     const src = "void foo() {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/idx.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/idx.pike", 1, undefined, src);
     wireInheritance(table);
 
     const result = await getCompletions(table, tree, 0, 0, ctx);
@@ -831,7 +831,7 @@ describe("Declared-type member completion", () => {
   test("typed variable arrow access resolves class members", async () => {
     const src = 'class Animal { string name; int age; void speak() {} } void test() { Animal a = Animal(); a-> }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/typed-var.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/typed-var.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -849,7 +849,7 @@ describe("Declared-type member completion", () => {
   test("typed parameter arrow access resolves class members", async () => {
     const src = 'class Dog { void bark() {} } void train(Dog d) { d-> }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/typed-param.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/typed-param.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -863,7 +863,7 @@ describe("Declared-type member completion", () => {
   test("inherited members appear in typed variable completion", async () => {
     const src = 'class Base { void base_method() {} } class Child { inherit Base; void child_method() {} } void test(Child c) { c-> }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/typed-inherit.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/typed-inherit.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -878,7 +878,7 @@ describe("Declared-type member completion", () => {
   test("primitive types produce no member completions", async () => {
     const src = 'void foo(string s, int i) { s-> }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/primitive.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/primitive.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -890,7 +890,7 @@ describe("Declared-type member completion", () => {
   test("mixed type produces no member completions", async () => {
     const src = 'void foo(mixed x) { x-> }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/mixed-type.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/mixed-type.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -902,7 +902,7 @@ describe("Declared-type member completion", () => {
   test("declaredType is populated in symbol table", () => {
     const src = 'void foo(Animal a, string s) { int i = 0; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/decl-types.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/decl-types.pike", 1, undefined, src);
     wireInheritance(table);
 
     const aDecl = table.declarations.find(d => d.name === "a");
@@ -1241,7 +1241,7 @@ describe("Private member filtering", () => {
       'void test() { Vault. }',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/dot-private.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/dot-private.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 
@@ -1267,7 +1267,7 @@ describe("Private member filtering", () => {
       'void test() { Vault v = Vault(); v-> }',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/arrow-private.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/arrow-private.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeCtx();
 

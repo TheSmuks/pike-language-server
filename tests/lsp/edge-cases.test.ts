@@ -23,7 +23,7 @@ import {
 
 function buildTableFromSrc(src: string): SymbolTable {
   const tree = parse(src);
-  return buildSymbolTable(tree, "file:///test.pike", 1);
+  return buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 }
 
 function findDecl(table: SymbolTable, name: string, kind?: string): Declaration | undefined {

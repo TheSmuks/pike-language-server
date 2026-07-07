@@ -63,7 +63,7 @@ describe("resolveType — same-file", () => {
   test("resolves same-file class by name", async () => {
     const src = 'class Animal { string name; } Animal a;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table, "file:///test/a.pike");
 
     const result = await resolveType("Animal", ctx);
@@ -76,7 +76,7 @@ describe("resolveType — same-file", () => {
   test("returns null for primitive types", async () => {
     const src = 'int x;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     for (const t of ["int", "string", "mixed", "void", "float", "bool", "zero"]) {
@@ -87,7 +87,7 @@ describe("resolveType — same-file", () => {
   test("returns null for unknown types", async () => {
     const src = 'NonExistent x;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("NonExistent", ctx)).toBeNull();
@@ -96,7 +96,7 @@ describe("resolveType — same-file", () => {
   test("returns null for empty type name", async () => {
     const src = 'int x;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("", ctx)).toBeNull();
@@ -105,7 +105,7 @@ describe("resolveType — same-file", () => {
   test("resolves correct class when multiple exist", async () => {
     const src = 'class Dog { void bark() {} } class Cat { void meow() {} }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const dog = await resolveType("Dog", ctx);
@@ -120,7 +120,7 @@ describe("resolveType — same-file", () => {
   test("returns null for object/function/program types", async () => {
     const src = 'object a; function b; program c;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("object", ctx)).toBeNull();
@@ -131,7 +131,7 @@ describe("resolveType — same-file", () => {
   test("returns null for compound types (array, mapping, multiset)", async () => {
     const src = 'array a; mapping b; multiset c;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("array", ctx)).toBeNull();
@@ -148,7 +148,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("resolves member through declared type variable", async () => {
     const src = 'class Animal { string name; int age; void speak() {} } void test() { Animal a; a->name }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -163,7 +163,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("resolves method through declared type parameter", async () => {
     const src = 'class Dog { void bark() {} } void train(Dog d) { d->bark }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -178,7 +178,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("resolves inherited member through class LHS", async () => {
     const src = 'class Base { void greet() {} } class Child { inherit Base; void child_method() {} }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -193,7 +193,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("returns null for mixed type variable", async () => {
     const src = 'void test() { mixed x; x->something }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -207,7 +207,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("returns null when member does not exist in class", async () => {
     const src = 'class Animal { string name; } void test() { Animal a; a->nonexistent }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -221,7 +221,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("returns null when no lhs declaration provided", async () => {
     const src = 'void test() { x->method }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const member = await resolveMemberAccess("x", "method", null, ctx);
@@ -231,7 +231,7 @@ describe("resolveMemberAccess — same-file", () => {
   test("resolves member when LHS is a class declaration", async () => {
     const src = 'class Utils { void helper() {} }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const utilsClass = table.declarations.find(d => d.name === "Utils" && d.kind === "class");
@@ -251,7 +251,7 @@ describe("Recursion guards", () => {
   test("resolveType returns null at max depth", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("Foo", ctx, 5)).toBeNull();
@@ -260,7 +260,7 @@ describe("Recursion guards", () => {
   test("resolveType succeeds at depth 4 (same-file is step 1)", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const result = await resolveType("Foo", ctx, 4);
@@ -271,7 +271,7 @@ describe("Recursion guards", () => {
   test("resolveMemberAccess returns null at max depth", async () => {
     const src = 'class Foo { string x; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const fooClass = table.declarations.find(d => d.name === "Foo" && d.kind === "class")!;
@@ -287,7 +287,7 @@ describe("resolveMemberAccess — function return type", () => {
   test("resolves member through function declared return type", async () => {
     const src = 'class Dog { void speak() {} } Dog f() { return Dog(); }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/fn-return.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/fn-return.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -303,7 +303,7 @@ describe("resolveMemberAccess — function return type", () => {
   test("returns null for function with no return type", async () => {
     const src = 'void f() { }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/fn-void.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/fn-void.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const fnF = table.declarations.find(d => d.name === "f" && d.kind === "function");
@@ -317,7 +317,7 @@ describe("resolveMemberAccess — function return type", () => {
   test("returns null when lhsName is a variable, not a function", async () => {
     const src = 'int x;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/var-not-fn.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/var-not-fn.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     // "x" is a variable, not a function → no return type lookup
@@ -482,7 +482,7 @@ describe("resolveType — qualified types", () => {
   test("resolves cross_import_a.Greeter as qualified type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
 
     const result = await resolveType("cross_import_a.Greeter", ctx);
@@ -494,7 +494,7 @@ describe("resolveType — qualified types", () => {
   test("resolves Stdio.File as stdlib type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     const result = await resolveType("Stdio.File", ctx);
@@ -506,7 +506,7 @@ describe("resolveType — qualified types", () => {
   test("resolves Stdio.File as stdlib type via WorkspaceIndex context", async () => {
     const src = "void test() {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table, "file:///test/main.pike", crossFileIndex);
 
     // WorkspaceIndex does not have Stdio, so it falls through to stdlib index
@@ -518,7 +518,7 @@ describe("resolveType — qualified types", () => {
   test("returns null for non-existent qualified type", async () => {
     const src = "void test() {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/main.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/main.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     expect(await resolveType("NonExistent.Module", ctx)).toBeNull();
@@ -544,7 +544,7 @@ describe("resolveType depth limit", () => {
     // The direct depth guard is tested by calling resolveType with depth=5.
     const src = "class A {}";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/depth.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/depth.pike", 1, undefined, src);
     const ctx = makeTypeCtx(table);
 
     // Calling resolveType with depth >= MAX_RESOLUTION_DEPTH should return null
@@ -558,7 +558,7 @@ describe("resolveType depth limit", () => {
     // Resolving inner->inner->inner->... should terminate at depth 5.
     const src = "class Wrapper { Wrapper inner; void fetch() {} }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/depth-member.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/depth-member.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -575,7 +575,7 @@ describe("resolveType depth limit", () => {
   test("resolveMemberAccess works within depth limit", async () => {
     const src = "class Wrapper { Wrapper inner; void fetch() {} }";
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/depth-ok.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/depth-ok.pike", 1, undefined, src);
     wireInheritance(table);
     const ctx = makeTypeCtx(table);
 
@@ -599,7 +599,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ternary-a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ternary-a.pike", 1, undefined, src);
     wireInheritance(table);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
@@ -617,7 +617,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ternary-b.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ternary-b.pike", 1, undefined, src);
     wireInheritance(table);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
@@ -635,7 +635,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ternary-c.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ternary-c.pike", 1, undefined, src);
     wireInheritance(table);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
@@ -652,7 +652,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ternary-d.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ternary-d.pike", 1, undefined, src);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
     expect(dDecl).toBeDefined();
@@ -671,7 +671,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/ternary-e.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/ternary-e.pike", 1, undefined, src);
     wireInheritance(table);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");
@@ -689,7 +689,7 @@ describe("extractInitializerType — cond_expr (ternary)", () => {
       '}',
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/non-ternary.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/non-ternary.pike", 1, undefined, src);
     wireInheritance(table);
 
     const dDecl = table.declarations.find(d => d.name === "d" && d.kind === "variable");

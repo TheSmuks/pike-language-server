@@ -20,7 +20,7 @@ function readCorpus(filename: string): string {
 
 function buildTable(src: string): SymbolTable {
   const tree = parse(src);
-  return buildSymbolTable(tree, "file:///test.pike", 1);
+  return buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 }
 
 /** Find a declaration by name (first match), optionally filtered by kind. */

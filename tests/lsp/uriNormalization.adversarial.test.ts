@@ -458,5 +458,5 @@ function buildMinimalTable(uri: string): SymbolTable {
   const tree = parse(content);
   // Use the actual buildSymbolTable to get a valid table
   const { buildSymbolTable } = require("../../server/src/features/symbolTable");
-  return buildSymbolTable(tree, uri, 1, { index: { getSymbolTable: () => null, resolveImport: () => null, resolveInherit: () => null } });
+  return buildSymbolTable(tree, uri, 1, { index: { getSymbolTable: () => null, resolveImport: () => null, resolveInherit: () => null } }, content);
 }
