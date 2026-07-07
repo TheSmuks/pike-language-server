@@ -8,13 +8,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 STAGE="$ROOT/out/.vsix-stage"
 
-# Read version from extension manifest.
-# Strip any existing build suffix (+NNNNNNN) to prevent doubling when
-# extension.package.json was left with a build-suffixed version from a
-# previous interrupted run or manual edit.
-RAW_VERSION=$(node -e "const fs=require('fs'),p=require('path');console.log(JSON.parse(fs.readFileSync(p.join('$ROOT','extension.package.json'),'utf8')).version)")
+# Read version from .template-version — the single source of truth that every
+# release cut bumps and that the git tag / GitHub release mirror. Deriving the
+# VSIX version from here (rather than extension.package.json) guarantees the
+# packaged artifact's version always matches the release, even if a manual cut
+# forgets to bump the JSON manifests. release.yml additionally asserts that the
+# release tag equals .template-version before packaging.
+# Strip any accidental build/pre-release suffix to prevent doubling.
+RAW_VERSION=$(tr -d '[:space:]' < "$ROOT/.template-version")
 VERSION="${RAW_VERSION%%+*}"
 VERSION="${VERSION%%-*}"
+if [[ -z "$VERSION" ]]; then
+  echo "FAIL: could not read version from $ROOT/.template-version" >&2
+  exit 1
+fi
 BUILD_NUM=$(date +%s | tail -c 7)
 # Use a single alphanumeric pre-release identifier — VS Code's vsce rejects
 # purely numeric pre-release parts (leading-zero violation per semver spec)
