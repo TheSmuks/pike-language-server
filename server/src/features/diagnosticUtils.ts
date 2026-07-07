@@ -10,6 +10,23 @@ import {
   DiagnosticSeverity,
 } from "vscode-languageserver/node";
 
+/**
+ * Build a notice shown when a file has more diagnostics than the configured
+ * cap, so the user knows results were truncated rather than clean. Placed at
+ * the top of the document; one slot is reserved for it within maxProblems.
+ */
+export function buildTruncationNotice(total: number, maxProblems: number): Diagnostic {
+  const shown = maxProblems - 1;
+  const hidden = total - shown;
+  return {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    severity: DiagnosticSeverity.Information,
+    source: "pike",
+    code: "P0001",
+    message: `Showing first ${shown} of ${total} problems (${hidden} more hidden). Raise "pike.languageServer.maxNumberOfProblems" to see them all.`,
+  };
+}
+
 import type { PikeDiagnostic } from "./pikeWorker";
 import type { Tree } from "../parser";
 

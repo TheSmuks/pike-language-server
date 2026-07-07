@@ -29,7 +29,7 @@ import { buildSymbolTable, type SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
-import { computeContentHash, mergeDiagnostics } from "./diagnosticUtils";
+import { computeContentHash, mergeDiagnostics, buildTruncationNotice } from "./diagnosticUtils";
 import { type FileDiagnosticState } from "./diagnosticTypes";
 import { propagateToDependents } from "./diagnosticPropagation";
 
@@ -427,9 +427,13 @@ export class DiagnosticManager {
       }
     }
 
-    const truncated = diagnostics.length > this.maxProblems
-      ? diagnostics.slice(0, this.maxProblems)
-      : diagnostics;
+    let truncated = diagnostics;
+    if (diagnostics.length > this.maxProblems) {
+      // Keep room for the notice so the total stays within maxProblems, and
+      // tell the user results were capped instead of silently dropping them.
+      truncated = diagnostics.slice(0, Math.max(0, this.maxProblems - 1));
+      truncated.push(buildTruncationNotice(diagnostics.length, this.maxProblems));
+    }
     const state = this.fileStates.get(uri);
     if (state) {
       state.lastDiagnostics = truncated;

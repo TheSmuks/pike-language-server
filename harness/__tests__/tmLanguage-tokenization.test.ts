@@ -201,4 +201,27 @@ describe("pike.tmLanguage.json tokenization rules", () => {
       expect(operator.match(regex)?.[0]).toBe(operator);
     }
   });
+
+  it("matches sprintf format specifiers inside strings", () => {
+    const grammar = loadGrammar();
+    const patterns = repositoryPatterns(grammar, "format-specifier");
+    const specPattern = patterns.find((p) => p.name === "constant.other.placeholder.pike");
+    expect(specPattern?.match).toBeDefined();
+
+    const regex = new RegExp(specPattern!.match!, "u");
+    // Common Pike sprintf conversions and flag/width/precision forms.
+    for (const spec of ["%d", "%s", "%O", "%c", "%x", "%f", "%-20s", "%3d", "%.2f", "%08x", "%%", "%{", "%}"]) {
+      expect(spec.match(regex)?.[0]).toBe(spec);
+    }
+  });
+
+  it("does not flag a bare percent in prose as a format specifier", () => {
+    const grammar = loadGrammar();
+    const specPattern = repositoryPatterns(grammar, "format-specifier")
+      .find((p) => p.name === "constant.other.placeholder.pike");
+    const regex = new RegExp(specPattern!.match!, "u");
+    // "% done" / "100% " — percent followed by whitespace is not a conversion.
+    expect("50% done".match(regex)).toBeNull();
+    expect("100% ".match(regex)).toBeNull();
+  });
 });

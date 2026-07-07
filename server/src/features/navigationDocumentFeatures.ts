@@ -34,7 +34,72 @@ import { produceFoldingRanges } from "./foldingRange";
 import { produceSignatureHelp } from "./signatureHelp";
 import { produceInlayHints } from "./inlayHints";
 import { getSelectionRange } from "./selectionRange";
+import { LRUCache } from "../util/lruCache";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
+
+// ---------------------------------------------------------------------------
+// Semantic tokens delta cache
+//
+// The client sends `textDocument/semanticTokens/full/delta` with the resultId
+// of the tokens it currently holds; we return only the integer-array edits
+// needed to transform that into the current tokens. This avoids re-sending the
+// entire token array on every keystroke. We cache the last emitted full token
+// array per document, keyed by resultId, in a bounded LRU so a burst of open
+// files can't grow it without limit.
+// ---------------------------------------------------------------------------
+
+interface CachedSemanticTokens {
+  resultId: string;
+  data: number[];
+}
+
+const semanticTokensCache = new LRUCache<CachedSemanticTokens>({
+  maxEntries: 64,
+  // 4 bytes per int; cap the whole cache near 32 MB of token data.
+  maxBytes: 32 * 1024 * 1024,
+  estimateSize: (v) => v.data.length * 4 + v.resultId.length,
+});
+
+let semanticTokensResultCounter = 0;
+
+function nextSemanticTokensResultId(): string {
+  semanticTokensResultCounter += 1;
+  return String(semanticTokensResultCounter);
+}
+
+/**
+ * Diff two flat semantic-token integer arrays into the minimal single edit the
+ * LSP `SemanticTokensDelta` shape expects, by trimming the common prefix and
+ * suffix. Returns an empty edit list when the arrays are identical.
+ */
+function diffSemanticTokens(
+  oldData: number[],
+  newData: number[],
+): Array<{ start: number; deleteCount: number; data: number[] }> {
+  const oldLen = oldData.length;
+  const newLen = newData.length;
+
+  let prefix = 0;
+  const maxPrefix = Math.min(oldLen, newLen);
+  while (prefix < maxPrefix && oldData[prefix] === newData[prefix]) prefix++;
+
+  let suffix = 0;
+  const maxSuffix = Math.min(oldLen, newLen) - prefix;
+  while (
+    suffix < maxSuffix &&
+    oldData[oldLen - 1 - suffix] === newData[newLen - 1 - suffix]
+  ) {
+    suffix++;
+  }
+
+  if (prefix === oldLen && prefix === newLen) return [];
+
+  return [{
+    start: prefix,
+    deleteCount: oldLen - prefix - suffix,
+    data: newData.slice(prefix, newLen - suffix),
+  }];
+}
 
 /**
  * Register document analysis feature handlers on the connection.
@@ -51,6 +116,9 @@ export function registerDocumentFeatureHandlers(
 
   connection.onRequest("textDocument/semanticTokens/full", (params, token) =>
     handleSemanticTokensFull(ctx, params, token));
+
+  connection.onRequest("textDocument/semanticTokens/full/delta", (params, token) =>
+    handleSemanticTokensDelta(ctx, params, token));
 
   connection.onRequest("textDocument/semanticTokens/range", (params, token) =>
     handleSemanticTokensRange(ctx, params, token));
@@ -119,7 +187,37 @@ async function handleSemanticTokensFull(
   token: CancellationToken,
 ) {
   const data = await buildSemanticTokenData(ctx, params.textDocument.uri, token);
-  return { data };
+  const resultId = nextSemanticTokensResultId();
+  semanticTokensCache.set(params.textDocument.uri, { resultId, data });
+  return { resultId, data };
+}
+
+/**
+ * Handle textDocument/semanticTokens/full/delta requests.
+ *
+ * When the client's previousResultId matches our cached tokens for this URI we
+ * return only the array edits; otherwise (cache miss / evicted / stale id) we
+ * fall back to a full token set, which the protocol permits.
+ */
+async function handleSemanticTokensDelta(
+  ctx: NavigationContext,
+  params: { textDocument: { uri: string }; previousResultId: string },
+  token: CancellationToken,
+) {
+  const uri = params.textDocument.uri;
+  const newData = await buildSemanticTokenData(ctx, uri, token);
+  const resultId = nextSemanticTokensResultId();
+
+  const cached = semanticTokensCache.get(uri);
+  semanticTokensCache.set(uri, { resultId, data: newData });
+
+  if (!cached || cached.resultId !== params.previousResultId) {
+    // Client holds tokens we can't diff against — send a full replacement.
+    return { resultId, data: newData };
+  }
+
+  const edits = diffSemanticTokens(cached.data, newData);
+  return { resultId, edits };
 }
 
 /** Handle textDocument/semanticTokens/range requests. */

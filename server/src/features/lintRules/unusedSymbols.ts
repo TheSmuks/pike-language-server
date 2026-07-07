@@ -17,7 +17,7 @@ import {
   type SymbolTable,
   type Declaration,
 } from "../symbolTable";
-import { Diagnostic, DiagnosticSeverity, Range } from "../diagnostics";
+import { Diagnostic, DiagnosticSeverity, DiagnosticTag, Range } from "../diagnostics";
 
 // ---------------------------------------------------------------------------
 // Lint rule codes (P3xxx range, per decision 0028)
@@ -61,17 +61,19 @@ export function detectUnusedSymbols(
     if (refCount > 0) continue;
 
     const isParam = decl.kind === "parameter";
-    diagnostics.push(
-      Diagnostic.create(
-        nameRange(decl),
-        isParam
-          ? `Parameter '${decl.name}' is unused`
-          : `Variable '${decl.name}' is unused`,
-        DiagnosticSeverity.Warning,
-        isParam ? CODE_UNUSED_PARAMETER : CODE_UNUSED_VARIABLE,
-        "pike-lsp-lint",
-      ),
+    const diag = Diagnostic.create(
+      nameRange(decl),
+      isParam
+        ? `Parameter '${decl.name}' is unused`
+        : `Variable '${decl.name}' is unused`,
+      DiagnosticSeverity.Warning,
+      isParam ? CODE_UNUSED_PARAMETER : CODE_UNUSED_VARIABLE,
+      "pike-lsp-lint",
     );
+    // Unnecessary tag fades the identifier grey in the editor, matching how
+    // modern language servers render dead declarations.
+    diag.tags = [DiagnosticTag.Unnecessary];
+    diagnostics.push(diag);
   }
 
   return diagnostics;

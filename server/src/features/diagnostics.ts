@@ -7,13 +7,14 @@
 import {
   Diagnostic,
   DiagnosticSeverity,
+  DiagnosticTag,
   Range,
   Position,
 } from 'vscode-languageserver/node';
 import { Tree, Node, Point } from 'web-tree-sitter';
 import { utf8ToUtf16 } from '../util/positionConverter';
 
-export { Diagnostic, DiagnosticSeverity, Range, Position };
+export { Diagnostic, DiagnosticSeverity, DiagnosticTag, Range, Position };
 
 function toPosition(point: Point, lines: string[]): Position {
   return Position.create(point.row, utf8ToUtf16(lines[point.row] ?? '', point.column));
