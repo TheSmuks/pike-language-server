@@ -76,7 +76,7 @@ async function collectFromResolvedTarget(
   table: SymbolTable,
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
-  const targetTable = ctx.index.getSymbolTable(targetUri);
+  const targetTable = await ctx.index.getOrIndexSymbolTable(targetUri);
   if (!targetTable) return items;
 
   const fileScope = targetTable.scopes.find(s => s.kind === "file");

@@ -182,7 +182,7 @@ async function collectImportedItems(
   for (const importDecl of importDecls) {
     const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
     if (!targetUri) continue;
-    const targetTable = ctx.index.getSymbolTable(targetUri);
+    const targetTable = await ctx.index.getOrIndexSymbolTable(targetUri);
     if (!targetTable) continue;
     const fileScope = targetTable.scopes.find(s => s.kind === "file");
     if (!fileScope) continue;
@@ -202,7 +202,7 @@ async function collectDirectoryModuleItems(
 ): Promise<void> {
   const directoryModule = await ctx.index.resolver.findDirectoryModulePmod(ctx.uri);
   if (!directoryModule) return;
-  const moduleTable = ctx.index.getSymbolTable(directoryModule);
+  const moduleTable = await ctx.index.getOrIndexSymbolTable(directoryModule);
   if (!moduleTable) return;
   const fileScope = moduleTable.scopes.find(s => s.kind === "file");
   if (!fileScope) return;
@@ -410,7 +410,7 @@ async function addWorkspaceModuleMembers(
   const wsTarget = await ctx.index.resolveModule(lhsText, ctx.uri);
   if (!wsTarget) return;
 
-  const targetTable = ctx.index.getSymbolTable(wsTarget);
+  const targetTable = await ctx.index.getOrIndexSymbolTable(wsTarget);
   if (!targetTable) return;
 
   const fileScope = targetTable.scopes.find(s => s.kind === "file");

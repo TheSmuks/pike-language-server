@@ -91,7 +91,9 @@ export async function addWorkspaceModuleMembers(
   const wsTarget = await ctx.index.resolveModule(lhsText, ctx.uri);
   if (!wsTarget) return;
 
-  const targetTable = ctx.index.getSymbolTable(wsTarget);
+  // getOrIndex (not getSymbolTable): the target may be a lazily-restored stub
+  // whose table is hydrated from cache on first access.
+  const targetTable = await ctx.index.getOrIndexSymbolTable(wsTarget);
   if (!targetTable) return;
 
   const fileScope = targetTable.scopes.find(s => s.kind === "file");

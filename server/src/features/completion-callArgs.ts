@@ -101,7 +101,8 @@ async function lookupImportedCallable(
   for (const importDecl of importDecls) {
     const targetUri = await ctx.index.resolveInherit(importDecl.name, false, ctx.uri);
     if (!targetUri) continue;
-    const targetTable = ctx.index.getSymbolTable(targetUri);
+    // getOrIndex: hydrate a lazily-restored stub target on first access.
+    const targetTable = await ctx.index.getOrIndexSymbolTable(targetUri);
     if (!targetTable) continue;
     const fileScope = targetTable.scopes.find(s => s.kind === "file");
     if (!fileScope) continue;
