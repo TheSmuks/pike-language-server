@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.34] — 2026-07-07
+
+### Added
+
+  - `#include "file.h"` and `#include <file.h>` now contribute the included
+    file's top-level symbols to the including file. Declarations (functions,
+    variables, constants, classes, typedefs) and `#define` macros from a header
+    appear in completion and hover, and go-to-definition jumps into the header.
+    `#define` macros are modeled as first-class symbols (object-like and
+    function-like).
+
+### Changed
+
+  - `#include` and relative `inherit`/`import` string paths now resolve outside
+    the workspace root — e.g. from `a/b/c/file.pike`, `#include "../defs.h"`
+    resolves to `a/b/defs.h` — matching how the Pike compiler resolves them
+    relative to the including file. Non-source system files reached by upward
+    traversal (e.g. `/etc/passwd`) remain refused. Document links and
+    go-to-definition follow the same resolution, and editing an included header
+    refreshes the files that include it.
+  - `buildSymbolTable` now requires the source text the tree was parsed from and
+    fails fast when it is missing, instead of silently producing a symbol table
+    with wrong character offsets.
+
 ## [0.8.33] — 2026-07-07
 
 ### Added
