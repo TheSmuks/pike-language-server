@@ -114,10 +114,17 @@ export abstract class PikeWorkerProcess {
     }
     stdout.on("data", (data: Buffer) => {
       this.buffer += data.toString();
-      // Guard against unbounded buffer growth (e.g. Pike binary dump without newlines).
+      // Guard against unbounded buffer growth (e.g. Pike binary dump without
+      // newlines). A >1MB line with no delimiter means the response stream is
+      // desynced — the buffer can no longer be parsed into responses. Clearing
+      // it alone would strand every in-flight request until its own timeout, so
+      // reject them now and restart the worker to recover a clean stream.
       if (this.buffer.length > 1_000_000) {
         this.buffer = "";
-        this.onCriticalError?.("worker.bufferOverflow", new Error("Response buffer exceeded 1MB — clearing"));
+        this.onCriticalError?.("worker.bufferOverflow", new Error("Response buffer exceeded 1MB — restarting worker"));
+        this.rejectAllPending(new Error("Pike worker response stream desynced (buffer overflow)"));
+        this.restart().catch((err) => this.onCriticalError?.("worker.bufferOverflowRestart", err));
+        return;
       }
       this.processBuffer();
     });
