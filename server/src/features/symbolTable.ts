@@ -180,10 +180,12 @@ export interface BuildOptions {
  * 1. Collect declarations and build scope tree
  * 2. Collect references and resolve them
  *
- * @param index Optional WorkspaceIndex for cross-file inheritance wiring.
- * @param sourceText Pre-split source text.
+ * @param options Optional WorkspaceIndex for cross-file inheritance wiring;
+ *   pass `undefined` when no index is available.
+ * @param sourceText Full source the tree was parsed from. REQUIRED — callers
+ *   already hold it, and omitting it corrupts every position (see guard below).
  */
-export function buildSymbolTable(tree: Tree, uri: string, version: number, options?: BuildOptions, sourceText?: string): SymbolTable {
+export function buildSymbolTable(tree: Tree, uri: string, version: number, options: BuildOptions | undefined, sourceText: string): SymbolTable {
   return measureSync("buildSymbolTable", () => {
     const root = tree.rootNode;
     if (!root) return emptySymbolTable(uri, version);
@@ -191,9 +193,21 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     bump("symbolTablesBuilt");
     // Callers MUST pass the pre-split source. Materializing rootNode.text
     // inside this hot path is O(N) and the source is already available from
-    // the LSP document change notification — fall back to an empty string
-    // would silently produce wrong character offsets for every identifier.
-    const state = initBuildState(root, sourceText ?? '');
+    // the LSP document change notification. Passing an empty string for a
+    // non-empty tree silently produces wrong character offsets: every position
+    // on line 0 collapses to column 0, the file scope becomes a zero-width
+    // [0,0]-[0,0] range, and getSymbolsInScope/completion return nothing at
+    // end-of-line positions. Fail fast instead of lying (TigerStyle). The type
+    // makes sourceText required, but bun runs tests without type-checking, so
+    // this runtime guard is what protects the (untyped) test call sites too.
+    // endIndex is an O(1) getter, so the guard adds no measurable hot-path cost.
+    if ((sourceText === undefined || sourceText.length === 0) && root.endIndex > 0) {
+      throw new Error(
+        `buildSymbolTable(${uri}): sourceText is required for a non-empty tree ` +
+          `(endIndex=${root.endIndex}); omitting it would corrupt every position.`,
+      );
+    }
+    const state = initBuildState(sourceText ?? '');
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);
@@ -240,8 +254,8 @@ function emptySymbolTable(uri: string, version: number): SymbolTable {
   };
 }
 
-/** Initialize builder state from the root node. */
-function initBuildState(root: { text: string }, sourceText: string): BuildState {
+/** Initialize builder state from the pre-split source text. */
+function initBuildState(sourceText: string): BuildState {
   const lines = sourceText.split('\n');
   return {
     nextId: 0,

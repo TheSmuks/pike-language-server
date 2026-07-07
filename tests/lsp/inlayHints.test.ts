@@ -23,7 +23,7 @@ describe("Inlay hints (G1)", () => {
     const uri = `file:///test-inlay-${++counter}.pike`;
     const tree = parse(source, uri);
     assert(tree);
-    const table = buildSymbolTable(tree, uri, 0);
+    const table = buildSymbolTable(tree, uri, 0, undefined, source);
     return produceInlayHints({
       tree,
       table,

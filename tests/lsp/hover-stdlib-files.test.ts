@@ -39,14 +39,14 @@ describe("Hover on stdlib files outside workspace", () => {
 
       test("builds symbol table with declarations", () => {
         const tree = parse(source, uri);
-        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex });
+        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex }, source);
         expect(table.declarations.length).toBeGreaterThan(0);
         expect(table.scopes.length).toBeGreaterThan(0);
       });
 
       test("finds declaration for 'db' variable", () => {
         const tree = parse(source, uri);
-        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex });
+        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex }, source);
         
         // Find the line with "Gdbm.gdbm db" or similar variable decl
         const lines = source.split("\n");
@@ -69,7 +69,7 @@ describe("Hover on stdlib files outside workspace", () => {
 
       test("finds declaration for 'Data' class", () => {
         const tree = parse(source, uri);
-        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex });
+        const table = buildSymbolTable(tree, uri, 1, { index: nullIndex }, source);
         
         const dataDecl = table.declarations.find(d => d.name === "Data" && d.kind === "class");
         expect(dataDecl).toBeDefined();

@@ -50,7 +50,7 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
     const index = new WorkspaceIndex({ workspaceRoot: "/tmp/micro" });
     t0 = process.hrtime.bigint();
     for (let i = 0; i < N; i++) {
-      buildSymbolTable(trees[i % trees.length], `file:///tmp/micro/f${i}.pike`, 1);
+      buildSymbolTable(trees[i % trees.length], `file:///tmp/micro/f${i}.pike`, 1, undefined, content);
     }
     const buildTableMs = hrMs(t0);
 
@@ -99,7 +99,7 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
 
     for (const t of trees) t.delete();
     // Verify that buildSymbolTable actually produced results
-    const sampleTable = buildSymbolTable(parse(content), "file:///tmp/micro/verify.pike", 1);
+    const sampleTable = buildSymbolTable(parse(content), "file:///tmp/micro/verify.pike", 1, undefined, content);
     expect(sampleTable.scopes.length).toBeGreaterThan(0);
     expect(sampleTable.declarations.length).toBeGreaterThan(0);
   });
@@ -120,7 +120,7 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
 
     const t0 = process.hrtime.bigint();
     for (let i = 0; i < N_PHASES; i++) {
-      buildSymbolTable(trees[i]!, `file:///tmp/perf/f${i}.pike`, 1);
+      buildSymbolTable(trees[i]!, `file:///tmp/perf/f${i}.pike`, 1, undefined, content);
     }
     const totalMs = hrMs(t0);
 
@@ -130,7 +130,7 @@ describe("Micro-benchmark: upsertBackgroundFile breakdown", () => {
     console.log("  ===============================\n");
 
     // Verify buildSymbolTable actually produces results
-    const sampleResult = buildSymbolTable(parse(content), "file:///tmp/perf/verify.pike", 1);
+    const sampleResult = buildSymbolTable(parse(content), "file:///tmp/perf/verify.pike", 1, undefined, content);
     expect(sampleResult).toBeDefined();
     expect(sampleResult.scopes.length).toBeGreaterThan(0);
 
