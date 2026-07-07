@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.32] — 2026-07-07
+
+### Added
+
+  - Developer tooling for debugging the extension without VS Code:
+    `bun run probe <command> <file>` (headless LSP driver that decodes semantic
+    tokens, hover, completion, diagnostics, and capabilities),
+    `bun run watch:server` / `watch:client` (incremental rebuilds), and
+    `docs/debugging.md`. VS Code F5 debug configuration under `.vscode/`.
+
 ### Fixed
 
   - Semantic highlighting no longer flickers off while typing. The semantic
@@ -35,14 +45,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `client/` paths) by `scripts/sync-manifest.ts`, which runs during
     `build:extension` and is enforced by a test. Previously the dev manifest was
     a stale subset missing ~17 configuration settings.
-
-### Added
-
-  - Developer tooling for debugging the extension without VS Code:
-    `bun run probe <command> <file>` (headless LSP driver that decodes semantic
-    tokens, hover, completion, diagnostics, and capabilities),
-    `bun run watch:server` / `watch:client` (incremental rebuilds), and
-    `docs/debugging.md`. VS Code F5 debug configuration under `.vscode/`.
 
 ## [0.8.31] — 2026-06-22
 
