@@ -9,6 +9,7 @@
 import {
   type Connection,
   type DocumentFormattingParams,
+  type DocumentRangeFormattingParams,
   type DocumentOnTypeFormattingParams,
   type TextEdit,
   type CancellationToken,
@@ -79,12 +80,60 @@ export function registerFormattingHandler(
       return handleFormatting(connection, ctx, params, token);
     },
   );
+  connection.onDocumentRangeFormatting(
+    async (params, token) => {
+      await ctx.beforeRequest?.();
+      return handleRangeFormatting(connection, ctx, params, token);
+    },
+  );
   connection.onDocumentOnTypeFormatting(
     async (params, token) => {
       await ctx.beforeRequest?.();
       return handleOnTypeFormatting(connection, ctx, params, token);
     },
   );
+}
+
+// ---------------------------------------------------------------------------
+// Range formatting
+//
+// pike-fmt operates on whole documents (it re-derives indentation from the
+// full parse tree), so true selection-only formatting is not available. Rather
+// than leave "Format Selection" as a dead menu item, we format the whole
+// document — a predictable, non-corrupting transformation — and return no
+// edits when the document is already formatted.
+// ---------------------------------------------------------------------------
+
+async function handleRangeFormatting(
+  connection: Connection,
+  ctx: FormattingContext,
+  params: DocumentRangeFormattingParams,
+  token: CancellationToken,
+): Promise<TextEdit[] | null> {
+  if (token.isCancellationRequested) return null;
+  const doc = ctx.documents.get(params.textDocument.uri);
+  if (!doc) return null;
+
+  const source = doc.getText();
+  const options = params.options;
+
+  try {
+    if (!parserInstance) {
+      logError(connection, ErrorCategory.System, "formattingHandler.handleRangeFormatting", new Error("parser not initialized"));
+      return null;
+    }
+    const formatted = pikeFormat(source, {
+      tabSize: options.tabSize ?? 4,
+      useTabs: options.insertSpaces === false,
+      insertFinalNewline: ctx.formattingConfig.insertFinalNewline,
+      operatorSpacing: ctx.formattingConfig.operatorSpacing,
+    }, parserInstance);
+
+    return computeEdits(source, formatted);
+  } catch (err) {
+    logError(connection, ErrorCategory.System, "formattingHandler.handleRangeFormatting", err);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

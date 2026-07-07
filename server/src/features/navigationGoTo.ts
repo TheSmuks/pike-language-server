@@ -17,6 +17,7 @@ import {
   getReferencesTo,
 } from "./symbolTable";
 import { resolveAccessDefinition } from "./accessResolver";
+import { resolveType, type TypeResolutionContext } from "./typeResolver";
 import { findImplementations } from "./implementation";
 import { resolveIncludeTarget } from "./navigationInclude";
 import { prepareGlobalQuery } from "./workspaceResolution";
@@ -39,11 +40,75 @@ export function registerGoToHandlers(
   connection.onDefinition((params, token) =>
     handleDefinition(connection, ctx, resolutionCtx, makeTypeInferrer, params, token));
 
+  // Pike has no separate declaration/definition split (no header prototypes),
+  // so "Go to Declaration" resolves to the same target as "Go to Definition".
+  connection.onRequest("textDocument/declaration", (params, token) =>
+    handleDefinition(connection, ctx, resolutionCtx, makeTypeInferrer, params, token));
+
+  connection.onRequest("textDocument/typeDefinition", (params, token) =>
+    handleTypeDefinition(ctx, makeTypeInferrer, params, token));
+
   connection.onReferences((params, token) =>
     handleReferences(ctx, params, token));
 
   connection.onRequest("textDocument/implementation", (params, token) =>
     handleImplementation(connection, ctx, params, token));
+}
+
+/**
+ * Handle textDocument/typeDefinition — jump from a variable/expression to the
+ * class that defines its type.
+ *
+ * Resolves the declaration under the cursor, extracts its declared type name,
+ * and resolves that type to a class declaration (same-file, qualified, or
+ * cross-file via inherit/import) using the shared type resolver.
+ */
+async function handleTypeDefinition(
+  ctx: NavigationContext,
+  makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  token: CancellationToken,
+): Promise<LspLocation | null> {
+  if (token.isCancellationRequested) return null;
+
+  const table = await ctx.getSymbolTable(params.textDocument.uri);
+  if (!table) return null;
+
+  const decl = getDefinitionAt(table, params.position.line, params.position.character);
+  const typeName = decl?.declaredType ? extractTypeName(decl.declaredType) : null;
+  if (!typeName) return null;
+
+  const doc = ctx.documents.get(params.textDocument.uri);
+  const typeCtx: TypeResolutionContext = {
+    table,
+    uri: params.textDocument.uri,
+    index: ctx.index,
+    stdlibIndex: ctx.stdlibIndex,
+    typeInferrer: doc ? makeTypeInferrer(doc.getText()) : undefined,
+    cache: new Map(),
+  };
+
+  const resolved = await resolveType(typeName, typeCtx);
+  if (!resolved || token.isCancellationRequested) return null;
+  return declToLspLocation(resolved.uri, resolved.decl);
+}
+
+/**
+ * Extract a resolvable class name from a declared-type string.
+ *
+ * Handles `object(Foo)` wrappers and qualified names (`Stdio.File`, kept as-is
+ * for the resolver). Bails on container/compound types (`array(...)`,
+ * `mapping(...)`, unions with `|`, function types) where a single target class
+ * is ambiguous — the resolver would reject them anyway.
+ */
+function extractTypeName(declaredType: string): string | null {
+  let t = declaredType.trim();
+  const objMatch = t.match(/^object\(([^)]+)\)$/);
+  if (objMatch) t = objMatch[1].trim();
+  // Reject anything with whitespace, remaining parens, or union operators —
+  // only a bare (optionally dotted) identifier resolves to one class.
+  if (t === "" || /[\s()|*]/.test(t)) return null;
+  return t;
 }
 
 /** Build a source-aware type inferrer factory using PikeWorker.typeof_(). */

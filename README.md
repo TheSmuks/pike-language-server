@@ -46,7 +46,7 @@ A comprehensive LSP feature set, all backed by real compiler information:
 
 **Diagnostics**
 - Live compilation errors and warnings straight from `pike`, debounced while you type
-- Three modes: `realtime`, `saveOnly`, or `off`; supports pull diagnostics
+- Three modes: `realtime`, `saveOnly`, or `off`, with version-gated supersession and cross-file propagation
 
 **Navigation**
 - Go-to-definition and find-references, workspace-wide and across `inherit`/`import` chains

@@ -9,7 +9,6 @@ import {
   FileOperationPatternKind,
   TextDocumentSyncKind,
   SemanticTokensOptions,
-  SemanticTokensRegistrationOptions,
 } from "vscode-languageserver/node";
 import type { InitializeResult } from "vscode-languageserver/node";
 import { SEMANTIC_TOKENS_LEGEND } from "./features/semanticTokens";
@@ -28,7 +27,12 @@ function buildTextDocumentSync(): object {
 
 function buildCompletionProvider(): object {
   return {
-    triggerCharacters: ['.'],
+    // '.' — module/dot member access; '>' — the second char of the `->`
+    // object-access operator (Pike's primary member operator); ':' — the
+    // second char of the `::` inherit-scope operator. Without '>' and ':'
+    // the client never auto-invokes completion after `->`/`::`; the trigger
+    // context is disambiguated by tree-sitter in completionTrigger.ts.
+    triggerCharacters: ['.', '>', ':'],
     resolveProvider: true,
   };
 }
@@ -36,7 +40,9 @@ function buildCompletionProvider(): object {
 function buildSemanticTokensProvider(): SemanticTokensOptions {
   return {
     legend: SEMANTIC_TOKENS_LEGEND,
-    full: true,
+    // Delta support: the client sends the resultId it holds and we reply with
+    // only the changed slice of the token array instead of the whole file.
+    full: { delta: true },
     range: true,
   };
 }
@@ -91,6 +97,8 @@ export function buildServerCapabilities(): InitializeResult {
       textDocumentSync: buildTextDocumentSync(),
       documentSymbolProvider: true,
       definitionProvider: true,
+      declarationProvider: true,
+      typeDefinitionProvider: true,
       referencesProvider: true,
       renameProvider: { prepareProvider: true },
       hoverProvider: true,
@@ -98,12 +106,18 @@ export function buildServerCapabilities(): InitializeResult {
       semanticTokensProvider: buildSemanticTokensProvider(),
       documentHighlightProvider: true,
       foldingRangeProvider: true,
-      signatureHelpProvider: { triggerCharacters: ['(', ','] },
+      signatureHelpProvider: {
+        triggerCharacters: ['(', ','],
+        // Re-resolve the active parameter as the user moves between arguments
+        // while the popup is already open.
+        retriggerCharacters: [','],
+      },
       inlayHintProvider: { resolveProvider: false },
       codeActionProvider: buildCodeActionProvider(),
       workspaceSymbolProvider: true,
       documentLinkProvider: { resolveProvider: false },
       documentFormattingProvider: true,
+      documentRangeFormattingProvider: true,
       documentOnTypeFormattingProvider: {
         firstTriggerCharacter: "}",
         moreTriggerCharacter: [";"],

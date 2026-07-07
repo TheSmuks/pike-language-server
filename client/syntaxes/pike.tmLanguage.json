@@ -67,7 +67,10 @@
 					"comment": "Raw strings #\" ... \"",
 					"name": "string.quoted.other.pike",
 					"begin": "#\"",
-					"end": "\""
+					"end": "\"",
+					"patterns": [
+						{ "include": "#format-specifier" }
+					]
 				},
 				{
 					"comment": "Single-character literals 'c'",
@@ -96,10 +99,26 @@
 							"match": "\\\\(?:[abtnvfr\\\\]|'|\"|[0-7]+|x[0-9a-fA-F]+|d[0-9]*|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})"
 						},
 						{
+							"comment": "Backslash line continuation at end of line",
+							"name": "constant.character.escape.continuation.pike",
+							"match": "\\\\$"
+						},
+						{
 							"name": "constant.character.escape.pike",
 							"match": "\\\\."
-						}
+						},
+						{ "include": "#format-specifier" }
 					]
+				}
+			]
+		},
+
+		"format-specifier": {
+			"patterns": [
+				{
+					"comment": "sprintf/printf format specifier, e.g. %d %-20s %O %{...%}. See Pike's String.sprintf.",
+					"name": "constant.other.placeholder.pike",
+					"match": "%(?!\\s)(?:\\*|[-+ 0#'=/!|<>^@:;.])*(?:\\d+)?(?:\\.(?:\\d+|\\*))?[boxXeEfgGdiucsqOHnt%\\[\\]{}]"
 				}
 			]
 		},

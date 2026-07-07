@@ -12,7 +12,7 @@
  */
 
 import { Tree } from "web-tree-sitter";
-import { Diagnostic, DiagnosticSeverity, Range } from "../diagnostics";
+import { Diagnostic, DiagnosticSeverity, DiagnosticTag, Range } from "../diagnostics";
 import { utf8ToUtf16 } from "../../util/positionConverter";
 
 // ---------------------------------------------------------------------------
@@ -107,18 +107,7 @@ function checkBlock(
 
     if (foundTerminator) {
       // This statement is unreachable.
-      diagnostics.push(
-        Diagnostic.create(
-          Range.create(
-            { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
-            { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
-          ),
-          "Unreachable code",
-          DiagnosticSeverity.Warning,
-          CODE_UNREACHABLE,
-          "pike-lsp-lint",
-        ),
-      );
+      diagnostics.push(makeUnreachableDiagnostic(child, lines));
       continue;
     }
 
@@ -126,6 +115,29 @@ function checkBlock(
       foundTerminator = true;
     }
   }
+}
+
+/**
+ * Build an "Unreachable code" diagnostic tagged Unnecessary so the editor
+ * fades the dead statement grey (matching how modern language servers render
+ * unreachable code).
+ */
+function makeUnreachableDiagnostic(
+  child: import("web-tree-sitter").Node,
+  lines: string[],
+): Diagnostic {
+  const diag = Diagnostic.create(
+    Range.create(
+      { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
+      { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
+    ),
+    "Unreachable code",
+    DiagnosticSeverity.Warning,
+    CODE_UNREACHABLE,
+    "pike-lsp-lint",
+  );
+  diag.tags = [DiagnosticTag.Unnecessary];
+  return diag;
 }
 
 /** Get named children of a node (skip anonymous tokens like `{`, `}`). */
@@ -184,18 +196,7 @@ function checkSwitchBlock(
         // But skip case/default entries and break statements — break after
         // return/continue is a common defensive pattern in switch cases.
         if (!CASE_ENTRY_TYPES.has(child.type) && child.type !== "break_statement") {
-          diagnostics.push(
-            Diagnostic.create(
-              Range.create(
-                { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
-                { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
-              ),
-              "Unreachable code",
-              DiagnosticSeverity.Warning,
-              CODE_UNREACHABLE,
-              "pike-lsp-lint",
-            ),
-          );
+          diagnostics.push(makeUnreachableDiagnostic(child, lines));
         }
         continue;
       }
