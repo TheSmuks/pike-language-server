@@ -7,7 +7,7 @@ import {
   StreamMessageWriter,
   createMessageConnection,
   type MessageConnection,
-} from "vscode-jsonrpc";
+} from "vscode-jsonrpc/node";
 import { createConnection } from "vscode-languageserver/node";
 import { createPikeServer, type PikeServer } from "../../server/src/server";
 import { readSnapshot } from "../../harness/src/snapshot";

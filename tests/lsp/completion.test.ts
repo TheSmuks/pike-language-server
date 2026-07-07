@@ -525,7 +525,7 @@ describe("textDocument/completion (LSP protocol)", () => {
     // impossible to read raw responses. A standalone server avoids this.
 
     const { PassThrough } = await import("node:stream");
-    const { StreamMessageReader, StreamMessageWriter } = await import("vscode-jsonrpc");
+    const { StreamMessageReader, StreamMessageWriter } = await import("vscode-jsonrpc/node");
     const { createConnection } = await import("vscode-languageserver/node");
     const { createPikeServer } = await import("../../server/src/server");
     const { initParser: ensureParser } = await import("../../server/src/parser");
