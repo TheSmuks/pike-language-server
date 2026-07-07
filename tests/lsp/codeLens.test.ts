@@ -1,19 +1,18 @@
 /**
  * CodeLens provider tests.
  *
- * Tests the reference-count code lens feature:
- *   produceCodeLenses(symbolTable, tree, uri, workspaceIndex) → CodeLens[]
+ * Tests the lazily-resolved reference-count code lens feature:
+ *   produceCodeLenses(symbolTable, uri) → CodeLens[]        (bare, no counts)
+ *   resolveCodeLens(lens, workspaceIndex) → CodeLens        (fills in count)
  *
- * Verifies that lenses are produced for function/method declarations with
- * references, skipped for zero-reference declarations, and omitted for
- * non-function declarations (classes, variables).
+ * produce emits one lens per function/method declaration (counts are computed
+ * on resolve, so zero-reference declarations show "0 references" rather than
+ * being hidden). Non-function declarations (classes, variables) are omitted.
  */
 
 import { describe, test, expect } from "bun:test";
-import { produceCodeLenses } from "../../server/src/features/codeLens";
-import type { CodeLens } from "vscode-languageserver/node";
+import { produceCodeLenses, resolveCodeLens } from "../../server/src/features/codeLens";
 import type { SymbolTable, Declaration } from "../../server/src/features/symbolTable";
-import type { Tree } from "web-tree-sitter";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -58,132 +57,94 @@ function makeWorkspaceIndex(
   } as any;
 }
 
-/** A fake Tree — produceCodeLenses only uses it as a passthrough arg. */
-const fakeTree = {} as Tree;
-
 // ---------------------------------------------------------------------------
-// Tests
+// produce
 // ---------------------------------------------------------------------------
 
 describe("produceCodeLenses", () => {
   test("returns empty array when there are no declarations", () => {
-    const table = makeTable([]);
-    const index = makeWorkspaceIndex({});
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
+    const lenses = produceCodeLenses(makeTable([]), "file:///a.pike");
     expect(lenses).toEqual([]);
   });
 
-  test("skips declarations with zero references", () => {
+  test("emits a bare lens (no command) per function/method declaration", () => {
     const table = makeTable([
-      { kind: "function", name: "unused", nameRange: { start: { line: 5, character: 0 }, end: { line: 5, character: 6 } } },
+      { kind: "function", name: "a", nameRange: { start: { line: 3, character: 4 }, end: { line: 3, character: 5 } } },
+      { kind: "method", name: "b", nameRange: { start: { line: 7, character: 0 }, end: { line: 7, character: 1 } } },
     ]);
-    const index = makeWorkspaceIndex({});
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
-    expect(lenses).toEqual([]);
-  });
-
-  test("produces lens for function with references", () => {
-    const table = makeTable([
-      {
-        kind: "function",
-        name: "myFunc",
-        nameRange: { start: { line: 3, character: 4 }, end: { line: 3, character: 10 } },
-      },
-    ]);
-    const index = makeWorkspaceIndex({
-      "file:///a.pike:3": [
-        // A reference from a different location (not the declaration itself)
-        { ref: { loc: { line: 10, character: 2 } } },
-        { ref: { loc: { line: 20, character: 5 } } },
-      ],
-    });
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
-
-    expect(lenses.length).toBe(1);
+    const lenses = produceCodeLenses(table, "file:///a.pike");
+    expect(lenses.length).toBe(2);
+    expect(lenses[0].command).toBeUndefined();
     expect(lenses[0].range.start.line).toBe(3);
     expect(lenses[0].range.start.character).toBe(4);
-    expect(lenses[0].command?.title).toBe("2 references");
-    expect(lenses[0].command?.command).toBe("pike.showReferences");
+    expect(lenses[0].data).toEqual({ uri: "file:///a.pike", line: 3, character: 4 });
   });
 
-  test("produces singular 'reference' for exactly 1 reference", () => {
-    const table = makeTable([
-      {
-        kind: "method",
-        name: "doThing",
-        nameRange: { start: { line: 7, character: 0 }, end: { line: 7, character: 6 } },
-      },
-    ]);
-    const index = makeWorkspaceIndex({
-      "file:///a.pike:7": [
-        { ref: { loc: { line: 15, character: 0 } } },
-      ],
-    });
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
-
-    expect(lenses.length).toBe(1);
-    expect(lenses[0].command?.title).toBe("1 reference");
-  });
-
-  test("skips non-function/method declarations even with references", () => {
+  test("omits non-function/method declarations", () => {
     const table = makeTable([
       { kind: "class", name: "Foo", nameRange: { start: { line: 1, character: 0 }, end: { line: 1, character: 3 } } },
       { kind: "variable", name: "bar", nameRange: { start: { line: 2, character: 0 }, end: { line: 2, character: 3 } } },
     ]);
-    const index = makeWorkspaceIndex({
-      "file:///a.pike:1": [{ ref: { loc: { line: 10, character: 0 } } }],
-      "file:///a.pike:2": [{ ref: { loc: { line: 11, character: 0 } } }],
-    });
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
-    expect(lenses).toEqual([]);
+    expect(produceCodeLenses(table, "file:///a.pike")).toEqual([]);
   });
+});
 
-  test("excludes self-reference from count", () => {
+// ---------------------------------------------------------------------------
+// resolve
+// ---------------------------------------------------------------------------
+
+describe("resolveCodeLens", () => {
+  test("fills in the reference count (plural)", () => {
     const table = makeTable([
-      {
-        kind: "function",
-        name: "recursive",
-        nameRange: { start: { line: 4, character: 0 }, end: { line: 4, character: 9 } },
-      },
+      { kind: "function", name: "myFunc", nameRange: { start: { line: 3, character: 4 }, end: { line: 3, character: 10 } } },
     ]);
     const index = makeWorkspaceIndex({
-      "file:///a.pike:4": [
-        // This reference is at the same position as the declaration — should be excluded
-        { ref: { loc: { line: 4, character: 0 } } },
+      "file:///a.pike:3": [
+        { ref: { loc: { line: 10, character: 2 } } },
+        { ref: { loc: { line: 20, character: 5 } } },
       ],
     });
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
-    // Zero references after excluding self-reference → no lens
-    expect(lenses).toEqual([]);
+    const [lens] = produceCodeLenses(table, "file:///a.pike");
+    const resolved = resolveCodeLens(lens, index);
+    expect(resolved.command?.title).toBe("2 references");
+    expect(resolved.command?.command).toBe("pike.showReferences");
   });
 
-  test("handles multiple function declarations with mixed reference counts", () => {
+  test("uses singular 'reference' for exactly 1", () => {
     const table = makeTable([
-      {
-        kind: "function",
-        name: "used",
-        nameRange: { start: { line: 1, character: 0 }, end: { line: 1, character: 4 } },
-      },
-      {
-        kind: "function",
-        name: "alsoUsed",
-        nameRange: { start: { line: 5, character: 0 }, end: { line: 5, character: 8 } },
-      },
-      {
-        kind: "function",
-        name: "notUsed",
-        nameRange: { start: { line: 10, character: 0 }, end: { line: 10, character: 6 } },
-      },
+      { kind: "method", name: "doThing", nameRange: { start: { line: 7, character: 0 }, end: { line: 7, character: 6 } } },
     ]);
     const index = makeWorkspaceIndex({
-      "file:///a.pike:1": [{ ref: { loc: { line: 20, character: 0 } } }],
-      "file:///a.pike:5": [{ ref: { loc: { line: 21, character: 0 } } }, { ref: { loc: { line: 22, character: 0 } } }, { ref: { loc: { line: 23, character: 0 } } }],
-      "file:///a.pike:10": [],
+      "file:///a.pike:7": [{ ref: { loc: { line: 15, character: 0 } } }],
     });
-    const lenses = produceCodeLenses(table, fakeTree, "file:///a.pike", index);
+    const [lens] = produceCodeLenses(table, "file:///a.pike");
+    expect(resolveCodeLens(lens, index).command?.title).toBe("1 reference");
+  });
 
-    expect(lenses.length).toBe(2);
-    expect(lenses[0].command?.title).toBe("1 reference");
-    expect(lenses[1].command?.title).toBe("3 references");
+  test("shows '0 references' for an unreferenced declaration", () => {
+    const table = makeTable([
+      { kind: "function", name: "unused", nameRange: { start: { line: 5, character: 0 }, end: { line: 5, character: 6 } } },
+    ]);
+    const index = makeWorkspaceIndex({});
+    const [lens] = produceCodeLenses(table, "file:///a.pike");
+    expect(resolveCodeLens(lens, index).command?.title).toBe("0 references");
+  });
+
+  test("excludes the self-reference from the count", () => {
+    const table = makeTable([
+      { kind: "function", name: "recursive", nameRange: { start: { line: 4, character: 0 }, end: { line: 4, character: 9 } } },
+    ]);
+    const index = makeWorkspaceIndex({
+      // Reference at the declaration's own position — must be excluded.
+      "file:///a.pike:4": [{ ref: { loc: { line: 4, character: 0 } } }],
+    });
+    const [lens] = produceCodeLenses(table, "file:///a.pike");
+    expect(resolveCodeLens(lens, index).command?.title).toBe("0 references");
+  });
+
+  test("returns the lens unchanged when it carries no data payload", () => {
+    const index = makeWorkspaceIndex({});
+    const bare = { range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } } };
+    expect(resolveCodeLens(bare, index).command).toBeUndefined();
   });
 });

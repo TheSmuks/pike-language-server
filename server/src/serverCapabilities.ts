@@ -125,7 +125,7 @@ export function buildServerCapabilities(): InitializeResult {
       selectionRangeProvider: true,
       callHierarchyProvider: true,
       typeHierarchyProvider: true,
-      codeLensProvider: { resolveProvider: false },
+      codeLensProvider: { resolveProvider: true },
       implementationProvider: true,
       workspace: buildWorkspaceFileOperations(),
     },
