@@ -23,8 +23,11 @@ export interface LRUOptions<T> {
 }
 
 export class LRUCache<T> {
-  private readonly map = new Map<string, { value: T; bytes: number; seq: number }>();
-  private seq = 0;
+  // Recency is encoded by Map insertion order: the first key is the
+  // least-recently-used, the last is the most-recently-used. get() and set()
+  // move the touched key to the tail by delete+re-insert, so eviction is O(1)
+  // (take the first key) instead of an O(n) scan for the oldest entry.
+  private readonly map = new Map<string, { value: T; bytes: number }>();
   private totalBytes = 0;
   private readonly opts: LRUOptions<T>;
 
@@ -46,7 +49,9 @@ export class LRUCache<T> {
   get(key: string): T | undefined {
     const entry = this.map.get(key);
     if (!entry) return undefined;
-    entry.seq = ++this.seq;
+    // Move to the tail (most-recently-used) so it evicts last.
+    this.map.delete(key);
+    this.map.set(key, entry);
     return entry.value;
   }
 
@@ -77,7 +82,7 @@ export class LRUCache<T> {
       this.evictOne();
     }
 
-    this.map.set(key, { value, bytes, seq: ++this.seq });
+    this.map.set(key, { value, bytes });
     this.totalBytes += bytes;
   }
 
@@ -102,7 +107,7 @@ export class LRUCache<T> {
     this.totalBytes = 0;
   }
 
-  /** Iterate entries (insertion order — not LRU order). */
+  /** Iterate entries in LRU order — least-recently-used first. */
   entries(): IterableIterator<[string, T]> {
     const inner = this.map.entries();
     return (function* () {
@@ -112,16 +117,10 @@ export class LRUCache<T> {
     })();
   }
 
+  /** Evict the least-recently-used entry: the first key in insertion order. */
   private evictOne(): void {
-    let oldestKey: string | null = null;
-    let oldestSeq = Infinity;
-    for (const [key, entry] of this.map) {
-      if (entry.seq < oldestSeq) {
-        oldestSeq = entry.seq;
-        oldestKey = key;
-      }
-    }
-    if (oldestKey) {
+    const oldestKey = this.map.keys().next().value;
+    if (oldestKey !== undefined) {
       this.delete(oldestKey);
     }
   }

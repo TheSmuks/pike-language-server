@@ -25,7 +25,7 @@ import type { PikeDiagnostic } from "./pikeWorkerTypes.js";
 import { getParseDiagnostics } from "./diagnostics";
 import { runLintRules } from "./lintRules";
 import { parse, type Tree } from "../parser";
-import { buildSymbolTable } from "./symbolTable";
+import { buildSymbolTable, type SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
@@ -461,11 +461,30 @@ export class DiagnosticManager {
   private safeLintDiagnostics(tree: Tree | null, uri: string, version: number, source: string): Diagnostic[] {
     if (tree === null) return [];
     try {
-      const table = buildSymbolTable(tree, uri, version, undefined, source);
+      // Reuse the symbol table the workspace index already built for this exact
+      // version instead of rebuilding it — buildSymbolTable is the single most
+      // expensive step of the diagnose path (~5x a parse). The index builds a
+      // table on every upsert (i.e. every didChange), so by the time the
+      // debounced diagnose fires, a matching table is almost always present.
+      const table = this.getIndexedSymbolTable(uri, version)
+        ?? buildSymbolTable(tree, uri, version, undefined, source);
       return runLintRules(tree, table, source);
     } catch (err) {
       logError(this.connection, ErrorCategory.Diagnostics, `safeLintDiagnostics(${uri})`, err);
       return [];
     }
+  }
+
+  /**
+   * Return the index's cached symbol table for `uri` only when it matches the
+   * requested version and is not stale; otherwise null so the caller rebuilds.
+   * Guards against serving a table that predates the content being linted.
+   */
+  private getIndexedSymbolTable(uri: string, version: number): SymbolTable | null {
+    const entry = this.index.getFile(uri);
+    if (!entry) return null;
+    if (entry.stale) return null;
+    if (entry.version !== version) return null;
+    return entry.symbolTable;
   }
 }

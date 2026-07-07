@@ -26,6 +26,8 @@ import {
   validatePingResult,
 } from "../util/jsonValidation.js";
 import { PikeWorkerProcess } from "./pikeWorkerProcess.js";
+import { LRUCache } from "../util/lruCache.js";
+import { hashContent } from "./cacheHash.js";
 import type {
   PikeWorkerConfig,
   PikeResponse,
@@ -65,6 +67,44 @@ export {
 // ---------------------------------------------------------------------------
 
 export class PikeWorker extends PikeWorkerProcess {
+
+  // -----------------------------------------------------------------------
+  // Interactive-query result caches
+  //
+  // typeof_ and resolve recompile the entire source (via compile_string) on
+  // every call, so hovering the same variable twice pays the full cost twice.
+  // These bounded LRU caches memoize successful results so repeated hovers /
+  // completions on unchanged content hit memory instead of the Pike worker.
+  //
+  // Keys: typeof is keyed by hash(source)+expression (source-dependent);
+  // resolve is keyed by symbol (workspace-global). Only successful results are
+  // cached — errors and unresolved symbols may change once module paths are
+  // added, so caching them would return stale negatives. Both caches are
+  // cleared on stop()/restart() because the worker resets its module-path
+  // state, which can change what resolves.
+  // -----------------------------------------------------------------------
+
+  private readonly typeofCache = new LRUCache<TypeofResult>({
+    maxEntries: 512,
+    maxBytes: 2 * 1024 * 1024,
+    estimateSize: (v) => (v.type?.length ?? 0) + 32,
+  });
+
+  private readonly resolveCache = new LRUCache<ResolveResult>({
+    maxEntries: 512,
+    maxBytes: 8 * 1024 * 1024,
+    estimateSize: (v) => JSON.stringify(v).length,
+  });
+
+  /**
+   * Clear interactive-query caches. Called whenever the worker stops so a
+   * fresh process (with reset module-path state) never serves stale results.
+   */
+  override stop(): void {
+    super.stop();
+    this.typeofCache.clear();
+    this.resolveCache.clear();
+  }
 
   // -----------------------------------------------------------------------
   // FIFO-queued request — all public methods go through this
@@ -207,6 +247,10 @@ export class PikeWorker extends PikeWorkerProcess {
 
   /** Get the type of an expression in context. */
   async typeof_(source: string, expression: string, token?: CancellationToken): Promise<TypeofResult> {
+    const cacheKey = hashContent(source) + "\0" + expression;
+    const cached = this.typeofCache.get(cacheKey);
+    if (cached) return cached;
+
     const response = await this.enqueue("typeof", {
       source,
       expression,
@@ -216,18 +260,28 @@ export class PikeWorker extends PikeWorkerProcess {
       return { type: "mixed", error: response.error.message };
     }
 
-    return validateTypeofResult(response.result);
+    const result = validateTypeofResult(response.result);
+    // Only cache successful evaluations — an error may resolve on retry.
+    if (!result.error) this.typeofCache.set(cacheKey, result);
+    return result;
   }
 
 
   /** Resolve a symbol to its kind, source location, and inheritance chain. */
   async resolve(symbol: string, token?: CancellationToken): Promise<ResolveResult> {
+    const cached = this.resolveCache.get(symbol);
+    if (cached) return cached;
+
     try {
       const response = await this.enqueue("resolve", { symbol }, token, PikePriority.interactive);
       if (response.error) {
         return { resolved: false, error: response.error.message };
       }
-      return validateResolveResult(response.result);
+      const result = validateResolveResult(response.result);
+      // Only cache positive resolutions — a symbol that does not resolve yet
+      // may resolve later once a diagnose adds its module path to the worker.
+      if (result.resolved) this.resolveCache.set(symbol, result);
+      return result;
     } catch (err) {
       if ((err as Error).message?.startsWith("TIMEOUT:")) {
         return { resolved: false, error: "Timeout" };
@@ -271,12 +325,13 @@ export class PikeWorker extends PikeWorkerProcess {
   async restart(): Promise<void> {
     this.restarting = true;
 
-    // Clear all pending request timeouts to prevent spurious fires
-    // after the new process is up.
-    for (const [, pending] of this.pending) {
-      clearTimeout(pending.timeout);
-    }
-    this.pending.clear();
+    // Reject every in-flight request: the process that would have answered
+    // them is going away, so their promises can never resolve. Previously we
+    // cleared their timeouts and dropped them from the map, which left the
+    // awaiting callers hanging forever (their timeout was the only thing that
+    // could have rejected them). Rejecting keeps success distinguishable from
+    // failure — callers fall back to degraded results instead of stalling.
+    this.rejectAllPending(new Error("Pike worker restarting — in-flight request aborted"));
 
     this.stop();
     this.start();

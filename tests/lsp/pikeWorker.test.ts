@@ -105,3 +105,52 @@ describe("US3: Watchdog — idle eviction (Phase 5, T069)", () => {
     expect(() => worker.resetIdleTimer()).not.toThrow();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Interactive-query result caching (typeof_ / resolve memoization)
+//
+// Goal: verify that a second identical query is served from the in-memory
+// cache rather than recompiling via the Pike worker, and that the cache is
+// cleared when the worker stops (fresh process = possibly different state).
+//
+// Methodology: exercise a real Pike worker. A cache hit returns the *same*
+// object reference (the cache stores and hands back the memoized result),
+// whereas a recomputation runs validateTypeofResult and produces a fresh
+// object. Object identity therefore distinguishes a hit from a miss without
+// needing to instrument private state.
+// ---------------------------------------------------------------------------
+
+describe("Interactive-query caching", () => {
+  test("typeof_ returns the cached result object on repeated identical calls", async () => {
+    const worker = new PikeWorker();
+    try {
+      const source = "int counter = 5;";
+      const first = await worker.typeof_(source, "counter");
+      // Skip if Pike could not evaluate (environment without full stdlib).
+      if (first.error) return;
+      expect(typeof first.type).toBe("string");
+
+      const second = await worker.typeof_(source, "counter");
+      expect(second).toBe(first); // same reference == served from cache
+    } finally {
+      worker.stop();
+    }
+  });
+
+  test("stop() clears the typeof cache — a fresh call recomputes", async () => {
+    const worker = new PikeWorker();
+    try {
+      const source = "string label = \"hi\";";
+      const first = await worker.typeof_(source, "label");
+      if (first.error) return;
+
+      worker.stop();
+
+      const afterRestart = await worker.typeof_(source, "label");
+      expect(afterRestart).not.toBe(first); // cache cleared -> new object
+      expect(afterRestart.type).toBe(first.type);
+    } finally {
+      worker.stop();
+    }
+  });
+});

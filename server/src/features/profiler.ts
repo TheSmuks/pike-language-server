@@ -41,6 +41,8 @@ export interface ProfilerCounters {
   fileReads: number;
   /** Number of tree-sitter parse() calls. */
   parseCalls: number;
+  /** Number of parse() calls served from the cache without re-parsing (unchanged source). */
+  parseCacheHits: number;
   /** Number of symbol tables built (buildSymbolTable). */
   symbolTablesBuilt: number;
   /** Number of index batch writes (upsertFile / upsertBackgroundFile / upsertCachedFile). */
@@ -103,6 +105,7 @@ function freshCounters(): ProfilerCounters {
     filesDiscovered: 0,
     fileReads: 0,
     parseCalls: 0,
+    parseCacheHits: 0,
     symbolTablesBuilt: 0,
     indexWrites: 0,
     indexWritesFull: 0,
