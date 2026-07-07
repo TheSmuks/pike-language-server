@@ -215,10 +215,29 @@ Follow [Conventional Branch](https://github.com/nickshanks347/conventional-branc
 
 Follow [Keep a Changelog](https://keepachangelog.com/). Update `CHANGELOG.md` under `[Unreleased]` for every user-facing change.
 
+### Releasing
+
+The release version is recorded in **six** places that must stay in lock-step:
+`.template-version`, the `README.md` `template-vX.Y.Z` badge, the `AGENTS.md`
+"generated from … version **X.Y.Z**" line, `.omp/skills/template-guide/SKILL.md`
+(`template-version:`), `.omp/skills/template-guide/scripts/audit.sh`
+(`TEMPLATE_VERSION=`), and the `CHANGELOG.md` heading. **Do not edit these by
+hand** — run the bump script, which updates all of them (and rolls
+`[Unreleased]` → the new version) atomically:
+
+```bash
+scripts/bump-version.sh <X.Y.Z>          # e.g. scripts/bump-version.sh 0.8.38
+```
+
+It intentionally does **not** touch `package.json` (the extension/VSIX version
+is decoupled). Then commit as `chore: cut vX.Y.Z`, merge to `main`, and
+`gh release create vX.Y.Z --target main` (publishing the release triggers the
+VSIX build + Marketplace publish via `release.yml`).
+
 ## Template Version
 
 
-This project was generated from `ai-project-template` version **0.8.37**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect.
+This project was generated from `ai-project-template` version **0.8.38**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect. Bump it (and every other version marker) with [`scripts/bump-version.sh`](./scripts/bump-version.sh) — see [Releasing](#releasing).
 
 
 <!-- SPECKIT START -->
