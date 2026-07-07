@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     rules. It reuses the version-matched table the workspace index already built
     on the triggering edit — `buildSymbolTable` is the most expensive step of the
     diagnose path (~5× a parse), and it was being run twice per settled edit.
+  - `LRUCache` eviction is now O(1) (Map insertion-order recency) instead of an
+    O(n) scan for the least-recently-used entry on every insertion. Cache
+    iteration order is now true LRU (oldest first), which also makes
+    `evictTreeCacheOldest` evict the genuinely oldest trees first.
 
 ### Fixed
 
@@ -39,13 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A desynced worker response stream (a >1MB line with no delimiter) now rejects
     in-flight requests and restarts the worker immediately, rather than clearing
     the buffer and stranding each request until its individual timeout.
-
-### Performance
-
-  - `LRUCache` eviction is now O(1) (Map insertion-order recency) instead of an
-    O(n) scan for the least-recently-used entry on every insertion. Cache
-    iteration order is now true LRU (oldest first), which also makes
-    `evictTreeCacheOldest` evict the genuinely oldest trees first.
 
 ## [0.8.32] — 2026-07-07
 
