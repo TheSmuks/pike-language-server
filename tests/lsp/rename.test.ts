@@ -41,7 +41,7 @@ function corpusUri(filename: string): string {
 function buildTable(filename: string): SymbolTable {
   const src = readCorpus(filename);
   const tree = parse(src);
-  return buildSymbolTable(tree, corpusUri(filename), 1);
+  return buildSymbolTable(tree, corpusUri(filename), 1, undefined, src);
 }
 
 function findDecl(table: SymbolTable, name: string, kind?: string): Declaration | undefined {
@@ -116,7 +116,7 @@ describe("prepareRename — direct API", () => {
   void speak() { write(name); }
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Position on "Animal" class declaration
     const result = prepareRename(table, 0, 6);
@@ -131,7 +131,7 @@ describe("prepareRename — direct API", () => {
   string name;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Position on "name" declaration
     const result = prepareRename(table, 1, 9);
@@ -142,7 +142,7 @@ describe("prepareRename — direct API", () => {
   test("returns null for position with no symbol", () => {
     const src = `class Animal { }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Position on whitespace
     const result = prepareRename(table, 0, 0);
@@ -153,7 +153,7 @@ describe("prepareRename — direct API", () => {
     const src = `int x = 1;
 x + 1;`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Position on "x" reference in "x + 1"
     const xRef = table.references.find(r => r.name === "x" && r.loc.line === 1);
@@ -179,7 +179,7 @@ describe("getRenameLocations — same-file", () => {
 counter = counter + 1;
 write((string)counter);`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Find position of "counter" declaration
     const decl = findDecl(table, "counter", "variable");
@@ -203,7 +203,7 @@ write((string)counter);`;
 Greeter g = Greeter("World");
 g->name;`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const decl = findDecl(table, "Greeter", "class");
     expect(decl).toBeDefined();
@@ -222,7 +222,7 @@ g->name;`;
 }
 Dog getDog();`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const decl = findDecl(table, "Dog", "class");
     expect(decl).toBeDefined();
     const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
@@ -243,7 +243,7 @@ Dog getDog();`;
 }
 array(Dog) dogs = ({});`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const decl = findDecl(table, "Dog", "class");
     expect(decl).toBeDefined();
     const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
@@ -260,7 +260,7 @@ array(Dog) dogs = ({});`;
 }
 mapping(Dog : int) dogMap = ([]);`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const decl = findDecl(table, "Dog", "class");
     expect(decl).toBeDefined();
     const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
@@ -274,7 +274,7 @@ mapping(Dog : int) dogMap = ([]);`;
 }
 void feed(Dog d) {}`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const decl = findDecl(table, "Dog", "class");
     expect(decl).toBeDefined();
     const result = await getRenameLocations(table, "file:///test.pike", decl!.nameRange.start.line, decl!.nameRange.start.character, null);
@@ -289,7 +289,7 @@ void feed(Dog d) {}`;
   return a + b;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const decl = findDecl(table, "a", "parameter");
     expect(decl).toBeDefined();
@@ -304,7 +304,7 @@ void feed(Dog d) {}`;
   test("returns null for position with no symbol", async () => {
     const src = `void test() { }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const result = await getRenameLocations(table, "file:///test.pike", 0, 0, null);
     expect(result).toBeNull();
@@ -317,7 +317,7 @@ void feed(Dog d) {}`;
   int add(int x) { value += x; return value; }
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const decl = findDecl(table, "reset", "function");
     expect(decl).toBeDefined();
@@ -339,7 +339,7 @@ void feed(Dog d) {}`;
       'int z = x + 2;',           // line 5: reference to outer x
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Rename the inner x (line 2, character 10 → position of 'x' in 'string x')
     const result = await getRenameLocations(table, "file:///test.pike", 2, 10, null);
@@ -371,7 +371,7 @@ void feed(Dog d) {}`;
       '}',
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Rename bark method
     const barkDecl = table.declarations.find(d => d.name === "bark" && d.kind === "function");
@@ -692,7 +692,7 @@ describe("prepareRename — stdlib/predef rejection", () => {
     // Parse a file that declares a function named 'write' (shadows predef)
     const src = `void write(string msg) {}`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const result = prepareRename(table, 0, 5, protectedNames);
     expect(result).toBeNull();
@@ -701,7 +701,7 @@ describe("prepareRename — stdlib/predef rejection", () => {
   test("rejects stdlib short names", () => {
     const src = `int strlen(string s) { return 0; }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const result = prepareRename(table, 0, 4, protectedNames);
     expect(result).toBeNull();
@@ -710,7 +710,7 @@ describe("prepareRename — stdlib/predef rejection", () => {
   test("allows non-protected names", () => {
     const src = `int myFunc(int x) { return x; }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const result = prepareRename(table, 0, 4, protectedNames);
     expect(result).not.toBeNull();
@@ -720,7 +720,7 @@ describe("prepareRename — stdlib/predef rejection", () => {
   test("allows all names when protectedNames is not provided", () => {
     const src = `void write(string msg) {}`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     // Without protectedNames, 'write' is renameable
     const result = prepareRename(table, 0, 5);
@@ -739,7 +739,7 @@ describe("getRenameLocations — stdlib/predef rejection", () => {
   test("returns null for predef builtin declaration", async () => {
     const src = `void write(string msg) { write("hi"); }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const result = await getRenameLocations(
       table, "file:///test.pike", 0, 5, null, protectedNames,
@@ -750,7 +750,7 @@ describe("getRenameLocations — stdlib/predef rejection", () => {
   test("returns null for reference to protected name", async () => {
     const src = `void search(string s) {}`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
     const decl = findDecl(table, "search", "function");
     expect(decl).toBeDefined();
@@ -917,7 +917,7 @@ describe("US-004: rename scope precision for same-name methods", () => {
       '}',
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     wireInheritance(table);
 
     // Find Dog.bark declaration — it's on line 1 (void bark)
