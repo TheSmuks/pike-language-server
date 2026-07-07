@@ -165,6 +165,28 @@ The `pike-signature` MCP tool uses `master()->resolv()` for symbol lookup, which
 
 ## Resolved Limitations
 
+### Semantic tokens cleared for the whole file on transient parse errors — RESOLVED
+
+**Problem**: Semantic highlighting flickered off while typing and never appeared
+for files with a partial parse. Two independent causes:
+
+1. `buildSemanticTokenData` threw `ContentModified` on *any* tree-sitter parse
+   error, discarding all tokens for the whole file. Fixed to return the tokens
+   the version-matched symbol table produces from the error-tolerant partial
+   tree, falling back to `ContentModified` only when zero tokens result.
+2. `declarationCollector`/`referenceCollector` returned early at every `ERROR`
+   node (`if (node.isError) return`), so declarations tree-sitter *had*
+   recovered inside an ERROR subtree — e.g. a function whose closing `}` is not
+   yet typed keeps its `local_declaration` children — were thrown away. Fixed to
+   descend into ERROR subtrees (skipping only zero-width MISSING nodes).
+
+Note: this is **not** a tree-sitter-pike grammar bug. The grammar recovers the
+inner declarations correctly; the LSP was refusing to read them. Corpus
+semantic-token coverage went from 76/81 to 81/81 files. See
+`docs/debugging.md` for how the `bun run probe` tool was used to diagnose this.
+
+
+
 ### Call hierarchy outgoing calls always return empty — RESOLVED
 
 **Problem**: The call hierarchy provider searched for `call_expression` nodes in the tree-sitter AST, but tree-sitter-pike represents function calls as `postfix_expr` nodes with `(` children (and optional `argument_list` when arguments are present). `getOutgoingCalls` always returned an empty array.

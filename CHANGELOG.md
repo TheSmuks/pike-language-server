@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Semantic highlighting no longer flickers off while typing. The semantic
+    tokens handler previously threw `ContentModified` on *any* tree-sitter parse
+    error, which cleared all semantic colors for the whole file on nearly every
+    keystroke and left files with tree-sitter grammar gaps permanently
+    uncolored. It now returns the tokens the version-matched symbol table
+    produces from the error-tolerant partial tree, falling back to
+    `ContentModified` only when no tokens can be produced at all.
+  - Semantic tokens are now recovered from partial parses. The declaration and
+    reference collectors returned early at every tree-sitter `ERROR` node, so
+    declarations the parser *had* recovered inside an ERROR subtree (e.g. a
+    function whose closing `}` is not yet typed) were discarded, blanking all
+    tokens for the file. Both collectors now descend into ERROR subtrees,
+    skipping only zero-width MISSING nodes. Corpus semantic-token coverage went
+    from 76/81 to 81/81 files. (This was an LSP bug, not a tree-sitter-pike
+    grammar bug — the grammar recovers the declarations correctly.)
+  - Corrected a stale test that asserted `semanticTokens/full` returns empty
+    data for an unknown document; the server reports `ContentModified` (a sync
+    race) as intended since the "protocol errors for semantic-token races" work.
+  - The dev manifest (`package.json`) and the shipped manifest
+    (`extension.package.json`) can no longer drift. `contributes` is now authored
+    once in `extension.package.json` and mirrored into `package.json` (with dev
+    `client/` paths) by `scripts/sync-manifest.ts`, which runs during
+    `build:extension` and is enforced by a test. Previously the dev manifest was
+    a stale subset missing ~17 configuration settings.
+
+### Added
+
+  - Developer tooling for debugging the extension without VS Code:
+    `bun run probe <command> <file>` (headless LSP driver that decodes semantic
+    tokens, hover, completion, diagnostics, and capabilities),
+    `bun run watch:server` / `watch:client` (incremental rebuilds), and
+    `docs/debugging.md`. VS Code F5 debug configuration under `.vscode/`.
+
 ## [0.8.31] — 2026-06-22
 
 ### Changed

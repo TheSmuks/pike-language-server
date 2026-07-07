@@ -1,0 +1,79 @@
+{
+  // Build tasks for debugging and iteration.
+  //
+  // - "build:extension" is the one-shot build used as the preLaunchTask for F5.
+  // - "watch" runs both client and server rebuilds in the background so edits
+  //   land in ~1s; after a rebuild, run "Developer: Reload Window" in the
+  //   Extension Development Host to pick up the change.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build:extension",
+      "type": "shell",
+      "command": "bun run build:extension",
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$esbuild"],
+      "presentation": { "reveal": "silent", "clear": true },
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "watch:client",
+      "type": "shell",
+      "command": "bun run scripts/watch-client.mjs",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild-client",
+        "source": "esbuild",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\s+(.*):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "watching client",
+          "endsPattern": "build finished"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "watch" }
+    },
+    {
+      "label": "watch:server",
+      "type": "shell",
+      "command": "bun run scripts/watch-server.mjs",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "esbuild-server",
+        "source": "esbuild",
+        "fileLocation": "absolute",
+        "pattern": {
+          "regexp": "^\\s+(.*):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "watching server",
+          "endsPattern": "build finished"
+        }
+      },
+      "presentation": { "reveal": "always", "panel": "dedicated", "group": "watch" }
+    },
+    {
+      "label": "watch",
+      "dependsOn": ["watch:client", "watch:server"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": "build"
+    }
+  ]
+}

@@ -52,8 +52,19 @@ export const DECL_KIND_MAP: Record<string, DeclKind> = {
  * Collect declarations by walking the tree and creating scopes as needed.
  */
 export function collectDeclarations(node: Node, state: BuildState): void {
-  // Skip ERROR / missing nodes
-  if (node.isError || node.isMissing) return;
+  // MISSING nodes are zero-width tokens the parser invents to recover; they hold
+  // no source and cannot be declarations.
+  if (node.isMissing) return;
+
+  // An ERROR node is not itself a declaration, but tree-sitter is error-tolerant
+  // and routinely recovers real declarations inside one — e.g. a function whose
+  // closing brace has not been typed yet keeps its `local_declaration` children.
+  // Descend and collect what parsed instead of dropping the whole subtree, which
+  // used to blank every semantic token in the file on almost every keystroke.
+  if (node.isError) {
+    for (const child of node.children) collectDeclarations(child, state);
+    return;
+  }
 
   // Dispatch by node type
   dispatchCollectDeclarations(node, state);
