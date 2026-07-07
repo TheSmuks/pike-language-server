@@ -7,7 +7,7 @@
       "dependencies": {
         "minimatch": "^10.2.5",
         "pike-fmt": "^0.1.9",
-        "vscode-jsonrpc": "^8.2.1",
+        "vscode-jsonrpc": "^9.0.1",
         "vscode-languageclient": "^9.0.1",
         "vscode-languageserver": "^9.0.0",
         "vscode-languageserver-textdocument": "^1.0.12",
@@ -102,7 +102,7 @@
 
     "undici-types": ["undici-types@7.19.2", "", {}, "sha512-qYVnV5OEm2AW8cJMCpdV20CDyaN3g0AjDlOGf1OW4iaDEx8MwdtChUp4zu4H0VP3nDRF/8RKWH+IPp9uW0YGZg=="],
 
-    "vscode-jsonrpc": ["vscode-jsonrpc@8.2.1", "", {}, "sha512-kdjOSJ2lLIn7r1rtrMbbNCHjyMPfRnowdKjBQ+mGq6NAW5QY2bEZC/khaC5OR8svbbjvLEaIXkOq45e2X9BIbQ=="],
+    "vscode-jsonrpc": ["vscode-jsonrpc@9.0.1", "", {}, "sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw=="],
 
     "vscode-languageclient": ["vscode-languageclient@9.0.1", "", { "dependencies": { "minimatch": "^5.1.0", "semver": "^7.3.7", "vscode-languageserver-protocol": "3.17.5" } }, "sha512-JZiimVdvimEuHh5olxhxkht09m3JzUGwggb5eRUkzzJhZ2KjCN0nh55VfiED9oez9DyF8/fz1g1iBV3h+0Z2EA=="],
 

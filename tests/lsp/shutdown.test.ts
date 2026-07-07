@@ -30,7 +30,7 @@ import { pikeAvailable } from "../helpers/pikeAvailable";
 import {
   StreamMessageReader,
   StreamMessageWriter,
-} from "vscode-jsonrpc";
+} from "vscode-jsonrpc/node";
 import { createConnection } from "vscode-languageserver/node";
 import { createPikeServer } from "../../server/src/server";
 
