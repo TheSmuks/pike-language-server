@@ -21,7 +21,7 @@ import {
   StreamMessageWriter,
   createMessageConnection,
   type MessageConnection,
-} from "vscode-jsonrpc";
+} from "vscode-jsonrpc/node";
 import {
   Connection,
   createConnection,
