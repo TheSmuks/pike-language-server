@@ -685,13 +685,21 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
     expect(range.data.length).toBeLessThan(full.data.length);
   });
 
-  test("returns empty data for unknown document", async () => {
-    const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
-      textDocument: { uri: "file:///nonexistent.pike" },
-    });
-
-    expect(result).toBeDefined();
-    expect(result.data).toEqual([]);
+  test("reports ContentModified for an unknown document (sync race, not empty)", async () => {
+    // A request for a document the server has not synced yet is a transient
+    // race (didOpen still in flight), not a document with zero tokens. Since
+    // commit "use protocol errors for semantic-token races" the server reports
+    // ContentModified so the client retries, rather than returning destructive
+    // empty data that would clear highlighting. (This test previously asserted
+    // the old empty-data contract and had gone stale.)
+    try {
+      await server.client.sendRequest("textDocument/semanticTokens/full", {
+        textDocument: { uri: "file:///nonexistent.pike" },
+      });
+      throw new Error("expected ContentModified");
+    } catch (err) {
+      expect((err as { code?: number }).code).toBe(-32801);
+    }
   });
 
   test("returns tokens for enum declarations", async () => {

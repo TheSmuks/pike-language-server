@@ -15,8 +15,13 @@
   },
   "scripts": {
     "build": "bun run build:extension",
-    "build:extension": "bash scripts/build-server.sh && bash scripts/build-client.sh",
+    "build:extension": "bun run scripts/sync-manifest.ts && bash scripts/build-server.sh && bash scripts/build-client.sh",
     "build:standalone": "bash scripts/build-standalone.sh",
+    "manifest:sync": "bun run scripts/sync-manifest.ts",
+    "manifest:check": "bun run scripts/sync-manifest.ts --check",
+    "probe": "bun run scripts/lsp-probe.ts",
+    "watch:client": "bun run scripts/watch-client.mjs",
+    "watch:server": "bun run scripts/watch-server.mjs",
     "test": "bun test tests/ harness/",
     "test:non-pike": "bun test harness/__tests__/snapshot-canonicalizer.test.ts harness/__tests__/tmLanguage.test.ts harness/__tests__/tmLanguage-tokenization.test.ts harness/__tests__/web-tree-sitter-leak.test.ts tests/lsp/languageConfiguration.test.ts tests/lsp/packageConfiguration.test.ts",
     "test:lsp": "bun test tests/lsp/",
@@ -93,17 +98,60 @@
       {
         "language": "pike",
         "scopes": {
-          "class": ["entity.name.type.class.pike", "entity.name.type.class"],
-          "enum": ["entity.name.type.enum.pike", "entity.name.type.enum", "entity.name.type"],
-          "enumMember": ["constant.other.enum.pike", "constant.other.enum", "variable.other.enummember"],
-          "function": ["support.function.any-method.pike", "entity.name.function.pike", "entity.name.function"],
-          "method": ["support.function.any-method.pike", "variable.other.property.pike", "variable.other.property", "entity.name.function.member.pike", "entity.name.function.member"],
-          "variable": ["variable.other.pike", "variable"],
-          "parameter": ["variable.parameter.pike", "variable.parameter"],
-          "type": ["entity.name.type.pike", "entity.name.type", "storage.type.pike", "storage.type"],
-          "namespace": ["entity.other.inherited-class.pike", "entity.other.inherited-class", "entity.name.namespace"],
-          "builtinFunction": ["support.function.builtin.pike", "support.function.builtin", "support.function.any-method.pike", "support.function"],
-          "variable.mutable": ["variable.other.mutable.pike"]
+          "class": [
+            "entity.name.type.class.pike",
+            "entity.name.type.class"
+          ],
+          "enum": [
+            "entity.name.type.enum.pike",
+            "entity.name.type.enum",
+            "entity.name.type"
+          ],
+          "enumMember": [
+            "constant.other.enum.pike",
+            "constant.other.enum",
+            "variable.other.enummember"
+          ],
+          "function": [
+            "support.function.any-method.pike",
+            "entity.name.function.pike",
+            "entity.name.function"
+          ],
+          "method": [
+            "support.function.any-method.pike",
+            "variable.other.property.pike",
+            "variable.other.property",
+            "entity.name.function.member.pike",
+            "entity.name.function.member"
+          ],
+          "variable": [
+            "variable.other.pike",
+            "variable"
+          ],
+          "parameter": [
+            "variable.parameter.pike",
+            "variable.parameter"
+          ],
+          "type": [
+            "entity.name.type.pike",
+            "entity.name.type",
+            "storage.type.pike",
+            "storage.type"
+          ],
+          "namespace": [
+            "entity.other.inherited-class.pike",
+            "entity.other.inherited-class",
+            "entity.name.namespace"
+          ],
+          "builtinFunction": [
+            "support.function.builtin.pike",
+            "support.function.builtin",
+            "support.function.any-method.pike",
+            "support.function"
+          ],
+          "variable.mutable": [
+            "variable.other.mutable.pike"
+          ]
         }
       }
     ],
@@ -143,7 +191,7 @@
         "pike.languageServer.path": {
           "type": "string",
           "default": "pike",
-          "description": "Path to the Pike binary. Used for language server subprocess and path discovery.",
+          "description": "Path to the Pike binary. Must be Pike 8.0 or newer.",
           "scope": "machine-overridable"
         },
         "pike.languageServer.pikeHome": {
@@ -181,35 +229,187 @@
         },
         "pike.languageServer.diagnosticMode": {
           "type": "string",
+          "default": "realtime",
           "enum": [
             "realtime",
             "saveOnly",
             "off"
           ],
-          "default": "realtime",
-          "description": "Controls when diagnostics are generated.",
           "enumDescriptions": [
-            "Diagnostics run on every change (debounced).",
-            "Diagnostics run only on save.",
-            "Diagnostics are disabled."
-          ]
+            "Report diagnostics as you type (debounced)",
+            "Report diagnostics only on save",
+            "Disable diagnostics"
+          ],
+          "description": "Controls when diagnostics are reported.",
+          "scope": "window"
         },
         "pike.languageServer.diagnosticDebounceMs": {
           "type": "number",
           "default": 500,
-          "description": "Debounce interval (ms) before running diagnostics after a document change.",
-          "minimum": 0
+          "description": "Debounce interval (ms) for realtime diagnostics.",
+          "minimum": 100,
+          "maximum": 5000,
+          "scope": "window"
         },
         "pike.languageServer.maxNumberOfProblems": {
           "type": "number",
           "default": 100,
           "description": "Maximum number of diagnostic problems reported per file.",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 1000,
+          "scope": "window"
         },
         "pike.languageServer.log.redactPaths": {
           "type": "boolean",
           "default": true,
           "description": "Redact absolute file paths and file:// URIs in Pike language server log output.",
+          "scope": "window"
+        },
+        "pike.languageServer.backgroundIndex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable background workspace indexing on startup. Disabling speeds up startup but cross-file features (go-to-definition, hover on inherited symbols) won't work until you open the files manually.",
+          "scope": "window"
+        },
+        "pike.languageServer.backgroundIndex.batchSize": {
+          "type": "number",
+          "default": 8,
+          "description": "Number of files indexed concurrently during background indexing. Higher values use more memory but finish faster. Lower values reduce memory pressure on constrained machines.",
+          "minimum": 1,
+          "maximum": 32,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.requestTimeoutMs": {
+          "type": "number",
+          "default": 5000,
+          "description": "Timeout (ms) for individual Pike worker requests. Increase for complex codebases that hit timeouts.",
+          "minimum": 1000,
+          "maximum": 60000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.idleTimeoutMs": {
+          "type": "number",
+          "default": 300000,
+          "description": "Idle timeout (ms) before the Pike worker subprocess is killed. Set to 0 to keep it alive indefinitely.",
+          "minimum": 0,
+          "maximum": 3600000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.maxRequestsBeforeRestart": {
+          "type": "number",
+          "default": 100,
+          "description": "Force-restart the Pike worker after this many requests, to mitigate memory leaks. Set to 0 to disable.",
+          "minimum": 0,
+          "maximum": 10000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.maxActiveMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "Force-restart the Pike worker after this many minutes of activity. Set to 0 to disable.",
+          "minimum": 0,
+          "maximum": 1440,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.niceValue": {
+          "type": "number",
+          "default": 5,
+          "description": "CPU niceness for the Pike worker on Linux (0–19). Set to 0 to disable. Higher values reduce CPU contention on shared machines.",
+          "minimum": 0,
+          "maximum": 19,
+          "scope": "window"
+        },
+        "pike.languageServer.format.insertFinalNewline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Insert a final newline when formatting.",
+          "scope": "window"
+        },
+        "pike.languageServer.format.operatorSpacing": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add spaces around operators when formatting.",
+          "scope": "window"
+        },
+        "pike.languageServer.trace.server": {
+          "type": "string",
+          "default": "off",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "enumDescriptions": [
+            "No LSP protocol logging",
+            "Log request/notification method names",
+            "Log full request/notification content"
+          ],
+          "description": "Controls the verbosity of LSP protocol tracing to the Output channel. Useful for debugging.",
+          "scope": "window"
+        },
+        "pike.languageServer.indexing.mode": {
+          "type": "string",
+          "default": "openFiles",
+          "enum": [
+            "openFiles",
+            "full",
+            "auto"
+          ],
+          "enumDescriptions": [
+            "Index only open files and their dependency closure (fast startup)",
+            "Index the entire workspace on startup (immediate global features)",
+            "Index open files first, then background-scan the rest (balanced)"
+          ],
+          "description": "Startup indexing strategy. 'openFiles' gives the fastest startup; 'full' provides immediate global features.",
+          "scope": "window"
+        },
+        "pike.languageServer.indexing.ignoreGlobs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for files to exclude from workspace indexing (e.g. [\"**/vendor/**\", \"**/.git/**\"]).",
+          "scope": "window"
+        },
+        "pike.languageServer.indexing.maxFileSizeBytes": {
+          "type": "number",
+          "default": 1048576,
+          "description": "Maximum file size in bytes for indexing. Files larger than this are skipped.",
+          "minimum": 1024,
+          "maximum": 52428800,
+          "scope": "window"
+        },
+        "pike.languageServer.memory.budgetMb": {
+          "type": "number",
+          "default": 512,
+          "description": "Maximum heap in MB before the server enters degraded mode and demotes non-essential index entries.",
+          "minimum": 64,
+          "maximum": 8192,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.heartbeatIntervalMs": {
+          "type": "number",
+          "default": 10000,
+          "description": "Interval (ms) between heartbeat signals to the Pike worker. The worker self-terminates if heartbeats stop.",
+          "minimum": 1000,
+          "maximum": 120000,
+          "scope": "window"
+        },
+        "pike.languageServer.worker.watchdogTimeoutMs": {
+          "type": "number",
+          "default": 60000,
+          "description": "Timeout (ms) after which the Pike worker self-terminates if no heartbeat is received.",
+          "minimum": 5000,
+          "maximum": 600000,
+          "scope": "window"
+        },
+        "pike.languageServer.hibernation.idleThresholdMs": {
+          "type": "number",
+          "default": 600000,
+          "description": "Idle period (ms) before the server hibernates: stops Pike, clears non-essential index entries, stays alive.",
+          "minimum": 10000,
+          "maximum": 86400000,
           "scope": "window"
         }
       }
