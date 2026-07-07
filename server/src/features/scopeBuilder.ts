@@ -14,7 +14,7 @@
 // are intentional — they provide a stable API surface for the
 // symbol table and completion systems.
  */
-import type { BuildIndex, BuildState, DeclKind, Declaration, Scope, SymbolTable } from './symbolTable';
+import type { Declaration, Scope, SymbolTable } from './symbolTable';
 
 // Re-export all helpers from the extracted modules
 export {
@@ -347,102 +347,6 @@ function createSyntheticScope(
  * Recursively create nested synthetic scopes for inherited scopes,
  * preserving the full inheritance chain depth.
  */
-// ---------------------------------------------------------------------------
-// Include wiring
-// ---------------------------------------------------------------------------
-
-/**
- * Declaration kinds a `#include`d file contributes to the includer. Preprocessor
- * `#include` is textual: a header's top-level definitions become part of the
- * including file. We merge names (not scopes) — enough for completion, hover,
- * and go-to-definition (which jumps to the header via `sourceUri`).
- */
-const MERGEABLE_INCLUDE_KINDS: ReadonlySet<DeclKind> = new Set<DeclKind>([
-  'function', 'method', 'class', 'variable', 'constant',
-  'enum', 'enum_member', 'typedef', 'macro',
-]);
-
-/**
- * After building the symbol table, merge the top-level symbols of each
- * `#include`d file into this file's file scope.
- *
- * Each included file's own table was built with its includes already merged, so
- * merging one level deep yields transitive symbols. A per-target guard avoids
- * re-merging a file included twice, and a (kind,name,origin) guard dedups the
- * diamond case (two headers that both include a third).
- */
-export function wireIncludes(
-  table: SymbolTable,
-  index?: BuildIndex,
-  uri?: string,
-): void {
-  if (!index || !uri) return;
-
-  const fileScope = table.scopes.find(s => s.kind === 'file');
-  if (!fileScope) return;
-
-  const includeDecls = fileScope.declarations
-    .map(id => table.declById.get(id))
-    .filter((d): d is Declaration => d?.kind === 'include');
-  if (includeDecls.length === 0) return;
-
-  let nextId = nextSyntheticId(table);
-  const mergedTargets = new Set<string>([uri]); // self + duplicate-include guard
-  const seen = new Set<string>();               // (kind,name,origin) diamond guard
-
-  for (const inc of includeDecls) {
-    const isSystem = inc.name.startsWith('<');
-    const targetUri = index.resolveInclude(inc.name, isSystem, uri);
-    if (!targetUri || mergedTargets.has(targetUri)) continue;
-    mergedTargets.add(targetUri);
-
-    const targetTable = index.getSymbolTable(targetUri);
-    if (!targetTable) continue;
-    const targetFileScope = targetTable.scopes.find(s => s.kind === 'file');
-    if (!targetFileScope) continue;
-
-    for (const remoteId of targetFileScope.declarations) {
-      const remote = targetTable.declById.get(remoteId);
-      if (!remote || !MERGEABLE_INCLUDE_KINDS.has(remote.kind)) continue;
-
-      const origin = remote.sourceUri ?? targetUri;
-      const key = `${remote.kind}:${remote.name}:${origin}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      const d: Declaration = {
-        id: nextId,
-        name: remote.name,
-        kind: remote.kind,
-        nameRange: remote.nameRange,
-        range: remote.range,
-        scopeId: fileScope.id,
-        declaredType: remote.declaredType,
-        assignedType: remote.assignedType,
-        functionLike: remote.functionLike,
-        // Point go-to-definition at the original defining file, following the
-        // chain when the symbol was itself merged from a nested include.
-        sourceUri: origin,
-      };
-      table.declarations.push(d);
-      table.declById.set(nextId, d);
-      fileScope.declarations.push(nextId);
-      nextId++;
-    }
-  }
-}
-
-/** Next synthetic ID above every existing declaration and scope ID. */
-function nextSyntheticId(table: SymbolTable): number {
-  const maxDeclId = table.declarations.length > 0
-    ? Math.max(...table.declarations.map(d => d.id))
-    : -1;
-  const maxScopeId = table.scopes.length > 0
-    ? Math.max(...table.scopes.map(s => s.id))
-    : -1;
-  return Math.max(maxDeclId, maxScopeId) + 1;
-}
-
 function createNestedScopes(
   table: SymbolTable,
   syntheticScopeId: number,
