@@ -32,6 +32,17 @@ jobs:
       - name: Verify release lineage
         run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
 
+      - name: Verify tag matches version manifest
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          expected="v$(tr -d '[:space:]' < .template-version)"
+          if [ "$tag" != "$expected" ]; then
+            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
+            echo "the packaged VSIX would be mislabelled; refusing to build" >&2
+            exit 1
+          fi
+          echo "release tag matches .template-version: $tag"
+
       - name: Build extension
         run: bun run build:extension
 
