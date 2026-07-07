@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.39] — 2026-07-07
+
+### Added
+
+- **Updated tree-sitter-pike WASM to v1.3.0** (from v1.2.2), which reaches **100% (624/624)** installed-distribution parse rate. New coverage: macro invocations that take statement arguments (`RUN_MAYBE_BLOCKING(cond, 0, 1, MSG("…"); return 0;)`), `modifier`-qualified local function declarations inside a block, and preprocessor conditionals that split a single expression into alternative fragments (`x = #if A … #else B … #endif y`).
+- **Autodoc markup highlighting** — `//!` and `/*! … */` autodoc comments, plus shebang lines, `#line`, and `#define` macro names are now highlighted.
+- **Autodoc skeleton snippet** — typing `//!` offers a completion that expands to an autodoc doc-comment skeleton.
+
+### Changed
+
+- **Enter keeps indentation** — the client enables `editor.autoIndent` so pressing Enter preserves the current indent level.
+- Bumped `vscode-jsonrpc` to 9.0.1.
+
 ## [0.8.38] — 2026-07-07
 
 ### Added
