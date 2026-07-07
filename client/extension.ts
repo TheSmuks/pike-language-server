@@ -176,6 +176,21 @@ function makeErrorHandler(label: string): ErrorHandler {
 // ─── Settings ────────────────────────────────────────────────────────────────
 
 /**
+ * Compute the V8 old-space cap (MB) for the server process from memory.budgetMb.
+ *
+ * The soft governor demotes at ~0.8× the budget, so the hard cap sits above the
+ * budget (1.5×, min budget+256) to leave headroom for young-gen and native
+ * (tree-sitter WASM) memory that RSS counts but --max-old-space-size does not.
+ * Mirrors the server-side clamp bounds (64–8192 MB).
+ */
+function computeHeapCapMb(): number {
+  const config = vscode.workspace.getConfiguration("pike.languageServer");
+  const raw = config.get<number>("memory.budgetMb", 512);
+  const budget = Number.isFinite(raw) ? Math.min(8192, Math.max(64, raw)) : 512;
+  return Math.max(budget + 256, Math.round(budget * 1.5));
+}
+
+/**
  * Read language server settings from VSCode configuration.
  */
 function getSettings(): Record<string, unknown> {
@@ -348,18 +363,25 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const serverModule = context.asAbsolutePath(path.join("server", "dist", "server.mjs"));
 
+  // Hard-cap the server's V8 old-space so a single window cannot balloon toward
+  // Node's ~2GB default ceiling. The soft governor (memory.budgetMb) evicts under
+  // pressure first; this is a last-resort ceiling sized with headroom above the
+  // budget for young-gen + native (tree-sitter WASM) allocations that RSS also counts.
+  // --expose-gc lets the server's memory governor force a collection after
+  // demoting files under pressure, so the reclaim shows up in RSS immediately.
+  const heapCapArgs = [`--max-old-space-size=${computeHeapCapMb()}`, "--expose-gc"];
 
   const serverOptions: ServerOptions = {
     run: {
       module: serverModule,
       transport: TransportKind.stdio,
-      options: { env: { PIKE_LSP_STDIO: "1" } },
+      options: { execArgv: heapCapArgs, env: { PIKE_LSP_STDIO: "1" } },
     },
     debug: {
       module: serverModule,
       transport: TransportKind.stdio,
       options: {
-        execArgv: ["--nolazy", "--inspect=6009"],
+        execArgv: ["--nolazy", "--inspect=6009", ...heapCapArgs],
         env: { PIKE_LSP_STDIO: "1" },
       },
     },
