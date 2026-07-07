@@ -85,7 +85,7 @@ describe("SignatureHelp", () => {
   function getTableAndTree() {
     const tree = parse(SOURCE, "file:///test.pike");
     assert(tree);
-    const table = buildSymbolTable(tree, SOURCE);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, SOURCE);
     return { tree, table };
   }
 

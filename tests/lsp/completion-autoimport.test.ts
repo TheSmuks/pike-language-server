@@ -30,7 +30,7 @@ describe("Completion — F5: auto-import suggestions", () => {
     const uri = `file:///test-autoimport-${++counter}.pike`;
     const tree = parse(source, uri);
     if (!tree) throw new Error("parse failed");
-    const table = buildSymbolTable(tree, uri, 0);
+    const table = buildSymbolTable(tree, uri, 0, undefined, source);
     return getCompletions(table, tree, line, character, {
       index: {
         resolveInherit: async () => null,

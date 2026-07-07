@@ -50,7 +50,7 @@ describe("findImplementations — same-file class with implementers", () => {
   test("Animal has Dog and GuideDog as implementers", () => {
     const src = readCorpus("class-single-inherit.pike");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, corpusUri("class-single-inherit.pike"), 1);
+    const table = buildSymbolTable(tree, corpusUri("class-single-inherit.pike"), 1, undefined, src);
 
     // Find the Animal class declaration
     const animalDecl = table.declarations.find(

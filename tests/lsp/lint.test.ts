@@ -27,7 +27,7 @@ import { DiagnosticSeverity } from "../../server/src/features/diagnostics";
 
 function buildAndLint(src: string) {
   const tree = parse(src);
-  const table = buildSymbolTable(tree, "file:///test.pike", 1);
+  const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
   const unused = detectUnusedSymbols(table);
   const unreachable = detectUnreachableCode(tree, src.split('\n'));
   return { tree, table, unused, unreachable };
@@ -35,7 +35,7 @@ function buildAndLint(src: string) {
 
 function lintAll(src: string) {
   const tree = parse(src);
-  const table = buildSymbolTable(tree, "file:///test.pike", 1);
+  const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
   return runLintRules(tree, table, src);
 }
 
@@ -181,7 +181,7 @@ void foo(string used, int unused_param) {
 }
 `;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const diags = detectUnusedSymbols(table, { checkParameters: false });
     const paramDiag = diags.find((d) => d.code === CODE_UNUSED_PARAMETER);
     expect(paramDiag).toBeUndefined();
@@ -354,7 +354,7 @@ int foo() {
 }
 `;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
     const diags = runLintRules(tree, table, src, { unusedSymbols: false });
     const hasUnused = diags.some((d) => d.code === CODE_UNUSED_VARIABLE);
     expect(hasUnused).toBe(false);
@@ -371,7 +371,7 @@ describe("Missing return lint rule (E3)", () => {
     write("oops");
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(1);
     expect(diags[0].code).toBe(CODE_MISSING_RETURN);
@@ -383,7 +383,7 @@ describe("Missing return lint rule (E3)", () => {
     write("ok");
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -393,7 +393,7 @@ describe("Missing return lint rule (E3)", () => {
     return 42;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -403,7 +403,7 @@ describe("Missing return lint rule (E3)", () => {
     write("ok");
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -413,7 +413,7 @@ describe("Missing return lint rule (E3)", () => {
     write("ok");
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -423,7 +423,7 @@ describe("Missing return lint rule (E3)", () => {
     this.name = name;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectMissingReturn(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -444,7 +444,7 @@ int main() {
     return 1;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -457,7 +457,7 @@ int main() {
     return 1;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(0);
   });
@@ -474,7 +474,7 @@ int main() {
     return 1;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectUnusedImports(tree, table, src);
     // Stdio is NOT flagged: write() is used but Stdio only appears once
     // (the import declaration). This is a false positive if we count
@@ -490,7 +490,7 @@ int main() {
     return 1;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, src, 1);
+    const table = buildSymbolTable(tree, src, 1, undefined, src);
     const diags = detectUnusedImports(tree, table, src);
     expect(diags.length).toBe(0);
   });

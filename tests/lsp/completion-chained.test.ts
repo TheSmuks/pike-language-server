@@ -70,7 +70,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-dog.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-dog.pike", 1, undefined, src);
     wireInheritance(table);
 
     // "  d->" on line 7, cursor at col 5 (right after '>')
@@ -94,7 +94,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-single-call.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-single-call.pike", 1, undefined, src);
     wireInheritance(table);
 
     // "  makeDog()->" on line 6, cursor right after '>'
@@ -120,7 +120,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-two-chain.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-two-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
     const result = await getCompletions(table, tree, 9, colAfterArrow(src, 9), makeCtx());
@@ -142,7 +142,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-three-chain.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-three-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
     const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx());
@@ -164,7 +164,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-void-chain.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-void-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
     const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx());
@@ -181,7 +181,7 @@ describe("F1: chained call type inference for member access completion", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/f1-unresolved.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/f1-unresolved.pike", 1, undefined, src);
     wireInheritance(table);
 
     const result = await getCompletions(table, tree, 1, colAfterArrow(src, 1), makeCtx());

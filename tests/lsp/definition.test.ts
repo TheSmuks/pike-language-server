@@ -45,7 +45,7 @@ function snapshotName(filename: string): string {
 function buildTable(filename: string): SymbolTable {
   const src = readCorpusSource(filename);
   const tree = parse(src);
-  return buildSymbolTable(tree, corpusUri(filename), 1);
+  return buildSymbolTable(tree, corpusUri(filename), 1, undefined, src);
 }
 
 /** Find a reference by name (first match). */
@@ -424,7 +424,7 @@ describe("definition API: scope-aware shadowing", () => {
     return x;
 }`;
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///shadow.pike", 1);
+    const table = buildSymbolTable(tree, "file:///shadow.pike", 1, undefined, src);
 
     // Should have two declarations for 'x'
     const xDecls = table.declarations.filter((d) => d.name === "x");
@@ -477,7 +477,7 @@ describe("definition API: while/switch/do-while scope isolation (US-005)", () =>
       '}',
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test-while.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test-while.pike", 1, undefined, src);
 
     // y should be declared at line 3 (inside while body)
     const yDecl = table.declarations.find(d => d.name === 'y');
@@ -504,7 +504,7 @@ describe("definition API: while/switch/do-while scope isolation (US-005)", () =>
       '}',
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test-switch.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test-switch.pike", 1, undefined, src);
 
     // a and b should be declared inside the switch body scope
     const aDecl = table.declarations.find(d => d.name === 'a');
@@ -530,7 +530,7 @@ describe("definition API: while/switch/do-while scope isolation (US-005)", () =>
       '}',
     ].join('\n');
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test-dowhile.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test-dowhile.pike", 1, undefined, src);
 
     // y should be declared inside the do-while body scope
     const yDecl = table.declarations.find(d => d.name === 'y');
@@ -556,7 +556,7 @@ describe("definition API: deep scope chain resolution (US-006)", () => {
   test("variable in outer function scope resolves from 4 levels deep", () => {
     const src = readCorpusSource("nested-scope-chain.pike");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1, undefined, src);
 
     // level3 = level0 + level1 + level2 is at line 18
     // level0 is at the outermost function scope (line 9)
@@ -574,7 +574,7 @@ describe("definition API: deep scope chain resolution (US-006)", () => {
   test("for-loop variable resolves from inside while/if nesting", () => {
     const src = readCorpusSource("nested-scope-chain.pike");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1, undefined, src);
 
     // level1 is at line 12 (inside for loop)
     // level1 reference at line 18 should resolve to declaration at line 12
@@ -591,7 +591,7 @@ describe("definition API: deep scope chain resolution (US-006)", () => {
   test("getDefinitionAt resolves through 4 scope levels", () => {
     const src = readCorpusSource("nested-scope-chain.pike");
     const tree = parse(src);
-    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1);
+    const table = buildSymbolTable(tree, corpusUri("nested-scope-chain.pike"), 1, undefined, src);
 
     // On line 18: string level3 = level0 + level1 + level2;
     const level0Ref = table.references.find(r => r.name === 'level0' && r.loc.line === 18);
@@ -729,7 +729,7 @@ describe("definition API: getDefinitionAt", () => {
 
   test("returns null for empty file", () => {
     const tree = parse("");
-    const table = buildSymbolTable(tree, "file:///empty.pike", 1);
+    const table = buildSymbolTable(tree, "file:///empty.pike", 1, undefined, "");
     const decl = getDefinitionAt(table, 0, 0);
     expect(decl).toBeNull();
   });
@@ -804,7 +804,7 @@ describe("definition API: error files produce partial results", () => {
     const src = readCorpusSource("err-syntax-basic.pike");
     const tree = parse(src);
     expect(() =>
-      buildSymbolTable(tree, "file:///err-syntax-basic.pike", 1),
+      buildSymbolTable(tree, "file:///err-syntax-basic.pike", 1, undefined, src),
     ).not.toThrow();
   });
 

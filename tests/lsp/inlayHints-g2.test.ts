@@ -25,7 +25,7 @@ describe("Inlay hints — G2: parameter name hints", () => {
     const uri = `file:///test-g2-${++testCounter}.pike`;
     const tree = parse(source, uri);
     if (!tree) throw new Error("parse failed");
-    const table = buildSymbolTable(tree, uri, 0);
+    const table = buildSymbolTable(tree, uri, 0, undefined, source);
     return produceInlayHints({
       tree,
       table,
