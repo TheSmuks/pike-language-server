@@ -35,6 +35,8 @@ const DECL_KIND_TO_SYMBOL_KIND: Record<DeclKind, SymbolKind> = {
   parameter: SymbolKind.Variable,
   inherit: SymbolKind.Module,
   import: SymbolKind.Module,
+  include: SymbolKind.File,
+  macro: SymbolKind.Constant,
 };
 
 // ---------------------------------------------------------------------------

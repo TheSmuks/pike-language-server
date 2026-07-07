@@ -28,8 +28,10 @@ export interface Declaration {
   declaredType?: string;
   /** For variables: type inferred from assignment initializer (e.g., Dog d = makeDog()). */
   assignedType?: string;
-  /** For synthetic declarations from cross-file inheritance: URI of the origin file. */
+  /** For synthetic declarations from cross-file inheritance/includes: URI of the origin file. */
   sourceUri?: string;
+  /** For macro declarations: true when defined function-like, i.e. `NAME(args)`. */
+  functionLike?: boolean;
 }
 
 export type DeclKind =
@@ -43,7 +45,12 @@ export type DeclKind =
   | 'typedef'
   | 'parameter'
   | 'inherit'
-  | 'import';
+  | 'import'
+  // Preprocessor `#include "file.h"` / `#include <file.h>` directive. `name`
+  // holds the raw path text (with quotes/brackets); resolved by wireIncludes.
+  | 'include'
+  // Preprocessor `#define NAME ...` macro. `functionLike` set for `NAME(args)`.
+  | 'macro';
 
 export interface Reference {
   name: string;
@@ -132,7 +139,7 @@ export {
   PRIMITIVE_TYPES,
   resolveTypeName,
 } from './scope-helpers';
-export { wireInheritance } from './scopeBuilder';
+export { wireInheritance, wireIncludes } from './scopeBuilder';
 
 // ---------------------------------------------------------------------------
 // Internal imports (not re-exported)
@@ -140,7 +147,7 @@ export { wireInheritance } from './scopeBuilder';
 
 import { toRangeUtf16, resolveTypeName } from './scope-helpers';
 import { pushScope, popScope } from './scope-helpers-state';
-import { wireInheritance } from './scopeBuilder';
+import { wireInheritance, wireIncludes } from './scopeBuilder';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 import { startSpan, stopSpan, bump, measureSync } from './profiler';
@@ -150,13 +157,20 @@ import { buildOffsetMap } from '../util/offsetMap';
 // Build orchestrator
 // ---------------------------------------------------------------------------
 
+/**
+ * Cross-file resolution surface used during symbol-table build. Shared by
+ * BuildOptions, wireInheritance, and wireIncludes so all three stay in sync.
+ */
+export interface BuildIndex {
+  getSymbolTable(uri: string): SymbolTable | null;
+  resolveImport(mod: string, from: string): string | null;
+  resolveInherit(path: string, isString: boolean, from: string): string | null;
+  resolveInclude(path: string, isSystem: boolean, from: string): string | null;
+}
+
 export interface BuildOptions {
-  /** WorkspaceIndex for cross-file inheritance resolution. */
-  index?: {
-    getSymbolTable(uri: string): SymbolTable | null;
-    resolveImport(mod: string, from: string): string | null;
-    resolveInherit(path: string, isString: boolean, from: string): string | null;
-  };
+  /** WorkspaceIndex for cross-file inheritance/include resolution. */
+  index?: BuildIndex;
 }
 
 /**
@@ -202,6 +216,12 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
     wireInheritance(table, options?.index, uri);
     bump("inheritanceWiringOps");
     stopSpan("wireInheritance");
+
+    // Merge `#include`d files' top-level symbols (declarations + macros) into
+    // this file's scope, so references below can resolve to them.
+    startSpan("wireIncludes");
+    wireIncludes(table, options?.index, uri);
+    stopSpan("wireIncludes");
 
     startSpan("referencePass");
     runReferencePass(tree.rootNode, state, table);

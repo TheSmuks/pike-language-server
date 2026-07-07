@@ -104,6 +104,7 @@ export class WorkspaceIndex {
       resolver: this.resolver,
       resolveImport: (p, f) => this.resolveImport(p, f),
       resolveInherit: (p, s, f) => this.resolveInherit(p, s, f),
+      resolveInclude: (p, s, f) => this.resolveInclude(p, s, f),
     };
   }
 
@@ -434,6 +435,13 @@ export class WorkspaceIndex {
     return result?.uri ?? null;
   }
 
+  async resolveInclude(pathText: string, isSystem: boolean, fromUri: string): Promise<string | null> {
+    const normalizedFromUri = normUri(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
+    const result = await this.resolver.resolveInclude(pathText, isSystem, fromPath);
+    return result?.uri ?? null;
+  }
+
   // ---------------------------------------------------------------------------
   // Sync resolution (cache-only, for symbolTable.ts compatibility)
   // ---------------------------------------------------------------------------
@@ -456,6 +464,12 @@ export class WorkspaceIndex {
     const normalizedFromUri = normUri(fromUri);
     const fromPath = this.uriToPath(normalizedFromUri);
     return this.resolver.getCachedModule(importPath, fromPath)?.uri ?? null;
+  }
+
+  resolveIncludeSync(pathText: string, isSystem: boolean, fromUri: string): string | null {
+    const normalizedFromUri = normUri(fromUri);
+    const fromPath = this.uriToPath(normalizedFromUri);
+    return this.resolver.getCachedInclude(pathText, isSystem, fromPath)?.uri ?? null;
   }
 
   // ---------------------------------------------------------------------------

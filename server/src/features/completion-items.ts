@@ -58,6 +58,8 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   parameter: CompletionItemKind.Variable,
   inherit: CompletionItemKind.Class,
   import: CompletionItemKind.Module,
+  include: CompletionItemKind.File,
+  macro: CompletionItemKind.Constant,
 };
 
 
@@ -75,6 +77,11 @@ export function declToCompletionItem(decl: Declaration, priority: number, table?
     // needing to resolve or hover.
     detail: decl.declaredType ?? undefined,
   };
+
+  // Function-like macros (`#define SQ(x) ...`) read as functions, not constants.
+  if (decl.kind === "macro" && decl.functionLike) {
+    item.kind = CompletionItemKind.Function;
+  }
 
   // For functions/methods, add snippet support with parameter placeholders.
   // The snippet looks like: functionName(${1:param1}, ${2:param2})

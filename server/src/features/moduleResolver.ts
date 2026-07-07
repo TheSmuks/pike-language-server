@@ -121,6 +121,14 @@ export class ModuleResolver {
   }
 
   /**
+   * Synchronous cache-only lookup for an #include path.
+   * Returns the cached ResolveResult or undefined if not cached.
+   */
+  getCachedInclude(pathText: string, isSystem: boolean, currentFile: string): ResolveResult | null | undefined {
+    return this.cache.get(`inc:${pathText}:${isSystem}:${currentFile}`);
+  }
+
+  /**
    * Resolve a module path like "Stdio.File" or "cross_import_a".
    * Returns null if unresolvable.
    */
@@ -174,6 +182,81 @@ export class ModuleResolver {
   async resolveImport(importPath: string, currentFile: string): Promise<ResolveResult | null> {
     // Import resolution is the same as module resolution
     return this.resolveModule(importPath, currentFile);
+  }
+
+  /**
+   * Resolve a preprocessor `#include` target to a file URI.
+   * - `#include <file.h>` (isSystem): search Pike's include directories (-I).
+   * - `#include "file.h"`: resolve relative to the current file's directory,
+   *   allowing upward (`../`) traversal — Pike splices the file in textually and
+   *   resolves it relative to the includer, so a sibling/ancestor header is a
+   *   legitimate target even outside the workspace root.
+   *
+   * `pathText` may be the raw path node text (with quotes or angle brackets) or
+   * the already-stripped inner path; both are handled.
+   */
+  async resolveInclude(pathText: string, isSystem: boolean, currentFile: string): Promise<ResolveResult | null> {
+    const cacheKey = `inc:${pathText}:${isSystem}:${currentFile}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const result = await this.doResolveInclude(pathText, isSystem, currentFile);
+    this.cache.set(cacheKey, result);
+    this.evictIfNeeded();
+    return result;
+  }
+
+  private async doResolveInclude(pathText: string, isSystem: boolean, currentFile: string): Promise<ResolveResult | null> {
+    const inner = stripIncludeDelimiters(pathText);
+    if (inner.length === 0) return null;
+
+    if (isSystem) {
+      // Angle-bracket include: search the configured -I include directories.
+      for (const dir of this.includePaths) {
+        const candidate = join(dir, inner);
+        if (await isFile(candidate)) {
+          return { uri: pathToFileURL(candidate).href, source: "system_module" };
+        }
+      }
+      return null;
+    }
+
+    // Quoted include.
+    if (inner.startsWith("/")) {
+      // Absolute path stays root-restricted (no upward traversal from a file).
+      const checked = this.normalizeAndCheck(inner);
+      if (checked && await isFile(checked)) {
+        return { uri: pathToFileURL(checked).href, source: "relative" };
+      }
+      return null;
+    }
+
+    // Relative include: resolve against the current file's directory, allowing
+    // `../` traversal. Accept when the resolved file exists AND is either under
+    // an allowed root or carries an includable extension — the latter lets a
+    // header outside the workspace resolve while still refusing to slurp
+    // arbitrary system files like `/etc/passwd`.
+    const currentDir = dirname(currentFile);
+    const resolved = resolve(currentDir, inner);
+    if (await isFile(resolved) && this.relativeTargetAllowed(resolved)) {
+      return { uri: pathToFileURL(resolved).href, source: "relative" };
+    }
+    return null;
+  }
+
+  /**
+   * Boundary check for a relative include/inherit target resolved from a file's
+   * own directory. Permits any path under a known root (workspace, Pike home,
+   * configured module/include/program paths) or any Pike/header source file —
+   * matching what the Pike compiler would itself read — while still excluding
+   * non-source system files reached by upward traversal.
+   */
+  private relativeTargetAllowed(normalizedPath: string): boolean {
+    // Under a known root (workspace / Pike home / configured module/include/
+    // program paths)? normalizeAndCheck with no baseDir enforces exactly that.
+    if (this.normalizeAndCheck(normalizedPath)) return true;
+    // Otherwise allow only genuine Pike/header source files.
+    return hasIncludableExtension(normalizedPath);
   }
 
   // ---------------------------------------------------------------------------
@@ -243,12 +326,32 @@ export class ModuleResolver {
       return this.tryInheritCandidate(this.normalizeAndCheck(rawPath));
     }
     if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
-      // Relative to current file — normalize and check boundary.
+      // Relative to current file — allow `../` traversal. Pike resolves an
+      // inherit string relative to the includer, so an ancestor/sibling program
+      // is a legitimate target even outside the workspace root. The boundary is
+      // applied to the file actually found (after extension resolution).
       const resolved = resolve(currentDir, rawPath);
-      return this.tryInheritCandidate(this.normalizeAndCheck(resolved, currentDir));
+      return this.tryRelativeInheritCandidate(resolved);
     }
     // Pike's cast_to_program: search current dir first, then program paths
     return this.searchInheritProgramPaths(rawPath, currentDir);
+  }
+
+  /**
+   * Resolve a relative inherit target (with optional extension append),
+   * applying the relaxed boundary to whatever file is actually found. Permits
+   * ancestor/sibling programs outside the workspace while refusing non-source
+   * system files reached by upward traversal.
+   */
+  private async tryRelativeInheritCandidate(resolvedBase: string): Promise<ResolveResult | null> {
+    if (await pathExists(resolvedBase) && this.relativeTargetAllowed(resolvedBase)) {
+      return { uri: pathToFileURL(resolvedBase).href, source: "relative" };
+    }
+    const withExt = await this.findWithExtension(resolvedBase);
+    if (withExt && this.relativeTargetAllowed(withExt)) {
+      return { uri: pathToFileURL(withExt).href, source: "relative" };
+    }
+    return null;
   }
 
   private async tryInheritCandidate(candidate: string | null): Promise<ResolveResult | null> {
@@ -462,6 +565,20 @@ export class ModuleResolver {
 // ---------------------------------------------------------------------------
 // Async fs helpers (module-level)
 // ---------------------------------------------------------------------------
+
+/** File extensions we treat as Pike source / includable headers. */
+const INCLUDABLE_EXTENSIONS = [".h", ".pike", ".pmod", ".inc"];
+
+/** Strip surrounding `"..."` or `<...>` delimiters from an include path. */
+function stripIncludeDelimiters(pathText: string): string {
+  return pathText.replace(/^["<]+|[">]+$/g, "");
+}
+
+/** Whether a path ends in a Pike source / header extension. */
+function hasIncludableExtension(p: string): boolean {
+  const lower = p.toLowerCase();
+  return INCLUDABLE_EXTENSIONS.some(ext => lower.endsWith(ext));
+}
 
 /** Check that a path exists on disk (file or directory). */
 async function pathExists(p: string): Promise<boolean> {

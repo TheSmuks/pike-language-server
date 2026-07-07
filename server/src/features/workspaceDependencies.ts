@@ -22,6 +22,7 @@ export interface DependencyContext {
   readonly resolver: ModuleResolver;
   readonly resolveImport: (importPath: string, fromUri: string) => Promise<string | null>;
   readonly resolveInherit: (pathText: string, isStringLiteral: boolean, fromUri: string) => Promise<string | null>;
+  readonly resolveInclude: (pathText: string, isSystem: boolean, fromUri: string) => Promise<string | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,13 @@ export async function warmResolverCache(
           promises.push({ key: `inh:${name}:false`, promise: ctx.resolver.resolveInherit(name, false, fromPath) });
         }
       }
+    } else if (node.type === 'preproc_include') {
+      const pathNode = node.childForFieldName('path');
+      if (pathNode) {
+        const name = pathNode.text;
+        const isSystem = name.startsWith('<');
+        promises.push({ key: `inc:${name}:${isSystem}`, promise: ctx.resolver.resolveInclude(name, isSystem, fromPath) });
+      }
     }
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
@@ -95,10 +103,17 @@ export async function extractDependencies(
 ): Promise<Set<string>> {
   const deps = new Set<string>();
 
-  // Collect all inherit/import declarations and resolve them in parallel.
+  // Collect all inherit/import/include declarations and resolve them in parallel.
   const resolutions = table.declarations
-    .filter(decl => decl.kind === "inherit" || decl.kind === "import")
+    .filter(decl => decl.kind === "inherit" || decl.kind === "import" || decl.kind === "include")
     .map(async (decl): Promise<string | null> => {
+      if (decl.kind === "include") {
+        const isSystem = decl.name.startsWith('<');
+        const cached = warmCache.get(`inc:${decl.name}:${isSystem}`);
+        if (cached !== undefined) return cached;
+        return ctx.resolveInclude(decl.name, isSystem, currentUri);
+      }
+
       const isStringLit = decl.name.startsWith('"') && decl.name.endsWith('"');
 
       if (isStringLit) {
