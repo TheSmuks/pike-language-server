@@ -50,7 +50,7 @@ jobs:
         run: bun add -g @vscode/vsce
 
       - name: Package VSIX
-        run: bash scripts/build-vsix.sh
+        run: bash scripts/build-vsix.sh --release
 
       - name: Upload to GitHub Release
         env:
@@ -58,3 +58,17 @@ jobs:
         run: |
           VSIX_PATH=$(cat out/.latest-vsix)
           gh release upload "${{ github.event.release.tag_name }}" "$VSIX_PATH" --clobber
+
+      - name: Publish to VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_MARKETPLACE_TOKEN }}
+        run: |
+          if [ -z "${VSCE_PAT:-}" ]; then
+            echo "VSCODE_MARKETPLACE_TOKEN secret is not set; refusing to publish" >&2
+            exit 1
+          fi
+          VSIX_PATH=$(cat out/.latest-vsix)
+          VSCE_BIN="$(command -v vsce || echo "$HOME/.bun/bin/vsce")"
+          # Publish the exact VSIX already attached to the release, so the
+          # Marketplace and GitHub artifacts are byte-identical.
+          "$VSCE_BIN" publish --packagePath "$VSIX_PATH"
