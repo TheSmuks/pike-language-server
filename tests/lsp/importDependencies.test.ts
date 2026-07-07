@@ -31,7 +31,7 @@ describe("Import DeclKind", () => {
   test("import declarations get kind 'import'", () => {
     const src = 'import Stdio;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
 
     const importDecls = table.declarations.filter(d => d.kind === "import");
     expect(importDecls.length).toBe(1);
@@ -41,7 +41,7 @@ describe("Import DeclKind", () => {
   test("inherit declarations keep kind 'inherit'", () => {
     const src = 'class Base {} class Child { inherit Base; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
 
     const inheritDecls = table.declarations.filter(d => d.kind === "inherit");
     expect(inheritDecls.length).toBe(1);
@@ -51,7 +51,7 @@ describe("Import DeclKind", () => {
   test("import and inherit in same file produce distinct kinds", () => {
     const src = 'import Stdio; class Base {} class Child { inherit Base; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
 
     const imports = table.declarations.filter(d => d.kind === "import");
     const inherits = table.declarations.filter(d => d.kind === "inherit");
@@ -137,7 +137,12 @@ describe("getSymbolsInScope — import handling", () => {
   test("import declarations are excluded from symbols in scope", () => {
     const src = 'import Stdio; int x;';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    // Pass `src`: buildSymbolTable needs it to convert tree-sitter byte
+    // positions into UTF-16 scope ranges. Omitting it collapses the file scope
+    // to a zero-width range, so getSymbolsInScope finds nothing at the
+    // end-of-line query position below — the reason this test previously only
+    // passed depending on suite ordering.
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
 
     // Import declarations should be excluded from getSymbolsInScope results
     const symbols = getSymbolsInScope(table, 0, 20);
@@ -150,7 +155,7 @@ describe("getSymbolsInScope — import handling", () => {
   test("inherit declarations are also excluded from symbols in scope", () => {
     const src = 'class Base {} class Child { inherit Base; }';
     const tree = parse(src);
-    const table = buildSymbolTable(tree, "file:///test/a.pike", 1);
+    const table = buildSymbolTable(tree, "file:///test/a.pike", 1, undefined, src);
     wireInheritance(table);
 
     const symbols = getSymbolsInScope(table, 2, 20);
