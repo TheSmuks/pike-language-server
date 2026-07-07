@@ -61,7 +61,7 @@ function tryBuildAutodocAction(
   if (line !== "//!!") return null;
   if (lineIdx + 1 >= lines.length) return null;
 
-  const decl = findDeclarationAtLine(table, lineIdx + 1);
+  const decl = findDocumentableDeclAtLine(table, lineIdx + 1);
   if (!decl) return null;
 
   const template = buildAutodocTemplate(decl, table, lines[lineIdx]);
@@ -87,9 +87,12 @@ function tryBuildAutodocAction(
 // ---------------------------------------------------------------------------
 
 /**
- * Find the declaration starting at or near the given line.
+ * Find a documentable declaration (function, method, class, or variable)
+ * whose declaration starts on the given line.
+ *
+ * Shared with the autodoc-skeleton completion (completion-autodoc.ts).
  */
-function findDeclarationAtLine(table: SymbolTable, line: number): Declaration | null {
+export function findDocumentableDeclAtLine(table: SymbolTable, line: number): Declaration | null {
   for (const decl of table.declarations) {
     if (decl.range.start.line === line) {
       if (decl.kind === "function" || decl.kind === "method" || decl.kind === "class" || decl.kind === "variable") {
@@ -98,6 +101,23 @@ function findDeclarationAtLine(table: SymbolTable, line: number): Declaration | 
     }
   }
   return null;
+}
+
+/**
+ * Collect the parameter names of a function/method declaration, in source order.
+ *
+ * Finds the innermost function/block scope that contains the declaration and
+ * returns the names of its `parameter` declarations. Shared with the
+ * autodoc-skeleton completion (completion-autodoc.ts).
+ */
+export function collectFunctionParamNames(decl: Declaration, table: SymbolTable): string[] {
+  const funcScope = table.scopes.find(
+    s => (s.kind === "function" || s.kind === "block") && containsRange(s.range, decl.range),
+  );
+  if (!funcScope) return [];
+  return table.declarations
+    .filter(d => d.kind === "parameter" && d.scopeId === funcScope.id)
+    .map(d => d.name);
 }
 
 // -----------------------------------------------------------------------
@@ -130,12 +150,8 @@ function generateFunctionTemplate(decl: Declaration, table: SymbolTable, prefix:
 }
 
 function appendParamLines(lines: string[], decl: Declaration, table: SymbolTable, prefix: string): void {
-  const funcScope = table.scopes.find(
-    s => (s.kind === "function" || s.kind === "block") && containsRange(s.range, decl.range),
-  );
-  if (!funcScope) return;
-  for (const param of table.declarations.filter(d => d.kind === "parameter" && d.scopeId === funcScope.id)) {
-    lines.push(`${prefix}@param ${param.name}`, `${prefix}Description.`);
+  for (const name of collectFunctionParamNames(decl, table)) {
+    lines.push(`${prefix}@param ${name}`, `${prefix}Description.`);
   }
 }
 
