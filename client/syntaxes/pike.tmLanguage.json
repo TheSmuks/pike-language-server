@@ -24,9 +24,9 @@
 		"comments": {
 			"patterns": [
 				{
-					"comment": "Autodoc comments /** ... */",
+					"comment": "Autodoc block comments — Pike /*! ... */ and Doxygen-style /** ... */ (but not the empty /**/)",
 					"name": "comment.block.documentation.pike",
-					"begin": "/\\*\\*(?!/)",
+					"begin": "/\\*(?:\\*(?!/)|!)",
 					"end": "\\*/",
 					"patterns": [
 						{ "include": "#autodoc-tags" }
@@ -39,9 +39,13 @@
 					"end": "\\*/"
 				},
 				{
-					"comment": "Line doc comments //!",
+					"comment": "Line doc comments //! — the primary Pike autodoc form; parse @-markup within",
 					"name": "comment.line.documentation.pike",
-					"match": "//!.*$"
+					"begin": "//!",
+					"end": "$",
+					"patterns": [
+						{ "include": "#autodoc-tags" }
+					]
 				},
 				{
 					"comment": "Line comments //",
@@ -54,9 +58,19 @@
 		"autodoc-tags": {
 			"patterns": [
 				{
-					"comment": "Autodoc @param, @return, @decl, @note, @fixme, @deprecated, @throws, @seealso, @example, @members, @endclass, @ignore, @belongs, @class, @b, @i, @tt, @pre, @code, @endcode, @url, @ref",
+					"comment": "Symbol cross-reference @[Module.symbol]",
+					"name": "markup.underline.link.pike",
+					"match": "@\\[[^\\]@]*\\]"
+				},
+				{
+					"comment": "Close of an @word{ ... @} inline markup group",
+					"name": "punctuation.definition.tag.end.pike",
+					"match": "@\\}"
+				},
+				{
+					"comment": "Autodoc keyword — meta (@decl @class @module @endclass @endmodule @appears @belongs @global), delimiter (@param @member @item @index @elem @value @returns @throws @note @bugs @fixme @deprecated @seealso @example @constant), block/endblock (@dl @mapping @multiset @array @int @string @mixed @ol @ul @section @matrix @code @pre and their @end* forms; @ignore/@endignore), and inline markup (@b{ @i{ @tt{ @u{ @sub{ @sup{ @xml{ @expr{ @ref{ @url{ @rfc{ @image{). Matches any @word; a trailing group brace is left as punctuation.",
 					"name": "keyword.other.documentation.pike",
-					"match": "@(param|return|decl|note|fixme|deprecated|throws|seealso|example|members|endclass|ignore|belongs|class|b|i|tt|pre|code|endcode|url|ref)\\b"
+					"match": "@[a-zA-Z_][a-zA-Z0-9_]*"
 				}
 			]
 		},
@@ -126,9 +140,22 @@
 		"preprocessor": {
 			"patterns": [
 				{
+					"comment": "Shebang line (stripped by the preprocessor, e.g. #!/usr/local/bin/pike)",
+					"name": "comment.line.shebang.pike",
+					"match": "^#!.*$"
+				},
+				{
+					"comment": "#define / #undef — highlight the defined macro name",
+					"match": "^\\s*(#\\s*(?:define|undef))\\s+([A-Za-z_][A-Za-z0-9_]*)",
+					"captures": {
+						"1": { "name": "keyword.control.directive.pike" },
+						"2": { "name": "entity.name.function.preprocessor.pike" }
+					}
+				},
+				{
 					"comment": "Preprocessor directives — must be anchored to line start",
 					"name": "keyword.control.directive.pike",
-					"match": "^\\s*#\\s*(if|ifdef|ifndef|else|elif|endif|define|undef|include|string|error|warning|pike|charset|pragma|require|elifdef|elifndef|elseif)\\b"
+					"match": "^\\s*#\\s*(if|ifdef|ifndef|else|elif|endif|define|undef|include|string|line|error|warning|pike|charset|pragma|require|elifdef|elifndef|elseif)\\b"
 				}
 			]
 		},
