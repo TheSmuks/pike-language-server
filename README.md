@@ -1,254 +1,135 @@
 <div align="center">
 
+<img src="icon.png" width="112" alt="Pike Language Server logo" />
+
 # Pike Language Server
 
-**Full-featured language support for [Pike](https://pike.lysator.liu.se/) in Visual Studio Code.**
+**Rich, IDE-grade language support for [Pike](https://pike.lysator.liu.se/) in Visual Studio Code** — diagnostics, completion, navigation, refactoring, and formatting, powered by the Pike compiler itself.
 
-[![version](https://img.shields.io/endpoint?url=https%3A%2F%2Fmarketplace.visualstudio.com%2F_items%2FitemName%2Fthesmuks.pike-language-server%3Faction%3Dversions)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server) <!-- template-v0.8.37 -->
-[![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
+<!-- template-v0.8.37 -->
+[![Marketplace](https://img.shields.io/github/v/release/TheSmuks/pike-language-server?label=marketplace&logo=visualstudiocode&color=0066b8)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)
+[![CI](https://github.com/TheSmuks/pike-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/TheSmuks/pike-language-server/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
 
-| [Installation](#installation) · [Features](#features) · [Configuration](#configuration) · [Architecture](#architecture) · [Testing](#testing) · [Contributing](./CONTRIBUTING.md)
+[Install](#installation) · [Features](#features) · [Configuration](#configuration) · [Troubleshooting](#troubleshooting) · [Contributing](./CONTRIBUTING.md)
 
 </div>
 
 ---
 
+## Why
+
+Pike is a powerful language with a sparse tooling story. This extension brings a modern editing experience to `.pike`, `.pmod`, and `.mmod` files by using **`pike` itself as the semantic oracle** — diagnostics, types, and symbol resolution come from the real compiler, not heuristics — with [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) providing fast, incremental syntax parsing.
+
+The extension bundles and manages the language server automatically. Install it, open a Pike file, and it just works.
+
 ## Installation
 
-### Prerequisites
+**Prerequisites**
 
-- **Pike 8.0+** — Download from [pike.lysator.liu.se](https://pike.lysator.liu.se/) and ensure `pike` is on your `PATH`
+- **Pike 8.0+** — install from [pike.lysator.liu.se](https://pike.lysator.liu.se/) and make sure `pike` is on your `PATH` (or set [`pike.languageServer.path`](#configuration)).
 - **VS Code 1.85+**
 
-### Install the Extension
+**Install**
 
-Install **Pike Language Server** from the [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server). The extension bundles and manages the LSP server automatically — no separate installation needed.
+Get **[Pike Language Server](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)** from the Marketplace, or from the command line:
 
-Open any `.pike`, `.pmod`, or `.mmod` file and the server starts immediately. The status bar item (bottom-right) shows the server state.
+```bash
+code --install-extension thesmuks.pike-language-server
+```
 
----
+Open any `.pike`, `.pmod`, or `.mmod` file and the server starts automatically. The status bar item (bottom-right) shows its state — click it to open the output channel.
 
 ## Features
 
-The server implements **23 LSP providers** covering diagnostics, navigation, editing, and rich language features:
+A comprehensive LSP feature set, all backed by real compiler information:
 
-### Diagnostics
+**Diagnostics**
+- Live compilation errors and warnings straight from `pike`, debounced while you type
+- Three modes: `realtime`, `saveOnly`, or `off`; supports pull diagnostics
 
-- Real-time compilation errors and warnings from `pike` (debounced)
-- Three modes: `realtime`, `saveOnly`, or `off`
-- Pull diagnostics support
+**Navigation**
+- Go-to-definition and find-references, workspace-wide and across `inherit`/`import` chains
+- Go-to-implementation for inherited symbols
+- Document & workspace symbols, document highlights, folding ranges
+- Call hierarchy and type hierarchy
 
-### Navigation
+**Completion**
+- Scope-aware local completions with priority ranking
+- Member completion through multi-level inheritance, for both `->` and `.` access with type inference
+- Chained-call resolution (`getContainer()->getItem()->…`)
+- **5,500+ stdlib symbols** (Stdio, Gtk2, Sql, Protocols, …) and **283 predef builtins**, with auto-import suggestions
+- Snippet completions with parameter placeholders and commit characters
 
-| Feature | Description |
-|---------|-------------|
-| Go-to-definition | Same-file scope resolution, cross-file via inherit/import chains |
-| Find references | Workspace-wide, including cross-file references |
-| Implementation | Jump to concrete implementations for inherited symbols |
-| Document symbols | Classes, functions, variables, enums, constants |
-| Workspace symbols | Cross-file search with prefix matching |
-| Document highlights | Read/write highlighting for references under cursor |
-| Folding ranges | Blocks, classes, comment groups |
-
-### Completion
-
-- Local scope completions with priority ranking
-- Class member completions across multi-level inheritance chains
-- **5,500+ stdlib symbols** (Stdio, Gtk2, Sql, Protocols, etc.)
-- **283 predef builtins** (`write`, `werror`, `foreach`, etc.)
-- Arrow (`->`) and dot (`.`) member access with type inference
-- Auto-import suggestions for stdlib symbols
-- Chained call resolution (`getContainer()->getItem()->`)
-- Commit characters for functions (`(`) and classes (`.`, `(`)
-- Snippet completions with parameter placeholders
-
-### Editing
-
-- **Rename** — workspace-wide, scope-aware, cross-file, type-aware receiver filtering
+**Refactoring & editing**
+- Scope-aware, cross-file, type-aware **rename**
 - **Code actions** — remove unused variable, add missing import, generate getters/setters, generate AutoDoc
-- **Signature help** — parameter hints with active parameter tracking
-- **Formatting** — indentation normalization via on-type and full-document formatting
-- **Code lenses** — reference counts on declarations
-- **Document links** — clickable `#include` paths
-- **Inlay hints** — inferred types on untyped variables
+- **Signature help** with active-parameter tracking
+- **Formatting** — full-document and on-type, with optional operator spacing
+- **Code lenses** (reference counts), **document links** (`#include` paths), **inlay hints** (inferred types)
 
-### Rich Information
-
-- **Hover** — type info, AutoDoc documentation, stdlib signatures, cross-file resolution
-- **Call hierarchy** — incoming/outgoing call hierarchy for functions and methods
-- **Semantic tokens** — syntax highlighting with 9 token types + 5 modifiers
-- **Selection ranges** — smart scope-aware selection expansion
-
----
+**Information**
+- **Hover** — types, AutoDoc, stdlib signatures, cross-file resolution
+- **Semantic tokens** for precise highlighting
+- Smart, scope-aware selection ranges
 
 ## Configuration
 
-Settings are available under **Extensions → Pike Language Server** in VS Code Settings, or directly in `settings.json`:
+Configure under **Settings → Extensions → Pike Language Server**, or in `settings.json`. The most common settings:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `pike.languageServer.path` | `pike` | Path to the Pike binary. Must be Pike 8.0 or newer. |
-| `pike.languageServer.diagnosticMode` | `realtime` | When to report diagnostics: `realtime`, `saveOnly`, or `off` |
-| `pike.languageServer.diagnosticDebounceMs` | `500` | Debounce interval (ms) for realtime diagnostics. Range: 100–5000. |
-| `pike.languageServer.maxNumberOfProblems` | `100` | Maximum diagnostic problems reported per file. Range: 1–1000. |
+| `pike.languageServer.path` | `"pike"` | Path to the Pike binary. Must be Pike 8.0 or newer. |
+| `pike.languageServer.pikeHome` | `""` | Pike installation root (e.g. `/usr/local/pike/8.0.1116`). Overrides auto-detection when set. |
+| `pike.languageServer.modulePaths` | `[]` | Additional module search paths (`-M`). |
+| `pike.languageServer.includePaths` | `[]` | Additional include search paths (`-I`). |
+| `pike.languageServer.diagnosticMode` | `"realtime"` | When to report diagnostics: `realtime`, `saveOnly`, or `off`. |
+| `pike.languageServer.diagnosticDebounceMs` | `500` | Debounce for realtime diagnostics, in ms (100–5000). |
+| `pike.languageServer.maxNumberOfProblems` | `100` | Max diagnostics reported per file (1–1000). |
+| `pike.languageServer.indexing.mode` | `"openFiles"` | Startup indexing: `openFiles` (fastest start), `full` (immediate global features), or `auto`. |
+| `pike.languageServer.format.operatorSpacing` | `false` | Add spaces around operators when formatting. |
+| `pike.languageServer.memory.budgetMb` | `512` | Heap budget (MB) before the server sheds non-essential index entries. |
+| `pike.languageServer.trace.server` | `"off"` | LSP protocol tracing (`off`/`messages`/`verbose`) for debugging. |
 
----
-
-## Architecture
-
-A **Tier-3 LSP** implementation — uses `pike` as oracle for semantic information and [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) as syntactic parser.
-
-```
-pike-language-server/
-├── server/src/           # LSP server (TypeScript, vscode-languageserver-node)
-│   ├── server.ts         # Entry point — creates the LSP connection
-│   ├── serverCapabilities.ts
-│   ├── serverLifecycle.ts
-│   └── features/         # 60+ focused modules, all under 500 lines
-│       ├── pikeWorker.ts         # Pike subprocess management
-│       ├── workspaceIndex.ts     # Per-file symbol table index
-│       ├── completion*.ts        # Completion engine (9 modules)
-│       ├── navigation*.ts        # Navigation handlers (7 modules)
-│       ├── symbolTable.ts        # Symbol table construction
-│       ├── typeResolver.ts       # Type inference and resolution
-│       ├── hoverHandler.ts       # Hover provider
-│       └── ...
-├── client/               # VSCode extension hosting the LSP server
-├── harness/              # Test harness — invokes pike, captures ground truth
-├── corpus/               # 85 Pike files covering language features
-├── tests/                # Test suites
-│   ├── pike/            # PUnit tests — Pike-language test suite (487 tests)
-│   ├── lsp/             # In-process LSP integration tests
-│   └── perf/            # Performance benchmarks
-└── docs/                 # Architecture, decisions, known limitations
-    └── decisions/        # Architecture Decision Records
-```
-
-### Design Principles
-
-- **Pike is the oracle.** Every test derives expected output from `pike` — no hand-written expectations.
-- **Fail-fast.** Runtime JSON validation on all Pike subprocess responses. Assertions at boundaries.
-- **Bounded by default.** LRU caches with caps, bounded queues, no unbounded growth.
-- **TigerStyle code.** 500-line file limit, 50-line function limit, explicit error handling throughout.
-
-See [docs/architecture.md](./docs/architecture.md) for the full system design and [docs/decisions/](./docs/decisions/) for architecture decision records.
-
----
-
-## Testing
-
-The project has two test layers:
-
-### TypeScript Tests (bun test)
-
-```bash
-bun test                        # Run all TS tests (harness + perf)
-bun test tests/lsp/             # LSP integration tests only
-bun run test:harness            # Harness tests only
-```
-
-### Pike Tests (PUnit)
-
-The Pike test suite uses [PUnit](./modules/PUnit.pmod/) and covers language analysis, LSP protocol handling, and server behavior via Pike's own `compile_string` introspection.
-
-```bash
-bun run test:pike               # Run all Pike tests (487 tests)
-bash scripts/test-pike.sh       # Run directly
-bun run test:all                # Run TS + Pike tests together
-```
-
-**Test directory structure:**
-
-```
-tests/pike/
-├── run_tests.pike              # PUnit test runner entry point
-├── PUnitSmokeTests.pike        # Framework smoke tests (13)
-├── DefinitionTests.pike        # Go-to-definition via Program.defined (18)
-├── DiagnosticsTests.pike       # Diagnostic normalization (18)
-├── CompilationHandlerTests.pike # Compilation handler (13)
-├── VersionTests.pike           # Pike version detection (5)
-├── IncrementalSyncTests.pike   # Edit-compile cycle simulation (10)
-├── StateConsistencyTests.pike  # Isolation and determinism (18)
-├── CompletionTests.pike        # Completion context tests (16)
-├── HoverTests.pike             # Hover/type inference tests (20)
-├── LintRulesTests.pike         # Static lint rule detection (23)
-├── SignatureTests.pike         # Function signature parsing (25)
-├── SymbolTableTests.pike       # Symbol extraction tests (23)
-├── JsonRpcProtocolTests.pike   # JSON-RPC 2.0 protocol (46)
-├── LspLifecycleTests.pike      # LSP initialize/shutdown lifecycle (33)
-├── LspDocumentTests.pike       # textDocument/didOpen/Change/Close/Save (50)
-├── WorkerProtocolTests.pike    # Worker IPC protocol (57)
-├── ProtocolEdgeCaseTests.pike  # Edge cases: malformed JSON, boundary values (101)
-├── LspProtocol.pmod            # Shared protocol builder/validator helpers
-└── TestBootstrap.pmod          # Test bootstrap utilities
-```
-
-### Adding New Pike Tests
-
-1. Create a new `.pike` file in `tests/pike/`:
-
-```pike
-//! MyTests.pike — Description of what these tests cover
-import PUnit;
-
-void test_my_feature() {
-  assert_equal(1 + 1, 2);
-}
-```
-
-2. Import shared helpers as needed:
-   - `import Common;` — for `DiagnosticHandler`, `get_pike_version`, `normalize_diagnostics`
-   - `import LspProtocol;` — for JSON-RPC/LSP message builders and validators
-
-3. Run your test file:
-
-```bash
-bash scripts/test-pike.sh tests/pike/MyTests.pike
-```
-
-The PUnit runner auto-discovers all `test_*` functions in each file. No registration needed.
-
----
-
-## Development
-
-```bash
-bun install                  # Install dependencies
-bun run build                # Build server + client
-bun test                     # Run default test suite (harness + perf)
-bun test tests/lsp/          # Run LSP integration tests
-bun run test:all             # Run TS + Pike tests together
-bun run typecheck            # Type-check the project
-bun run fmt:check            # Check formatting
-```
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for contribution guidelines and [docs/ci.md](./docs/ci.md) for the CI pipeline.
-
----
+There are 25+ settings in total — including worker lifecycle, background indexing, and hibernation tuning — all discoverable in the Settings UI.
 
 ## Troubleshooting
 
-### Server won't start
+**Server won't start**
+1. Click the status bar item to open **Output → Pike Language Server**.
+2. Confirm `pike --version` works in your terminal and reports 8.0 or newer.
+3. Check that `pike.languageServer.path` points to a working Pike binary.
 
-1. Open **Output → Pike Language Server** (click the status bar item)
-2. Verify `pike --version` works from your terminal
-3. Check `pike.languageServer.path` points to a working Pike binary
+**Diagnostics not appearing** — ensure `pike.languageServer.diagnosticMode` is `realtime` or `saveOnly`.
 
-### Diagnostics not appearing
+**Status bar shows a warning icon** — click it to inspect the error. Common causes: Pike not found, version too old, or file permissions.
 
-Ensure `pike.languageServer.diagnosticMode` is set to `realtime` or `saveOnly`.
+For deeper diagnosis, set `pike.languageServer.trace.server` to `verbose` and check the output channel.
 
-### Status bar shows warning icon
+## Architecture
 
-Click the status bar item to open the output channel and inspect the error. Common causes: Pike binary not found, version too old, or file permissions.
+A **Tier-3 LSP**: `pike` is the semantic oracle and [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) is the syntactic parser. The server is TypeScript (`vscode-languageserver-node`) split into 60+ focused modules, following a strict style budget (500-line files, 50-line functions, explicit error handling, bounded caches).
 
----
+Correctness is anchored to the compiler: the test suite derives every expected result from `pike` itself — no hand-written expectations — across ~490 Pike (PUnit) tests, a 90-file language corpus, and TypeScript LSP integration tests.
+
+See **[docs/architecture.md](./docs/architecture.md)** for the full design and **[docs/decisions/](./docs/decisions/)** for the decision records.
+
+## Contributing
+
+Contributions are welcome. Quick start:
+
+```bash
+bun install          # install dependencies
+bun run build        # build server + client
+bun run test:all     # TypeScript + Pike test suites
+bun run typecheck    # type-check
+bun run fmt:check    # formatting check
+```
+
+See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for guidelines and **[docs/ci.md](./docs/ci.md)** for the CI pipeline.
 
 ## Links
 
 - [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)
-- [Source repository](https://github.com/TheSmuks/pike-language-server)
-- [Changelog](./CHANGELOG.md)
-- [License](./LICENSE) (MIT)
-- [Pike language](https://pike.lysator.liu.se/)
-- [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike)
+- [Changelog](./CHANGELOG.md) · [License (MIT)](./LICENSE)
+- [Pike language](https://pike.lysator.liu.se/) · [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike)
