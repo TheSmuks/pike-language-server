@@ -32,7 +32,11 @@ function buildCompletionProvider(): object {
     // second char of the `::` inherit-scope operator. Without '>' and ':'
     // the client never auto-invokes completion after `->`/`::`; the trigger
     // context is disambiguated by tree-sitter in completionTrigger.ts.
-    triggerCharacters: ['.', '>', ':'],
+    // '!' — the third char of the `//!` autodoc doc-comment marker; lets the
+    // autodoc-skeleton completion auto-popup when `//!` is typed above a
+    // declaration (see completion-autodoc.ts). Outside that context it just
+    // re-invokes the normal completion list.
+    triggerCharacters: ['.', '>', ':', '!'],
     resolveProvider: true,
   };
 }
@@ -54,6 +58,7 @@ function buildCodeActionProvider(): object {
       "source.fixAll",
       "source.organizeImports",
       "refactor.extract.variable",
+      "refactor.rewrite",
     ],
   };
 }

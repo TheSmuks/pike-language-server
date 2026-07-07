@@ -43,6 +43,7 @@ import { completeCallArgs } from "./completion-callArgs";
 import { collectKeywordSnippets } from "./completion-keywords";
 import { addStdlibMembers, addStdlibMembersByType } from "./completion-stdlib-members";
 import { utf16ToUtf8 } from "../util/positionConverter";
+import { buildAutodocCompletion } from "./completion-autodoc";
 
 // Re-export for backward compatibility
 export { type CompletionContext, resetCompletionCache } from "./completionTrigger";
@@ -64,6 +65,12 @@ export async function getCompletions(
   const root = tree.rootNode;
   // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
   const lines = ctx.source.split("\n");
+
+  // Autodoc-skeleton snippet: fires only when the cursor sits on an empty
+  // `//!` line above a declaration. Cheap regex guard; returns null otherwise.
+  const autodocItem = buildAutodocCompletion(table, line, character, ctx.source);
+  if (autodocItem) return { isIncomplete: false, items: [autodocItem] };
+
   const utf8Col = utf16ToUtf8(lines[line] ?? "", character);
   const pos = { row: line, column: utf8Col };
 
