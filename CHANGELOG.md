@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.37] — 2026-07-07
+
 ### Added
 
 - **VS Code Marketplace publishing.** `release.yml` now publishes the extension to the Marketplace when a GitHub release is published, using the `VSCODE_MARKETPLACE_TOKEN` secret (`vsce publish --packagePath …` on the exact VSIX attached to the release, so both artifacts are identical). Release builds pass `build-vsix.sh --release` to produce a clean `X.Y.Z` version, which the Marketplace requires; local builds keep the unique `-buildNNNNNN` suffix so you can tell you're running the build you just made.
