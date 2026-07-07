@@ -14,7 +14,7 @@ import {
   CancellationTokenSource,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { isParserReady, parse, initParser, getTreeCacheStats, evictTreeCacheOldest } from "./parser";
+import { isParserReady, parse, initParser } from "./parser";
 import type { WorkspaceIndex } from "./features/workspaceIndex";
 import { ModificationSource } from "./features/workspaceIndex";
 import { indexWorkspaceFiles } from "./features/backgroundIndex";
@@ -24,6 +24,8 @@ import {
   computeWasmHash,
   type CachedFileEntry,
 } from "./features/persistentCache";
+import { loadManifest, restoreStubs } from "./features/cacheManifest";
+import { SymbolIndex } from "./features/symbolIndex";
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
@@ -32,6 +34,7 @@ import { createIndexWarmRefresh } from "./features/indexWarmRefresh";
 import { isOverMemoryBudget } from "./serverInitHandler";
 import type { ResourceConfiguration } from "./features/resourceTypes";
 import type { ResourceStateTracker } from "./features/resourceState";
+import { createHeapPressureGovernor } from "./features/memoryGovernor";
 import type { HibernationManager } from "./features/hibernation";
 
 // ---------------------------------------------------------------------------
@@ -311,7 +314,17 @@ function startBackgroundIndexing(
 
 function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection): void {
   const MEMORY_CHECK_INTERVAL_MS = 60_000;
-  const HEAP_USAGE_WARNING_RATIO = 0.80;
+
+  // Budget-aware governor: RSS vs memory.budgetMb with demotion/recovery
+  // hysteresis. Replaces the old advisory heapUsed/heapTotal ratio check —
+  // memory.budgetMb is now actually enforced.
+  const governor = createHeapPressureGovernor({
+    index: ctx.index,
+    documents: ctx.documents,
+    resourceState: ctx.resourceState,
+    memoryBudget: ctx.resourceConfig.memory,
+    connection,
+  });
 
   ctx.memoryTimer = setInterval(() => {
     // Hibernation idle check — fires on the same timer as memory monitoring.
@@ -321,26 +334,7 @@ function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection)
       logWarn(connection, `[hibernation] idle check error: ${err}`);
     });
 
-    const mem = process.memoryUsage();
-    const heapRatio = mem.heapUsed / mem.heapTotal;
-
-    if (heapRatio > HEAP_USAGE_WARNING_RATIO) {
-      const treeStats = getTreeCacheStats();
-
-      if (treeStats.size > 5) {
-        logWarn(connection,
-          `Memory pressure: heap ${Math.round(mem.heapUsed / 1024 / 1024)}MB / `
-          + `${Math.round(mem.heapTotal / 1024 / 1024)}MB `
-          + `(${Math.round(heapRatio * 100)}%). `
-          + `Tree cache: ${treeStats.size} entries (${Math.round(treeStats.bytes / 1024)}KB). `
-          + `Evicting ${Math.ceil(treeStats.size / 2)} entries.`
-        );
-
-        const evictCount = Math.ceil(treeStats.size / 2);
-        const evicted = evictTreeCacheOldest(evictCount);
-        logWarn(connection, `Evicted ${evicted} tree cache entries due to memory pressure`);
-      }
-    }
+    governor.check();
   }, MEMORY_CHECK_INTERVAL_MS);
   if (ctx.memoryTimer.unref) ctx.memoryTimer.unref();
 }
@@ -399,19 +393,24 @@ export async function handleInitialized(ctx: InitializedContext): Promise<void> 
   const wasmPath = resolve(import.meta.dirname ?? dirname(fileURLToPath(import.meta.url)), 'tree-sitter-pike.wasm');
   const currentWasmHash = computeWasmHash(wasmPath);
 
-  const cacheLoadPromise = loadCache(index.workspaceRoot, currentWasmHash)
-    .catch((err) => {
-      logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err);
-      return null;
-    });
+  // Lazy restore: prefer the lightweight manifest (stub entries, no symbol
+  // tables resident) so startup stays fast and low-RAM. Fall back to the eager
+  // per-file restore only for old caches written before the manifest existed.
+  const manifest = await loadManifest(index.workspaceRoot, currentWasmHash).catch(() => null);
 
   warmUpPikeWorker(connection, worker, backgroundIndexEnabled);
 
-  cacheLoadPromise.then((cached) => {
-    handleCacheLoad(connection, index, cached, ctx);
-  }).catch((err) => {
-    logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err);
-  });
+  if (manifest) {
+    const stubs = restoreStubs(index, manifest);
+    index.symbolIndex = new SymbolIndex(manifest);
+    logInfo(connection, `[init] step 7e: restored ${stubs} stubs, ${index.symbolIndex.size} resident symbols (lazy)`);
+    startBackgroundIndexing(connection, index, backgroundIndexEnabled, backgroundIndexBatchSize, ctx);
+  } else {
+    loadCache(index.workspaceRoot, currentWasmHash)
+      .catch((err) => { logError(connection, ErrorCategory.System, "[init] step 7e FAILED: cache load", err); return null; })
+      .then((cached) => handleCacheLoad(connection, index, cached, ctx))
+      .catch((err) => { logError(connection, ErrorCategory.System, "[init] step 7e: cache restore failed", err); });
+  }
 
   logInfo(connection, "[init] step 7: onInitialized complete — server fully operational");
   startMemoryMonitorStep(ctx, connection);

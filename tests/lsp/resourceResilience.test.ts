@@ -10,22 +10,28 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadCache } from "../../server/src/features/persistentCache";
+import { loadCache, getCachePath } from "../../server/src/features/persistentCache";
 
 describe("US1: Bloated-cache startup (Phase 3)", () => {
   let bloatedDir: string;
+  let origCacheHome: string | undefined;
 
   beforeEach(() => {
     bloatedDir = mkdtempSync(join(tmpdir(), "pike-lsp-bloated-"));
+    // Isolate the global cache under bloatedDir so it is cleaned with it.
+    origCacheHome = process.env.XDG_CACHE_HOME;
+    process.env.XDG_CACHE_HOME = bloatedDir;
   });
 
   afterEach(() => {
+    if (origCacheHome === undefined) delete process.env.XDG_CACHE_HOME;
+    else process.env.XDG_CACHE_HOME = origCacheHome;
     rmSync(bloatedDir, { recursive: true, force: true });
   });
 
   test("T027: loads cache with many entries without crashing", async () => {
     const wasmHash = "bloated-hash";
-    const cacheDir = join(bloatedDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(bloatedDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     // Write 200 cache entries — exercises bounded-batch loading.
@@ -47,7 +53,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
     }
 
     writeFileSync(
-      join(bloatedDir, ".pike-lsp", "cacheIndex.json"),
+      join(getCachePath(bloatedDir), "cacheIndex.json"),
       JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 200 }),
     );
 
@@ -58,7 +64,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
 
   test("T027: cache with temp files from interrupted saves does not break load", async () => {
     const wasmHash = "temp-hash";
-    const cacheDir = join(bloatedDir, ".pike-lsp", "cache");
+    const cacheDir = join(getCachePath(bloatedDir), "cache");
     mkdirSync(cacheDir, { recursive: true });
 
     // Write valid entries alongside temp files (from interrupted atomic writes).
@@ -80,7 +86,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
     writeFileSync(join(cacheDir, "valid-hash.json.tmp.1234.5678"), "partial write");
 
     writeFileSync(
-      join(bloatedDir, ".pike-lsp", "cacheIndex.json"),
+      join(getCachePath(bloatedDir), "cacheIndex.json"),
       JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
     );
 

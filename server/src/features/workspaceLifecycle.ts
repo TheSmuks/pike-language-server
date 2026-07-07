@@ -9,6 +9,8 @@
  */
 
 import type { FileEntry } from "./workspaceTypes";
+import { ModificationSource } from "./workspaceTypes";
+import type { SymbolTable } from "./symbolTable";
 import type { DependencyContext } from "./workspaceDependencies";
 import { extractDependencies } from "./workspaceDependencies";
 import { registerReverseDeps } from "./workspaceIndexImpl";
@@ -137,6 +139,67 @@ export async function rehydrateEntryImpl(
     // Re-indexing failed — entry stays demoted. Do not present false success.
   }
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Lazy (stub) cache restore
+// ---------------------------------------------------------------------------
+
+/**
+ * Restore a cached file as a stub: dependency edges only, no symbol table.
+ *
+ * Startup restores the whole cached graph this way so no symbol tables are
+ * resident until a file (or an open file's dependency closure) needs one.
+ * `uri` and dependency URIs are normalized via `normFn`. No-op if the entry
+ * already exists (an open document indexed first must win).
+ */
+export function restoreStubImpl(
+  files: Map<string, FileEntry>,
+  dependents: Map<string, Set<string>>,
+  uri: string,
+  version: number,
+  contentHash: string,
+  dependencies: string[],
+  normFn: (uri: string) => string,
+): void {
+  if (files.has(uri)) return;
+
+  const normalizedDeps = new Set<string>();
+  for (const dep of dependencies) normalizedDeps.add(normFn(dep));
+
+  files.set(uri, {
+    uri,
+    version,
+    symbolTable: null,
+    pikeVersion: null,
+    dependencies: normalizedDeps,
+    lastModSource: ModificationSource.BackgroundIndex,
+    contentHash,
+    stale: false,
+    depsResolved: true,
+    lifecycle: "stub",
+  });
+  registerReverseDeps(dependents, uri, normalizedDeps, normFn);
+}
+
+/**
+ * Install a symbol table onto a stub/demoted entry, promoting it to "full".
+ *
+ * Returns false if the entry is absent or already full — callers treat that as
+ * "no hydration needed". `uri` must be normalized.
+ */
+export function hydrateStubImpl(
+  files: Map<string, FileEntry>,
+  uri: string,
+  table: SymbolTable,
+): boolean {
+  const entry = files.get(uri);
+  if (!entry) return false;
+  if (entry.lifecycle !== "stub" && entry.lifecycle !== "demoted") return false;
+  entry.symbolTable = table;
+  entry.lifecycle = "full";
+  entry.stale = false;
+  return true;
 }
 
 // ---------------------------------------------------------------------------

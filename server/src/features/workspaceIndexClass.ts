@@ -32,6 +32,8 @@ import {
   invalidateWithDependentsImpl,
   demoteNonEssentialEntriesImpl,
   restoreDependenciesImpl,
+  restoreStubImpl,
+  hydrateStubImpl,
   rehydrateEntryImpl,
   ensureDependenciesResolvedImpl,
   buildDependencyForwardEdges,
@@ -56,6 +58,8 @@ export class WorkspaceIndex {
   readonly resolver: ModuleResolver;
   readonly workspaceRoot: string;
   readonly pikePaths: PikePaths;
+  /** Resident outline-symbol index for cheap workspace/symbol (set at startup). */
+  symbolIndex: import("./symbolIndex").SymbolIndex | null = null;
   private onDemandIndex: OnDemandIndexFn | null = null;
   /** True after a global scan has completed (full mode or on-demand prep). */
   private globalPrepDone = false;
@@ -248,6 +252,16 @@ export class WorkspaceIndex {
     restoreDependenciesImpl(this.files, this.dependents, normUri(uri), dependencies, normUri);
   }
 
+  /** Restore a cached file as a stub (dependency edges only, no symbol table). */
+  restoreStub(uri: string, version: number, contentHash: string, dependencies: string[]): void {
+    restoreStubImpl(this.files, this.dependents, normUri(uri), version, contentHash, dependencies, normUri);
+  }
+
+  /** Install a symbol table onto a stub/demoted entry, promoting it to "full". */
+  hydrateStub(uri: string, table: SymbolTable): boolean {
+    return hydrateStubImpl(this.files, normUri(uri), table);
+  }
+
   getFile(uri: string): FileEntry | undefined {
     return this.files.get(normUri(uri));
   }
@@ -434,10 +448,7 @@ export class WorkspaceIndex {
     return (await this.resolver.resolveInclude(pathText, isSystem, this.fromPath(fromUri)))?.uri ?? null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Sync resolution (cache-only, for symbolTable.ts compatibility)
-  // ---------------------------------------------------------------------------
-
+  // Sync resolution (cache-only, for symbolTable.ts compatibility).
   resolveModuleSync(modulePath: string, fromUri: string): string | null {
     const resolver = this.scopedResolver(this.files.get(normUri(fromUri)));
     return resolver.getCachedModule(modulePath, this.fromPath(fromUri))?.uri ?? null;
@@ -455,10 +466,7 @@ export class WorkspaceIndex {
     return this.resolver.getCachedInclude(pathText, isSystem, this.fromPath(fromUri))?.uri ?? null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Cross-file resolution (delegated to workspaceResolution.ts)
-  // ---------------------------------------------------------------------------
-
+  // Cross-file resolution (delegated to workspaceResolution.ts).
   /** Resolve a cross-file definition at a position. Returns target URI + declaration, or null. */
   async resolveCrossFileDefinition(uri: string, line: number, character: number): Promise<{
     uri: string; decl: Declaration;
@@ -482,10 +490,7 @@ export class WorkspaceIndex {
     return getCrossFileReferencesFn(this.resolutionCtx(), normUri(uri), line, character);
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal helpers
-  // ---------------------------------------------------------------------------
-
+  // Internal helpers.
   /** Create a resolver scoped to the file's #pike version, or the default resolver. */
   private scopedResolver(entry: FileEntry | undefined): ModuleResolver {
     return this.scopedResolvers.get(entry);

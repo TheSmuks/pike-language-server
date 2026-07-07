@@ -56,18 +56,26 @@ export function searchWorkspaceSymbols(
 ): SymbolInformation[] {
   const lowerQuery = query.toLowerCase();
   const results: SymbolInformation[] = [];
+  const liveUris = new Set<string>();
 
-  const entries = index.getAllEntries();
-
-  for (const entry of entries) {
+  // Live entries (open / edited / hydrated) are authoritative — they reflect
+  // unsaved edits that the resident snapshot cannot.
+  for (const entry of index.getAllEntries()) {
     if (!entry.symbolTable) continue;
+    liveUris.add(entry.uri);
+    collectMatchingSymbols(entry, entry.symbolTable.declarations, lowerQuery, results);
+  }
 
-    collectMatchingSymbols(
-      entry,
-      entry.symbolTable.declarations,
-      lowerQuery,
-      results,
-    );
+  // Resident index covers cached-but-not-loaded (stub) files with zero
+  // hydration — the modern-LSP win: complete search without a full scan.
+  const resident = index.symbolIndex;
+  if (resident) {
+    for (const ref of resident.search(lowerQuery)) {
+      if (liveUris.has(ref.uri)) continue; // a live table supersedes the snapshot
+      const kind = DECL_KIND_TO_SYMBOL_KIND[ref.kind as DeclKind];
+      if (kind === undefined) continue;
+      results.push({ name: ref.name, kind, location: { uri: ref.uri, range: ref.nameRange } });
+    }
   }
 
   return results;
@@ -89,15 +97,19 @@ export async function searchWorkspaceSymbolsLazy(
   connection: Connection,
   cancellationToken?: CancellationToken,
 ): Promise<SymbolInformation[]> {
-  await prepareGlobalQuery({
-    connection,
-    index,
-    workspaceRoot: index.workspaceRoot,
-    cancellationToken,
-  });
-
-  // Cancellation during preparation — return empty (protocol allows this).
-  if (cancellationToken?.isCancellationRequested) return [];
+  // With a resident symbol index, answer from it (+ live entries) — no need to
+  // force-index the whole workspace into RAM. Fall back to a full scan only when
+  // there is no index (old caches predating the manifest, or a fresh workspace).
+  if (!index.symbolIndex) {
+    await prepareGlobalQuery({
+      connection,
+      index,
+      workspaceRoot: index.workspaceRoot,
+      cancellationToken,
+    });
+    // Cancellation during preparation — return empty (protocol allows this).
+    if (cancellationToken?.isCancellationRequested) return [];
+  }
 
   return searchWorkspaceSymbols(query, index);
 }

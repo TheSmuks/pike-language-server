@@ -1,8 +1,11 @@
 /**
  * Persistent cache for workspace index across LSP restarts.
  *
- * On shutdown, serializes symbol tables to per-file JSON entries in .pike-lsp/cache/.
- * On startup, reads individual cache entries and validates each by content hash.
+ * On shutdown, serializes symbol tables to per-file JSON entries in the global
+ * user cache dir (see getCachePath — keyed by a hash of the workspace path, so
+ * caches never pollute the project tree). On startup, reads individual cache
+ * entries and validates each by content hash. A legacy in-workspace .pike-lsp/
+ * cache is migrated to the global location on first load.
  *
  * Design decisions (see ADR 0025):
  * - Per-file cache entries: loading one file does not require parsing the
@@ -28,6 +31,8 @@ import { mkdir, readFile, writeFile, rm, readdir, rename, stat } from "node:fs/p
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { getCachePath, migrateLegacyCache } from "./cachePaths";
+import { writeManifest, manifestSymbolsFrom } from "./cacheManifest";
 import type {
   Declaration,
   Reference,
@@ -80,7 +85,6 @@ interface CacheIndex {
 // Constants
 // ---------------------------------------------------------------------------
 
-const CACHE_DIR = ".pike-lsp";
 const CACHE_SUBDIR = "cache";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
 const FORMAT_VERSION = 2; // Per-file entries (was 1: monolithic)
@@ -94,22 +98,15 @@ const MAX_CACHE_ENTRIES_ON_LOAD = 50_000;
 // Public API
 // ---------------------------------------------------------------------------
 
-/**
- * Get the cache root path for a workspace.
- */
-export function getCachePath(workspaceRoot: string): string {
-  return join(workspaceRoot, CACHE_DIR);
-}
+export { getCachePath } from "./cachePaths"; // resolution + legacy migration live there
 
 /**
  * Save workspace index to persistent cache.
  *
- * Writes each file entry as an individual JSON file to .pike-lsp/cache/.
- * Uses atomic write (temp file + rename) to prevent corruption on crash.
- * Writes cacheIndex.json last, after all entries, to mark a complete save.
- * Forward dependency URIs are serialized per entry, enabling the reverse
- * dependency graph to be reconstructed from cache without async resolution.
- * Errors are caught and logged — never throws.
+ * Each file entry is an individual JSON file written atomically (temp + rename);
+ * cacheIndex.json + manifest.json are written last to mark a complete save.
+ * Forward dependency URIs are serialized per entry so the reverse-dep graph can
+ * be reconstructed without async resolution. Errors are caught, never thrown.
  */
 export async function saveCache(
   workspaceRoot: string,
@@ -119,7 +116,7 @@ export async function saveCache(
   if (!workspaceRoot) return;
 
   startSpan("saveCache");
-  const cacheDir = join(workspaceRoot, CACHE_DIR, CACHE_SUBDIR);
+  const cacheDir = join(getCachePath(workspaceRoot), CACHE_SUBDIR);
 
   try {
     await mkdir(cacheDir, { recursive: true });
@@ -146,13 +143,16 @@ export async function saveCache(
   // T035: Prune stale entries — files no longer in the index get deleted.
   await pruneStaleEntries(cacheDir, liveEntries);
 
-  // T031/T033: Stat source files to populate mtime/size metadata.
-  // Old-format entries that lacked these fields are upgraded on this save.
+  // T031/T033: Stat source files to populate mtime/size metadata (upgrades old entries).
   await populateSourceMetadata(entries);
 
-  // Write all entries in parallel batches, then write the index atomically.
+  // Write all entries in parallel batches, then the index + manifest atomically.
   await writeEntriesBatched(cacheDir, entries);
   await writeCacheIndexAtomically(workspaceRoot, wasmHash, entries.length);
+  await writeManifest(getCachePath(workspaceRoot), entries.map((e) => ({
+    uri: e.uri, version: e.version, contentHash: e.contentHash, dependencies: e.dependencies,
+    symbols: manifestSymbolsFrom(e.symbolTable?.declarations ?? [], e.symbolTable?.scopes ?? []),
+  })));
   stopSpan("saveCache");
 }
 
@@ -173,7 +173,8 @@ export async function loadCache(
   if (!workspaceRoot) return null;
 
   startSpan("loadCache");
-  const cacheDir = join(workspaceRoot, CACHE_DIR);
+  const cacheDir = getCachePath(workspaceRoot);
+  await migrateLegacyCache(workspaceRoot, cacheDir);
   const indexPath = join(cacheDir, CACHE_INDEX_FILENAME);
 
   if (!existsSync(indexPath)) {
@@ -197,7 +198,7 @@ export async function loadCache(
  * Delete the entire cache directory for a workspace.
  */
 export async function deleteCache(workspaceRoot: string): Promise<void> {
-  const cachePath = join(workspaceRoot, CACHE_DIR);
+  const cachePath = getCachePath(workspaceRoot);
   try {
     await rm(cachePath, { recursive: true, force: true });
   } catch {
@@ -352,7 +353,7 @@ async function writeCacheIndexAtomically(workspaceRoot: string, wasmHash: string
   startSpan("serializeCacheIndex");
   const indexData = JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount });
   stopSpan("serializeCacheIndex");
-  await writeFileAtomic(join(workspaceRoot, CACHE_DIR, CACHE_INDEX_FILENAME), indexData);
+  await writeFileAtomic(join(getCachePath(workspaceRoot), CACHE_INDEX_FILENAME), indexData);
   bump("cacheDiskWrites");
 }
 
