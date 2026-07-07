@@ -8,6 +8,15 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 STAGE="$ROOT/out/.vsix-stage"
 
+# --release: package a clean X.Y.Z version (for GitHub releases and the VS Code
+# Marketplace, which only accepts major.minor.patch). Without it, a unique
+# "-buildNNNNNN" suffix is appended so local dev installs always look newer than
+# the previous one — you can tell you're running the build you just made.
+RELEASE_MODE=false
+for arg in "$@"; do
+  [[ "$arg" == "--release" ]] && RELEASE_MODE=true
+done
+
 # Read version from .template-version — the single source of truth that every
 # release cut bumps and that the git tag / GitHub release mirror. Deriving the
 # VSIX version from here (rather than extension.package.json) guarantees the
@@ -22,12 +31,18 @@ if [[ -z "$VERSION" ]]; then
   echo "FAIL: could not read version from $ROOT/.template-version" >&2
   exit 1
 fi
-BUILD_NUM=$(date +%s | tail -c 7)
-# Use a single alphanumeric pre-release identifier — VS Code's vsce rejects
-# purely numeric pre-release parts (leading-zero violation per semver spec)
-# and dot-separated identifiers where a sub-part is numeric with leading zeros.
-# "buildNNNNNN" (no dot) avoids both issues.
-FULL_VERSION="${VERSION}-build${BUILD_NUM}"
+if [[ "$RELEASE_MODE" == true ]]; then
+  # Clean version for release/marketplace. The Marketplace rejects semver
+  # pre-release suffixes, so no "-buildNNNNNN" here.
+  FULL_VERSION="${VERSION}"
+else
+  BUILD_NUM=$(date +%s | tail -c 7)
+  # Use a single alphanumeric pre-release identifier — VS Code's vsce rejects
+  # purely numeric pre-release parts (leading-zero violation per semver spec)
+  # and dot-separated identifiers where a sub-part is numeric with leading zeros.
+  # "buildNNNNNN" (no dot) avoids both issues.
+  FULL_VERSION="${VERSION}-build${BUILD_NUM}"
+fi
 VSIX_NAME="pike-language-server-${FULL_VERSION}.vsix"
 
 echo "Packaging pike-language-server v${FULL_VERSION}..."
