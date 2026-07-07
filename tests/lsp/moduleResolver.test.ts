@@ -181,6 +181,53 @@ describe("ModuleResolver — inherit resolution", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Regression: file opened outside the workspace root
+//
+// Bug: opening a single Pike file that lives outside the open workspace folder
+// left every cross-file `inherit` (and the symbols it brings in) unresolved —
+// "dumb mode". normalizeAndCheck rejected the file's own directory because it
+// was not under the workspace root or a system path. The importing file's own
+// directory is always a valid resolution root, so siblings must still resolve;
+// absolute-path traversal must still be blocked.
+// ---------------------------------------------------------------------------
+
+describe("ModuleResolver — file outside workspace root", () => {
+  // Workspace root points somewhere unrelated to the corpus, so the corpus
+  // files are "outside the workspace" exactly like the reported scenario.
+  const OUTSIDE_WS = pathToFileURL("/tmp/unrelated-workspace").href;
+  const resolver = new ModuleResolver({
+    workspaceRoot: OUTSIDE_WS,
+    pikePaths: {
+      pikeHome: PIKE_HOME,
+      modulePaths: ["/tmp/unrelated-workspace", SYSTEM_MODULES],
+      includePaths: ["/tmp/unrelated-workspace"],
+      programPaths: ["/tmp/unrelated-workspace"],
+    },
+    pikeVersion: null,
+  });
+
+  test("resolves a sibling inherit for a file outside the workspace", async () => {
+    const currentFile = corpusFile("cross-inherit-simple-a.pike");
+    const result = await resolver.resolveInherit("cross-inherit-simple-b", false, currentFile);
+    expect(result).not.toBeNull();
+    expect(result!.uri).toBe(corpusUri("cross-inherit-simple-b.pike"));
+  });
+
+  test("resolves a relative .sibling inherit for a file outside the workspace", async () => {
+    const currentFile = corpusFile("cross-inherit-simple-a.pike");
+    const result = await resolver.resolveInherit(".cross-inherit-simple-b", false, currentFile);
+    expect(result).not.toBeNull();
+    expect(result!.uri).toBe(corpusUri("cross-inherit-simple-b.pike"));
+  });
+
+  test("still blocks absolute-path traversal outside all boundaries", async () => {
+    const currentFile = corpusFile("cross-inherit-simple-a.pike");
+    const result = await resolver.resolveInherit('"/etc/passwd"', true, currentFile);
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Import resolution
 // ---------------------------------------------------------------------------
 

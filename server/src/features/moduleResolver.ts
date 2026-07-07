@@ -75,9 +75,19 @@ export class ModuleResolver {
    * Security boundary check: reject paths outside the workspace and Pike system paths.
    * Prevents path traversal via `inherit "/etc/passwd"` or `inherit "../../../etc/shadow"`.
    * Returns the normalized path if allowed, null if outside boundaries.
+   *
+   * `baseDir` is the importing file's own directory. A file's siblings and
+   * sub-directories are always a legitimate resolution root — Pike resolves
+   * relative `inherit`/`import` against the file itself — so they are allowed
+   * even when the file lives outside the workspace root. Without this, opening a
+   * single file outside the workspace leaves every cross-file `inherit` (and the
+   * symbols it brings in) unresolved, degrading the file to "dumb mode". The
+   * guard still blocks upward traversal, since `../../etc` does not stay under
+   * `baseDir`.
    */
-  private normalizeAndCheck(resolvedPath: string): string | null {
+  private normalizeAndCheck(resolvedPath: string, baseDir?: string): string | null {
     const normalized = resolve(resolvedPath);
+    if (baseDir && normalized.startsWith(baseDir)) return normalized;
     if (normalized.startsWith(this.workspaceRoot)) return normalized;
     if (this.pikePaths.pikeHome && normalized.startsWith(this.pikePaths.pikeHome)) return normalized;
     // Also allow any declared module/include/program paths
@@ -227,13 +237,15 @@ export class ModuleResolver {
     const currentDir = dirname(currentFile);
 
     if (rawPath.startsWith("/")) {
-      // Absolute path — normalize and check boundary
+      // Absolute path — normalize and check boundary. No baseDir: an absolute
+      // path is not resolved against the file, so it must stay within the
+      // workspace/system boundaries.
       return this.tryInheritCandidate(this.normalizeAndCheck(rawPath));
     }
     if (rawPath.startsWith("./") || rawPath.startsWith("../")) {
-      // Relative to current file — normalize and check boundary
+      // Relative to current file — normalize and check boundary.
       const resolved = resolve(currentDir, rawPath);
-      return this.tryInheritCandidate(this.normalizeAndCheck(resolved));
+      return this.tryInheritCandidate(this.normalizeAndCheck(resolved, currentDir));
     }
     // Pike's cast_to_program: search current dir first, then program paths
     return this.searchInheritProgramPaths(rawPath, currentDir);
@@ -252,9 +264,10 @@ export class ModuleResolver {
   }
 
   private async searchInheritProgramPaths(rawPath: string, currentDir: string): Promise<ResolveResult | null> {
-    // Search current dir first
+    // Search current dir first. The importing file's own directory is a valid
+    // resolution root even outside the workspace, so pass it as baseDir.
     const relativeToDir = resolve(currentDir, rawPath);
-    const checkedRelative = this.normalizeAndCheck(relativeToDir);
+    const checkedRelative = this.normalizeAndCheck(relativeToDir, currentDir);
     if (checkedRelative) {
       if (await pathExists(checkedRelative)) {
         return { uri: pathToFileURL(checkedRelative).href, source: "relative" };

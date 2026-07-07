@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+  - Cross-file navigation now works for a file opened outside the current
+    workspace folder. Opening a single Pike file that lives outside the open
+    workspace left every cross-file `inherit` (and the symbols it pulled in)
+    unresolved — go-to-definition, find-references, and completion all degraded
+    to "dumb mode". The module resolver's path-traversal guard rejected the
+    file's own directory because it was not under the workspace root, so sibling
+    files could not be resolved. The importing file's own directory is now a
+    valid resolution root (upward `../` traversal and absolute paths outside the
+    workspace/system boundaries remain blocked).
+
 ## [0.8.32] — 2026-07-07
 
 ### Added
