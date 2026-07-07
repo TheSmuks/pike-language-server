@@ -63,7 +63,7 @@ export function runLintRules(
   }
 
   if (options?.unreachableCode !== false) {
-    diagnostics.push(...detectUnreachableCode(tree, lines));
+    diagnostics.push(...detectUnreachableCode(tree, lines, table.uri));
   }
 
   if (options?.missingReturn !== false) {

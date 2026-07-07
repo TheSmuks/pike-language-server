@@ -51,9 +51,9 @@ const COMMENT_TYPES = new Set([
  *
  * Returns diagnostics with severity Warning.
  */
-export function detectUnreachableCode(tree: Tree, lines: string[]): Diagnostic[] {
+export function detectUnreachableCode(tree: Tree, lines: string[], uri: string): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  walkBlocks(tree.rootNode, diagnostics, lines);
+  walkBlocks(tree.rootNode, diagnostics, lines, uri);
   return diagnostics;
 }
 
@@ -65,7 +65,7 @@ export function detectUnreachableCode(tree: Tree, lines: string[]): Diagnostic[]
  * Recursively walk the tree, finding block nodes and checking for
  * unreachable statements after terminators.
  */
-function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[], lines: string[]): void {
+function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[], lines: string[], uri: string): void {
   if (node.type === "block") {
     // Switch bodies contain case/default clauses as direct children in a
     // flat block. Each case is an independent control-flow entry point, so
@@ -73,15 +73,15 @@ function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnosti
     // Use segmented checking for switch blocks.
     const parent = node.parent;
     if (parent && parent.type === "switch_statement") {
-      checkSwitchBlock(node, diagnostics, lines);
+      checkSwitchBlock(node, diagnostics, lines, uri);
       return;
     }
-    checkBlock(node, diagnostics, lines);
+    checkBlock(node, diagnostics, lines, uri);
   }
 
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child) walkBlocks(child, diagnostics, lines);
+    if (child) walkBlocks(child, diagnostics, lines, uri);
   }
 }
 
@@ -95,49 +95,72 @@ function checkBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
   lines: string[],
+  uri: string,
 ): void {
   const children = namedChildren(block);
 
-  // Scan forward. Once we see a terminator, flag everything after it.
-  let foundTerminator = false;
+  // Scan forward. Once we see a terminator, flag everything after it and point
+  // related information back at the terminator that made it unreachable.
+  let terminator: import("web-tree-sitter").Node | null = null;
 
   for (const child of children) {
     // Comments are not executable code — never flag them.
     if (COMMENT_TYPES.has(child.type)) continue;
 
-    if (foundTerminator) {
-      // This statement is unreachable.
-      diagnostics.push(makeUnreachableDiagnostic(child, lines));
+    if (terminator) {
+      diagnostics.push(makeUnreachableDiagnostic(child, terminator, lines, uri));
       continue;
     }
 
     if (TERMINATOR_TYPES.has(child.type)) {
-      foundTerminator = true;
+      terminator = child;
     }
   }
+}
+
+/** Build an LSP Range spanning a tree-sitter node, UTF-16 corrected. */
+function nodeRange(node: import("web-tree-sitter").Node, lines: string[]): Range {
+  return Range.create(
+    { line: node.startPosition.row, character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column) },
+    { line: node.endPosition.row, character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column) },
+  );
 }
 
 /**
  * Build an "Unreachable code" diagnostic tagged Unnecessary so the editor
  * fades the dead statement grey (matching how modern language servers render
- * unreachable code).
+ * unreachable code), with related information pointing at the terminator
+ * (return/break/continue) that makes the statement unreachable.
  */
 function makeUnreachableDiagnostic(
   child: import("web-tree-sitter").Node,
+  terminator: import("web-tree-sitter").Node,
   lines: string[],
+  uri: string,
 ): Diagnostic {
   const diag = Diagnostic.create(
-    Range.create(
-      { line: child.startPosition.row, character: utf8ToUtf16(lines[child.startPosition.row] ?? '', child.startPosition.column) },
-      { line: child.endPosition.row, character: utf8ToUtf16(lines[child.endPosition.row] ?? '', child.endPosition.column) },
-    ),
+    nodeRange(child, lines),
     "Unreachable code",
     DiagnosticSeverity.Warning,
     CODE_UNREACHABLE,
     "pike-lsp-lint",
   );
   diag.tags = [DiagnosticTag.Unnecessary];
+  diag.relatedInformation = [{
+    location: { uri, range: nodeRange(terminator, lines) },
+    message: `Any code below this ${terminatorLabel(terminator.type)} is never executed`,
+  }];
   return diag;
+}
+
+/** Human-readable label for a control-flow terminator node type. */
+function terminatorLabel(nodeType: string): string {
+  switch (nodeType) {
+    case "return_statement": return "return";
+    case "break_statement": return "break";
+    case "continue_statement": return "continue";
+    default: return "statement";
+  }
 }
 
 /** Get named children of a node (skip anonymous tokens like `{`, `}`). */
@@ -167,6 +190,7 @@ function checkSwitchBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
   lines: string[],
+  uri: string,
 ): void {
   const children = namedChildren(block);
 
@@ -185,24 +209,24 @@ function checkSwitchBlock(
 
   // Check each segment independently.
   for (const segment of segments) {
-    let foundTerminator = false;
+    let terminator: import("web-tree-sitter").Node | null = null;
     for (const child of segment) {
       // Comments are not executable code — never flag them.
       if (COMMENT_TYPES.has(child.type)) continue;
 
-      if (foundTerminator) {
+      if (terminator) {
         // Still flag unreachable code within a single case segment.
         // E.g.: `case 1: return 1; foo();` — foo() is unreachable.
         // But skip case/default entries and break statements — break after
         // return/continue is a common defensive pattern in switch cases.
         if (!CASE_ENTRY_TYPES.has(child.type) && child.type !== "break_statement") {
-          diagnostics.push(makeUnreachableDiagnostic(child, lines));
+          diagnostics.push(makeUnreachableDiagnostic(child, terminator, lines, uri));
         }
         continue;
       }
 
       if (TERMINATOR_TYPES.has(child.type)) {
-        foundTerminator = true;
+        terminator = child;
       }
     }
   }

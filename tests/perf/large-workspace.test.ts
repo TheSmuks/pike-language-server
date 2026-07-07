@@ -189,7 +189,7 @@ describe("Large workspace profiling (1000 files)", () => {
     expect(table).not.toBeNull();
 
     const start = process.hrtime.bigint();
-    const lenses = produceCodeLenses(table!, f.tree, f.uri, index);
+    const lenses = produceCodeLenses(table!, f.uri);
     const ms = hrMs(start);
 
     record("produceCodeLenses (1 file)", ms,
@@ -237,7 +237,7 @@ describe("Large workspace profiling (1000 files)", () => {
     for (const f of files) {
       const table = index.getSymbolTable(f.uri);
       if (!table) continue;
-      const lenses = produceCodeLenses(table, f.tree, f.uri, index);
+      const lenses = produceCodeLenses(table, f.uri);
       totalLenses += lenses.length;
     }
 

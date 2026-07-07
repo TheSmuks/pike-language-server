@@ -33,7 +33,7 @@ import {
   getSupertypes,
   getSubtypes,
 } from "./typeHierarchy";
-import { produceCodeLenses } from "./codeLens";
+import { produceCodeLenses, resolveCodeLens } from "./codeLens";
 import { registerDocumentLinkHandler } from "./documentLink";
 import { prepareGlobalQuery } from "./workspaceResolution";
 import { computeContentHash } from "./diagnosticManager";
@@ -211,15 +211,14 @@ function registerCodeLensHandler(
 ): void {
   connection.onCodeLens(async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return null;
-    const doc = ctx.documents.get(params.textDocument.uri);
-    if (!doc) return null;
-
     const table = await ctx.getSymbolTable(params.textDocument.uri);
     if (!table) return null;
 
-    const tree = parse(doc.getText(), params.textDocument.uri);
-    return produceCodeLenses(table, tree, params.textDocument.uri, ctx.index);
+    // Emit bare lenses; reference counts are filled in lazily on resolve.
+    return produceCodeLenses(table, params.textDocument.uri);
   });
+
+  connection.onCodeLensResolve((lens) => resolveCodeLens(lens, ctx.index));
 }
 
 /** Extract AutoDoc XML if the content hash has changed. */

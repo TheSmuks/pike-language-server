@@ -29,7 +29,7 @@ function buildAndLint(src: string) {
   const tree = parse(src);
   const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
   const unused = detectUnusedSymbols(table);
-  const unreachable = detectUnreachableCode(tree, src.split('\n'));
+  const unreachable = detectUnreachableCode(tree, src.split('\n'), "file:///test.pike");
   return { tree, table, unused, unreachable };
 }
 
@@ -203,6 +203,22 @@ int foo() {
     const { unreachable } = buildAndLint(src);
     expect(unreachable.length).toBeGreaterThanOrEqual(1);
     expect(unreachable[0].code).toBe(CODE_UNREACHABLE);
+  });
+
+  test("points related information at the controlling terminator", () => {
+    const src = `
+int foo() {
+    return 42;
+    write("unreachable");
+}
+`;
+    const { unreachable } = buildAndLint(src);
+    const related = unreachable[0].relatedInformation;
+    expect(related?.length).toBe(1);
+    // The related location points at the `return 42;` line (0-based line 2).
+    expect(related![0].location.uri).toBe("file:///test.pike");
+    expect(related![0].location.range.start.line).toBe(2);
+    expect(related![0].message).toContain("return");
   });
 
   test("detects code after break", () => {
