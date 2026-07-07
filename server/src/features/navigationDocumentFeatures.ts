@@ -168,11 +168,21 @@ export async function buildSemanticTokenData(
   if (table.version !== currentDoc.version) {
     throwSemanticTokensContentModified();
   }
-  if (documentHasParseError(uri, currentDoc)) {
+
+  // tree-sitter is error-tolerant: a version-matched table still holds correct
+  // declarations for the parts that parsed, so we return their tokens even when
+  // a stray ERROR node exists elsewhere. A transient parse error occurs on
+  // nearly every keystroke while typing; rejecting here used to clear ALL
+  // semantic highlighting for the whole file, so tokens flickered off mid-edit
+  // and never appeared for files with tree-sitter grammar gaps. Only when we
+  // truly produced nothing AND the tree is broken do we fall back to
+  // ContentModified (keep the client's prior tokens) rather than destructively
+  // clearing the file to empty.
+  const data = encodeSemanticTokenData(ctx, table, range);
+  if (data.length === 0 && documentHasParseError(uri, currentDoc)) {
     throwSemanticTokensContentModified();
   }
-
-  return encodeSemanticTokenData(ctx, table, range);
+  return data;
 }
 
 function encodeSemanticTokenData(
@@ -195,21 +205,27 @@ function buildDirectSemanticTokenData(
   doc: { version: number; getText(): string },
   range?: SemanticTokenRange,
 ): number[] {
+  let data: number[];
+  let treeErr: boolean;
   try {
     const source = doc.getText();
     const tree = parse(source, uri);
-    if (treeHasError(tree)) {
-      throwSemanticTokensContentModified();
-    }
+    treeErr = treeHasError(tree);
     const table = buildSymbolTable(tree, uri, doc.version, undefined, source);
     const externalLookup = getExternalLookup(ctx.predefBuiltins, ctx.stdlibIndex);
     const tokens = produceSemanticTokens(table, externalLookup);
-    const data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
-    return data;
+    data = deltaEncodeTokens(range ? sliceSemanticTokens(tokens, range) : tokens);
   } catch (err) {
     logError(ctx.connection, ErrorCategory.Parse, "semanticTokens.direct", err);
     throwSemanticTokensContentModified();
   }
+  // Same rationale as buildSemanticTokenData: serve best-effort tokens from the
+  // partial tree; only keep the client's prior tokens (ContentModified) when we
+  // produced nothing at all and the tree is broken.
+  if (data.length === 0 && treeErr) {
+    throwSemanticTokensContentModified();
+  }
+  return data;
 }
 
 function documentHasParseError(

@@ -1,0 +1,53 @@
+{
+  // Debug configurations for the Pike Language Server extension.
+  //
+  // Quick start: pick "Extension + Server" from the Run and Debug dropdown and
+  // press F5. This launches a second VSCode window (the Extension Development
+  // Host) with the extension loaded from source, opens the Pike corpus so you
+  // have files to test against, and attaches the debugger to BOTH the extension
+  // client and the LSP server process. Set breakpoints in client/*.ts and
+  // server/src/**/*.ts and they will hit.
+  //
+  // See docs/debugging.md for the full workflow.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // Launches the Extension Development Host with this repo as the extension.
+      // Loads the ROOT package.json manifest (dev layout), not the packaged
+      // extension.package.json — see docs/debugging.md for why that matters.
+      "name": "Run Pike Extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "${workspaceFolder}/corpus/files"
+      ],
+      "outFiles": ["${workspaceFolder}/client/dist/**/*.cjs"],
+      "sourceMaps": true,
+      "preLaunchTask": "build:extension"
+    },
+    {
+      // Attaches to the LSP server subprocess. The extension spawns the server
+      // with --inspect=6009 whenever the extension host runs in debug mode
+      // (i.e. whenever you launched it via F5), so this just connects.
+      // "restart: true" reconnects automatically when the server restarts
+      // (e.g. after a settings change or a crash-and-recover).
+      "name": "Attach to Pike LSP Server",
+      "type": "node",
+      "request": "attach",
+      "port": 6009,
+      "restart": true,
+      "outFiles": ["${workspaceFolder}/server/dist/**/*.mjs"],
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ],
+  "compounds": [
+    {
+      // The one you usually want: client + server, both debuggable in one shot.
+      "name": "Extension + Server",
+      "configurations": ["Run Pike Extension", "Attach to Pike LSP Server"],
+      "stopAll": true
+    }
+  ]
+}

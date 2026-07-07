@@ -24,7 +24,16 @@ import { collectPostfixRef } from './postfixRefs';
  * Collect references by walking the tree.
  */
 export function collectReferences(node: Node, state: BuildState): void {
-  if (node.isError || node.isMissing) return;
+  // MISSING nodes are zero-width recovery tokens with no source to reference.
+  if (node.isMissing) return;
+
+  // Descend into ERROR nodes to collect references tree-sitter recovered inside
+  // them (same rationale as collectDeclarations): partial-parse states during
+  // editing must still produce reference tokens rather than clearing the file.
+  if (node.isError) {
+    for (const child of node.children) collectReferences(child, state);
+    return;
+  }
 
   // Skip reference collection inside inherit_decl — the inherit declaration
   // itself represents the relationship; the path identifier should not be

@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/err-syntax-partial.pike",
   "parseCount": 1,
-  "lintCount": 0,
+  "lintCount": 1,
   "diagnostics": [
     {
       "range": {
@@ -18,6 +18,22 @@
       "code": "P1000",
       "source": "pike-lsp",
       "message": "Unexpected '(', expected expression"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 13,
+          "character": 6
+        },
+        "end": {
+          "line": 13,
+          "character": 7
+        }
+      },
+      "severity": 2,
+      "code": "P3001",
+      "source": "pike-lsp-lint",
+      "message": "Variable 'x' is unused"
     }
   ]
 }

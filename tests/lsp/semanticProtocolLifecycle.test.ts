@@ -56,9 +56,39 @@ describe("semantic token protocol lifecycle", () => {
     }
   });
 
-  test("parse errors report ContentModified instead of destructive empty data", async () => {
+  test("partial parse errors still return tokens from the version-matched table (no flicker)", async () => {
+    // Regression: a transient parse error (here, a missing closing brace — the
+    // state after almost every keystroke while typing) must NOT clear the whole
+    // file's semantic tokens. tree-sitter is error-tolerant, so the version-
+    // matched table still holds valid declarations; we return their tokens
+    // instead of throwing ContentModified, which used to make highlighting
+    // flicker off mid-edit.
     const uri = "file:///semantic-parse-error-protocol.pike";
-    const source = "int main() {\n  string local = \"x\";\n  write(local);\n";
+    // Unbalanced `if (count` — a real mid-keystroke state. tree-sitter still
+    // recovers the surrounding declarations (main, count), so tokens exist.
+    const source = "int main() {\n  int count = 42;\n  if (count \n  return 0;\n}\n";
+    const doc = TextDocument.create(uri, "pike", 2, source);
+    const table = buildSymbolTable(parse(source, uri), uri, doc.version, undefined, source);
+    const ctx = {
+      documents: { get: (requestedUri: string) => requestedUri === uri ? doc : undefined },
+      upsertInFlight: new Map(),
+      getSymbolTable: async () => table,
+      predefBuiltins: {},
+      stdlibIndex: {},
+      debugTelemetry: false,
+      connection: {},
+    } as any;
+
+    const data = await buildSemanticTokenData(ctx, uri, CancellationToken.None);
+    expect(data.length).toBeGreaterThan(0);
+  });
+
+  test("truly empty output on a broken tree still reports ContentModified (non-destructive)", async () => {
+    // The non-destructive fallback the original guard was reaching for: when the
+    // document produces NO tokens at all AND the tree is broken, keep the
+    // client's prior tokens via ContentModified rather than clearing to empty.
+    const uri = "file:///semantic-empty-broken-protocol.pike";
+    const source = "{{{\n";
     const doc = TextDocument.create(uri, "pike", 2, source);
     const table = buildSymbolTable(parse(source, uri), uri, doc.version, undefined, source);
     const ctx = {

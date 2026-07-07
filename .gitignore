@@ -53,7 +53,16 @@ node_modules/
 .ipynb_checkpoints/
 
 # IDE
+# Ignore every .vscode directory anywhere in the tree...
 .vscode/
+# ...but track the shared debug configuration at the repo root. The root dir is
+# un-ignored so git can descend into it, its contents are re-ignored, then the
+# two debug files are re-included. Nested .vscode dirs (e.g. under corpus/) stay
+# ignored because the leading-slash rules only match the root.
+!/.vscode/
+/.vscode/*
+!/.vscode/launch.json
+!/.vscode/tasks.json
 .idea/
 *.swp
 *.swo
