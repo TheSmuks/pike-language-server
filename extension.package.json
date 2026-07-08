@@ -83,7 +83,8 @@
           "type": ["entity.name.type.pike", "entity.name.type", "storage.type.pike", "storage.type"],
           "namespace": ["entity.other.inherited-class.pike", "entity.other.inherited-class", "entity.name.namespace"],
           "builtinFunction": ["support.function.builtin.pike", "support.function.builtin", "support.function.any-method.pike", "support.function"],
-          "variable.mutable": ["variable.other.mutable.pike"]
+          "variable.mutable": ["variable.other.mutable.pike"],
+          "variable.readonly": ["variable.other.constant.pike", "variable.other.constant", "constant.other.pike", "constant.language.pike"]
         }
       }
     ],
