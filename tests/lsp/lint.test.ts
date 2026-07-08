@@ -100,6 +100,34 @@ string module_level = "exported";
     expect(moduleDiag!.severity).toBe(DiagnosticSeverity.Warning);
   });
 
+  test("does NOT flag file-scope declarations in header fragments (.h/.inc)", () => {
+    // A header's top-level declarations are its export surface for includers;
+    // linting the header standalone must not report them as unused.
+    const src = `
+constant doc_separator = "----";
+string prefix = "hdr";
+`;
+    for (const uri of ["file:///thing.h", "file:///thing.inc"]) {
+      const tree = parse(src);
+      const table = buildSymbolTable(tree, uri, 1, undefined, src);
+      const unused = detectUnusedSymbols(table);
+      expect(unused.find((d) => d.message.includes("doc_separator"))).toBeUndefined();
+      expect(unused.find((d) => d.message.includes("prefix"))).toBeUndefined();
+    }
+  });
+
+  test("still flags unused locals inside functions in a header", () => {
+    const src = `
+void helper() {
+    int scratch = 1;
+}
+`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///thing.h", 1, undefined, src);
+    const unused = detectUnusedSymbols(table);
+    expect(unused.find((d) => d.message.includes("scratch"))).toBeDefined();
+  });
+
   test("does NOT flag class fields (may be external)", () => {
     const src = `
 class Dog {
