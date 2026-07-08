@@ -18,8 +18,12 @@
           "name": "declaration"
         },
         {
-          "type": "SYMBOL",
-          "name": "expression_statement"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression_statement"
+          }
         },
         {
           "type": "SYMBOL",
@@ -277,7 +281,15 @@
         "members": [
           {
             "type": "STRING",
-            "value": "#\""
+            "value": "#"
+          },
+          {
+            "type": "PATTERN",
+            "value": "[ \\t]*"
+          },
+          {
+            "type": "STRING",
+            "value": "\""
           },
           {
             "type": "REPEAT",
@@ -443,8 +455,24 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
-          "value": "#string"
+          "type": "TOKEN",
+          "content": {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "[ \\t]*"
+              },
+              {
+                "type": "STRING",
+                "value": "string"
+              }
+            ]
+          }
         },
         {
           "type": "SYMBOL",
@@ -807,8 +835,54 @@
       ]
     },
     "_expr": {
-      "type": "SYMBOL",
-      "name": "comma_expr"
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "comma_expr"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "preproc_conditional_expr"
+        }
+      ]
+    },
+    "preproc_conditional_expr": {
+      "type": "PREC_DYNAMIC",
+      "value": -1,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "branch",
+            "content": {
+              "type": "SYMBOL",
+              "name": "comma_expr"
+            }
+          },
+          {
+            "type": "REPEAT1",
+            "content": {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "preproc_branch"
+                },
+                {
+                  "type": "FIELD",
+                  "name": "branch",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "comma_expr"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
     },
     "comma_expr": {
       "type": "CHOICE",
@@ -2924,8 +2998,16 @@
           ]
         },
         {
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "expression_statement"
+          }
+        },
+        {
           "type": "SYMBOL",
-          "name": "expression_statement"
+          "name": "macro_invocation_stmt"
         },
         {
           "type": "SYMBOL",
@@ -3887,33 +3969,29 @@
       ]
     },
     "macro_invocation_stmt": {
-      "type": "PREC_RIGHT",
-      "value": 1,
-      "content": {
-        "type": "SEQ",
-        "members": [
-          {
-            "type": "FIELD",
-            "name": "name",
-            "content": {
-              "type": "SYMBOL",
-              "name": "identifier"
-            }
-          },
-          {
-            "type": "FIELD",
-            "name": "arguments",
-            "content": {
-              "type": "SYMBOL",
-              "name": "macro_argument_list"
-            }
-          },
-          {
-            "type": "STRING",
-            "value": ";"
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "identifier"
           }
-        ]
-      }
+        },
+        {
+          "type": "FIELD",
+          "name": "arguments",
+          "content": {
+            "type": "SYMBOL",
+            "name": "macro_argument_list"
+          }
+        },
+        {
+          "type": "STRING",
+          "value": ";"
+        }
+      ]
     },
     "macro_argument_list": {
       "type": "SEQ",
@@ -3939,6 +4017,10 @@
                 {
                   "type": "SYMBOL",
                   "name": "block"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "macro_argument_stmts"
                 },
                 {
                   "type": "SYMBOL",
@@ -3985,6 +4067,10 @@
                       },
                       {
                         "type": "SYMBOL",
+                        "name": "macro_argument_stmts"
+                      },
+                      {
+                        "type": "SYMBOL",
                         "name": "magic_identifier"
                       },
                       {
@@ -4024,6 +4110,42 @@
           "value": ")"
         }
       ]
+    },
+    "macro_argument_stmts": {
+      "type": "PREC_DYNAMIC",
+      "value": -1,
+      "content": {
+        "type": "REPEAT1",
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "if_statement"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "return_statement"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "break_statement"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "continue_statement"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "expression_statement"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "macro_invocation_stmt"
+            }
+          ]
+        }
+      }
     },
     "macro_statement": {
       "type": "PREC_DYNAMIC",
@@ -5386,6 +5508,13 @@
       "type": "SEQ",
       "members": [
         {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "modifier"
+          }
+        },
+        {
           "type": "FIELD",
           "name": "return_type",
           "content": {
@@ -5984,6 +6113,67 @@
         }
       ]
     },
+    "preproc_include": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "#"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\s*"
+        },
+        {
+          "type": "STRING",
+          "value": "include"
+        },
+        {
+          "type": "PATTERN",
+          "value": "\\s+"
+        },
+        {
+          "type": "FIELD",
+          "name": "path",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "string_literal"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "system_lib_string"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "system_lib_string": {
+      "type": "TOKEN",
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "<"
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "PATTERN",
+              "value": "[^>]"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": ">"
+          }
+        ]
+      }
+    },
     "preprocessor_directive": {
       "type": "TOKEN",
       "content": {
@@ -6077,132 +6267,11 @@
               },
               {
                 "type": "STRING",
-                "value": "elif"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s"
-              },
-              {
-                "type": "PATTERN",
-                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
-                "value": "elseif"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s"
-              },
-              {
-                "type": "PATTERN",
-                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
-                "value": "elifdef"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s"
-              },
-              {
-                "type": "PATTERN",
-                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
-                "value": "elifndef"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s"
-              },
-              {
-                "type": "PATTERN",
-                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
-                "value": "else"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
                 "value": "endif"
               },
               {
                 "type": "PATTERN",
-                "value": "\\s*"
+                "value": "[^\\S\\r\\n]*"
               }
             ]
           },
@@ -6245,31 +6314,6 @@
               {
                 "type": "STRING",
                 "value": "undef"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s"
-              },
-              {
-                "type": "PATTERN",
-                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
-              }
-            ]
-          },
-          {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "#"
-              },
-              {
-                "type": "PATTERN",
-                "value": "\\s*"
-              },
-              {
-                "type": "STRING",
-                "value": "include"
               },
               {
                 "type": "PATTERN",
@@ -6433,6 +6477,135 @@
           }
         ]
       }
+    },
+    "preproc_branch": {
+      "type": "TOKEN",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s*"
+              },
+              {
+                "type": "STRING",
+                "value": "elif"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s"
+              },
+              {
+                "type": "PATTERN",
+                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s*"
+              },
+              {
+                "type": "STRING",
+                "value": "elseif"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s"
+              },
+              {
+                "type": "PATTERN",
+                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s*"
+              },
+              {
+                "type": "STRING",
+                "value": "elifdef"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s"
+              },
+              {
+                "type": "PATTERN",
+                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s*"
+              },
+              {
+                "type": "STRING",
+                "value": "elifndef"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s"
+              },
+              {
+                "type": "PATTERN",
+                "value": "(\\\\\\n|\\\\[^\\n]|[^\\\\\\n])*"
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "#"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\s*"
+              },
+              {
+                "type": "STRING",
+                "value": "else"
+              },
+              {
+                "type": "PATTERN",
+                "value": "[^\\S\\r\\n]*"
+              }
+            ]
+          }
+        ]
+      }
     }
   },
   "extras": [
@@ -6454,7 +6627,15 @@
     },
     {
       "type": "SYMBOL",
+      "name": "preproc_include"
+    },
+    {
+      "type": "SYMBOL",
       "name": "preprocessor_directive"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "preproc_branch"
     },
     {
       "type": "SYMBOL",
@@ -6517,25 +6698,6 @@
       "if_statement"
     ],
     [
-      "macro_statement",
-      "_id_expr"
-    ],
-    [
-      "macro_statement",
-      "identifier_expr"
-    ],
-    [
-      "macro_statement",
-      "_id_expr",
-      "identifier_expr"
-    ],
-    [
-      "inherit_specifier"
-    ],
-    [
-      "postfix_expr"
-    ],
-    [
       "identifier_expr",
       "declaration"
     ],
@@ -6566,7 +6728,18 @@
     ],
     [
       "identifier_expr",
-      "macro_invocation"
+      "macro_invocation",
+      "macro_invocation_stmt",
+      "declaration"
+    ],
+    [
+      "macro_invocation",
+      "macro_invocation_stmt"
+    ],
+    [
+      "macro_invocation",
+      "macro_invocation_stmt",
+      "declaration"
     ],
     [
       "macro_argument_list",
@@ -6591,6 +6764,24 @@
     ],
     [
       "declaration"
+    ],
+    [
+      "preproc_conditional_expr",
+      "comma_expr"
+    ],
+    [
+      "identifier_expr",
+      "macro_invocation_stmt",
+      "macro_statement"
+    ],
+    [
+      "identifier_expr",
+      "macro_invocation",
+      "macro_invocation_stmt"
+    ],
+    [
+      "identifier_expr",
+      "macro_invocation_stmt"
     ]
   ],
   "precedences": [],
