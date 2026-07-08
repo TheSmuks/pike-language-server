@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`# "…"` and `# string "…"` no longer flagged as errors** — updated the
+  tree-sitter-pike WASM to **v1.3.1**, which accepts horizontal whitespace
+  between `#` and the string delimiter in hash-strings and string includes
+  (Pike compiles these identically to `#"…"` / `#string "…"`). Previously the
+  parser produced an `ERROR` node, surfacing a spurious diagnostic.
+- **Phantom "unused" warnings in `.h`/`.inc` headers** — the unused-symbol lint
+  no longer flags file-scope declarations in header fragments. Headers exist to
+  be `#include`d, so their top-level declarations are the export surface for the
+  includer, not dead code. Locals inside functions in a header are still linted.
+- **Constants keep their color under semantic highlighting** — added a
+  `variable.readonly` semantic-token scope fallback so `constant` declarations
+  fall back to a constant color instead of a plain `variable` when the active
+  theme has no semantic rule for readonly variables.
+- **Configured include/module/program paths no longer discard auto-detected
+  ones** — `pike.languageServer.includePaths` (and the module/program
+  equivalents) are now *prepended* to the auto-detected Pike paths, as
+  documented, instead of replacing them. Adding a custom include directory no
+  longer silently breaks resolution of system headers such as `<stdio.h>`.
+
 ## [0.8.39] — 2026-07-07
 
 ### Added
