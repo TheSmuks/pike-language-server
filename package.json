@@ -151,6 +151,12 @@
           ],
           "variable.mutable": [
             "variable.other.mutable.pike"
+          ],
+          "variable.readonly": [
+            "variable.other.constant.pike",
+            "variable.other.constant",
+            "constant.other.pike",
+            "constant.language.pike"
           ]
         }
       }
