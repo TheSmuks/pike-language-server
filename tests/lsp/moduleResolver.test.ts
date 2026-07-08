@@ -308,4 +308,28 @@ describe.skipIf(!pikeAvailable)("detectPikePaths", () => {
     expect(paths.includePaths).toContain(CORPUS_DIR);
     expect(paths.programPaths).toContain(CORPUS_DIR);
   });
+
+  test("includePaths override is prepended, not replacing auto-detected system paths", async () => {
+    const pikeBinary = process.env.PIKE_BINARY ?? "pike";
+    const detected = await detectPikePaths(CORPUS_DIR, pikeBinary);
+    // The auto-detected system include dir (e.g. $PIKE_HOME/lib/include) must
+    // survive an individual override so `<stdio.h>` still resolves.
+    const systemInclude = detected.includePaths.find((p) => p !== CORPUS_DIR);
+
+    const custom = "/tmp/custom-pike-includes";
+    const withOverride = await detectPikePaths(CORPUS_DIR, pikeBinary, {
+      includePaths: [custom],
+    });
+    expect(withOverride.includePaths).toContain(custom);
+    expect(withOverride.includePaths).toContain(CORPUS_DIR);
+    if (systemInclude) {
+      expect(withOverride.includePaths).toContain(systemInclude);
+    }
+    // Custom path outranks the auto-detected system dir.
+    if (systemInclude) {
+      expect(withOverride.includePaths.indexOf(custom)).toBeLessThan(
+        withOverride.includePaths.indexOf(systemInclude),
+      );
+    }
+  });
 });
