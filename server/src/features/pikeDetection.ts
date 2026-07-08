@@ -222,6 +222,18 @@ function buildPikePaths(
 // Main detection entry point
 // ---------------------------------------------------------------------------
 
+/** De-duplicate a path list, preserving first-seen order. */
+function dedupePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const p of paths) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    out.push(p);
+  }
+  return out;
+}
+
 /**
  * Detect Pike installation paths.
  *
@@ -266,16 +278,21 @@ export async function detectPikePaths(
 
   const result = buildPikePaths(workspaceRoot, pikeHome, systemModulePath, includePath, programPath);
 
-  // Apply individual overrides — user settings take precedence over detected values.
+  // Apply individual overrides — user settings take precedence over detected
+  // values, but do NOT discard them: the config UI documents these as
+  // "prepended to auto-detected paths". Merging keeps system paths (e.g. Pike's
+  // own include dir for `<stdio.h>`) resolvable while the user's custom dirs win
+  // by ordering. Without this merge, adding one custom include path silently
+  // breaks resolution of every system header.
   if (overrides?.pikeHome) result.pikeHome = overrides.pikeHome;
   if (overrides?.modulePaths && overrides.modulePaths.length > 0) {
-    result.modulePaths = [workspaceRoot, ...overrides.modulePaths];
+    result.modulePaths = dedupePaths([workspaceRoot, ...overrides.modulePaths, ...result.modulePaths]);
   }
   if (overrides?.includePaths && overrides.includePaths.length > 0) {
-    result.includePaths = [workspaceRoot, ...overrides.includePaths];
+    result.includePaths = dedupePaths([workspaceRoot, ...overrides.includePaths, ...result.includePaths]);
   }
   if (overrides?.programPaths && overrides.programPaths.length > 0) {
-    result.programPaths = [workspaceRoot, ...overrides.programPaths];
+    result.programPaths = dedupePaths([workspaceRoot, ...overrides.programPaths, ...result.programPaths]);
   }
 
   return result;
