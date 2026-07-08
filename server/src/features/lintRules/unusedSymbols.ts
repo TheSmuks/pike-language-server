@@ -104,7 +104,24 @@ function isLintable(
   const scope = table.scopeById.get(decl.scopeId);
   if (!scope) return false;
 
+  // Header fragments (.h/.inc) are never compiled standalone — they exist to be
+  // #included, so their file-scope declarations are the export surface for the
+  // includer. Flagging them as "unused" when the header is linted on its own is
+  // always a false positive (e.g. a `doc_separator` constant used only by
+  // includers). Locals inside functions in a header are still lintable.
+  if (scope.kind === "file" && isHeaderFragment(table.uri)) return false;
+
   return true;
+}
+
+/**
+ * Pike include fragments: `.h` and `.inc` files are pure headers, never
+ * compiled as standalone programs. `.pike`/`.pmod` are real programs/modules
+ * and keep normal file-scope linting.
+ */
+function isHeaderFragment(uri: string): boolean {
+  const lower = uri.toLowerCase();
+  return lower.endsWith(".h") || lower.endsWith(".inc");
 }
 
 /** Count references that resolve to a given declaration ID. */
