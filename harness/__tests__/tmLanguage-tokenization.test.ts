@@ -6,6 +6,8 @@ interface GrammarPattern {
   comment?: string;
   name?: string;
   match?: string;
+  begin?: string;
+  end?: string;
   captures?: Record<string, { name?: string }>;
   patterns?: GrammarPattern[];
 }
@@ -223,5 +225,37 @@ describe("pike.tmLanguage.json tokenization rules", () => {
     // "% done" / "100% " — percent followed by whitespace is not a conversion.
     expect("50% done".match(regex)).toBeNull();
     expect("100% ".match(regex)).toBeNull();
+  });
+
+  it("colors #include / #string target paths as include strings", () => {
+    const grammar = loadGrammar();
+    const includePattern = patternByCommentPrefix(grammar, "preprocessor", "#include / #string");
+    expect(includePattern?.begin).toBeDefined();
+
+    const beginRegex = new RegExp(includePattern!.begin!, "u");
+    expect("#include <stdio.h>".match(beginRegex)?.[1]).toBe("#include");
+    expect("# string \"blob\"".match(beginRegex)?.[1]).toBe("# string");
+
+    const scopes = (includePattern!.patterns ?? []).map((p) => p.name);
+    expect(scopes).toContain("string.quoted.other.lt-gt.include.pike");
+    expect(scopes).toContain("string.quoted.double.include.pike");
+  });
+
+  it("greys a disabled #if 0 branch and stops at #else/#elif/#endif", () => {
+    const grammar = loadGrammar();
+    const ifBranch = patternByName(grammar, "preprocessor", "comment.block.preprocessor.if-branch.pike");
+    expect(ifBranch?.begin).toBeDefined();
+
+    const beginRegex = new RegExp(ifBranch!.begin!, "u");
+    expect("#if 0".match(beginRegex)).not.toBeNull();
+    expect("  # if   0   // legacy".match(beginRegex)).not.toBeNull();
+    // A live branch must not be swallowed.
+    expect("#if 1".match(beginRegex)).toBeNull();
+    expect("#ifdef DEBUG".match(beginRegex)).toBeNull();
+
+    // The block is a lookahead terminator so #else/#endif keep their own scope.
+    const endRegex = new RegExp(ifBranch!.end!, "u");
+    expect("#endif".match(endRegex)).not.toBeNull();
+    expect("#else".match(endRegex)).not.toBeNull();
   });
 });

@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Include paths and disabled blocks are highlighted** — `#include <stdio.h>`
+  and `#string "…"` now color the target as a string (like C), and `#if 0 … #endif`
+  branches are greyed like comments. The disabled region stops at `#else`/`#elif`/
+  `#endif`, so a live branch keeps its normal coloring.
+
+### Changed
+
+- **Semantic highlighting is left to the theme (theme-agnostic)** — the extension
+  no longer forces `editor.semanticHighlighting.enabled: true`; it now defaults to
+  `configuredByTheme`. Forcing it on whited-out identifiers under themes that don't
+  define semantic-token colors (e.g. Ayu Mirage): the server's semantic tokens
+  overrode the theme's TextMate colors with the plain default foreground about a
+  second after opening a file. Themes that opt into semantic highlighting still get
+  it, colored by the theme (or via our `semanticTokenScopes` fallbacks); others keep
+  their comprehensive TextMate grammar coloring.
+
+### Fixed
+
+- **Typed constants are named correctly** — `constant int FOO = 1;` (at file scope
+  or inside a class) previously registered a symbol named after its *type* with the
+  real name lost to a parse-error node, which mislabeled the type keyword and broke
+  hover, go-to-definition, and rename on the constant. The collector now recovers the
+  real name regardless of which identifier the grammar mis-parses.
+- **`variable.mutable` / `variable.readonly` no longer fall back to plain text** —
+  their `semanticTokenScopes` lists now end in real, widely-themed scopes
+  (`variable.other.pike`, `variable`), so a theme with no rule for those modifiers
+  colors them like a normal variable instead of the editor's default foreground.
+
 ## [0.8.40] — 2026-07-08
 
 ### Fixed

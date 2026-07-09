@@ -145,12 +145,42 @@
 					"match": "^#!.*$"
 				},
 				{
+					"comment": "Disabled `#if 0 ... #endif` (or `... #else`) branch — greyed like a comment. Ends at #else/#elif/#endif so any live branch keeps normal coloring.",
+					"name": "comment.block.preprocessor.if-branch.pike",
+					"begin": "^\\s*(#\\s*if)\\s+(0)\\b.*$",
+					"beginCaptures": {
+						"1": { "name": "keyword.control.directive.pike" },
+						"2": { "name": "constant.numeric.preprocessor.pike" }
+					},
+					"end": "(?=^\\s*#\\s*(?:else|elif|endif)\\b)"
+				},
+				{
 					"comment": "#define / #undef — highlight the defined macro name",
 					"match": "^\\s*(#\\s*(?:define|undef))\\s+([A-Za-z_][A-Za-z0-9_]*)",
 					"captures": {
 						"1": { "name": "keyword.control.directive.pike" },
 						"2": { "name": "entity.name.function.preprocessor.pike" }
 					}
+				},
+				{
+					"comment": "#include / #string — color the target path as an include string (like C).",
+					"begin": "^\\s*(#\\s*(?:include|string))\\b",
+					"beginCaptures": {
+						"1": { "name": "keyword.control.directive.pike" }
+					},
+					"end": "$",
+					"patterns": [
+						{
+							"name": "string.quoted.double.include.pike",
+							"begin": "\"",
+							"end": "\""
+						},
+						{
+							"name": "string.quoted.other.lt-gt.include.pike",
+							"begin": "<",
+							"end": ">"
+						}
+					]
 				},
 				{
 					"comment": "Preprocessor directives — must be anchored to line start",
