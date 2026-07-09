@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Constants no longer lose their color under semantic highlighting** — the
+  `variable.readonly` scope fallback led with `variable.other.constant`, which a
+  theme's broad `variable` rule matches, so constants collapsed to the plain default
+  foreground before the fallback ever reached the `constant.*` scopes the theme
+  actually colors (e.g. on Ayu Mirage, `constant NAME` went to `#cccac2` instead of
+  the theme's constant color). Reordered the fallback to lead with `constant.other` /
+  `constant.language`, so a `constant` declaration keeps a real color. Completes the
+  0.8.40 readonly-fallback fix.
+
 ## [0.8.41] — 2026-07-09
 
 ### Added

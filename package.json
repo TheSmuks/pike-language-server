@@ -155,10 +155,12 @@
             "variable"
           ],
           "variable.readonly": [
+            "constant.other.pike",
+            "constant.other",
+            "constant.language.pike",
+            "constant.language",
             "variable.other.constant.pike",
             "variable.other.constant",
-            "constant.other.pike",
-            "constant.language.pike",
             "variable.other.pike",
             "variable"
           ]

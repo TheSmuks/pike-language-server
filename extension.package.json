@@ -84,7 +84,7 @@
           "namespace": ["entity.other.inherited-class.pike", "entity.other.inherited-class", "entity.name.namespace"],
           "builtinFunction": ["support.function.builtin.pike", "support.function.builtin", "support.function.any-method.pike", "support.function"],
           "variable.mutable": ["variable.other.mutable.pike", "variable.other.pike", "variable"],
-          "variable.readonly": ["variable.other.constant.pike", "variable.other.constant", "constant.other.pike", "constant.language.pike", "variable.other.pike", "variable"]
+          "variable.readonly": ["constant.other.pike", "constant.other", "constant.language.pike", "constant.language", "variable.other.constant.pike", "variable.other.constant", "variable.other.pike", "variable"]
         }
       }
     ],
