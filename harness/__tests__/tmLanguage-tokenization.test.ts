@@ -151,6 +151,13 @@ describe("Pike grammar — tokenization behavior", () => {
     expectScope("string name;", "name", "variable.other");
   });
 
+  it("colors arrow, scope-resolution, and arithmetic operators", () => {
+    expectScope("x = obj->field;", "->", "keyword.operator");
+    expectScope("a = foo::bar;", "::", "keyword.operator");
+    expectScope("a = b + c;", "+", "keyword.operator");
+    expectScope("x = b == c;", "==", "keyword.operator");
+  });
+
   it("does not classify a member access as a builtin/module", () => {
     // `write` after `->` is a member call, not the predef builtin form.
     const toks = tokenize("o->size;");

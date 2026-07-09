@@ -90,14 +90,20 @@ void foo() {
     expect(underscoreDiag).toBeUndefined();
   });
 
-  test("flags program-scope variables", () => {
+  test("flags a private file-scope variable but not an exported one", () => {
+    // In Pike a public/unmarked top-level variable is reachable from other files
+    // (inherit, import, `->`), so it can't be judged unused from one file — only
+    // a `private` global is provably file-local. Flagging the exported one would
+    // pollute every module/library file opened on its own.
     const src = `
 string module_level = "exported";
+private int scratch = 0;
 `;
     const { unused } = buildAndLint(src);
-    const moduleDiag = unused.find((d) => d.message.includes("module_level"));
-    expect(moduleDiag).toBeDefined();
-    expect(moduleDiag!.severity).toBe(DiagnosticSeverity.Warning);
+    expect(unused.find((d) => d.message.includes("module_level"))).toBeUndefined();
+    const privateDiag = unused.find((d) => d.message.includes("scratch"));
+    expect(privateDiag).toBeDefined();
+    expect(privateDiag!.severity).toBe(DiagnosticSeverity.Warning);
   });
 
   test("does NOT flag file-scope declarations in header fragments (.h/.inc)", () => {

@@ -32,6 +32,8 @@ export interface Declaration {
   sourceUri?: string;
   /** For macro declarations: true when defined function-like, i.e. `NAME(args)`. */
   functionLike?: boolean;
+  /** Visibility/storage modifiers on the declaration, e.g. ['private'], ['protected','variant']. */
+  modifiers?: string[];
 }
 
 export type DeclKind =

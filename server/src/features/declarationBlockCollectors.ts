@@ -295,6 +295,7 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
   const typeText = extractTypeText(decl);
   const assignedType = (actualKind === 'variable' && (!typeText || typeText === 'mixed'))
     ? extractInitializerType(decl) : undefined;
+  const modifiers = collectModifiers(decl);
 
   if (nameNodes.length > 0) {
     for (const nameNode of nameNodes) {
@@ -302,7 +303,7 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
         name: nameNode.text, kind: actualKind,
         nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
         range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId, declaredType: typeText, assignedType,
+        scopeId, declaredType: typeText, assignedType, modifiers,
       });
     }
   } else {
@@ -312,10 +313,25 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
         name: nameNode.text, kind: actualKind,
         nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
         range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId, declaredType: typeText, assignedType,
+        scopeId, declaredType: typeText, assignedType, modifiers,
       });
     }
   }
+}
+
+/**
+ * Collect visibility/storage modifiers (`private`, `protected`, `public`,
+ * `static`, `variant`, …) for a declaration. In tree-sitter-pike the modifiers
+ * are `modifier` children of the enclosing `declaration` node, not of the inner
+ * `variable_decl`/`constant_decl`, so look at the parent when present.
+ */
+function collectModifiers(decl: Node): string[] | undefined {
+  const container = decl.parent?.type === 'declaration' ? decl.parent : decl;
+  const mods: string[] = [];
+  for (const child of container.children) {
+    if (child.type === 'modifier') mods.push(child.text);
+  }
+  return mods.length > 0 ? mods : undefined;
 }
 
 /**
