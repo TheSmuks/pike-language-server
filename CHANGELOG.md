@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Declaration names and type references are now highlighted** — the adopted
+  grammar colored keywords, calls, builtins, and modules but left declared names
+  and type references plain ("Other"). The grammar now colors:
+  - **class / enum declaration names** and **uppercase type references** (`Widget`,
+    `Foo bar;`, `Widget w = …`) as `entity.name.type.class`;
+  - **constant declaration names** (`constant int MAX = …`) as `constant.other`,
+    while keeping the declared type colored;
+  - **inherit / import module paths** as `entity.other.inherited-class`;
+  - **variable / field / parameter declaration names** as `variable.other`.
+
+  All standard TextMate scopes, resolved by your theme (no hardcoded colors). Note
+  that some themes — e.g. Ayu Mirage — deliberately render `variable` as the editor
+  foreground, so plain locals stay uncolored there by the theme's own choice, while
+  classes, types, and constants are colored.
+
 ## [0.8.44] — 2026-07-09
 
 ### Changed

@@ -48,6 +48,9 @@
 			"include": "#builtin-functions"
 		},
 		{
+			"include": "#declarations"
+		},
+		{
 			"include": "#fncall"
 		},
 		{
@@ -262,6 +265,12 @@
 					"include": "#block"
 				}
 			]
+		},
+		{
+			"include": "#type-references"
+		},
+		{
+			"include": "#variable-names"
 		}
 	],
 	"repository": {
@@ -695,6 +704,82 @@
 					"comment": "Top-level Pike stdlib modules from the reference (autodoc).",
 					"name": "support.class.pike",
 					"match": "(?<![\\w.>:])\\b(ADT|Arg|Array|Audio|Bz2|Cache|Calendar|Charset|Colors|Concurrent|Crypto|Debug|Error|Filesystem|Float|Function|Fuse|GDK|GDK1|GDK2|GLU|GLUE|GTK|GTK1|GTK2|GTKSupport|Geography|Getopt|Git|Graphics|Gz|Int|Java|Languages|Local|Locale|MIME|Mapping|Math|Mysql|NetUtils|Oracle|Parser|Pike|Process|Program|Protocols|Regexp|Remote|SSL|Search|Serializer|Sql|Standards|Stdio|String|System|Thread|Tools|Val|Web|Yabu|Yp|ZXID)\\b"
+				}
+			]
+		},
+		"declarations": {
+			"patterns": [
+				{
+					"comment": "class / enum declaration name",
+					"match": "\\b(class|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+					"captures": {
+						"1": {
+							"name": "storage.type.pike"
+						},
+						"2": {
+							"name": "entity.name.type.class.pike"
+						}
+					}
+				},
+				{
+					"comment": "typedef target name",
+					"match": "\\b(typedef)\\b[^;]*?\\b([A-Za-z_][A-Za-z0-9_]*)\\s*;",
+					"captures": {
+						"1": {
+							"name": "storage.type.pike"
+						},
+						"2": {
+							"name": "entity.name.type.pike"
+						}
+					}
+				},
+				{
+					"comment": "inherit / import module path",
+					"match": "\\b(inherit|import)\\s+([A-Za-z_][A-Za-z0-9_.]*)",
+					"captures": {
+						"1": {
+							"name": "keyword.control.pike"
+						},
+						"2": {
+							"name": "entity.other.inherited-class.pike"
+						}
+					}
+				},
+				{
+					"comment": "constant declaration name (with optional type)",
+					"match": "\\b(constant)\\s+(?:(void|mixed|int|float|string|array|mapping|multiset|object|program|function|type|zero|auto|bool)\\b(?:\\([^)]*\\))?\\s*\\**\\s+|([A-Z][A-Za-z0-9_]*)\\s+)?([A-Za-z_][A-Za-z0-9_]*)\\s*(?==)",
+					"captures": {
+						"1": {
+							"name": "storage.modifier.pike"
+						},
+						"2": {
+							"name": "storage.type.pike"
+						},
+						"3": {
+							"name": "entity.name.type.class.pike"
+						},
+						"4": {
+							"name": "constant.other.pike"
+						}
+					}
+				}
+			]
+		},
+		"type-references": {
+			"patterns": [
+				{
+					"comment": "Uppercase-leading identifier used as a type / class reference",
+					"name": "entity.name.type.class.pike",
+					"match": "(?<![\\w.>:])\\b[A-Z][A-Za-z0-9_]*\\b"
+				}
+			]
+		},
+		"variable-names": {
+			"patterns": [
+				{
+					"comment": "Variable / field / parameter name after a type",
+					"name": "variable.other.pike",
+					"match": "(?<=[\\w)*>\\]]\\s)([a-z_][A-Za-z0-9_]*)\\b(?=\\s*[;=,)])"
 				}
 			]
 		}
