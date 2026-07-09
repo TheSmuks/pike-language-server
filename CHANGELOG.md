@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.43] — 2026-07-09
+
 ### Changed
 
 - **Semantic highlighting is now off by default for Pike (the gopls route)** —

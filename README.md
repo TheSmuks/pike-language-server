@@ -6,7 +6,7 @@
 
 **Rich, IDE-grade language support for [Pike](https://pike.lysator.liu.se/) in Visual Studio Code** — diagnostics, completion, navigation, refactoring, and formatting, powered by the Pike compiler itself.
 
-<!-- template-v0.8.42 -->
+<!-- template-v0.8.43 -->
 [![Marketplace](https://img.shields.io/github/v/release/TheSmuks/pike-language-server?label=marketplace&logo=visualstudiocode&color=0066b8)](https://marketplace.visualstudio.com/items?itemName=thesmuks.pike-language-server)
 [![CI](https://github.com/TheSmuks/pike-language-server/actions/workflows/ci.yml/badge.svg)](https://github.com/TheSmuks/pike-language-server/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/TheSmuks/pike-language-server/blob/main/LICENSE)
