@@ -173,7 +173,7 @@
         "editor.insertSpaces": true,
         "editor.detectIndentation": false,
         "editor.autoIndent": "full",
-        "editor.semanticHighlighting.enabled": "configuredByTheme"
+        "editor.semanticHighlighting.enabled": false
       }
     },
     "commands": [
