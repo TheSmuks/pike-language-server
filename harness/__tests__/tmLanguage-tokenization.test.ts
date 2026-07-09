@@ -121,8 +121,34 @@ describe("Pike grammar — tokenization behavior", () => {
 
   it("colors top-level stdlib modules from the reference (support.class)", () => {
     for (const m of ["Stdio", "Protocols", "Array", "String"]) {
-      expectScope(`inherit ${m};`, m, "support.class");
+      expectScope(`mixed v = ${m}.member;`, m, "support.class");
     }
+  });
+
+  it("colors class / enum declaration names", () => {
+    expectScope("class Widget {", "Widget", "entity.name.type");
+    expectScope("enum Color { RED }", "Color", "entity.name.type");
+  });
+
+  it("colors uppercase type references", () => {
+    expectScope("Widget next;", "Widget", "entity.name.type");
+    expectScope("Widget w = 0;", "Widget", "entity.name.type");
+  });
+
+  it("colors inherit / import module paths", () => {
+    expectScope("inherit Stdio.File;", "Stdio.File", "entity.other.inherited-class");
+    expectScope("import Protocols.HTTP;", "Protocols.HTTP", "entity.other.inherited-class");
+  });
+
+  it("colors constant declaration names (typed and untyped) and keeps the type", () => {
+    expectScope("constant int MAX = 10;", "MAX", "constant.other");
+    expectScope("constant int MAX = 10;", "int", "storage.type");
+    expectScope('constant NAME = "x";', "NAME", "constant.other");
+  });
+
+  it("colors variable / field declaration names", () => {
+    expectScope("int count = 0;", "count", "variable.other");
+    expectScope("string name;", "name", "variable.other");
   });
 
   it("does not classify a member access as a builtin/module", () => {
