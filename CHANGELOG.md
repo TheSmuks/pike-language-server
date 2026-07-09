@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Operators are highlighted** — the adopted grammar didn't color operators at
+  all. Arrow (`->`), scope resolution (`::`), and arithmetic/logical/assignment
+  operators are now `keyword.operator`, so they get your theme's operator color
+  instead of the default foreground.
+
+### Fixed
+
+- **Exported top-level variables are no longer falsely flagged as unused** — the
+  unused-variable lint reported any file-scope variable with no *local* reference,
+  which polluted every module/library/included file (its globals are used by
+  importers/inheritors, not within itself). Declarations now carry their Pike
+  modifiers, and a file-scope variable is only flagged when it is `private` (the
+  one visibility that is provably file-local); `public`/`protected`/unmarked
+  globals are left alone. Locals inside functions are still linted as before.
+
 ## [0.8.45] — 2026-07-09
 
 ### Added

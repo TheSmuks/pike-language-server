@@ -98,18 +98,21 @@ function isLintable(
   // Skip `_`-prefixed names (Pike convention for intentionally unused).
   if (decl.name.startsWith("_")) return false;
 
-  // Program-scope variables are lintable in Pike: a file is an implicit
-  // program, not an external module export list. Missing diagnostics here made
-  // top-level unused state invisible while locals were reported correctly.
   const scope = table.scopeById.get(decl.scopeId);
   if (!scope) return false;
 
-  // Header fragments (.h/.inc) are never compiled standalone — they exist to be
-  // #included, so their file-scope declarations are the export surface for the
-  // includer. Flagging them as "unused" when the header is linted on its own is
-  // always a false positive (e.g. a `doc_separator` constant used only by
-  // includers). Locals inside functions in a header are still lintable.
-  if (scope.kind === "file" && isHeaderFragment(table.uri)) return false;
+  // File-scope (program-scope) variables can be the file's external API: in Pike
+  // a public/protected/unmarked top-level variable is an object/module member
+  // reachable by inheritors (`inherit`), importers (`import`, `Module.var`), or
+  // `->` from other files. Linting a single file can't see those cross-file uses,
+  // so flagging such a variable as "unused" is a false positive that pollutes any
+  // library/module/header opened on its own. Only a `private` file-scope variable
+  // is provably file-local (not inherited, not externally reachable) and thus
+  // safe to flag. Locals inside functions/blocks are always lintable.
+  if (scope.kind === "file") {
+    if (isHeaderFragment(table.uri)) return false;
+    if (!(decl.modifiers?.includes("private") ?? false)) return false;
+  }
 
   return true;
 }

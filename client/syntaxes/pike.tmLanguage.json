@@ -57,6 +57,9 @@
 			"include": "#block"
 		},
 		{
+			"include": "#operators"
+		},
+		{
 			"comment": "Control flow keywords",
 			"match": "\\b(if|else|while|for|foreach|do|return|continue|break|switch|case|default|goto|catch|lambda|gauge|inherit|import)\\b",
 			"name": "keyword.control.pike"
@@ -780,6 +783,15 @@
 					"comment": "Variable / field / parameter name after a type",
 					"name": "variable.other.pike",
 					"match": "(?<=[\\w)*>\\]]\\s)([a-z_][A-Za-z0-9_]*)\\b(?=\\s*[;=,)])"
+				}
+			]
+		},
+		"operators": {
+			"patterns": [
+				{
+					"comment": "Arrow, scope-resolution, and arithmetic/logical operators (Pike 8.0 BNF). Longest alternatives first.",
+					"name": "keyword.operator.pike",
+					"match": "\\?->|->>|->\\?|<<=|>>=|\\+=|-=|\\*=|/=|&=|\\|=|\\^=|%=|\\.\\.\\.|\\.\\.|\\+\\+|--|&&|\\|\\||==|!=|<=|>=|<<|>>|::|->|=|@|[+\\-*/%]|[!<>&\\|^~=]"
 				}
 			]
 		}
