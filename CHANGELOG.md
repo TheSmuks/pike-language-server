@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Semantic highlighting is now off by default for Pike (the gopls route)** —
+  following gopls (`ui.semanticTokens: false`), the TextMate grammar is the default
+  coloring layer and semantic tokens are opt-in. On themes with a sparse semantic
+  palette (e.g. Ayu Mirage, which renders the `variable` token as the default
+  foreground) the semantic layer overrode the grammar's colors inconsistently;
+  making it opt-in removes that class of surprise and keeps coloring theme-agnostic.
+  Turn it on per language to get the accuracy the grammar cannot provide — colored
+  parameters, member-vs-field distinction, and cross-file-aware coloring:
+
+  ```json
+  "[pike]": { "editor.semanticHighlighting.enabled": true }
+  ```
+
 ## [0.8.42] — 2026-07-09
 
 ### Fixed

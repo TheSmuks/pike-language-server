@@ -27,21 +27,23 @@ describe("VSCode configuration contributions", () => {
     }
   });
 
-  test("leaves semantic highlighting up to the theme (theme-agnostic) in both manifests", () => {
+  test("defaults semantic highlighting OFF for Pike (gopls route) in both manifests", () => {
     const root = process.cwd();
     const manifests = [
       readJson(join(root, "package.json")),
       readJson(join(root, "extension.package.json")),
     ];
 
-    // Forcing `true` breaks coloring on themes that don't define semantic-token
-    // rules (e.g. Ayu Mirage): the server's semantic tokens override the theme's
-    // TextMate colors with the default foreground. `configuredByTheme` lets
-    // opted-in themes use semantic highlighting while everyone else keeps their
-    // (comprehensive) TextMate grammar coloring.
+    // Semantic tokens are off by default, matching gopls (ui.semanticTokens=false):
+    // the TextMate grammar colors via each theme's own scopes, with no semantic
+    // layer overriding it. On sparse-semantic themes (e.g. Ayu Mirage) the semantic
+    // layer flattened variables to the default foreground; making it opt-in avoids
+    // that class of surprise. Users who want semantic accuracy (parameters, member
+    // vs field, cross-file) can turn it on per-language. Never force `true` and
+    // never hardcode colors — coloring stays theme-agnostic.
     for (const manifest of manifests) {
       const defaults = manifest.contributes.configurationDefaults["[pike]"];
-      expect(defaults["editor.semanticHighlighting.enabled"]).toBe("configuredByTheme");
+      expect(defaults["editor.semanticHighlighting.enabled"]).toBe(false);
     }
   });
 
