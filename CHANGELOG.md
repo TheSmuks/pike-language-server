@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **New, much richer Pike TextMate grammar** — replaced the hand-written grammar
+  with one adapted from the mature `poppa/pike-for-sublime` lineage (via
+  `GwennKoi`/`undeadfish` `vscode-pike-lang`), then extended with builtin-function
+  and module-name lists generated from the installed Pike 8.0 reference (autodoc).
+  It now colors:
+  - **member and scope-resolved method calls** — `o->read()`, `Stdio.File()`,
+    `this->helper()`, `::process()` — which the old grammar left plain;
+  - **~180 `predef::` builtins** (`sizeof`, `sprintf`, `werror`, `indices`, …) as
+    `support.function.builtin`;
+  - **64 top-level stdlib modules** (`Stdio`, `Protocols`, `String`, `Array`, …) as
+    `support.class` — which even the upstream grammar leaves uncolored.
+
+  With semantic highlighting off by default (0.8.43), this grammar is now the
+  primary coloring layer, so the added coverage is what you see. All colors come
+  from standard TextMate scopes resolved by your theme — no hardcoded colors.
+
 ## [0.8.43] — 2026-07-09
 
 ### Changed

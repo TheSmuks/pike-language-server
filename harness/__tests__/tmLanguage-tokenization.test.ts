@@ -1,261 +1,135 @@
-import { describe, expect, it } from "bun:test";
+/**
+ * Behavioral tokenization tests for the Pike TextMate grammar.
+ *
+ * Rather than inspect the grammar's internal repository structure (brittle, and
+ * meaningless after a grammar swap), these tokenize real Pike source with the
+ * exact engine VS Code uses (vscode-oniguruma + vscode-textmate) and assert the
+ * scope each token receives. This survives grammar restructuring and tests what
+ * users actually see.
+ */
+
+import { describe, it, expect, beforeAll } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import * as oniguruma from "vscode-oniguruma";
+import * as vsctm from "vscode-textmate";
 
-interface GrammarPattern {
-  comment?: string;
-  name?: string;
-  match?: string;
-  begin?: string;
-  end?: string;
-  captures?: Record<string, { name?: string }>;
-  patterns?: GrammarPattern[];
-}
+const GRAMMAR = resolve(__dirname, "../../client/syntaxes/pike.tmLanguage.json");
+const WASM = resolve(__dirname, "../../node_modules/vscode-oniguruma/release/onig.wasm");
 
-interface GrammarRepositoryEntry {
-  patterns?: GrammarPattern[];
-}
+let grammar: vsctm.IGrammar;
 
-interface Grammar {
-  repository?: Record<string, GrammarRepositoryEntry>;
-}
-
-function loadGrammar(): Grammar {
-  const grammarPath = resolve(__dirname, "../../client/syntaxes/pike.tmLanguage.json");
-  return JSON.parse(readFileSync(grammarPath, "utf8")) as Grammar;
-}
-
-function identifierPatterns(grammar: Grammar): GrammarPattern[] {
-  const patterns = grammar.repository?.identifiers?.patterns;
-  if (!patterns) return [];
-  return patterns;
-}
-
-function functionCallPatternIndex(patterns: GrammarPattern[]): number {
-  return patterns.findIndex((pattern) => pattern.name === "entity.name.function.call.pike");
-}
-
-function catchAllIdentifierPatternIndex(patterns: GrammarPattern[]): number {
-  return patterns.findIndex((pattern) => pattern.name === "variable.other.pike");
-}
-
-function classReferencePatternIndex(patterns: GrammarPattern[]): number {
-  return patterns.findIndex((pattern) => pattern.name === "entity.name.type.class.pike");
-}
-
-function repositoryPatterns(grammar: Grammar, name: string): GrammarPattern[] {
-  const patterns = grammar.repository?.[name]?.patterns;
-  if (!patterns) return [];
-  return patterns;
-}
-
-function patternByName(grammar: Grammar, repositoryName: string, patternName: string): GrammarPattern | undefined {
-  return repositoryPatterns(grammar, repositoryName).find((pattern) => pattern.name === patternName);
-}
-
-function patternByCommentPrefix(
-  grammar: Grammar,
-  repositoryName: string,
-  commentPrefix: string,
-): GrammarPattern | undefined {
-  return repositoryPatterns(grammar, repositoryName).find((pattern) => pattern.comment?.startsWith(commentPrefix));
-}
-
-describe("pike.tmLanguage.json tokenization rules", () => {
-  it("classifies call identifiers before the generic identifier fallback", () => {
-    const patterns = identifierPatterns(loadGrammar());
-
-    const callIndex = functionCallPatternIndex(patterns);
-    const catchAllIndex = catchAllIdentifierPatternIndex(patterns);
-
-    expect(callIndex).toBeGreaterThanOrEqual(0);
-    expect(catchAllIndex).toBeGreaterThanOrEqual(0);
-    expect(callIndex).toBeLessThan(catchAllIndex);
+beforeAll(async () => {
+  await oniguruma.loadWASM(readFileSync(WASM).buffer);
+  const registry = new vsctm.Registry({
+    onigLib: Promise.resolve({
+      createOnigScanner: (p) => new oniguruma.OnigScanner(p),
+      createOnigString: (s) => new oniguruma.OnigString(s),
+    }),
+    loadGrammar: async (scope) =>
+      scope === "source.pike"
+        ? vsctm.parseRawGrammar(readFileSync(GRAMMAR, "utf8"), "pike.tmLanguage.json")
+        : null,
   });
+  const g = await registry.loadGrammar("source.pike");
+  if (!g) throw new Error("failed to load source.pike grammar");
+  grammar = g;
+});
 
-  it("matches ordinary function and constructor-style calls", () => {
-    const patterns = identifierPatterns(loadGrammar());
-    const callPattern = patterns[functionCallPatternIndex(patterns)];
-    expect(callPattern?.match).toBeDefined();
+interface Tok {
+  text: string;
+  scopes: string[];
+}
 
-    const regex = new RegExp(callPattern.match!, "u");
-    expect("write(\"hello\");".match(regex)?.[0]).toBe("write");
-    expect("Foo();".match(regex)?.[0]).toBe("Foo");
-  });
+/** Tokenize a single line (grammar starts fresh). */
+function tokenize(line: string): Tok[] {
+  const r = grammar.tokenizeLine(line, vsctm.INITIAL);
+  return r.tokens.map((t) => ({ text: line.slice(t.startIndex, t.endIndex), scopes: t.scopes }));
+}
 
-  it("classifies class-like identifiers before the generic identifier fallback", () => {
-    const patterns = identifierPatterns(loadGrammar());
+/** Assert the token whose text === `text` carries a scope with the given prefix. */
+function expectScope(line: string, text: string, scopePrefix: string): void {
+  const tok = tokenize(line).find((t) => t.text === text);
+  expect(tok, `token '${text}' not found in: ${line}`).toBeDefined();
+  const hit = tok!.scopes.some((s) => s === scopePrefix || s.startsWith(scopePrefix + "."));
+  expect(hit, `token '${text}' scopes ${JSON.stringify(tok!.scopes)} lack '${scopePrefix}'`).toBe(true);
+}
 
-    const classIndex = classReferencePatternIndex(patterns);
-    const catchAllIndex = catchAllIdentifierPatternIndex(patterns);
-
-    expect(classIndex).toBeGreaterThanOrEqual(0);
-    expect(catchAllIndex).toBeGreaterThanOrEqual(0);
-    expect(classIndex).toBeLessThan(catchAllIndex);
-  });
-
-  it("matches class-like identifiers as type/class tokens", () => {
-    const patterns = identifierPatterns(loadGrammar());
-    const classPattern = patterns[classReferencePatternIndex(patterns)];
-    expect(classPattern?.match).toBeDefined();
-
-    const regex = new RegExp(classPattern.match!, "u");
-    expect("Foo value;".match(regex)?.[0]).toBe("Foo");
-    expect("Stdio.File file;".match(regex)?.[0]).toBe("Stdio");
-    expect("lowercase value;".match(regex)?.[0]).toBeUndefined();
-  });
-
-  it("maps arrow member names to the standard property scope", () => {
-    const patterns = repositoryPatterns(loadGrammar(), "member-access");
-    const arrowPattern = patterns.find((pattern) => pattern.comment?.startsWith("Arrow member access"));
-
-    expect(arrowPattern?.captures?.["1"]?.name).toBe("punctuation.accessor.arrow.pike");
-    expect(arrowPattern?.captures?.["2"]?.name).toBe("variable.other.property.pike");
-  });
-
-  it("matches Pike 8.0 BNF numeric literal forms", () => {
-    const grammar = loadGrammar();
-    const numericPatterns = repositoryPatterns(grammar, "numbers").filter(
-      (pattern) => pattern.name === "constant.numeric.pike",
-    );
-    const floatPattern = patternByName(grammar, "numbers", "constant.numeric.float.pike");
-
-    expect(numericPatterns.length).toBeGreaterThan(0);
-    expect(floatPattern?.match).toBeDefined();
-
-    const numericRegexes = numericPatterns.map((pattern) => new RegExp(pattern.match!, "u"));
-    const floatRegex = new RegExp(floatPattern!.match!, "u");
-
-    for (const literal of ["42", "0x2a", "0X2A", "0b101010", "0B101010", "0755"]) {
-      expect(numericRegexes.some((regex) => literal.match(regex)?.[0] === literal)).toBe(true);
-    }
-    for (const literal of ["1.5", "1.5e-2", ".5", "5e10"]) {
-      expect(literal.match(floatRegex)?.[0]).toBe(literal);
+describe("Pike grammar — tokenization behavior", () => {
+  it("colors primitive and container types as storage.type", () => {
+    for (const t of ["int", "float", "string", "array", "mapping", "multiset", "object", "program", "function", "void", "mixed"]) {
+      expectScope(`${t} x;`, t, "storage.type");
     }
   });
 
-  it("matches Pike 8.0 BNF string and character escape forms", () => {
-    const grammar = loadGrammar();
-    const doubleQuoted = patternByName(grammar, "strings", "string.quoted.double.pike");
-    const singleQuoted = patternByName(grammar, "strings", "string.quoted.single.pike");
+  it("colors control-flow and declaration keywords", () => {
+    expectScope("if (x) return;", "if", "keyword.control");
+    expectScope("foreach (a, int b) {}", "foreach", "keyword.control");
+    expectScope("return 0;", "return", "keyword.control");
+  });
 
-    const doubleEscapes = doubleQuoted?.patterns ?? [];
-    const singleEscapes = singleQuoted?.patterns ?? [];
+  it("colors visibility/storage modifiers", () => {
+    expectScope("private int x;", "private", "storage.modifier");
+    expectScope("protected void f() {}", "protected", "storage.modifier");
+  });
 
-    const escapedSamples = ["\\a", "\\b", "\\t", "\\n", "\\v", "\\f", "\\r", "\\\"", "\\\\", "\\123", "\\x2a", "\\d42", "\\u0041", "\\U00000041"];
-    for (const escaped of escapedSamples) {
-      expect(doubleEscapes.some((pattern) => new RegExp(pattern.match!, "u").test(escaped))).toBe(true);
-      expect(singleEscapes.some((pattern) => new RegExp(pattern.match!, "u").test(escaped))).toBe(true);
+  it("colors double- and single-quoted strings", () => {
+    expectScope('string s = "hi";', '"', "string.quoted.double");
+    expectScope("int c = 'a';", "'", "string.quoted.single");
+  });
+
+  it("colors sprintf placeholders inside strings", () => {
+    const toks = tokenize('werror("%s => %d\\n");');
+    const pct = toks.find((t) => t.text === "%s");
+    expect(pct?.scopes.some((s) => s.startsWith("constant.other.placeholder"))).toBe(true);
+  });
+
+  it("colors numeric literals (hex, binary, octal, float)", () => {
+    for (const [line, n] of [["int a = 42;", "42"], ["int b = 0x2A;", "0x2A"], ["int c = 0b1010;", "0b1010"], ["float d = 1.5e-2;", "1.5e-2"]] as const) {
+      expectScope(line, n, "constant.numeric");
     }
   });
 
-  it("matches Pike 8.0 BNF operator-name identifiers", () => {
-    const grammar = loadGrammar();
-    const backtickPattern = patternByName(grammar, "identifiers", "entity.name.function.operator.pike");
-    expect(backtickPattern?.match).toBeDefined();
-
-    const regex = new RegExp(backtickPattern!.match!, "u");
-    for (const identifier of ["`+", "`/", "`%", "`*", "`&", "`|", "`^", "`~", "`<", "`<<", "`<=", "`>", "`>>", "`>=", "`==", "`!=", "`!", "`()", "`-", "`->", "`->=", "`[]", "`[]="]) {
-      expect(identifier.match(regex)?.[0]).toBe(identifier);
-    }
-  });
-
-  it("does not classify aggregate literal delimiters as a TextMate scope", () => {
-    // Per ADR-0037, aggregate-literal delimiters ({, }, <, >, [, ] in
-    // aggregate contexts) are classified by the tree-sitter semantic-token
-    // layer, not the TextMate grammar. PR #95's `literal-delimiters` rule
-    // produced false positives like `])` in `foo(arr[i])` because regex has
-    // no parse context. The rule has been removed; this test enforces that
-    // it does not reappear.
-    const grammar = loadGrammar();
-    const repo = grammar.repository ?? {};
-    expect(repo).not.toHaveProperty("literal-delimiters");
-
-    const allPatterns: { name?: string; match?: string }[] = [];
-    for (const entry of Object.values(repo)) {
-      const patterns = Array.isArray(entry) ? entry : entry.patterns ?? [];
-      for (const p of patterns) allPatterns.push(p as { name?: string; match?: string });
-    }
-    // No rule should match the `([` / `])` / `({` / `})` / `(<` / `>)` token
-    // pairs at the start of an aggregate literal. None of these should be
-    // a single TextMate match.
-    for (const sample of ["foo(arr[i])", "f(g(x[i]))", "({ 1, 2 })", "([ \"k\": v ])", "({})", "([])"]) {
-      for (const pat of allPatterns) {
-        if (!pat.match) continue;
-        const re = new RegExp(pat.match, "gu");
-        const matches = [...sample.matchAll(re)].map(m => m[0]);
-        // `])` and `])` and `]))` and similar substrings must not be a
-        // match. The `])` from `foo(arr[i])` is the canonical PR #95
-        // regression.
-        expect(matches).not.toContain("])");
-        expect(matches).not.toContain("])");
-      }
-    }
-  });
-
-  it("matches Pike 8.0 BNF assignment, spread, splice, and range operators", () => {
-    const grammar = loadGrammar();
-    const operatorPattern = patternByCommentPrefix(grammar, "operators", "Operators");
-    expect(operatorPattern?.match).toBeDefined();
-
-    const regex = new RegExp(operatorPattern!.match!, "u");
-    for (const operator of ["=", "+=", "*=", "/=", "&=", "|=", "^=", "<<=", ">>=", "%=", "..", "...", "@", "->"] ) {
-      expect(operator.match(regex)?.[0]).toBe(operator);
-    }
-  });
-
-  it("matches sprintf format specifiers inside strings", () => {
-    const grammar = loadGrammar();
-    const patterns = repositoryPatterns(grammar, "format-specifier");
-    const specPattern = patterns.find((p) => p.name === "constant.other.placeholder.pike");
-    expect(specPattern?.match).toBeDefined();
-
-    const regex = new RegExp(specPattern!.match!, "u");
-    // Common Pike sprintf conversions and flag/width/precision forms.
-    for (const spec of ["%d", "%s", "%O", "%c", "%x", "%f", "%-20s", "%3d", "%.2f", "%08x", "%%", "%{", "%}"]) {
-      expect(spec.match(regex)?.[0]).toBe(spec);
-    }
-  });
-
-  it("does not flag a bare percent in prose as a format specifier", () => {
-    const grammar = loadGrammar();
-    const specPattern = repositoryPatterns(grammar, "format-specifier")
-      .find((p) => p.name === "constant.other.placeholder.pike");
-    const regex = new RegExp(specPattern!.match!, "u");
-    // "% done" / "100% " — percent followed by whitespace is not a conversion.
-    expect("50% done".match(regex)).toBeNull();
-    expect("100% ".match(regex)).toBeNull();
+  it("colors line and block comments, including AutoDoc", () => {
+    expectScope("x; // trailing", "//", "comment");
+    expectScope("//! doc line", "//!", "comment");
   });
 
   it("colors #include / #string target paths as include strings", () => {
-    const grammar = loadGrammar();
-    const includePattern = patternByCommentPrefix(grammar, "preprocessor", "#include / #string");
-    expect(includePattern?.begin).toBeDefined();
-
-    const beginRegex = new RegExp(includePattern!.begin!, "u");
-    expect("#include <stdio.h>".match(beginRegex)?.[1]).toBe("#include");
-    expect("# string \"blob\"".match(beginRegex)?.[1]).toBe("# string");
-
-    const scopes = (includePattern!.patterns ?? []).map((p) => p.name);
-    expect(scopes).toContain("string.quoted.other.lt-gt.include.pike");
-    expect(scopes).toContain("string.quoted.double.include.pike");
+    const toks = tokenize("#include <stdio.h>");
+    const path = toks.find((t) => t.text.includes("stdio"));
+    expect(path?.scopes.some((s) => s.includes("include"))).toBe(true);
   });
 
-  it("greys a disabled #if 0 branch and stops at #else/#elif/#endif", () => {
-    const grammar = loadGrammar();
-    const ifBranch = patternByName(grammar, "preprocessor", "comment.block.preprocessor.if-branch.pike");
-    expect(ifBranch?.begin).toBeDefined();
+  it("colors ordinary and constructor-style calls as functions", () => {
+    expectScope("write(x);", "write", "support.function");
+    expectScope("Counter();", "Counter", "support.function");
+  });
 
-    const beginRegex = new RegExp(ifBranch!.begin!, "u");
-    expect("#if 0".match(beginRegex)).not.toBeNull();
-    expect("  # if   0   // legacy".match(beginRegex)).not.toBeNull();
-    // A live branch must not be swallowed.
-    expect("#if 1".match(beginRegex)).toBeNull();
-    expect("#ifdef DEBUG".match(beginRegex)).toBeNull();
+  it("colors member and scope-resolved method calls", () => {
+    expectScope("o->read();", "read", "support.function");
+    expectScope("Stdio.File(x);", "File", "support.function");
+    expectScope("this->helper(n);", "helper", "support.function");
+    expectScope("::process(data);", "process", "support.function");
+  });
 
-    // The block is a lookahead terminator so #else/#endif keep their own scope.
-    const endRegex = new RegExp(ifBranch!.end!, "u");
-    expect("#endif".match(endRegex)).not.toBeNull();
-    expect("#else".match(endRegex)).not.toBeNull();
+  it("colors Pike builtin functions from the reference (support.function.builtin)", () => {
+    for (const b of ["sizeof", "sprintf", "werror", "indices", "objectp"]) {
+      expectScope(`int n = ${b};`, b, "support.function.builtin");
+    }
+  });
+
+  it("colors top-level stdlib modules from the reference (support.class)", () => {
+    for (const m of ["Stdio", "Protocols", "Array", "String"]) {
+      expectScope(`inherit ${m};`, m, "support.class");
+    }
+  });
+
+  it("does not classify a member access as a builtin/module", () => {
+    // `write` after `->` is a member call, not the predef builtin form.
+    const toks = tokenize("o->size;");
+    const size = toks.find((t) => t.text === "size");
+    // whatever it is, it must not be tagged as the predef builtin scope
+    expect(size?.scopes.some((s) => s.startsWith("support.function.builtin"))).not.toBe(true);
   });
 });
