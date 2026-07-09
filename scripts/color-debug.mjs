@@ -27,7 +27,7 @@ import * as oniguruma from "vscode-oniguruma";
 import * as vsctm from "vscode-textmate";
 import { Parser, Language } from "web-tree-sitter";
 import { buildSymbolTable } from "../server/src/features/symbolTable";
-import { produceSemanticTokens, TOKEN_TYPES } from "../server/src/features/semanticTokens";
+import { produceSemanticTokens, TOKEN_TYPES, TOKEN_MODIFIERS } from "../server/src/features/semanticTokens";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -119,21 +119,29 @@ function scopeToColor(scopeList) {
   return null;
 }
 
-// Our contributed semanticTokenScopes fallback (keep in sync with extension.package.json).
-const SEM_SCOPES = {
-  class: ["entity.name.type.class"], enum: ["entity.name.type.enum", "entity.name.type"],
-  enumMember: ["constant.other.enum", "variable.other.enummember"],
-  function: ["support.function.any-method", "entity.name.function"],
-  method: ["support.function.any-method", "variable.other.property", "entity.name.function.member"],
-  variable: ["variable.other", "variable"], parameter: ["variable.parameter"],
-  type: ["entity.name.type", "storage.type"], namespace: ["entity.other.inherited-class", "entity.name.namespace"],
-  builtinFunction: ["support.function.builtin", "support.function"],
-};
-function semanticColor(typeName) {
+// Our contributed semanticTokenScopes fallback — read from the built manifest so
+// this always reflects what actually ships (not a drifting hand-copy).
+const SEM_SCOPES = (() => {
+  const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
+  const entry = (pkg.contributes?.semanticTokenScopes || []).find((e) => e.language === "pike");
+  return entry?.scopes || {};
+})();
+// Resolve a semantic token's color the way VS Code does: theme semantic rule for
+// the most specific type.modifier selector, else our semanticTokenScopes fallback
+// (also most-specific selector first), else the theme's default foreground.
+function semanticColor(typeName, mods) {
   const stc = theme.semanticTokenColors || {};
-  if (stc[typeName]) return typeof stc[typeName] === "string" ? stc[typeName] : stc[typeName].foreground;
-  const c = SEM_SCOPES[typeName] && scopeToColor(SEM_SCOPES[typeName]);
-  return c || EDITOR_FG;
+  for (const sel of selectors(typeName, mods)) {
+    if (stc[sel]) return typeof stc[sel] === "string" ? stc[sel] : stc[sel].foreground;
+    if (SEM_SCOPES[sel]) { const c = scopeToColor(SEM_SCOPES[sel]); if (c) return c; }
+  }
+  return EDITOR_FG;
+}
+// type.modifier selectors, most specific first (e.g. variable.readonly, then variable).
+function selectors(typeName, mods) {
+  const out = mods.map((m) => `${typeName}.${m}`);
+  out.push(typeName);
+  return out;
 }
 
 await Parser.init();
@@ -146,7 +154,8 @@ function mergeSemantic(tmLines, counters) {
   const byLine = new Map();
   for (const t of semTokens) {
     const typeName = TOKEN_TYPES[t.typeId];
-    (byLine.get(t.line) || byLine.set(t.line, []).get(t.line)).push({ char: t.character, len: t.length, typeName, color: semanticColor(typeName) });
+    const mods = TOKEN_MODIFIERS.filter((_, i) => t.modifiers & (1 << i));
+    (byLine.get(t.line) || byLine.set(t.line, []).get(t.line)).push({ char: t.character, len: t.length, typeName, color: semanticColor(typeName, mods) });
   }
   return source.split("\n").map((_, ln) => {
     const chars = [];
