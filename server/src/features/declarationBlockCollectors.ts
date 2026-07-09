@@ -272,6 +272,24 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
   if (decl.type === 'enum_decl') { collectEnumDecl(decl, state); return; }
   if (decl.type === 'inherit_decl' || decl.type === 'import_decl') { collectInheritDecl(decl, state); return; }
 
+  // Typed constants (`constant int FOO = 1;`) are idiomatic Pike, but the
+  // tree-sitter grammar has no rule for them: it binds the type identifier to
+  // the `name` field and pushes the real name into a trailing ERROR node. Without
+  // this recovery, the constant is (wrongly) named after its type and the real
+  // name never becomes a symbol. Recover the real name from the ERROR node.
+  if (decl.type === 'constant_decl') {
+    const recovered = recoverTypedConstant(decl);
+    if (recovered) {
+      addDeclaration(state, {
+        name: recovered.nameNode.text, kind: 'constant',
+        nameRange: toRangeUtf16(recovered.nameNode, state.lines, state.offsetMap),
+        range: toRangeUtf16(decl, state.lines, state.offsetMap),
+        scopeId, declaredType: recovered.typeText,
+      });
+      return;
+    }
+  }
+
   // Multi-name declarations (variable, constant)
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
@@ -298,6 +316,37 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
       });
     }
   }
+}
+
+/**
+ * Recover the real name of a typed constant (`constant <type> <name> = ...`).
+ * The grammar has no rule for a type before the name, so it misparses one of the
+ * two identifiers into an ERROR node — and the shape is inconsistent (at file
+ * scope the type takes the `name` field and the name lands in the ERROR; inside
+ * a class it is reversed). Rather than depend on which slot is which, use
+ * position: in `constant <type> <name> = <value>` the name is always the
+ * rightmost identifier before the `=`. Returns null for untyped constants (one
+ * identifier before `=`), which the grammar already handles correctly.
+ */
+function recoverTypedConstant(decl: Node): { nameNode: Node; typeText: string } | null {
+  let eqIndex = Number.POSITIVE_INFINITY;
+  for (const child of decl.children) {
+    if (child.type === '=') { eqIndex = child.startIndex; break; }
+  }
+  const ids: Node[] = [];
+  collectIdentifiersBefore(decl, eqIndex, ids);
+  if (ids.length < 2) return null;
+  ids.sort((a, b) => a.startIndex - b.startIndex);
+  const nameNode = ids[ids.length - 1];
+  const typeText = ids.slice(0, -1).map((n) => n.text).join(' ');
+  return { nameNode, typeText };
+}
+
+/** Collect `identifier` nodes under `node` that start before `limit`. */
+function collectIdentifiersBefore(node: Node, limit: number, out: Node[]): void {
+  if (node.startIndex >= limit) return;
+  if (node.type === 'identifier') { out.push(node); return; }
+  for (const child of node.children) collectIdentifiersBefore(child, limit, out);
 }
 
 function collectEnumDecl(node: Node, state: BuildState): void {

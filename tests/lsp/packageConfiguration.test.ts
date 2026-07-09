@@ -27,16 +27,21 @@ describe("VSCode configuration contributions", () => {
     }
   });
 
-  test("enables semantic highlighting for Pike in both manifests", () => {
+  test("leaves semantic highlighting up to the theme (theme-agnostic) in both manifests", () => {
     const root = process.cwd();
     const manifests = [
       readJson(join(root, "package.json")),
       readJson(join(root, "extension.package.json")),
     ];
 
+    // Forcing `true` breaks coloring on themes that don't define semantic-token
+    // rules (e.g. Ayu Mirage): the server's semantic tokens override the theme's
+    // TextMate colors with the default foreground. `configuredByTheme` lets
+    // opted-in themes use semantic highlighting while everyone else keeps their
+    // (comprehensive) TextMate grammar coloring.
     for (const manifest of manifests) {
       const defaults = manifest.contributes.configurationDefaults["[pike]"];
-      expect(defaults["editor.semanticHighlighting.enabled"]).toBe(true);
+      expect(defaults["editor.semanticHighlighting.enabled"]).toBe("configuredByTheme");
     }
   });
 

@@ -150,13 +150,17 @@
             "support.function"
           ],
           "variable.mutable": [
-            "variable.other.mutable.pike"
+            "variable.other.mutable.pike",
+            "variable.other.pike",
+            "variable"
           ],
           "variable.readonly": [
             "variable.other.constant.pike",
             "variable.other.constant",
             "constant.other.pike",
-            "constant.language.pike"
+            "constant.language.pike",
+            "variable.other.pike",
+            "variable"
           ]
         }
       }
@@ -167,7 +171,7 @@
         "editor.insertSpaces": true,
         "editor.detectIndentation": false,
         "editor.autoIndent": "full",
-        "editor.semanticHighlighting.enabled": true
+        "editor.semanticHighlighting.enabled": "configuredByTheme"
       }
     },
     "commands": [
