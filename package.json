@@ -19,6 +19,7 @@
     "build:standalone": "bash scripts/build-standalone.sh",
     "manifest:sync": "bun run scripts/sync-manifest.ts",
     "manifest:check": "bun run scripts/sync-manifest.ts --check",
+    "check:deps": "node scripts/check-phantom-deps.mjs",
     "probe": "bun run scripts/lsp-probe.ts",
     "watch:client": "bun run scripts/watch-client.mjs",
     "watch:server": "bun run scripts/watch-server.mjs",

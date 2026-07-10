@@ -26,6 +26,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: bash scripts/check-adr-prefixes.sh
+      - run: node scripts/check-phantom-deps.mjs
 
   typecheck:
     name: typecheck (${{ matrix.os }})
