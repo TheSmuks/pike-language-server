@@ -20,6 +20,8 @@
         "@types/vscode": "^1.118.0",
         "esbuild": "^0.28.0",
         "typescript": "^6.0.3",
+        "vscode-oniguruma": "^2.0.1",
+        "vscode-textmate": "^9.3.2",
       },
     },
   },
@@ -113,6 +115,10 @@
     "vscode-languageserver-textdocument": ["vscode-languageserver-textdocument@1.0.12", "", {}, "sha512-cxWNPesCnQCcMPeenjKKsOCKQZ/L6Tv19DTRIGuLWe32lyzWhihGVJ/rcckZXJxfdKCFvRLS3fpBIsV/ZGX4zA=="],
 
     "vscode-languageserver-types": ["vscode-languageserver-types@3.17.5", "", {}, "sha512-Ld1VelNuX9pdF39h2Hgaeb5hEZM2Z3jUrrMgWQAu82jMtZp7p3vJT3BzToKtZI7NgQssZje5o0zryOrhQvzQAg=="],
+
+    "vscode-oniguruma": ["vscode-oniguruma@2.0.1", "", {}, "sha512-poJU8iHIWnC3vgphJnrLZyI3YdqRlR27xzqDmpPXYzA93R4Gk8z7T6oqDzDoHjoikA2aS82crdXFkjELCdJsjQ=="],
+
+    "vscode-textmate": ["vscode-textmate@9.3.2", "", {}, "sha512-n2uGbUcrjhUEBH16uGA0TvUfhWwliFZ1e3+pTjrkim1Mt7ydB41lV08aUvsi70OlzDWp6X7Bx3w/x3fAXIsN0Q=="],
 
     "web-tree-sitter": ["web-tree-sitter@0.26.8", "", {}, "sha512-4sUwi7ZyOrIk5KLgYLkc2A/F0LFMQnBhfb+2Cdl7ik4ePJ6JD+fk4ofI2sA5eGawBKBaK4Vntt7Ww5KcEsay4A=="],
 
