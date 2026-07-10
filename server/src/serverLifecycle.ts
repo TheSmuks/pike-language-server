@@ -142,8 +142,9 @@ async function refreshStaleCacheEntries(
       const tree = parse(diskContent, entry.uri);
       index.upsertBackgroundFile(entry.uri, 0, tree, diskContent);
       reindexed++;
-    } catch {
-      reindexed++;
+    } catch (err) {
+      // Failure left the entry invalidated; surface it, don't count as reindexed.
+      logError(connection, ErrorCategory.Index, `refreshStaleCacheEntries(${entry.uri})`, err);
     }
   }
 
@@ -313,7 +314,8 @@ function startBackgroundIndexing(
 }
 
 function startMemoryMonitorStep(ctx: InitializedContext, connection: Connection): void {
-  const MEMORY_CHECK_INTERVAL_MS = 60_000;
+  // 10s not 60s: heap can blow the --max-old-space-size cap within one 60s window.
+  const MEMORY_CHECK_INTERVAL_MS = 10_000;
 
   // Budget-aware governor: RSS vs memory.budgetMb with demotion/recovery
   // hysteresis. Replaces the old advisory heapUsed/heapTotal ratio check —

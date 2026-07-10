@@ -28,41 +28,54 @@ export interface MemoryGovernorDeps {
   connection: Connection;
 }
 
-/** Free memory under pressure and mark the server degraded. */
+/**
+ * Free memory under pressure. Runs on *every* governor check while usage stays
+ * above the demotion threshold (level-triggered), so files opened after the
+ * initial demotion are re-demoted rather than accumulating unbounded.
+ *
+ * Cheap when there is nothing left to free: dropping already-demoted files is a
+ * no-op, so we only force a GC / log when this pass actually reclaimed
+ * something — avoiding GC-churn every tick when RSS is pinned high by
+ * non-demotable memory (tree-sitter WASM, the Pike worker).
+ */
 function relieveMemoryPressure(deps: MemoryGovernorDeps): void {
-  const { index, documents, resourceState, connection } = deps;
+  const { index, documents, connection } = deps;
   const openUris = new Set(documents.all().map((doc) => doc.uri));
   const demoted = index.demoteNonEssentialEntries(openUris, new Set(), index.size);
 
   const treeStats = getTreeCacheStats();
   const evicted = treeStats.size > 0 ? evictTreeCacheOldest(Math.ceil(treeStats.size / 2)) : 0;
 
+  if (demoted.length === 0 && evicted === 0) return;
+
   // global.gc exists only when the process was started with --expose-gc.
   (globalThis as { gc?: () => void }).gc?.();
 
-  resourceState.transition(
-    "degraded",
-    `memory budget pressure — demoted ${demoted.length} non-open files, evicted ${evicted} trees`,
-  );
   logWarn(connection,
     `Memory budget pressure: demoted ${demoted.length} non-open files, evicted ${evicted} tree cache entries`,
   );
 }
 
 /**
- * Create a budget-aware governor. Call `.check()` on a timer; it fires the
- * relief action once when RSS crosses the demotion threshold and recovers the
- * state once when RSS drops below the recovery threshold.
+ * Create a budget-aware governor. Call `.check()` on a timer; each check runs
+ * the relief action while usage is above the demotion threshold, marks the
+ * server degraded once on entry, and recovers once when usage falls below the
+ * recovery threshold.
  */
 export function createHeapPressureGovernor(deps: MemoryGovernorDeps): HeapPressureMonitor {
   return new HeapPressureMonitor(
     deps.memoryBudget,
-    () => relieveMemoryPressure(deps),
+    () => {
+      deps.resourceState.transition("degraded", "memory budget pressure — demoting non-open files");
+      logWarn(deps.connection, "Entering degraded mode — memory budget pressure");
+    },
     () => {
       if (deps.resourceState.getState() === "degraded") {
         deps.resourceState.transition("active", "memory recovered below recovery threshold");
         logInfo(deps.connection, "Memory recovered — exiting degraded mode");
       }
     },
+    undefined,
+    () => relieveMemoryPressure(deps),
   );
 }
