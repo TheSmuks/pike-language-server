@@ -25,6 +25,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Stale cache-refresh failures were counted as successes and swallowed** —
   a parse/upsert error while refreshing a changed-on-disk cache entry was
   silently discarded and still tallied as "reindexed"; it is now logged.
+- **External-editor syntax highlighting was completely broken** — the
+  `queries/highlights.scm` that `docs/other-editors.md` tells Helix and
+  Neovim/nvim-treesitter users to copy still referenced grammar node types that
+  no longer exist (`call_expression`, `function_definition`,
+  `prepreprocessor_directive`, `primitive_type`, `binary_expression`, …). A
+  tree-sitter query with unknown node types fails to compile in full, so those
+  editors rendered no highlighting at all. The query is regenerated against the
+  current grammar (v1.3.x) and a test now compiles it against the bundled
+  grammar so it cannot silently drift again. Removed the unused duplicate
+  `server/src/highlights.scm`.
 
 ### Changed
 

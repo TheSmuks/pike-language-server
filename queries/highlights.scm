@@ -1,96 +1,93 @@
-; tree-sitter highlights for Pike
+; Tree-sitter syntax-highlighting queries for Pike.
+;
+; For external editors (Helix, Neovim/nvim-treesitter) — see docs/other-editors.md
+; for install instructions. Node names track the tree-sitter-pike grammar
+; (currently v1.3.x); keep this file in sync when the grammar is updated.
 
-; Preprocessor directives
-(prepreprocessor_directive) @preproc
-
-; Comments
-(line_comment) @comment
-(block_comment) @comment
-(doc_comment) @comment.documentation
-
-; Strings
-(string) @string
-(char_literal) @string
-
-; Type keywords
-(primitive_type) @type
-(type_identifier) @type
-
-; Declaration keywords
-"class" @keyword
-"inherit" @keyword.import
-"import" @keyword.import
-"typedef" @keyword
-"enum" @keyword
-"constant" @keyword
-
-; Control flow
-"if" @keyword
-"else" @keyword.control
-"for" @keyword.control
-"while" @keyword.control
-"do" @keyword.control
-"foreach" @keyword.control
-"switch" @keyword.control
-"case" @keyword.control
-"default" @keyword.control
-"break" @keyword.control
-"continue" @keyword.control
-"return" @keyword.control
+; Keywords
+[
+  "if" "else" "for" "while" "do" "foreach" "switch" "case" "default"
+  "break" "continue" "return"
+  "catch" "gauge" "sscanf" "typeof" "lambda"
+  "class" "enum" "typedef" "inherit" "import"
+  "constant"
+] @keyword
 
 ; Modifiers
-"static" @storage
-"private" @storage
-"protected" @storage
-"public" @storage
-"local" @storage
-"final" @storage
-"inline" @storage
-"extern" @storage
-"variant" @storage
-"optional" @storage
-"nomask" @storage
+[
+  "private" "protected" "public" "static" "extern"
+  "inline" "local" "final" "variant" "optional"
+  "global" "nomask"
+] @keyword.modifier
 
-; Other keywords
-"lambda" @keyword
-"typeof" @keyword
-"catch" @keyword
+; Type keywords
+[
+  "void" "mixed" "int" "float" "string" "array"
+  "mapping" "multiset" "object" "program" "function"
+] @type.builtin
+
+; Special identifiers
+[
+  "__attribute__" "__deprecated__"
+  "__func__"
+  "predef" "bits"
+] @keyword
+
+; Literals
+(integer_literal) @number
+(float_literal) @number.float
+(string_literal) @string
 
 ; Identifiers
 (identifier) @variable
+(identifier_expr (identifier) @variable)
+(backtick_identifier) @function.builtin
 
-; Function/method calls
-(call_expression
-  function: (identifier) @function)
-
-; Method definition
-(method_definition
-  name: (identifier) @function.method)
-
-; Function definition
-(function_definition
+; Function declarations
+(function_decl
   name: (identifier) @function)
 
-; Numbers
-(integer_literal) @number
-(float_literal) @number
+; Function calls — postfix_expr is transparent so we can't precisely match
+; call vs field access. This matches identifiers followed by argument_list.
+
+; Class declarations
+(class_decl
+  name: (identifier) @type)
+(enum_decl
+  name: (identifier) @type)
+(typedef_decl
+  name: (identifier) @type)
+
+; Type annotations
+(type (basic_type) @type)
+(parameter
+  type: (type) @type)
 
 ; Operators
-(binary_expression
-  operator: _ @operator)
-(unary_expression
-  operator: _ @operator)
+[
+  "+" "-" "*" "/" "%"
+  "==" "!=" ">" ">=" "<" "<="
+  "<<" ">>"
+  "&" "|" "^" "~"
+  "&&" "||" "!"
+  ".." "..."
+  "->" "::" "->?" "[?"
+  "=" "+=" "-=" "*=" "/=" "%=" "&=" "|=" "^=" "<<=" ">>="
+  "++" "--"
+] @operator
 
 ; Punctuation
-"{" @punctuation.bracket
-"}" @punctuation.bracket
-"(" @punctuation.bracket
-")" @punctuation.bracket
-"[" @punctuation.bracket
-"]" @punctuation.bracket
-"," @punctuation.delimiter
-";" @punctuation.delimiter
-":" @punctuation.delimiter
-"." @punctuation.dot
-"::" @operator
-"->" @operator
+["(" ")" "{" "}" "[" "]" "," ";" "." "@" "?" ":"] @punctuation.delimiter
+
+; Comments
+(line_comment) @comment.line
+(block_comment) @comment.block
+(autodoc_comment) @comment.documentation
+
+; Preprocessor
+(preprocessor_directive) @keyword.directive
+
+; Constants
+[
+  "this" "this_program"
+] @constant.builtin
