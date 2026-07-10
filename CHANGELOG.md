@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comes up empty, so the common completion path is unchanged, and both degrade
   silently when Pike/pike-introspect are unavailable.
 
+### Changed
+
+- Internal refactor of the declaration collector (`collectSimpleDecl`) to stay
+  within the project's function-size limit; behavior is unchanged (covered by
+  the diagnostic golden files).
+
 ### Fixed
 
 - **Runtime symbol resolution (`resolve`) was silently broken end to end** —
@@ -63,12 +69,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current grammar (v1.3.x) and a test now compiles it against the bundled
   grammar so it cannot silently drift again. Removed the unused duplicate
   `server/src/highlights.scm`.
-
-### Changed
-
-- Internal refactor of the declaration collector (`collectSimpleDecl`) to stay
-  within the project's function-size limit; behavior is unchanged (covered by
-  the diagnostic golden files).
 
 ## [0.8.46] — 2026-07-09
 
