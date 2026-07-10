@@ -192,15 +192,18 @@ export function validateResolveResult(raw: unknown): ResolveResult {
   assertBoolean(raw["resolved"], "ResolveResult.resolved");
 
   // Optional string fields
+  // Introspect emits `source_file: null` / `source_line` absent for symbols
+  // whose location it cannot determine (e.g. inner classes). Treat null like
+  // absent — a missing location must not discard an otherwise-valid result.
   const optionalStrings = ["name", "kind", "source_file", "error"] as const;
   for (const field of optionalStrings) {
-    if (field in raw && raw[field] !== undefined) {
+    if (field in raw && raw[field] != null) {
       assertString(raw[field], `ResolveResult.${field}`);
     }
   }
 
   // Optional: source_line (number)
-  if ("source_line" in raw && raw["source_line"] !== undefined) {
+  if ("source_line" in raw && raw["source_line"] != null) {
     assertNumber(raw["source_line"], "ResolveResult.source_line");
   }
 
@@ -239,10 +242,11 @@ function validateTypedArrayField(raw: Record<string, unknown>, field: "methods" 
   for (let i = 0; i < arr.length; i++) {
     assertObject(arr[i], `ResolveResult.${field}[${i}]`);
     assertString(arr[i]["name"], `ResolveResult.${field}[${i}].name`);
-    if ("source_file" in arr[i] && arr[i]["source_file"] !== undefined) {
+    // null source_file/source_line means "location unknown" — tolerate it.
+    if ("source_file" in arr[i] && arr[i]["source_file"] != null) {
       assertString(arr[i]["source_file"], `ResolveResult.${field}[${i}].source_file`);
     }
-    if ("source_line" in arr[i] && arr[i]["source_line"] !== undefined) {
+    if ("source_line" in arr[i] && arr[i]["source_line"] != null) {
       assertNumber(arr[i]["source_line"], `ResolveResult.${field}[${i}].source_line`);
     }
   }

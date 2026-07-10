@@ -144,7 +144,7 @@ export async function resolveMemberAccess(
 }
 
 /** Resolve the type name of an LHS expression (declared, inferred, or function return). */
-async function resolveLhsTypeName(
+export async function resolveLhsTypeName(
   lhsName: string,
   lhsDecl: Declaration | null,
   context: TypeResolutionContext,

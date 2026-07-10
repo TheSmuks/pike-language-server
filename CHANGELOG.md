@@ -9,8 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Standard-library completion and hover now cover types the pre-built index
+  misses** — completing a member of a variable whose declared type is a Pike
+  stdlib class that isn't in the static index (e.g. `Image.Image`,
+  `Protocols.HTTP.Session`) now falls back to the live Pike introspection worker
+  and lists its real runtime methods and constants. Hovering a member of a
+  stdlib-typed variable (`Stdio.File f; f->open(...)`) now resolves the precise
+  qualified symbol (`predef.Stdio.File.open`) and shows its actual signature and
+  documentation instead of nothing. Both paths only run when the static index
+  comes up empty, so the common completion path is unchanged, and both degrade
+  silently when Pike/pike-introspect are unavailable.
+
 ### Fixed
 
+- **Runtime symbol resolution (`resolve`) was silently broken end to end** —
+  three independent faults meant the worker's `resolve` method never returned
+  data, so the feature above could never have worked: the server looked for the
+  introspection module at `modules/Introspect/src` while current `pmp` installs
+  it as `modules/pike_introspect/src`; the worker reached submodules via runtime
+  `->` indexing, which returns 0 in Pike (it must resolve the full dotted path,
+  `master()->resolv("Introspect.Discover")`); and the result validator threw on
+  a `null` source location — which pike-introspect emits for inner classes such
+  as `Protocols.HTTP.Session.Cookie` — discarding the entire otherwise-valid
+  result. All three are fixed.
+- **A user-defined function that shares a name with a predef builtin** (e.g. a
+  local `int write(int x)`) now shows its own signature on hover instead of the
+  builtin's documentation.
 - **Server no longer runs out of memory / crashes on large projects or with
   multiple windows open** — the memory governor's relief action (dropping
   symbol tables for non-open files) was latched to the rising edge of the

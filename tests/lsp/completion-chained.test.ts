@@ -28,12 +28,14 @@ import predefBuiltinIndex from "../../server/src/data/predef-builtin-index.json"
 await initParser();
 
 /** Build a minimal CompletionContext for direct API tests. */
-function makeCtx(uri = "file:///test/chained.pike"): CompletionContext {
+function makeCtx(source = "", uri = "file:///test/chained.pike"): CompletionContext {
   return {
     index: new WorkspaceIndex({ workspaceRoot: "/test" }),
     stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
     predefBuiltins: predefBuiltinIndex as Record<string, string>,
+    predefAutodoc: {},
     uri,
+    source,
   };
 }
 
@@ -74,7 +76,7 @@ describe("F1: chained call type inference for member access completion", () => {
     wireInheritance(table);
 
     // "  d->" on line 7, cursor at col 5 (right after '>')
-    const result = await getCompletions(table, tree, 7, colAfterArrow(src, 7), makeCtx());
+    const result = await getCompletions(table, tree, 7, colAfterArrow(src, 7), makeCtx(src));
     const labels = completionLabels(result);
 
     expect(labels).toContain("bark");
@@ -98,7 +100,7 @@ describe("F1: chained call type inference for member access completion", () => {
     wireInheritance(table);
 
     // "  makeDog()->" on line 6, cursor right after '>'
-    const result = await getCompletions(table, tree, 6, colAfterArrow(src, 6), makeCtx());
+    const result = await getCompletions(table, tree, 6, colAfterArrow(src, 6), makeCtx(src));
     const labels = completionLabels(result);
 
     expect(labels).toContain("bark");
@@ -123,7 +125,7 @@ describe("F1: chained call type inference for member access completion", () => {
     const table = buildSymbolTable(tree, "file:///test/f1-two-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
-    const result = await getCompletions(table, tree, 9, colAfterArrow(src, 9), makeCtx());
+    const result = await getCompletions(table, tree, 9, colAfterArrow(src, 9), makeCtx(src));
     const labels = completionLabels(result);
 
     // Should show Item members (id, use), not Container members
@@ -145,7 +147,7 @@ describe("F1: chained call type inference for member access completion", () => {
     const table = buildSymbolTable(tree, "file:///test/f1-three-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
-    const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx());
+    const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx(src));
     const labels = completionLabels(result);
 
     // Should show C members (value, render), not A or B members
@@ -167,7 +169,7 @@ describe("F1: chained call type inference for member access completion", () => {
     const table = buildSymbolTable(tree, "file:///test/f1-void-chain.pike", 1, undefined, src);
     wireInheritance(table);
 
-    const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx());
+    const result = await getCompletions(table, tree, 5, colAfterArrow(src, 5), makeCtx(src));
     const labels = completionLabels(result);
 
     // void has no members, so result should be empty
@@ -184,7 +186,7 @@ describe("F1: chained call type inference for member access completion", () => {
     const table = buildSymbolTable(tree, "file:///test/f1-unresolved.pike", 1, undefined, src);
     wireInheritance(table);
 
-    const result = await getCompletions(table, tree, 1, colAfterArrow(src, 1), makeCtx());
+    const result = await getCompletions(table, tree, 1, colAfterArrow(src, 1), makeCtx(src));
     expect(result.items).toHaveLength(0);
   });
 });

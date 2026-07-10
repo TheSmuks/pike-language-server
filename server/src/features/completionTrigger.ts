@@ -7,6 +7,7 @@
 
 import { Tree, Node } from "web-tree-sitter";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import type { ResolveResult } from "./pikeWorker";
 import { type StdlibEntry, resetStdlibCache, resetAutoImportCache } from "./completion-stdlib";
 import { utf16ToUtf8 } from "../util/positionConverter";
 
@@ -24,6 +25,13 @@ export interface CompletionContext {
   source: string;
   /** Optional runtime type inferrer (PikeWorker.typeof_()). */
   typeInferrer?: (varName: string) => Promise<string | null>;
+  /**
+   * Optional runtime member resolver (PikeWorker.resolve()). Enumerates the
+   * methods/constants of a type the static stdlib index doesn't cover. Used as
+   * a fallback in member-access completion; results are cached per type name by
+   * the worker, so repeated completions on the same type hit memory.
+   */
+  memberResolver?: (typeName: string) => Promise<ResolveResult | null>;
 }
 
 // ---------------------------------------------------------------------------

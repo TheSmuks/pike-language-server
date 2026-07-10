@@ -65,8 +65,15 @@ export const WORKER_SCRIPT = resolveFile(
   join(DEV_ROOT, "harness", "worker.pike"),
   join(VSIX_ROOT, "harness", "worker.pike"),
 );
+// pmp installs the introspect module under a package-named directory. The
+// package was historically symlinked as `modules/Introspect`, but current pmp
+// versions name it after the pike.json dependency key (`modules/pike_introspect`).
+// Try both layouts so `resolve` works regardless of the installed pmp version.
 export const INTROSPECT_PATH = resolveDir(
   join(DEV_ROOT, "modules", "Introspect", "src"),
+  join(DEV_ROOT, "modules", "pike_introspect", "src"),
+  join(VSIX_ROOT, "modules", "Introspect", "src"),
+  join(VSIX_ROOT, "modules", "pike_introspect", "src"),
 );
 
 // ---------------------------------------------------------------------------

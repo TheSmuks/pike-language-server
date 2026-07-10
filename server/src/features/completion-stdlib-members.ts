@@ -10,7 +10,7 @@ import {
   CompletionItemKind,
   InsertTextFormat,
 } from "vscode-languageserver/node";
-import { getStdlibChildrenMap } from "./completion-stdlib";
+import { getStdlibChildrenMap, isCompletableIdentifier } from "./completion-stdlib";
 import { padSortKey, extractParamsFromStdlibSignature } from "./completion-items";
 import type { CompletionContext } from "./completionTrigger";
 
@@ -90,5 +90,60 @@ export function addStdlibMembersByType(
     // First match wins — don't accumulate from multiple prefixes
     // since longer prefixes are more specific.
     return;
+  }
+}
+
+/**
+ * Strategy 3c: Runtime member resolution via PikeWorker.resolve().
+ *
+ * Fallback for types the static stdlib index doesn't cover (e.g. `Image.Image`,
+ * `Protocols.HTTP.Session`) and for the fuller inherited member set introspect
+ * enumerates. Only called when the static index yields nothing for the type, so
+ * the common completion path never pays the subprocess round-trip. Members are
+ * enriched with static-index docs when a matching FQN entry exists.
+ */
+export async function addResolvedMembers(
+  typeName: string,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): Promise<void> {
+  if (!ctx.memberResolver) return;
+  const result = await ctx.memberResolver(typeName);
+  if (!result || !result.resolved) return;
+
+  const fqnPrefix = "predef." + typeName + ".";
+  addResolvedGroup(result.methods, CompletionItemKind.Method, fqnPrefix, ctx, items, seenNames);
+  addResolvedGroup(result.constants, CompletionItemKind.Constant, fqnPrefix, ctx, items, seenNames);
+}
+
+/** Convert one group (methods or constants) of resolved members to items. */
+function addResolvedGroup(
+  members: Array<{ name: string }> | undefined,
+  kind: CompletionItemKind,
+  fqnPrefix: string,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): void {
+  if (!members) return;
+  for (const member of members) {
+    const name = member.name;
+    if (seenNames.has(name)) continue;
+    // Skip operator overloads (`<<, `%, …) — not meaningful `->` members.
+    if (!isCompletableIdentifier(name)) continue;
+    seenNames.add(name);
+    const fqn = fqnPrefix + name;
+    const entry = ctx.stdlibIndex[fqn];
+    items.push({
+      label: name,
+      kind,
+      detail: entry?.signature || undefined,
+      sortText: padSortKey(10) + name,
+      filterText: name,
+      // Only tag a resolve-data source when the static index can supply
+      // markdown for completionItem/resolve; otherwise leave it undocumented.
+      data: entry ? { source: "stdlib", fqn } : undefined,
+    });
   }
 }

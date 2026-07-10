@@ -21,6 +21,7 @@ import type { Tree, Node } from "web-tree-sitter";
 import { getDefinitionAt, type SymbolTable, type Declaration } from "./symbolTable";
 import {
   resolveAccessDeclaration,
+  resolveAccessQualifiedType,
   type ResolutionContext,
 } from "./accessResolver";
 import type { PikeWorker } from "./pikeWorker";
@@ -229,6 +230,14 @@ async function resolveHoverFallback(
     return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
   }
 
+  // Qualified stdlib member: when the LHS resolves to a stdlib type (e.g.
+  // `Stdio.File f; f->open`), look up the precise FQN `predef.Stdio.File.open`
+  // instead of the unqualified `predef.open`, which does not exist.
+  const qualifiedHover = await hoverFromQualifiedStdlib(
+    ctx, hoverResolutionCtx, table, params, hoverTree,
+  );
+  if (qualifiedHover) return qualifiedHover;
+
   return resolveHoverBuiltin(ctx, hoverTree, doc, params);
 }
 
@@ -272,6 +281,42 @@ function hoverFromStdlibAccess(
     character: decl.nameRange.start.character,
     isAutodoc: true,
   };
+}
+
+/**
+ * Resolve hover for a qualified stdlib member by building the precise FQN
+ * from the LHS type name.
+ *
+ * `hoverFromStdlibAccess` only fires when the member resolves to a workspace
+ * Declaration; pure stdlib types (e.g. `Stdio.File`) resolve to a synthetic
+ * class with an empty member table, so that path returns null. Here we recover
+ * the LHS type name, build `predef.<Type>.<member>`, and look up rich docs.
+ */
+async function hoverFromQualifiedStdlib(
+  ctx: HoverContext,
+  resolutionCtx: ResolutionContext,
+  table: SymbolTable,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  tree: Tree,
+): Promise<Hover | null> {
+  const qualified = await resolveAccessQualifiedType(
+    resolutionCtx, table, params.textDocument.uri,
+    params.position.line, params.position.character, tree,
+  );
+  if (!qualified) return null;
+
+  const fqn = `predef.${qualified.typeName}.${qualified.memberName}`;
+  const entry = ctx.stdlibIndex[fqn];
+  if (!entry) return null;
+
+  return formatHover({
+    name: qualified.memberName,
+    signature: entry.signature,
+    documentation: entry.markdown,
+    line: params.position.line,
+    character: params.position.character,
+    isAutodoc: true,
+  });
 }
 
 /** Try to resolve hover from predef builtins or stdlib index. */

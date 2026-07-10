@@ -50,11 +50,13 @@ export function registerCompletionHandlers(
   ctx: NavigationContext,
 ): void {
   const makeTypeInferrer = buildTypeInferrerFactory(ctx);
+  const memberResolver = buildMemberResolver(ctx);
   const completionBase = {
     index: ctx.index,
     stdlibIndex: ctx.stdlibIndex,
     predefBuiltins: ctx.predefBuiltins,
     predefAutodoc: ctx.predefAutodoc,
+    memberResolver,
   };
 
   // -----------------------------------------------------------------------
@@ -89,11 +91,26 @@ function buildTypeInferrerFactory(
   };
 }
 
+/** Build a runtime member resolver backed by PikeWorker.resolve(). */
+function buildMemberResolver(
+  ctx: NavigationContext,
+): (typeName: string) => Promise<import("./pikeWorker").ResolveResult | null> {
+  return async (typeName: string) => {
+    try {
+      const result = await ctx.worker.resolve(typeName);
+      return result.resolved ? result : null;
+    } catch {
+      // Worker unavailable or Pike not installed — degrade gracefully.
+      return null;
+    }
+  };
+}
+
 /** Handle textDocument/completion requests. */
 async function handleCompletion(
   connection: Connection,
   ctx: NavigationContext,
-  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins; predefAutodoc: typeof ctx.predefAutodoc },
+  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins; predefAutodoc: typeof ctx.predefAutodoc; memberResolver: (typeName: string) => Promise<import("./pikeWorker").ResolveResult | null> },
   makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
   token: CancellationToken,
