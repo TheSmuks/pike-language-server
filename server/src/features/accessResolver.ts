@@ -14,7 +14,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Location as LspLocation } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration } from "./symbolTable";
 import type { TypeResolutionContext } from "./typeResolver";
-import { resolveMemberAccess } from "./typeResolver";
+import { resolveMemberAccess, resolveLhsTypeName } from "./typeResolver";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
@@ -63,13 +63,49 @@ export async function resolveAccessCore(
   character: number,
   tree?: Tree,
 ): Promise<AccessResult | null> {
+  const site = await locateAccessSite(ctx, table, uri, line, character, tree);
+  if (!site) return null;
+
+  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0, site.lines);
+  if (!lhsDecl) return null;
+
+  const targetDecl = await resolveMemberAccess(
+    site.lhsNode.type === 'identifier' ? site.lhsNode.text : '',
+    site.memberName,
+    lhsDecl,
+    site.typeCtx,
+  );
+  if (!targetDecl) return null;
+
+  const targetUri = findDeclUri(ctx, targetDecl, table, uri);
+  return { decl: targetDecl, uri: targetUri };
+}
+
+/** The located pieces of an arrow/dot access, shared by the resolvers below. */
+interface AccessSite {
+  lhsNode: Node;
+  memberName: string;
+  typeCtx: TypeResolutionContext;
+  lines: string[];
+}
+
+/**
+ * Locate the LHS operand and member name of the arrow/dot access at a position.
+ * Returns null when the position is not on an access member.
+ */
+async function locateAccessSite(
+  ctx: ResolutionContext,
+  table: SymbolTable,
+  uri: string,
+  line: number,
+  character: number,
+  tree?: Tree,
+): Promise<AccessSite | null> {
   const ref = table.references.find(
     r => r.loc.line === line && r.loc.character === character &&
       (r.kind === 'arrow_access' || r.kind === 'dot_access'),
   );
-  if (!ref) {
-    return null;
-  }
+  if (!ref) return null;
 
   const doc = ctx.documents.get(uri);
   if (!doc) return null;
@@ -94,19 +130,34 @@ export async function resolveAccessCore(
   if (!lhsNode) return null;
 
   const typeCtx: TypeResolutionContext = { table, uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex, typeInferrer: ctx.typeInferrer };
-  const lhsDecl = await resolveLhsDeclaration(lhsNode, table, typeCtx, 0, lines);
-  if (!lhsDecl) return null;
+  return { lhsNode, memberName: ref.name, typeCtx, lines };
+}
 
-  const targetDecl = await resolveMemberAccess(
-    lhsNode.type === 'identifier' ? lhsNode.text : '',
-    ref.name,
-    lhsDecl,
-    typeCtx,
-  );
-  if (!targetDecl) return null;
+/**
+ * Resolve an arrow/dot access to its qualified LHS type name and member.
+ *
+ * For `Stdio.File f; f->open` this returns `{ typeName: "Stdio.File",
+ * memberName: "open" }`, letting hover build the precise stdlib FQN
+ * `predef.Stdio.File.open` instead of the unqualified `predef.open` (which
+ * does not exist). Returns null when the LHS type cannot be determined.
+ */
+export async function resolveAccessQualifiedType(
+  ctx: ResolutionContext,
+  table: SymbolTable,
+  uri: string,
+  line: number,
+  character: number,
+  tree?: Tree,
+): Promise<{ typeName: string; memberName: string } | null> {
+  const site = await locateAccessSite(ctx, table, uri, line, character, tree);
+  if (!site) return null;
 
-  const targetUri = findDeclUri(ctx, targetDecl, table, uri);
-  return { decl: targetDecl, uri: targetUri };
+  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0, site.lines);
+  const lhsName = site.lhsNode.type === 'identifier' ? site.lhsNode.text : '';
+  const typeName = await resolveLhsTypeName(lhsName, lhsDecl, site.typeCtx);
+  if (!typeName) return null;
+
+  return { typeName, memberName: site.memberName };
 }
 
 // ---------------------------------------------------------------------------

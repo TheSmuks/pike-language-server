@@ -202,12 +202,18 @@ mapping handle_resolve(mapping params) {
     // Resolve Introspect at RUNTIME, not compile time.
     // Pike's `import` is a compile-time directive — it fails the entire
     // script if the module is absent. master()->resolv() defers to runtime.
-    object|program introspect = master()->resolv("Introspect");
-    if (!introspect) {
+    //
+    // Resolve the submodules by their full dotted path. Indexing the parent
+    // module object at runtime (`introspect->Discover`) returns 0 because Pike
+    // does not auto-load submodule dirnodes through `->`; only the compile-time
+    // `.` operator or a fully-qualified resolv() triggers the load.
+    object discover = master()->resolv("Introspect.Discover");
+    object describe = master()->resolv("Introspect.Describe");
+    if (!discover) {
       return ([ "resolved": Val.false, "error": "Introspect module not available" ]);
     }
 
-    mapping info = introspect->Discover->resolve_symbol(symbol);
+    mapping info = discover->resolve_symbol(symbol);
     if (!info)
       return ([ "resolved": Val.false, "symbol": symbol ]);
 
@@ -215,10 +221,10 @@ mapping handle_resolve(mapping params) {
     m_delete(info, "program");
 
     // If it's a class, also get inheritance info
-    if (info["kind"] == "class") {
-      program p = introspect->Discover->resolve_program(symbol);
+    if (info["kind"] == "class" && describe) {
+      program p = discover->resolve_program(symbol);
       if (p) {
-        mapping desc = introspect->Describe->describe_program(p);
+        mapping desc = describe->describe_program(p);
         if (desc["methods"])
           info["methods"] = desc["methods"];
         if (desc["constants"])

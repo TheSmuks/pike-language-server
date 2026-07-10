@@ -41,7 +41,7 @@ import { resolveChainedType } from "./completion-chain";
 import { completeScopeAccess } from "./completion-scopeAccess";
 import { completeCallArgs } from "./completion-callArgs";
 import { collectKeywordSnippets } from "./completion-keywords";
-import { addStdlibMembers, addStdlibMembersByType } from "./completion-stdlib-members";
+import { addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import { utf16ToUtf8 } from "../util/positionConverter";
 import { buildAutodocCompletion } from "./completion-autodoc";
 
@@ -388,7 +388,13 @@ async function completeMemberAccess(
     // are not in the workspace — check the stdlib index explicitly.
     const typeName = resolveTypeName(resolvedDecl);
     if (typeName) {
+      const before = items.length;
       addStdlibMembersByType(typeName, ctx, items, seenNames);
+      // Runtime fallback: when the static stdlib index has no members for this
+      // type, ask the Pike worker to enumerate them (e.g. `Image.Image`).
+      if (items.length === before) {
+        await addResolvedMembers(typeName, ctx, items, seenNames);
+      }
     }
 
     const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);

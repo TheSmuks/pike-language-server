@@ -169,10 +169,35 @@ describe("Tier 1: Workspace AutoDoc hover", () => {
 // ---------------------------------------------------------------------------
 
 describe("Tier 2: Stdlib hover", () => {
-  test("predef builtin hover shows type signature", async () => {
-    // Declare a local variable with the same name as a predef builtin,
-    // then hover over a reference to it. This exercises the Tier 2b
-    // predef builtins lookup inside declForHover.
+  test("qualified stdlib member: f->open where f is Stdio.File shows Stdio.File.open docs (C3)", async () => {
+    // Regression for audit iteration-6 C3: hovering a member of a stdlib-typed
+    // variable must build the precise FQN `predef.Stdio.File.open`, not the
+    // unqualified `predef.open` (which does not exist → previously no hover).
+    const uri = "file:///test/c3-qualified-stdlib.pike";
+    const source = [
+      "void test() {",
+      "  Stdio.File f;",
+      "  f->open(\"x\", \"r\");",
+      "}",
+    ].join("\n");
+    server.openDoc(uri, source);
+
+    // Cursor on `open` (line 2, char 5 — right after `f->`).
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 2, character: 5 } },
+    ) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("open");
+    // Signature from predef.Stdio.File.open: "int open(string filename, string mode)"
+    expect(result!.contents.value).toContain("filename");
+  });
+
+  test("user-defined function shadowing a predef builtin shows its own signature", async () => {
+    // Declare a local function with the same name as a predef builtin, then
+    // hover over a reference to it. The local definition must win — showing the
+    // builtin's docs (e.g. "Writes a string on stdout") would be misleading.
     const uri = "file:///test/predef-hover.pike";
     const source = "int write(int x) { return x; }\nint y = write(1);";
     server.openDoc(uri, source);
@@ -183,12 +208,12 @@ describe("Tier 2: Stdlib hover", () => {
       { textDocument: { uri }, position: { line: 1, character: 8 } },
     ) as HoverResult | null;
 
-    // The local function 'write' should be resolved by tree-sitter
-    // and produce a hover result (Tier 3 at minimum — bare signature).
     expect(result).not.toBeNull();
     expect(result!.contents.value).toBeDefined();
-    // Should contain the function signature
-    expect(result!.contents.value).toContain("function");
+    // Shows the local signature, not the predef `write` stdout-writer docs.
+    expect(result!.contents.value).toContain("write");
+    expect(result!.contents.value).toContain("int");
+    expect(result!.contents.value).not.toContain("stdout");
   });
 });
 

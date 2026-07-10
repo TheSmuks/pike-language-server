@@ -337,13 +337,21 @@ function hoverFromAutodoc(
 
 /** Tier 2: Stdlib + predef builtins — hash-table lookup. */
 function hoverFromStdlib(
-  decl: { name: string; nameRange: { start: { line: number; character: number } } },
+  decl: { name: string; kind: string; nameRange: { start: { line: number; character: number } } },
   signature: string,
   ctx: HoverContentContext,
 ): HoverInfo | null {
   const entry = ctx.stdlibIndex[`predef.${decl.name}`];
   if (entry) {
     return makeHoverInfo(decl, entry.signature, entry.markdown, true);
+  }
+
+  // A user-defined function/method that happens to share a name with a C-level
+  // predef builtin (e.g. a local `int write(int x)`) must show its own
+  // signature, not the builtin's docs. Skip the predef override for these; the
+  // caller falls through to the tree-sitter signature (Tier 3).
+  if (decl.kind === "function" || decl.kind === "method") {
+    return null;
   }
 
   const builtinSig = ctx.predefBuiltins[decl.name];
