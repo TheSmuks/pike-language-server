@@ -6,7 +6,7 @@
  */
 
 import type { Node } from 'web-tree-sitter';
-import type { BuildState } from './symbolTable';
+import type { BuildState, DeclKind } from './symbolTable';
 import {
   toRangeUtf16,
   getNameNodes,
@@ -290,32 +290,30 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
     }
   }
 
-  // Multi-name declarations (variable, constant)
+  collectNamedDecl(decl, actualKind, state, scopeId);
+}
+
+/**
+ * Emit a symbol for each declared name of a plain variable/constant declaration
+ * (Pike allows `int a, b, c;`), falling back to the `name` field when the
+ * grammar exposes no name list.
+ */
+function collectNamedDecl(decl: Node, actualKind: DeclKind, state: BuildState, scopeId: number): void {
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
   const assignedType = (actualKind === 'variable' && (!typeText || typeText === 'mixed'))
     ? extractInitializerType(decl) : undefined;
   const modifiers = collectModifiers(decl);
 
-  if (nameNodes.length > 0) {
-    for (const nameNode of nameNodes) {
-      addDeclaration(state, {
-        name: nameNode.text, kind: actualKind,
-        nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
-        range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId, declaredType: typeText, assignedType, modifiers,
-      });
-    }
-  } else {
-    const nameNode = decl.childForFieldName('name');
-    if (nameNode) {
-      addDeclaration(state, {
-        name: nameNode.text, kind: actualKind,
-        nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
-        range: toRangeUtf16(decl, state.lines, state.offsetMap),
-        scopeId, declaredType: typeText, assignedType, modifiers,
-      });
-    }
+  const targets = nameNodes.length > 0 ? nameNodes : [decl.childForFieldName('name')];
+  for (const nameNode of targets) {
+    if (!nameNode) continue;
+    addDeclaration(state, {
+      name: nameNode.text, kind: actualKind,
+      nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
+      range: toRangeUtf16(decl, state.lines, state.offsetMap),
+      scopeId, declaredType: typeText, assignedType, modifiers,
+    });
   }
 }
 

@@ -175,6 +175,7 @@ export class HeapPressureMonitor {
   private readonly budget: MemoryBudget;
   private readonly onPressure: () => void;
   private readonly onRecovery: () => void;
+  private readonly onSustainedPressure: (() => void) | undefined;
   private readonly heapSource: HeapSource;
 
   constructor(
@@ -182,10 +183,12 @@ export class HeapPressureMonitor {
     onPressure: () => void,
     onRecovery: () => void,
     heapSource?: HeapSource,
+    onSustainedPressure?: () => void,
   ) {
     this.budget = budget;
     this.onPressure = onPressure;
     this.onRecovery = onRecovery;
+    this.onSustainedPressure = onSustainedPressure;
     this.heapSource = heapSource ?? {
       getHeapUsedMb: () => process.memoryUsage().rss / (1024 * 1024),
     };
@@ -194,15 +197,27 @@ export class HeapPressureMonitor {
   /**
    * Check current heap usage and fire transitions if thresholds are crossed.
    * Safe to call on a timer or after significant events.
+   *
+   * `onPressure`/`onRecovery` are edge-triggered — they fire once per degraded
+   * episode and drive the client-facing state notification. `onSustainedPressure`
+   * is level-triggered: it fires on *every* check while usage stays above the
+   * demotion threshold. Relief work (dropping non-open symbol tables) must run
+   * here, not on the edge — otherwise the very first demotion latches `degraded`
+   * and, because RSS seldom falls back below the recovery threshold after a GC,
+   * the governor would go silent while newly-opened files keep growing the heap
+   * unbounded toward the hard cap.
    */
   check(): void {
     const usedMb = this.heapSource.getHeapUsedMb();
     const demotionThresholdMb = this.budget.budgetMb * this.budget.demotionThresholdFraction;
     const recoveryThresholdMb = this.budget.budgetMb * this.budget.recoveryThresholdFraction;
 
-    if (!this.degraded && usedMb > demotionThresholdMb) {
-      this.degraded = true;
-      this.onPressure();
+    if (usedMb > demotionThresholdMb) {
+      if (!this.degraded) {
+        this.degraded = true;
+        this.onPressure();
+      }
+      this.onSustainedPressure?.();
     } else if (this.degraded && usedMb < recoveryThresholdMb) {
       this.degraded = false;
       this.onRecovery();

@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Server no longer runs out of memory / crashes on large projects or with
+  multiple windows open** — the memory governor's relief action (dropping
+  symbol tables for non-open files) was latched to the rising edge of the
+  pressure threshold, so it fired **once** and then went silent for the rest of
+  the process's life (resident memory rarely falls back below the recovery
+  threshold after a GC). Files opened afterward grew the heap unbounded toward
+  the `--max-old-space-size` hard cap until V8 aborted the process. Relief is
+  now level-triggered — it re-runs on every check while usage stays above the
+  demotion threshold — and the check interval dropped from 60s to 10s so a fast
+  climb is caught before the cap. The client-facing "degraded" notification
+  stays edge-triggered (one message per episode).
+- **Stale cache-refresh failures were counted as successes and swallowed** —
+  a parse/upsert error while refreshing a changed-on-disk cache entry was
+  silently discarded and still tallied as "reindexed"; it is now logged.
+
+### Changed
+
+- Internal refactor of the declaration collector (`collectSimpleDecl`) to stay
+  within the project's function-size limit; behavior is unchanged (covered by
+  the diagnostic golden files).
+
 ## [0.8.46] — 2026-07-09
 
 ### Added

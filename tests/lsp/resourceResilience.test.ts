@@ -193,6 +193,49 @@ describe("US3: Heap-pressure monitor hysteresis (Phase 5, T065)", () => {
     monitor.check(); // already recovered — no re-fire
     expect(recoveryCalls).toBe(1);
   });
+
+  test("sustained relief fires on every check while above threshold (onPressure stays edge-triggered)", () => {
+    // Regression: the relief action must be level-triggered. When it was
+    // latched to the rising edge, the governor demoted once and then went
+    // silent while RSS stayed pinned high — so files opened afterward grew the
+    // heap unbounded toward the hard cap and crashed the server.
+    let pressureCalls = 0;
+    let reliefCalls = 0;
+    const monitor = new HeapPressureMonitor(
+      TEST_BUDGET,
+      () => { pressureCalls++; },
+      () => {},
+      { getHeapUsedMb: () => 90 }, // stays above the 80 MB demotion threshold
+      () => { reliefCalls++; },
+    );
+
+    monitor.check();
+    monitor.check();
+    monitor.check();
+
+    expect(pressureCalls).toBe(1); // degraded notification: edge-triggered
+    expect(reliefCalls).toBe(3);   // relief: runs every check while over budget
+  });
+
+  test("sustained relief stops once usage recovers", () => {
+    let reliefCalls = 0;
+    const letHeap = { mb: 90 };
+    const monitor = new HeapPressureMonitor(
+      TEST_BUDGET,
+      () => {},
+      () => {},
+      { getHeapUsedMb: () => letHeap.mb },
+      () => { reliefCalls++; },
+    );
+
+    monitor.check();       // over threshold → relief
+    monitor.check();       // still over → relief
+    letHeap.mb = 30;       // below recovery threshold
+    monitor.check();       // recovered → no relief
+    monitor.check();       // still recovered → no relief
+
+    expect(reliefCalls).toBe(2);
+  });
 });
 
 describe("US3: Degraded global feature unavailability (Phase 5, T065)", () => {
