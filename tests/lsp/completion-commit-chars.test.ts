@@ -6,8 +6,10 @@
  * completion or function-call parens.
  *
  * Rules under test:
- *   1. Functions/methods get "("
- *   2. Classes get "." and "("
+ *   1. Functions/methods get NO commit characters — their snippet insertText
+ *      already includes the opening paren, so committing on "(" would double it.
+ *   2. Classes get "." only — "(" is omitted for the same reason (the
+ *      constructor snippet already includes it).
  *   3. Variables/parameters/inherit with a non-primitive type get "."
  *   4. Everything else gets no commit characters
  */
@@ -40,24 +42,23 @@ function makeDecl(
 // ---------------------------------------------------------------------------
 
 describe("commit characters: functions and methods", () => {
-  it("function gets '(' as commit character", () => {
+  it("function gets no commit character (snippet already inserts '(')", () => {
     const item = declToCompletionItem(makeDecl("function", {
       declaredType: "function(string:void)",
     }), 0);
-    expect(item.commitCharacters).toEqual(["("]);
+    expect(item.commitCharacters).toBeUndefined();
   });
 
-  it("method gets '(' as commit character", () => {
+  it("method gets no commit character (snippet already inserts '(')", () => {
     const item = declToCompletionItem(makeDecl("method", {
       declaredType: "function(int:int)",
     }), 0);
-    expect(item.commitCharacters).toEqual(["("]);
+    expect(item.commitCharacters).toBeUndefined();
   });
 
-  it("function without declared type still gets '('", () => {
-    // Functions are always callable, even without type info.
+  it("function without declared type gets no commit character", () => {
     const item = declToCompletionItem(makeDecl("function"), 0);
-    expect(item.commitCharacters).toEqual(["("]);
+    expect(item.commitCharacters).toBeUndefined();
   });
 });
 
@@ -66,9 +67,9 @@ describe("commit characters: functions and methods", () => {
 // ---------------------------------------------------------------------------
 
 describe("commit characters: classes", () => {
-  it("class gets '.' and '(' as commit characters", () => {
+  it("class gets '.' only ('(' omitted — constructor snippet inserts it)", () => {
     const item = declToCompletionItem(makeDecl("class"), 0);
-    expect(item.commitCharacters).toEqual([".", "("]);
+    expect(item.commitCharacters).toEqual(["."]);
   });
 });
 
