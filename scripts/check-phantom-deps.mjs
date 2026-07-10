@@ -49,6 +49,11 @@ function packageName(spec) {
   return spec.startsWith("@") ? parts.slice(0, 2).join("/") : parts[0];
 }
 
+// A real npm package name — so template-expression noise such as `${x}` that
+// slips past the specifier regex (e.g. inside this file's own messages) is not
+// mistaken for a dependency.
+const VALID_PACKAGE = /^(?:@[\w.-]+\/)?[\w.-]+$/;
+
 /** Every resolved package name recorded in a bun.lock's entries. */
 function lockPackageNames(lockPath) {
   const names = new Set();
@@ -116,6 +121,7 @@ for (const rel of sourceFiles) {
     if (spec.startsWith(".") || spec.startsWith("/")) continue;
     if (isBuiltin(spec) || isAmbient(spec)) continue;
     const pkg = packageName(spec);
+    if (!VALID_PACKAGE.test(pkg)) continue;
     if (isBuiltin(pkg) || isAmbient(pkg)) continue;
     if (available.has(pkg) || seen.has(pkg)) continue;
     seen.add(pkg);
