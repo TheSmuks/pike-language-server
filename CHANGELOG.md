@@ -9,7 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Install without building anything — three ways.** Previously the only route
+  for Helix, Neovim, and other LSP clients was to clone the repository and build
+  from source. Each artifact below is built and verified by CI, and attached to
+  the GitHub Release:
+  - **Native binaries** for linux-x64/arm64, darwin-x64/arm64, and windows-x64.
+    A single self-contained executable requiring **no runtime at all** — no
+    Node, no Bun. It embeds its own tree-sitter grammar and stdlib index.
+  - **npm package** — `npm install -g pike-language-server`, runs on Node 18+.
+    Published with no runtime dependencies and no install scripts; everything is
+    bundled.
+  - **Standalone tarball** — extract and point your editor at `server.js`; runs
+    on Node 18+ or Bun.
+- **`check:distributions`** — builds each artifact and drives all 13 LSP
+  features against it *from outside the repository*, so an artifact that only
+  works inside a checkout fails CI. Runs as a matrix job on every PR.
+
 ### Fixed
+
+- **The standalone bundle was not self-contained: any copy of it outside the
+  repository was dead on arrival.** `vscode-languageserver` and friends were
+  marked external, so `server.js` still imported them from `node_modules` at
+  runtime; it only ever worked because Bun found the checkout's own
+  `node_modules` by walking up. Copied anywhere else — which is exactly what a
+  tarball or npm package is — it died with `Cannot find module
+  'vscode-languageserver-protocol/lib/common/api'`. Only `vscode` itself (the
+  extension-host API) is external now.
+- **The standalone bundle could not run on Node at all**, only Bun. esbuild's
+  ESM output cannot satisfy the dynamic `require()` inside web-tree-sitter's
+  emscripten glue, so Node died with `Dynamic require of "fs" is not supported`.
+  A `createRequire` banner fixes it; the bundle now runs on both, which is what
+  makes the npm package viable without Bun.
+- **`bin/pike-language-server` hard-required Bun** — it spawned a `bun` child
+  process, so `npx pike-language-server` was broken for Node-only users. It now
+  loads the server in-process on whichever runtime started it.
 
 - **The standalone server could never start, so Helix, Neovim, and every other
   non-VSCode LSP client were broken.** Two independent faults: the standalone

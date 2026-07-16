@@ -14,6 +14,7 @@
 import { Parser, Tree, Language, Edit, type Point } from 'web-tree-sitter';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { getEmbeddedAssets } from './embeddedAssets';
 import { LRUCache } from './util/lruCache';
 import { startSpan, stopSpan, bump, measureSync, measureAsync } from './features/profiler';
 
@@ -45,8 +46,24 @@ export function initParser(wasmPath?: string): Promise<void> {
 
 async function doInit(wasmPath?: string): Promise<void> {
   await measureAsync("parserInit", async () => {
-    await Parser.init();
+    const embedded = getEmbeddedAssets();
+
+    // In the compiled binary there is no .wasm on disk: hand emscripten the
+    // bytes directly, or it aborts with ENOENT trying to locate its own
+    // runtime. Elsewhere `embedded` is empty and web-tree-sitter loads it
+    // from disk as usual.
+    await Parser.init(
+      embedded.runtimeWasm ? { wasmBinary: embedded.runtimeWasm } : undefined,
+    );
     const parser = new Parser();
+
+    if (embedded.grammarWasm) {
+      language = await Language.load(embedded.grammarWasm);
+      parser.setLanguage(language);
+      parserInstance = parser;
+      parserReady = true;
+      return;
+    }
 
     // Try WASM in multiple locations:
     // 1. Explicit path provided by caller
