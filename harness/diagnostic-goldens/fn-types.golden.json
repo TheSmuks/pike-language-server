@@ -31,9 +31,9 @@
         }
       },
       "severity": 2,
-      "code": "P3002",
+      "code": "P3001",
       "source": "pike-lsp-lint",
-      "message": "Parameter 'i' is unused"
+      "message": "Variable 'i' is unused"
     },
     {
       "range": {

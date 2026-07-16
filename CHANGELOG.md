@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Foreach loop variables were modelled as function parameters.** `foreach(nums; int i; int val)` declares locals scoped to the loop, not arguments to a call, but the collector filed them under `kind: 'parameter'`. Two consequences: the linter said "Parameter 'i' is unused", which is simply the wrong noun; and it filed them under the unused-**parameter** rule (P3002), so switching off unused-parameter warnings — which people reasonably do, since a signature can force an argument you never read — silently switched off unused-loop-variable warnings too. Those are different problems: an unused parameter is often unavoidable, whereas Pike lets you omit a foreach index entirely, so the advice is actionable. Loop variables are now `kind: 'variable'` and report as `Variable 'i' is unused` (P3001). Real function parameters are unaffected — they come from a separate collector.
+- **`scripts/build-stdlib-index.ts` could not run at all.** It imported `parseXml` and `XmlNode` from `autodocRenderer`, which consumes both from `xmlParser` but never re-exported them, so the script threw `SyntaxError: Export named 'parseXml' not found` on load. Nothing type-checked `scripts/`, and nothing referenced the script, so it rotted unnoticed. It now imports from `xmlParser` and runs (489 files, 5170 symbols, 0 errors). Note the committed `stdlib-autodoc.json` has drifted from its output and is deliberately left alone — see the warning in the script header.
+- **`scripts/manifest.ts` type annotation described data that never existed.** `CATEGORY_PATTERNS` was annotated as an array of objects while being populated with — and destructured as — tuples.
+
+### Changed
+
+- **`scripts/` is now type-checked**, closing the last gap of the kind that let `tests/` rot: the root `tsconfig.json` covered neither, so 21 errors had accumulated across the two script files, including the broken import above.
+
 ## [0.8.48] — 2026-07-16
 
 ### Fixed

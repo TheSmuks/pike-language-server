@@ -4,6 +4,15 @@
  * renders XML to markdown, and outputs a JSON index.
  *
  * Usage: bun run scripts/build-stdlib-index.ts
+ *
+ * WARNING — the committed server/src/data/stdlib-autodoc.json has drifted from
+ * this script's output. Running it here regenerates cleanly (489 files, 5170
+ * symbols, 0 errors) but rewrites roughly half the index, so the checked-in data
+ * was produced by an older version of this script or against a different Pike.
+ * Do not regenerate casually: the index backs completion and hover, so a rewrite
+ * needs its own review. This script imported `parseXml`/`XmlNode` from
+ * autodocRenderer (which consumes but never re-exported them) and so threw on
+ * load — it could not run at all, and nothing type-checked scripts/ to notice.
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -14,11 +23,8 @@ import {
   readFileSync,
 } from "node:fs";
 import { join, extname, basename, dirname } from "node:path";
-import {
-  parseXml,
-  renderAutodoc,
-  type XmlNode,
-} from "../server/src/features/autodocRenderer";
+import { renderAutodoc } from "../server/src/features/autodocRenderer";
+import { parseXml, type XmlNode } from "../server/src/features/xmlParser";
 
 // ---------------------------------------------------------------------------
 // Config
