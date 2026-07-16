@@ -1,8 +1,24 @@
 {
   "file": "corpus/files/basic-generics.pike",
   "parseCount": 0,
-  "lintCount": 5,
+  "lintCount": 6,
   "diagnostics": [
+    {
+      "range": {
+        "start": {
+          "line": 9,
+          "character": 21
+        },
+        "end": {
+          "line": 9,
+          "character": 22
+        }
+      },
+      "severity": 2,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'i' is unused"
+    },
     {
       "range": {
         "start": {

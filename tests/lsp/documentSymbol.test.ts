@@ -81,7 +81,7 @@ function openDoc(
 // ---------------------------------------------------------------------------
 
 /** LSP SymbolKind values that are tree-sitter-only (no Pike equivalent). */
-const TS_ONLY_KINDS = new Set([SymbolKind.Module, SymbolKind.TypeParameter]);
+const TS_ONLY_KINDS = new Set<SymbolKind>([SymbolKind.Module, SymbolKind.TypeParameter]);
 
 /** Flatten nested DocumentSymbol[] into a flat list. */
 function flattenSymbols(symbols: DocumentSymbol[]): DocumentSymbol[] {
@@ -373,7 +373,7 @@ describe("documentSymbol determinism", () => {
       const result = await ctx.client.sendRequest(
         "textDocument/documentSymbol",
         { textDocument: { uri } },
-      );
+      ) as DocumentSymbol[];
       results.push(result);
     }
   });

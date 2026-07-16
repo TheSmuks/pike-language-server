@@ -1,4 +1,21 @@
-# Known Limitations
+# Known Limitations — DEPRECATED
+
+> # ⚠️ THIS DOCUMENT IS DEPRECATED. KNOWN LIMITATIONS MUST BE FIXED.
+>
+> **Do not add entries to this file.** A "known limitation" is a bug with a
+> paragraph in front of it. Documenting a defect here does not make it
+> acceptable — it makes it permanent, and it hides the defect from the tests
+> that would otherwise catch it.
+>
+> **If you find something broken: fix it.** If it is broken in a dependency we
+> own (`pike-fmt`, `tree-sitter-pike`), fix it *there* and release, rather than
+> adding a workaround here. Two entries in this file — the pike-fmt `__dirname`
+> wasm lookup and the missing `web-tree-sitter.wasm` — sat documented as
+> "RESOLVED (with workaround)" while the underlying bugs shipped to every user
+> of that package. Both are now fixed upstream.
+>
+> Entries below are retained only as history. Each one is a candidate for
+> deletion once verified fixed; none is a licence to leave it broken.
 
 ## Current Limitations
 
@@ -16,7 +33,7 @@ The `textDocument/formatting` feature uses a three-layer architecture:
 | 2 | **Preprocessor directive formatting** | `#if`/`#endif` blocks may not format correctly if parse tree splits across boundaries | tree-sitter-pike limitation — document in user docs |
 | 3 | **No operator spacing** | Phase 1 is indentation normalization only | Future phases may add spacing |
 | 4 | **Multiline string/comment bodies preserved** | Formatter only touches leading whitespace | Intentional for Phase 1 |
-| 5 | **Range formatting not implemented** | Formatter operates on whole files | Full-document formatting only |
+| 5 | ~~**Range formatting not implemented**~~ FIXED | `textDocument/rangeFormatting` is implemented; pike-fmt re-derives indentation from the whole parse tree, so a range request formats the whole document rather than corrupting a slice | Covered by `tests/lsp/formatting.test.ts` |
 | 6 | **Requires pike-fmt dependency** | Formatter is imported in-process via `pike-fmt` package | Build-time dependency, no runtime PATH requirement |
 
 ### Cross-File Resolution (Phase 4)
@@ -322,11 +339,29 @@ Row 7 in the formatting table above is now marked RESOLVED.
 
 **Fixed in**: pike-fmt v0.1.5 — accepts `--wasm-path <path>` or `PIKE_FMT_WASM` env var.
 
-**LSP workaround**: `scripts/fmt.sh` sets `PIKE_FMT_WASM` to point to
-`dist/tree-sitter-pike.wasm`. The bundled `cli.js` has a hardcoded `__dirname`
-pointing to the build machine's source path, so auto-detection fails. The env var
-bypasses the broken search paths. A `postinstall` script (`scripts/postinstall-pike-fmt.js`)
-also symlinks `web-tree-sitter.wasm` into `dist/` so the bundled tree-sitter runtime can find it.
+**Root cause, fixed upstream and released as pike-fmt v0.1.10 (2026-07-16)**:
+the workarounds existed because the *published pike-fmt package was broken*, not
+because the LSP needed special handling:
+
+1. `bun build --target node` replaced `__dirname` with a string literal of the
+   build machine's source directory (`/home/runner/work/pike-fmt/pike-fmt/src`),
+   so every wasm search path pointed somewhere that exists only on the CI runner.
+   Fixed by resolving from `import.meta.url`, which survives bundling.
+2. `web-tree-sitter.wasm` was never published — `bun build` inlines the
+   web-tree-sitter JS runtime but not its `.wasm`, which that runtime loads at
+   startup from alongside `dist/cli.js`. The build never copied it into `dist/`,
+   so it did not exist to be packaged. Fixed with a build-time copy.
+
+Pinned by `tests/cli-packaging.test.ts` in pike-fmt, which runs the built CLI
+from an unrelated cwd with no flags or env var, and by a CI build step (CI
+previously never built, so defects in the artifact were invisible to it).
+
+**Both workarounds are now REMOVED** (dependency bumped to `^0.1.10`):
+`scripts/fmt.sh` no longer sets `PIKE_FMT_WASM`, and
+`scripts/postinstall-pike-fmt.js` is deleted along with the `postinstall` hook.
+Verified: `bash scripts/fmt.sh --check` passes on the corpus with no override.
+Note the LSP server itself never used the CLI — it imports
+`pike-fmt/src/formatter` in-process — so only `scripts/fmt.sh` was affected.
 
 ### .pmod directory contents not individually introspected by harness — RESOLVED
 

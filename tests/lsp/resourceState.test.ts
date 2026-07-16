@@ -89,55 +89,8 @@ describe("ResourceStateTracker: transitions", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Activity tracking tests
-// ---------------------------------------------------------------------------
-
-describe("ResourceStateTracker: activity", () => {
-  test("recordActivity updates last activity time", () => {
-    const { tracker } = createTracker();
-    const before = tracker.idleMs();
-    expect(before).toBeGreaterThanOrEqual(0);
-    tracker.recordActivity();
-    expect(tracker.idleMs()).toBeLessThanOrEqual(before + 100);
-  });
-
-  test("idleMs grows over time", async () => {
-    const { tracker } = createTracker();
-    tracker.recordActivity();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(tracker.idleMs()).toBeGreaterThanOrEqual(40);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Open document tracking tests
-// ---------------------------------------------------------------------------
-
-describe("ResourceStateTracker: open documents", () => {
-  test("onDocumentOpen increments count and records activity", () => {
-    const { tracker } = createTracker();
-    expect(tracker.getOpenDocumentCount()).toBe(0);
-    tracker.onDocumentOpen();
-    expect(tracker.getOpenDocumentCount()).toBe(1);
-    tracker.onDocumentOpen();
-    expect(tracker.getOpenDocumentCount()).toBe(2);
-  });
-
-  test("onDocumentClose decrements count", () => {
-    const { tracker } = createTracker();
-    tracker.onDocumentOpen();
-    tracker.onDocumentOpen();
-    tracker.onDocumentClose();
-    expect(tracker.getOpenDocumentCount()).toBe(1);
-  });
-
-  test("onDocumentClose does not go negative", () => {
-    const { tracker } = createTracker();
-    tracker.onDocumentClose();
-    expect(tracker.getOpenDocumentCount()).toBe(0);
-  });
-});
+// Activity and open-document tracking are owned by HibernationManager, not
+// this tracker — see tests/lsp/hibernation.test.ts.
 
 // ---------------------------------------------------------------------------
 // Cancellation tests
@@ -168,16 +121,17 @@ describe("ResourceStateTracker: fake clock", () => {
     delete process.env.PIKE_LSP_FAKE_CLOCK_MS;
   });
 
-  test("respects PIKE_LSP_FAKE_CLOCK_MS for activity tracking", () => {
+  test("respects PIKE_LSP_FAKE_CLOCK_MS for notification timestamps", () => {
     process.env.PIKE_LSP_FAKE_CLOCK_MS = "1000000";
-    const { tracker } = createTracker();
+    const { tracker, notifications } = createTracker();
 
-    // After creation, lastActivityMs should be ~1000000
-    expect(tracker.getLastActivityMs()).toBe(1_000_000);
+    tracker.transition("degraded", "fake clock");
+    expect(notifications[0].timestamp).toBe(1_000_000);
 
-    // Advance fake clock
+    // Advance fake clock — the next transition stamps the new time.
     process.env.PIKE_LSP_FAKE_CLOCK_MS = "1005000";
-    expect(tracker.idleMs()).toBe(5_000);
+    tracker.transition("active", "fake clock");
+    expect(notifications[1].timestamp).toBe(1_005_000);
   });
 });
 

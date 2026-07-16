@@ -49,9 +49,9 @@ export function createSilentStream(): PassThrough {
       return false;
     }
     if (typeof rest[0] === "string" && typeof rest[1] === "function") {
-      return origWrite(chunk, rest[0], rest[1]);
+      return origWrite(chunk, rest[0] as BufferEncoding, rest[1] as () => void);
     } else if (typeof rest[0] === "function") {
-      return origWrite(chunk, rest[0]);
+      return origWrite(chunk, rest[0] as () => void);
     } else {
       return origWrite(chunk);
     }
@@ -122,7 +122,7 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
   const origError = serverConn.console.error.bind(serverConn.console);
   serverConn.console.error = (...args: unknown[]) => {
     try {
-      origError(...args);
+      origError(args.map(String).join(" "));
     } catch {
       // Connection closed during teardown — swallow
     }
@@ -202,11 +202,11 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
         shutdownPromise,
         new Promise((r) => setTimeout(r, 500)),
       ]);
-      try {
-        client.sendNotification("exit");
-      } catch {
-        // ignore
-      }
+      // Deliberately NOT sending the LSP `exit` notification. This server runs
+      // in-process, so vscode-languageserver's built-in exit handler would call
+      // process.exit(0) on the test runner itself — killing the suite mid-run
+      // and reporting success. onShutdown (above) already does every cleanup
+      // step, including ctx.worker.stop(); `exit` only kills the process.
       // Drain pending events before destroying streams to avoid
       // "Connection is closed" errors from in-flight notifications.
       await new Promise((r) => setTimeout(r, 50));

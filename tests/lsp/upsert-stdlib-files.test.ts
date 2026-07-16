@@ -6,13 +6,18 @@ import { initParser, parse } from "../../server/src/parser";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { pikeAvailable, stdlibModulePath } from "../helpers/pikeAvailable";
 
+// Resolved from the running Pike, not hardcoded: a dev box has Pike at
+// /usr/local/pike/<ver> while CI builds it into $HOME/.pike, so an absolute
+// path here only ever runs in one of those places.
 const FILES = [
-  "/usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/Gdbm.pike",
-  "/usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/Yabu.pike",
-];
+  stdlibModulePath("Cache.pmod/Storage.pmod/Gdbm.pike"),
+  stdlibModulePath("Cache.pmod/Storage.pmod/Yabu.pike"),
+].filter((p): p is string => p !== null);
 
-describe("upsertFile for stdlib files", () => {
+// Pike is configurable — these Cache.pmod backends are not in every build.
+describe.skipIf(!pikeAvailable || FILES.length === 0)("upsertFile for stdlib files", () => {
   let index: WorkspaceIndex;
 
   beforeAll(async () => {

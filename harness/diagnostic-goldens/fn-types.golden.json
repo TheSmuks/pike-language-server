@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/fn-types.pike",
   "parseCount": 0,
-  "lintCount": 6,
+  "lintCount": 7,
   "diagnostics": [
     {
       "range": {
@@ -18,6 +18,22 @@
       "code": "P3002",
       "source": "pike-lsp-lint",
       "message": "Parameter 'x' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 27,
+          "character": 20
+        },
+        "end": {
+          "line": 27,
+          "character": 21
+        }
+      },
+      "severity": 2,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'i' is unused"
     },
     {
       "range": {

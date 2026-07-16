@@ -118,7 +118,7 @@ function registerWorkspaceSymbolHandler(connection: Connection, ctx: NavigationC
   connection.onRequest("workspace/symbol", async (params, token: CancellationToken) => {
     if (token.isCancellationRequested) return [];
     return searchWorkspaceSymbolsLazy(
-      params.query ?? "", ctx.index, ctx.connection, token,
+      params.query ?? "", ctx.index, ctx.connection, token, params.workDoneToken,
     );
   });
 }

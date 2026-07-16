@@ -38,10 +38,12 @@ function makePikePaths(workspaceRoot: string): PikePaths {
     modulePaths: [workspaceRoot, SYSTEM_MODULES],
     includePaths: [workspaceRoot],
     programPaths: [workspaceRoot],
+    // Mirrors the auto-detected default: pikeHome/lib.
+    ldLibraryPath: join(PIKE_HOME, "lib"),
   };
 }
 
-function makeResolver(pikeVersion?: { major: number; minor: number }): ModuleResolver {
+function makeResolver(pikeVersion?: { major: number; minor: number } | null): ModuleResolver {
   return new ModuleResolver({
     workspaceRoot: CORPUS_URI,
     pikePaths: makePikePaths(CORPUS_DIR),
@@ -202,6 +204,7 @@ describe("ModuleResolver — file outside workspace root", () => {
       modulePaths: ["/tmp/unrelated-workspace", SYSTEM_MODULES],
       includePaths: ["/tmp/unrelated-workspace"],
       programPaths: ["/tmp/unrelated-workspace"],
+      ldLibraryPath: join(PIKE_HOME, "lib"),
     },
     pikeVersion: null,
   });
@@ -307,6 +310,49 @@ describe.skipIf(!pikeAvailable)("detectPikePaths", () => {
     expect(paths.modulePaths).toContain(CORPUS_DIR);
     expect(paths.includePaths).toContain(CORPUS_DIR);
     expect(paths.programPaths).toContain(CORPUS_DIR);
+  });
+
+  // Regression: `pike --show-paths` pads its labels with dots to a fixed
+  // column, so the dot count depends on the label's length:
+  //
+  //   Module path...: /usr/local/pike/8.0.1116/lib/modules   <- 3 dots
+  //   Include path..: /usr/local/pike/8.0.1116/lib/include   <- 2 dots
+  //
+  // The parser matched a literal `...` for every label, so `Include path` and
+  // `Program path` never matched. includePaths held nothing but the workspace
+  // root and every `#include <stdio.h>` silently failed to resolve —
+  // goto-definition fell through and returned the including file itself.
+  //
+  // The neighbouring override test cannot catch this: it guards its assertions
+  // with `if (systemInclude)`, so it passed vacuously the whole time.
+  test("detects the system include directory, so <stdio.h> can resolve", async () => {
+    const pikeBinary = process.env.PIKE_BINARY ?? "pike";
+    const paths = await detectPikePaths(CORPUS_DIR, pikeBinary);
+
+    const systemIncludes = paths.includePaths.filter((p) => p !== CORPUS_DIR);
+    expect(systemIncludes.length).toBeGreaterThan(0);
+
+    // The detected directory must be the real one — it has to contain the
+    // headers Pike ships, or resolution still returns null.
+    expect(systemIncludes.some((p) => existsSync(join(p, "stdio.h")))).toBe(true);
+  });
+
+  test("resolves a system include to the real header on disk", async () => {
+    const pikeBinary = process.env.PIKE_BINARY ?? "pike";
+    const paths = await detectPikePaths(CORPUS_DIR, pikeBinary);
+    const resolver = new ModuleResolver({
+      workspaceRoot: pathToFileURL(CORPUS_DIR).href,
+      pikePaths: paths,
+      pikeVersion: null,
+    });
+
+    const result = await resolver.resolveInclude(
+      "<stdio.h>",
+      true,
+      join(CORPUS_DIR, "any.pike"),
+    );
+    expect(result).not.toBeNull();
+    expect(result!.uri).toContain("stdio.h");
   });
 
   test("includePaths override is prepended, not replacing auto-detected system paths", async () => {

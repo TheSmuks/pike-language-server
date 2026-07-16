@@ -436,7 +436,13 @@ function hoverFromComments(
   if (paragraphs.length === 0) return null;
 
   const rendered = renderAutodocLines(autodocLines);
-  return makeHoverInfo(decl, signature, rendered || paragraphs.join("\n\n"), true);
+  // isAutodoc stays false: it means "documentation already embeds the
+  // signature", which is true of Tier 1's XML render but not here —
+  // renderAutodocLines emits comment prose only (it strips @decl). Marking
+  // these autodoc made formatHover drop the signature block, so a `//!`-
+  // documented symbol lost its signature whenever the XML cache was cold or
+  // the extractor was unavailable.
+  return makeHoverInfo(decl, signature, rendered || paragraphs.join("\n\n"));
 }
 
 // ---------------------------------------------------------------------------

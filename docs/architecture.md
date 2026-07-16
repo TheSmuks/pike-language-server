@@ -164,7 +164,7 @@ Lint diagnostics are suppressed on lines where Pike provides diagnostics, preven
 
 | Dependency | Purpose | Version |
 |------------|---------|---------|
-| [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) | Syntactic parser (WASM) | v1.2.2 |
+| [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) | Syntactic parser (WASM) | v1.3.3 |
 | [pike-ai-kb](https://github.com/TheSmuks/pike-ai-kb) | Pike semantics oracle (MCP tools) | latest |
 | `pike` binary | Ground truth for diagnostics, types, symbols | 8.0+ |
 | `vscode-languageserver-node` | LSP protocol implementation | latest |

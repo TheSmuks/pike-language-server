@@ -70,6 +70,10 @@ exclude_parts = {
     "node_modules", "dist", "build", "out", ".git", ".pike-lsp", ".specify", ".omp",
     "fixtures", "evidence", ".vscode-test", "dist-temp", "specs", "wiki",
     "decisions", ".github",
+    # Generated bundles (gitignored). Absent on CI's clean checkout, but present
+    # for anyone who has run build:standalone / check:standalone locally — and
+    # they carry third-party markers we neither own nor can annotate.
+    "standalone", "dist-npm",
 }
 exclude_rel_prefixes = ("docs/audits/", "docs/plans/")
 source_exts = {".ts", ".tsx", ".js", ".mjs", ".cjs"}

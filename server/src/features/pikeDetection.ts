@@ -112,8 +112,19 @@ function parseShowPathsOutput(output: string): ShowPathsResult {
   let includePath = "";
   let programPath = "";
 
+  // Pike pads each label with dots to a fixed column, so the dot count varies
+  // with the label's length:
+  //
+  //   master.pike...: /usr/local/pike/8.0.1116/lib/master.pike     <- 3 dots
+  //   Module path...: /usr/local/pike/8.0.1116/lib/modules         <- 3 dots
+  //   Include path..: /usr/local/pike/8.0.1116/lib/include         <- 2 dots
+  //   Program path..:                                              <- 2 dots
+  //
+  // These patterns matched a literal `...`, so the two 12-character labels
+  // never matched: includePath stayed empty, and every system include
+  // (`#include <stdio.h>`) failed to resolve. Match one-or-more dots.
   for (const line of output.split("\n")) {
-    const masterMatch = line.match(/^master\.pike\.\.\.\s*:\s*(.+)$/);
+    const masterMatch = line.match(/^master\.pike\.+\s*:\s*(.+)$/);
     if (masterMatch) {
       const masterPath = masterMatch[1].trim();
       pikeHome = masterPath.endsWith("/lib/master.pike")
@@ -121,7 +132,7 @@ function parseShowPathsOutput(output: string): ShowPathsResult {
         : join(masterPath, "..");
     }
 
-    const moduleMatch = line.match(/^Module path\.\.\.\s*:\s*(.+)$/);
+    const moduleMatch = line.match(/^Module path\.+\s*:\s*(.+)$/);
     if (moduleMatch) {
       systemModulePath = moduleMatch[1].trim();
       if (!pikeHome) {
@@ -131,10 +142,10 @@ function parseShowPathsOutput(output: string): ShowPathsResult {
       }
     }
 
-    const includeMatch = line.match(/^Include path\.\.\.\s*:\s*(.+)$/);
+    const includeMatch = line.match(/^Include path\.+\s*:\s*(.+)$/);
     if (includeMatch) includePath = includeMatch[1].trim();
 
-    const programMatch = line.match(/^Program path\.\.\.\s*:\s*(.+)$/);
+    const programMatch = line.match(/^Program path\.+\s*:\s*(.+)$/);
     if (programMatch) programPath = programMatch[1].trim();
   }
 
@@ -203,8 +214,14 @@ function buildPikePaths(
     modulePaths.push(systemModulePath || join(pikeHome, "lib", "modules"));
   }
 
+  // Fall back to pikeHome/lib/include, mirroring modulePaths above: pikeHome
+  // can be found by version probe or directory scan even when --show-paths
+  // yields nothing, and without a system include path `#include <stdio.h>`
+  // cannot resolve at all.
   const includePaths = [workspaceRoot];
-  if (includePath) includePaths.push(includePath);
+  if (includePath || pikeHome) {
+    includePaths.push(includePath || join(pikeHome, "lib", "include"));
+  }
 
   const programPaths = [workspaceRoot];
   if (programPath) programPaths.push(programPath);

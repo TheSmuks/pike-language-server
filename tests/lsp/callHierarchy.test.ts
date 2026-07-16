@@ -16,6 +16,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { Parser, Language } from "web-tree-sitter";
 import type { SymbolTable, Declaration, Reference } from "../../server/src/features/symbolTable";
 import type { WorkspaceIndex, FileEntry } from "../../server/src/features/workspaceIndex";
+import { ModificationSource } from "../../server/src/features/workspaceIndex";
 import {
   prepareCallHierarchy,
   getIncomingCalls,
@@ -81,10 +82,18 @@ function makeWorkspaceIndex(
       return refsByUri[key] ?? [];
     },
     getFile(uri: string): FileEntry | undefined {
-      if (tablesByUri?.[uri]) {
-        return { symbolTable: tablesByUri[uri], contentHash: "", dependencies: [], dependents: [], generation: 0 };
-      }
-      return undefined;
+      const symbolTable = tablesByUri?.[uri];
+      if (!symbolTable) return undefined;
+      return {
+        uri,
+        version: 1,
+        symbolTable,
+        pikeVersion: null,
+        dependencies: new Set<string>(),
+        lastModSource: ModificationSource.DidOpen,
+        contentHash: "",
+        stale: false,
+      };
     },
     getAllEntries(): Array<{ uri: string; symbolTable: SymbolTable }> {
       if (!tablesByUri) return [];
@@ -339,9 +348,11 @@ describe("getOutgoingCalls", () => {
       selectionRange: fn.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    // parse() returns Tree | null; assert rather than deref a possible null.
+    expect(tree).not.toBeNull();
+    const result = getOutgoingCalls(item, tree!, table, "file:///test/test.pike", index, src.split("\n"));
     expect(result).toEqual([]);
-    tree.delete();
+    tree!.delete();
   });
 
   // Outgoing calls now correctly resolve through postfix_expr nodes.
@@ -379,7 +390,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "helper", `Expected callee "helper", got "${result[0].to.name}"`);
     tree.delete();
@@ -421,7 +432,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
     assert(result.length === 1, `Expected 1 deduplicated outgoing call, got ${result.length}`);
     tree.delete();
   });
@@ -468,7 +479,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
     const names = result.map(r => r.to.name).sort();
     assert(names.length === 2, `Expected 2 outgoing calls, got ${names.length}: ${names}`);
     assert(names[0] === "bar", `Expected "bar", got "${names[0]}"`);
@@ -504,7 +515,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
     assert(result.length === 0, `Expected 0 outgoing calls for unresolved, got ${result.length}`);
     tree.delete();
   });
@@ -548,7 +559,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "greet", `Expected callee "greet", got "${result[0].to.name}"`);
     assert(result[0].to.kind === 6, `Expected callee kind 6 (Method), got ${result[0].to.kind}`);

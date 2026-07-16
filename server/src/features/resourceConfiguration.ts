@@ -15,7 +15,28 @@ import type { ResourceConfiguration, IndexingMode } from "./resourceTypes";
 // Defaults
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_RESOURCE_CONFIG: ResourceConfiguration = {
+/**
+ * Recursively freeze an object and every nested object it owns.
+ * Used to keep the defaults immutable — see DEFAULT_RESOURCE_CONFIG.
+ */
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== "object") return value;
+  for (const key of Object.getOwnPropertyNames(value)) {
+    deepFreeze((value as Record<string, unknown>)[key]);
+  }
+  return Object.freeze(value);
+}
+
+/**
+ * The baseline configuration every unset key falls back to.
+ *
+ * Deep-frozen: this is a process-wide singleton that `parseResourceConfig`
+ * reads to source fallback values, so a caller mutating it in place would
+ * silently redefine "default" for every later parse. Holders of a live config
+ * (e.g. ServerContext.resourceConfig) must own a separate object — build one
+ * with `parseResourceConfig(undefined)` rather than aliasing this.
+ */
+export const DEFAULT_RESOURCE_CONFIG: ResourceConfiguration = deepFreeze({
   indexing: {
     mode: "openFiles",
     ignoreGlobs: [],
@@ -43,7 +64,7 @@ export const DEFAULT_RESOURCE_CONFIG: ResourceConfiguration = {
     idleThresholdMs: 600_000, // 10 minutes
     sustainedActivityMs: 30_000, // 30s of activity before full reindex resumes
   },
-};
+});
 
 // ---------------------------------------------------------------------------
 // Clamping bounds
@@ -129,7 +150,7 @@ export function parseResourceConfig(raw: RawResourceSettings | undefined | null)
   const mode = isIndexingMode(r.indexingMode) ? r.indexingMode : DEFAULT_RESOURCE_CONFIG.indexing.mode;
   const ignoreGlobs = Array.isArray(r.indexIgnoreGlobs)
     ? r.indexIgnoreGlobs.filter((g): g is string => typeof g === "string")
-    : DEFAULT_RESOURCE_CONFIG.indexing.ignoreGlobs;
+    : [...DEFAULT_RESOURCE_CONFIG.indexing.ignoreGlobs];
 
   const d = DEFAULT_RESOURCE_CONFIG;
   const db = d.memory.demotionThresholdFraction;

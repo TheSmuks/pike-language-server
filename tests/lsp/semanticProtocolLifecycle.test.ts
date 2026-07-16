@@ -195,7 +195,8 @@ describe("semantic token refresh lifecycle over LSP", () => {
         expect(result.data.length).toBeGreaterThan(0);
       } catch (err) {
         const code = (err as { code?: number }).code;
-        expect([LSPErrorCodes.ContentModified, LSPErrorCodes.RequestCancelled]).toContain(code);
+        expect(code).toBeDefined();
+        expect([LSPErrorCodes.ContentModified, LSPErrorCodes.RequestCancelled]).toContain(code!);
       }
     }
 

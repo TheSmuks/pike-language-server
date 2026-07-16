@@ -181,17 +181,44 @@ describe("US-026: Real-codebase verification", () => {
     }
   });
 
-  test("rename does not crash with valid position and name", async () => {
+  test("rename returns edits for a real identifier", async () => {
     // Use a safe file with known identifiers
     const file = corpusFiles.find(f => f.name === "basic-types.pike");
     if (!file) return;
 
+    // Target the local `count` in `int count = 42;` — line 0 is a comment, and
+    // renaming there correctly fails rather than exercising this path.
+    const lines = file.src.split("\n");
+    const line = lines.findIndex(l => l.includes("int count = 42;"));
+    expect(line).toBeGreaterThanOrEqual(0);
+    const character = lines[line].indexOf("count");
+
     const result = await server.client.sendRequest("textDocument/rename", {
+      textDocument: { uri: file.uri },
+      position: { line, character },
+      newName: "renamed_var",
+    }) as { changes?: Record<string, unknown[]> };
+
+    expect(result).toBeDefined();
+    expect(result.changes?.[file.uri]?.length).toBeGreaterThan(0);
+  });
+
+  test("rename at a non-renamable position fails cleanly rather than crashing", async () => {
+    const file = corpusFiles.find(f => f.name === "basic-types.pike");
+    if (!file) return;
+
+    // Line 0 is a `// Corpus: ...` comment — no symbol to rename.
+    const attempt = server.client.sendRequest("textDocument/rename", {
       textDocument: { uri: file.uri },
       position: { line: 0, character: 0 },
       newName: "renamed_var",
     });
-    expect(result).toBeDefined();
+
+    // A clean LSP error, not a crashed server: the next request still works.
+    await expect(attempt).rejects.toThrow(/No renamable symbol/);
+    expect(await server.client.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri: file.uri },
+    })).toBeDefined();
   });
 
   test("workspace symbol search returns results from corpus files", async () => {

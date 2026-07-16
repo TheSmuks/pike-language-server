@@ -83,13 +83,19 @@ export function collectForeachStatement(node: Node, state: BuildState): void {
 /**
  * Add a parameter declaration from an identifier node.
  */
-function addParamDecl(state: BuildState, idNode: Node, scopeId: number): void {
+function addParamDecl(
+  state: BuildState,
+  idNode: Node,
+  scopeId: number,
+  declaredType?: string,
+): void {
   addDeclaration(state, {
     name: idNode.text,
     kind: 'parameter',
     nameRange: toRangeUtf16(idNode, state.lines, state.offsetMap),
     range: toRangeUtf16(idNode, state.lines, state.offsetMap),
     scopeId,
+    ...(declaredType ? { declaredType } : {}),
   });
 }
 
@@ -117,15 +123,29 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
     const nodes = node.childrenForFieldName(fieldName);
     if (nodes.length === 0) return;
 
-    // First pass: direct identifier children (typed form).
+    // First pass: direct identifier children.
     for (const n of nodes) {
       if (n.type === 'identifier') addParamDecl(state, n, scopeId);
     }
 
-    // Second pass: compound expressions (bare form, comma_expr, array_destructure).
+    // Second pass: compound expressions.
+    //
+    // `typed_lvalue` is the typed form — `foreach(items; int idx; string val)`.
+    // The grammar wraps `type` + `name` in a typed_lvalue node, so the field
+    // yields typed_lvalue, never a bare identifier. Omitting it here meant the
+    // typed form declared nothing at all: no completion, hover, goto, or rename
+    // for the loop variables. The bare form (`foreach(items; k; v)`) yields
+    // comma_expr and worked, which is why this went unnoticed.
     if (!nodes.some(n => n.type === 'identifier')) {
       for (const n of nodes) {
-        if (n.type === 'comma_expr' || n.type === 'array_destructure') {
+        if (n.type === 'typed_lvalue') {
+          // Carry the annotation through, so `foreach(dogs; int i; Dog d)`
+          // can resolve `d->` to Dog's members. Without declaredType the
+          // variable exists but has no type to resolve against.
+          const nameNode = n.childForFieldName('name');
+          const typeNode = n.childForFieldName('type');
+          if (nameNode) addParamDecl(state, nameNode, scopeId, typeNode?.text);
+        } else if (n.type === 'comma_expr' || n.type === 'array_destructure') {
           collectIdsFromContainer(n, state, scopeId);
         }
       }

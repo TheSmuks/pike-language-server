@@ -37,7 +37,9 @@ function assert(condition: unknown, msg: string): asserts condition {
 function rangeAt(src: string, line: number, character: number) {
   const tree = parser.parse(src);
   assert(tree, "Parse failed");
-  const result = getSelectionRange(tree, line, character);
+  // getSelectionRange needs the source lines to map LSP UTF-16 columns onto
+  // tree-sitter UTF-8 byte offsets.
+  const result = getSelectionRange(tree, line, character, src.split("\n"));
   tree.delete();
   return result;
 }

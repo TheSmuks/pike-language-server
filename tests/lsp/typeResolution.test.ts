@@ -25,6 +25,16 @@ import stdlibAutodocIndex from "../../server/src/data/stdlib-autodoc.json";
 import { createTestServer, type TestServer } from "./helpers";
 import { resetCompletionCache } from "../../server/src/features/completion";
 
+/** Location shape returned by textDocument/definition over the wire. */
+interface LspLocation {
+  uri: string;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
+
+
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
@@ -344,10 +354,10 @@ describe("Definition provider — arrow/dot access", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 3, character: 27 }, // on 'speak'
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
-    expect(result.range.start.line).toBe(1); // line of 'void speak()'
+    expect(result!.uri).toBe(uri);
+    expect(result!.range.start.line).toBe(1); // line of 'void speak()'
   });
 
   test("hover on arrow member shows method info", async () => {
@@ -363,9 +373,9 @@ describe("Definition provider — arrow/dot access", () => {
     const result = await server.client.sendRequest("textDocument/hover", {
       textDocument: { uri },
       position: { line: 3, character: 27 }, // on 'speak'
-    });
+    }) as { contents: { value: string } } | null;
     expect(result).not.toBeNull();
-    expect(result.contents.value).toContain("speak");
+    expect(result!.contents.value).toContain("speak");
   });
 
   test("go-to-def on mixed type arrow returns null", async () => {
@@ -375,7 +385,7 @@ describe("Definition provider — arrow/dot access", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 0, character: 25 }, // on 'something'
-    });
+    }) as LspLocation | null;
 
     expect(result).toBeNull();
   });
@@ -393,7 +403,7 @@ describe("resolveType — cross-file", () => {
     const uri = `file://${join(CORPUS_DIR, name)}`;
     const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
     const tree = parse(src);
-    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
   }
 
   beforeAll(async () => {
@@ -471,7 +481,7 @@ describe("resolveType — qualified types", () => {
     const uri = `file://${join(CORPUS_DIR, name)}`;
     const src = readFileSync(join(CORPUS_DIR, name), "utf-8");
     const tree = parse(src);
-    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+    await crossFileIndex.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
   }
 
   beforeAll(async () => {

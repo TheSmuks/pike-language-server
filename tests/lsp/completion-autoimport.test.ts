@@ -12,7 +12,7 @@ import { initParser, parse } from "../../server/src/parser";
 import { buildSymbolTable } from "../../server/src/features/symbolTable";
 import { getCompletions } from "../../server/src/features/completion";
 import { CompletionItemKind } from "vscode-languageserver/node";
-import stdlibIndex from "../../server/src/data/stdlib-autodoc.json" assert { type: "json" };
+import stdlibIndex from "../../server/src/data/stdlib-autodoc.json" with { type: "json" };
 
 // Predef builtins for testing — minimal subset.
 const predefBuiltins: Record<string, string> = {

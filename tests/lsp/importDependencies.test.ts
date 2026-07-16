@@ -78,7 +78,7 @@ describe("Dependency graph — import edges", () => {
       1,
       tree,
       src,
-      ModificationSource.didOpen,
+      ModificationSource.DidOpen,
     );
 
     const deps = index.getDependents("file:///test/someModule.pmod");
@@ -99,7 +99,7 @@ describe("Dependency graph — import edges", () => {
       1,
       tree,
       src,
-      ModificationSource.didOpen,
+      ModificationSource.DidOpen,
     );
 
     // Both import and inherit reference SomeModule
@@ -114,12 +114,12 @@ describe("Dependency graph — import edges", () => {
     // Index with import
     const src1 = 'import SomeModule;';
     const tree1 = parse(src1);
-    await index.upsertFile("file:///test/a.pike", 1, tree1, src1, ModificationSource.didOpen);
+    await index.upsertFile("file:///test/a.pike", 1, tree1, src1, ModificationSource.DidOpen);
 
     // Re-index without import
     const src2 = 'int x;';
     const tree2 = parse(src2);
-    await index.upsertFile("file:///test/a.pike", 2, tree2, src2, ModificationSource.didChange);
+    await index.upsertFile("file:///test/a.pike", 2, tree2, src2, ModificationSource.DidChange);
 
     // File should have no import declarations
     const file = index.getFile("file:///test/a.pike");

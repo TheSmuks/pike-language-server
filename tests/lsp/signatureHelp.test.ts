@@ -96,7 +96,7 @@ describe("SignatureHelp", () => {
     // Cursor right after the opening paren of Dog(
     // "  Dog d = Dog(" → column 14 (0-indexed: 2+4+1+1+2+1+3 = Dog( at col 12, paren at 15)
     // Let's just use column 14 — inside the parens
-    const result = produceSignatureHelp(tree, table, 29, 16);
+    const result = produceSignatureHelp(tree, table, 29, 16, undefined, undefined, SOURCE);
     assert(result, "Expected signature help for Dog(");
     expect(result.signatures).toHaveLength(1);
 
@@ -112,7 +112,7 @@ describe("SignatureHelp", () => {
 
     // Line 30: "  d->bark("hello", 3);"
     // Cursor inside the parens after bark(
-    const result = produceSignatureHelp(tree, table, 30, 10);
+    const result = produceSignatureHelp(tree, table, 30, 10, undefined, undefined, SOURCE);
     assert(result, "Expected signature help for d->bark(");
     expect(result.signatures).toHaveLength(1);
 
@@ -128,7 +128,7 @@ describe("SignatureHelp", () => {
 
     // Line 30: "  d->bark("hello", 3);"
     // After the comma: column ~19
-    const result = produceSignatureHelp(tree, table, 30, 19);
+    const result = produceSignatureHelp(tree, table, 30, 19, undefined, undefined, SOURCE);
     assert(result, "Expected signature help for d->bark(");
     expect(result.activeParameter).toBe(1);
   });
@@ -138,7 +138,7 @@ describe("SignatureHelp", () => {
 
     // Line 31: "  greet("hi", 2);"
     // Cursor inside parens after greet(
-    const result = produceSignatureHelp(tree, table, 31, 9);
+    const result = produceSignatureHelp(tree, table, 31, 9, undefined, undefined, SOURCE);
     assert(result, "Expected signature help for greet(");
     expect(result.signatures).toHaveLength(1);
 
@@ -152,7 +152,7 @@ describe("SignatureHelp", () => {
   test("no signature for position outside any call", () => {
     const { tree, table } = getTableAndTree();
 
-    const result = produceSignatureHelp(tree, table, 0, 0);
+    const result = produceSignatureHelp(tree, table, 0, 0, undefined, undefined, SOURCE);
     expect(result).toBeNull();
   });
 });

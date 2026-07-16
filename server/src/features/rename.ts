@@ -111,6 +111,28 @@ export interface PrepareRenameResult {
 /** Set of symbol short names that cannot be renamed (stdlib + predef). */
 export type ProtectedNames = ReadonlySet<string>;
 
+/**
+ * Is this declaration protected from rename by a stdlib/predef name collision?
+ *
+ * Only *file-scope* declarations qualify. A file-scope symbol shadows the
+ * predef of the same name and propagates to dependent files by name, so
+ * renaming one can reach call sites the rename engine cannot prove belong to
+ * it. Locals, parameters, and class members cannot shadow a predef across
+ * files — locals resolve within their own scope, and member references are
+ * filtered by receiver type — so a user variable called `name`, `count`,
+ * `size`, `data`, `index`… must stay renameable. Roughly 3,700 names are in
+ * `protectedNames`, which made this check far too broad when applied to every
+ * declaration kind.
+ */
+function isProtectedFromRename(
+  table: SymbolTable,
+  decl: Declaration,
+  protectedNames?: ProtectedNames,
+): boolean {
+  if (!protectedNames?.has(decl.name)) return false;
+  return table.scopeById.get(decl.scopeId)?.kind === 'file';
+}
+
 // ---------------------------------------------------------------------------
 // Type-aware rename filtering
 // ---------------------------------------------------------------------------
@@ -225,8 +247,8 @@ export async function getRenameLocations(
     return null;
   }
 
-  // Reject stdlib/predef symbols
-  if (protectedNames?.has(decl.name)) {
+  // Reject stdlib/predef symbols shadowed at file scope
+  if (isProtectedFromRename(table, decl, protectedNames)) {
     return null;
   }
   const locations: RenameLocation[] = [];
@@ -244,7 +266,29 @@ export async function getRenameLocations(
   if (index) await collectCrossFileReferences(locations, decl, table, uri, index);
   await collectSameFileReferences(locations, decl, table, uri, index);
 
-  return { locations, oldName };
+  return { locations: dedupeLocations(locations), oldName };
+}
+
+/**
+ * Drop duplicate edits at the same position.
+ *
+ * `getCrossFileReferences()` already returns same-file references, and
+ * `collectSameFileReferences()` then collects them again — so every same-file
+ * reference lands in the list twice whenever a workspace index is present.
+ * Both paths apply the same receiver-type filter, so the duplicates are exact
+ * and dropping them changes only the count. Emitting them would produce a
+ * WorkspaceEdit with overlapping ranges, which clients either reject or apply
+ * twice (corrupting the text).
+ */
+function dedupeLocations(locations: RenameLocation[]): RenameLocation[] {
+  const unique: RenameLocation[] = [];
+  for (const loc of locations) {
+    const duplicate = unique.some(
+      u => u.uri === loc.uri && u.line === loc.line && u.character === loc.character,
+    );
+    if (!duplicate) unique.push(loc);
+  }
+  return unique;
 }
 
 async function collectCrossFileReferences(
@@ -332,7 +376,7 @@ export function prepareRename(
 ): PrepareRenameResult | null {
   const decl = getDefinitionAt(table, line, character);
   if (!decl) return null;
-  if (protectedNames?.has(decl.name)) return null;
+  if (isProtectedFromRename(table, decl, protectedNames)) return null;
   if (PIKE_KEYWORDS.has(decl.name)) return null;
 
   return {
