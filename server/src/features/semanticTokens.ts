@@ -360,50 +360,64 @@ function tokenModifiersForReference(decl: Declaration): number {
 // Lazy external lookup caches
 // ---------------------------------------------------------------------------
 
-/** Cached set of predef builtin names for semantic token classification. */
-let predefBuiltinsSet: ReadonlySet<string> | null = null;
-/** Cached set of stdlib top-level module names for semantic token classification. */
-let stdlibModulesSet: ReadonlySet<string> | null = null;
+type StdlibIndex = Record<string, { signature: string; markdown: string }>;
+
+/**
+ * Derived sets, memoised against the exact index object they came from.
+ *
+ * Keyed by identity rather than a bare "built yet?" flag: the sets used to be
+ * built once from whichever index arrived first and then returned to every
+ * later caller regardless of what it passed, so a caller supplying a different
+ * index silently got the first one's answers. The server passes the same
+ * long-lived index objects every call, so this still builds once in practice.
+ */
+const predefBuiltinsSets = new WeakMap<Record<string, string>, ReadonlySet<string>>();
+const stdlibModulesSets = new WeakMap<StdlibIndex, ReadonlySet<string>>();
+
+/** Collect the top-level module names (`predef.<Module>. …`) from an index. */
+function stdlibModulesOf(stdlibIndex: StdlibIndex): ReadonlySet<string> {
+  const modules = new Set<string>();
+  for (const fqn of Object.keys(stdlibIndex)) {
+    const parts = fqn.split(".");
+    if (parts.length >= 2 && parts[0] === "predef") {
+      modules.add(parts[1]);
+    }
+  }
+  return modules;
+}
 
 /**
  * Build or return cached external lookup sets for semantic token production.
- * These are lazy-built from the provided indices and reused across calls.
+ * Each set is derived from — and only from — the index passed in this call.
  */
 export function getExternalLookup(
   predefBuiltins?: Record<string, string>,
-  stdlibIndex?: Record<string, { signature: string; markdown: string }>,
+  stdlibIndex?: StdlibIndex,
 ): {
   predefBuiltins?: ReadonlySet<string>;
   stdlibModules?: ReadonlySet<string>;
 } {
   if (!predefBuiltins && !stdlibIndex) return {};
 
-  if (predefBuiltins && !predefBuiltinsSet) {
-    predefBuiltinsSet = new Set(Object.keys(predefBuiltins));
-  }
-  if (stdlibIndex && !stdlibModulesSet) {
-    const modules = new Set<string>();
-    for (const fqn of Object.keys(stdlibIndex)) {
-      const parts = fqn.split(".");
-      if (parts.length >= 2 && parts[0] === "predef") {
-        modules.add(parts[1]);
-      }
+  let builtins: ReadonlySet<string> | undefined;
+  if (predefBuiltins) {
+    builtins = predefBuiltinsSets.get(predefBuiltins);
+    if (!builtins) {
+      builtins = new Set(Object.keys(predefBuiltins));
+      predefBuiltinsSets.set(predefBuiltins, builtins);
     }
-    stdlibModulesSet = modules;
   }
 
-  return {
-    predefBuiltins: predefBuiltinsSet ?? undefined,
-    stdlibModules: stdlibModulesSet ?? undefined,
-  };
-}
+  let modules: ReadonlySet<string> | undefined;
+  if (stdlibIndex) {
+    modules = stdlibModulesSets.get(stdlibIndex);
+    if (!modules) {
+      modules = stdlibModulesOf(stdlibIndex);
+      stdlibModulesSets.set(stdlibIndex, modules);
+    }
+  }
 
-/**
- * Reset external lookup caches. Called when data indices change.
- */
-export function resetExternalLookupCache(): void {
-  predefBuiltinsSet = null;
-  stdlibModulesSet = null;
+  return { predefBuiltins: builtins, stdlibModules: modules };
 }
 
 // ---------------------------------------------------------------------------

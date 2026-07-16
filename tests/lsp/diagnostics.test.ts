@@ -28,7 +28,9 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   createConnection,
+  DiagnosticSeverity,
   type Connection,
+  type Diagnostic,
 } from "vscode-languageserver/node";
 import { createPikeServer, type PikeServer } from "../../server/src/server";
 import { DiagnosticManager } from "../../server/src/features/diagnosticManager";
@@ -172,9 +174,8 @@ async function createDiagnosticTestServer(debounceMs = DEBOUNCE_MS): Promise<Tes
         shutdownPromise,
         new Promise((r) => setTimeout(r, 500)),
       ]);
-      try {
-        client.sendNotification("exit");
-      } catch { /* ignore */ }
+      // No `exit` notification: the server is in-process, so the LSP library's
+      // exit handler would process.exit(0) the test runner. See tests/lsp/helpers.ts.
       c2s.destroy();
       s2c.destroy();
     },
@@ -192,9 +193,9 @@ async function createDiagnosticTestServer(debounceMs = DEBOUNCE_MS): Promise<Tes
 describe("DiagnosticManager unit", () => {
   test("mergeDiagnostics maps Pike diagnostics to LSP format", async () => {
     const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
-    const parseDiags = [{
+    const parseDiags: Diagnostic[] = [{
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
-      severity: 1,
+      severity: DiagnosticSeverity.Error,
       source: "pike-lsp",
       message: "Parse error",
     }];
@@ -422,7 +423,7 @@ describe.skipIf(!pikeAvailable)("Diagnostic mode", () => {
 
     const shutdownPromise = client.sendRequest("shutdown").catch(() => {});
     await Promise.race([shutdownPromise, new Promise((r) => setTimeout(r, 500))]);
-    try { client.sendNotification("exit"); } catch { /* ignore */ }
+    // No `exit`: in-process server — the LSP exit handler would kill the test runner.
     c2s.destroy();
     s2c.destroy();
   });
@@ -618,7 +619,7 @@ describe.skipIf(!pikeAvailable)("Cross-file diagnostic propagation", () => {
     server.worker.stop();
     const shutdownPromise = client.sendRequest("shutdown").catch(() => {});
     await Promise.race([shutdownPromise, new Promise((r) => setTimeout(r, 500))]);
-    try { client.sendNotification("exit"); } catch { /* ignore */ }
+    // No `exit`: in-process server — the LSP exit handler would kill the test runner.
     c2s.destroy();
     s2c.destroy();
   });

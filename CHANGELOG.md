@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Hover lost the signature whenever the AutoDoc XML cache was cold.** A `//!`-documented symbol rendered as bare prose with no `pike` code block — no signature, no type. The Tier 2b comment fallback marked its result `isAutodoc`, which `formatHover` reads as "the documentation already embeds the signature"; that is true of the Tier 1 XML render but not of `renderAutodocLines`, which emits comment prose only (it strips `@decl`). Hover now shows the tree-sitter signature alongside the comment text whenever the extractor is unavailable or the cache has not warmed.
+- **A test could corrupt the server's default configuration.** `DEFAULT_RESOURCE_CONFIG` was an exported mutable object aliased directly into `ServerContext.resourceConfig`, so anything mutating the live config in place rewrote the process-wide defaults that `parseResourceConfig` reads for fallback values. The defaults are now deep-frozen, the context owns a fresh config, and `ignoreGlobs` is no longer handed out by reference.
+- **Semantic tokens could classify symbols from the wrong stdlib index.** `getExternalLookup` built its predef/stdlib name sets from whichever index arrived first and then ignored its arguments on every later call, so a caller passing a different index silently received the first one's answers. `resetExternalLookupCache()` existed to paper over this and had no callers. The sets are now memoised per index object and self-invalidate; the reset function is gone.
+- **Renaming a class left dangling return types on its prototypes.** `Dog getDog();` — a legal Pike forward declaration — was mis-parsed as a bare identifier plus an expression statement, so the function was never declared and the return type was never a reference. Fixed upstream in tree-sitter-pike v1.3.3 (`function_decl` now carries the same `prec.dynamic(2)` as `variable_decl`); the vendored wasm is updated.
+- **`workspace/symbol` ignored the client's `workDoneToken`.** A client that asked for progress on a symbol query got none, so lazy global indexing appeared to hang with no indicator. The server now reports `begin`/`end` on the client-supplied token per LSP 3.15, with `end` sent from a `finally` so a failed query cannot strand the indicator.
+
+### Removed
+
+- **Dead activity tracking on `ResourceStateTracker`.** Its open-document count and activity timestamps had no callers and could only ever read zero — `HibernationManager` owns that state and is wired to the request and document paths. A second, unwired copy of a fact is a trap for whoever consults it next.
+- **The pike-fmt `postinstall` workaround.** `scripts/postinstall-pike-fmt.js` symlinked `web-tree-sitter.wasm` into pike-fmt's `dist/`, and `scripts/fmt.sh` set `PIKE_FMT_WASM` to route around a broken asset lookup. Both existed because the published pike-fmt package could not locate its own wasm; that is fixed upstream in pike-fmt v0.1.10 and the dependency is bumped.
+
+### Changed
+
+- **`tests/` is now type-checked.** The root `tsconfig.json` excluded it, so roughly ninety type errors had accumulated unseen — including a formatting harness that built an invalid handler context (every request threw and returned `null`, which several tests asserted as correct behaviour), `ModificationSource.didOpen` references that silently evaluated to `undefined` on a field the server branches on, an incomplete `BuildIndex` mock missing `resolveInclude`, and two fixture modules that would have thrown `ReferenceError` had anything called them (both were unused duplicates of logic already inlined elsewhere, and are deleted).
+- **`bun run test:fast` runs the suite in parallel (106s to ~41s), opt-in.** The default `bun run test` stays serial and single-process **on purpose**: `--parallel` implies `--isolate`, and a shared process is what catches cross-file pollution. Two of the defects fixed above — the mutable `DEFAULT_RESOURCE_CONFIG` singleton and `getExternalLookup` ignoring its arguments — were caught precisely because one test's global mutation broke a later test. The server is a single long-lived process, so that bug class is real in production; isolation would have hidden both. `test:fast` is for local iteration, not a gate. It excludes the latency benchmarks from the parallel phase (under load they measure CPU contention, not the server) and uses 4 workers rather than one per core (wall time is bound by the two slowest files, so extra workers buy nothing and their contention trips bun's 5s per-test timeout).
+
 ### Added
 
 - **Install without building anything — three ways.** Previously the only route

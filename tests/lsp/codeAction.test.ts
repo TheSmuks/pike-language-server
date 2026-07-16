@@ -76,7 +76,9 @@ describe("US-018: textDocument/codeAction", () => {
     ) as CodeActionResult[] | null;
 
     expect(result).not.toBeNull();
-    expect(result!.length).toBe(1);
+    // An unfiltered request yields the individual quick-fix plus the
+    // source.fixAll companion that applies every auto-fixable diagnostic.
+    expect(result!.map((a) => a.kind)).toEqual(["quickfix", "source.fixAll"]);
 
     const action = result![0];
     expect(action.title).toBe("Remove unused variable");
@@ -206,7 +208,7 @@ describe("US-018: textDocument/codeAction", () => {
     ) as CodeActionResult[] | null;
 
     expect(result).not.toBeNull();
-    expect(result!.length).toBe(1);
+    expect(result!.map((a) => a.kind)).toEqual(["quickfix", "source.fixAll"]);
 
     const edits = result![0].edit!.changes![uri];
     expect(edits.length).toBe(1);

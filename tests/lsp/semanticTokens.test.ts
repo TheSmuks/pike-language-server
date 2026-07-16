@@ -20,6 +20,17 @@ import {
   type SemanticToken,
 } from "../../server/src/features/semanticTokens";
 
+/**
+ * The `textDocument/semanticTokens/*` response shape. `sendRequest` with a
+ * string method is typed `unknown`, so the expected shape must be stated for
+ * these assertions to be checked against anything.
+ */
+interface SemanticTokensResponse {
+  data: number[];
+  resultId?: string;
+}
+
+
 let parser: Parser;
 
 beforeAll(async () => {
@@ -591,18 +602,22 @@ describe("deltaEncodeTokens", () => {
     ];
     for (const [source, type] of cases) {
       const tree = parser.parse(source);
-      expect(containsNodeType(tree.rootNode, type)).toBe(true);
-      tree.delete();
+      // parse() returns Tree | null; a null here means the parser failed
+      // outright, which should say so rather than surface as a TypeError.
+      expect(tree).not.toBeNull();
+      expect(containsNodeType(tree!.rootNode, type)).toBe(true);
+      tree!.delete();
     }
   });
 
   test("indexing calls do not produce aggregate literal nodes", () => {
     for (const source of ["foo(arr[i]);", "f(g(x[i]));"]) {
       const tree = parser.parse(source);
-      expect(containsAnyNodeType(tree.rootNode, [
+      expect(tree).not.toBeNull();
+      expect(containsAnyNodeType(tree!.rootNode, [
         "array_literal", "mapping_literal", "multiset_literal",
       ])).toBe(false);
-      tree.delete();
+      tree!.delete();
     }
   });
 
@@ -637,7 +652,7 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
 
     const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri },
-    });
+    }) as SemanticTokensResponse;
 
     expect(result).toBeDefined();
     expect(result.data).toBeDefined();
@@ -657,7 +672,7 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
 
     const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri },
-    });
+    }) as SemanticTokensResponse;
 
     expect(result).toBeDefined();
     expect(result.data).toBeDefined();
@@ -675,11 +690,11 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
 
     const full = await server.client.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri },
-    });
+    }) as SemanticTokensResponse;
     const range = await server.client.sendRequest("textDocument/semanticTokens/range", {
       textDocument: { uri },
       range: { start: { line: 1, character: 0 }, end: { line: 2, character: 0 } },
-    });
+    }) as SemanticTokensResponse;
 
     expect(range.data.length).toBeGreaterThan(0);
     expect(range.data.length).toBeLessThan(full.data.length);
@@ -695,7 +710,7 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
     try {
       await server.client.sendRequest("textDocument/semanticTokens/full", {
         textDocument: { uri: "file:///nonexistent.pike" },
-      });
+      }) as SemanticTokensResponse;
       throw new Error("expected ContentModified");
     } catch (err) {
       expect((err as { code?: number }).code).toBe(-32801);
@@ -710,7 +725,7 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
 
     const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri },
-    });
+    }) as SemanticTokensResponse;
 
     expect(result).toBeDefined();
     expect(result.data).toBeDefined();
@@ -729,7 +744,7 @@ describe("US-014: semanticTokens/full LSP protocol", () => {
 
     const result = await server.client.sendRequest("textDocument/semanticTokens/full", {
       textDocument: { uri },
-    });
+    }) as SemanticTokensResponse;
 
     expect(result).toBeDefined();
     expect(result.data).toBeDefined();

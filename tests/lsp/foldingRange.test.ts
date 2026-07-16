@@ -211,17 +211,17 @@ describe("US-016: textDocument/foldingRange LSP protocol", () => {
 
     const result = await server.client.sendRequest("textDocument/foldingRange", {
       textDocument: { uri },
-    });
+    }) as Array<{ startLine: number; endLine: number }> | null;
 
     expect(result).toBeDefined();
     expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThanOrEqual(2);
+    expect(result!.length).toBeGreaterThanOrEqual(2);
   });
 
   test("returns empty array for unknown document", async () => {
     const result = await server.client.sendRequest("textDocument/foldingRange", {
       textDocument: { uri: "file:///nonexistent.pike" },
-    });
+    }) as Array<{ startLine: number; endLine: number }> | null;
 
     expect(result).toEqual([]);
   });

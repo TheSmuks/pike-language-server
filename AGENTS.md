@@ -17,12 +17,21 @@ bun install
 # Build
 bun run build
 
-# Run tests
+# Run tests (serial, single process — this is the gate)
 bun test
+
+# Run tests faster while iterating (parallel workers, ~41s vs ~106s)
+bun run test:fast
 
 # Type check
 bun run typecheck
 ```
+
+`bun test` is deliberately serial. `--parallel` implies `--isolate`, so each
+file gets its own process and cross-file pollution from global mutable state
+stops being detectable — the server is one long-lived process, so that bug class
+is real. Use `test:fast` for local iteration, but let the serial run be the
+thing you trust before pushing.
 
 ## Code Style
 
@@ -142,6 +151,44 @@ decisions/        # Root-level decision documents
 - Tests must be deterministic: no reliance on external services, wall-clock time, or random state unless explicitly controlled
 - Test expected output must come from `pike`, not from hand-written expectations (canary tests are the sole exception)
 - Prefer integration tests over mocks — mocks invent behaviors that never happen in production
+
+### Fixing a bug: prove, fix, pin
+
+Three rules, in order. None is optional.
+
+**1. Prove it with `pike` before you fix it.** A suspected bug is a hypothesis
+until the real compiler rules on it. Write the minimal `.pike` file, run it, and
+paste the output into the commit or PR:
+
+```bash
+$ cat fe.pike
+int main() {
+  array(string) items = ({ "a" });
+  foreach(items; int idx; string val) { write(idx + ":" + val + "\n"); }
+  return 0;
+}
+$ pike fe.pike
+0:a          # compiles and runs -> the construct is valid, the LSP is wrong
+```
+
+This cuts both ways, and that is the point — it tells you *which side* is wrong.
+`foreach(items; k; v)` with undeclared `k`/`v` gives `Undefined identifier k.`,
+which proved the bare form assigns to existing variables and must NOT declare
+them; a test asserting otherwise was encoding a bug. Never "fix" code to satisfy
+a test whose expectation you have not verified against `pike`.
+
+**2. Pin it with a regression test that you have seen fail.** A regression test
+that has never failed proves nothing. Revert the fix, watch the test go red,
+restore the fix, watch it go green — then keep it. State that you did this.
+For a bug fixed in a dependency (grammar, wasm), the test lives on *both* sides:
+the dependency pins the mechanism, this repo pins the user-visible behaviour,
+because a bad artifact can be vendored here without the dependency noticing.
+
+**3. Zero errors and zero warnings.** This includes pre-existing ones, and
+includes warnings from the tools themselves (esbuild, tsc, quality-gates).
+"It was already failing" is not a disposition — see Operating Principle 9 for
+the three permitted outcomes. If a check is noisy because it is wrong, fix the
+check and prove the fixed check still catches a real defect.
 
 ## Error Handling
 

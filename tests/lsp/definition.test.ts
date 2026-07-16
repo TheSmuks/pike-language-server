@@ -23,7 +23,21 @@ import {
   type Reference,
 } from "../../server/src/features/symbolTable";
 import { readSnapshot } from "../../harness/src/snapshot";
+
 import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
+/**
+ * What textDocument/definition and textDocument/references return over the
+ * wire. `sendRequest` with a string method is typed `unknown`, so protocol
+ * tests must state the shape they expect — otherwise nothing checks that these
+ * assertions match the server's actual response.
+ */
+interface LspLocation {
+  uri: string;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -167,6 +181,62 @@ describe("definition API: top-level classes", () => {
     const decl = findDecl(table, "Builder", "class");
     expect(decl).toBeDefined();
     expect(decl!.nameRange.start.line).toBe(3);
+  });
+});
+
+// ===========================================================================
+// Regression: file-scope variables with a user-defined type
+//
+// tree-sitter-pike < 1.3.2 did not parse `Greeter g = Greeter("World");` at
+// file scope as a declaration. It split into a bare-identifier declaration
+// (`Greeter`) plus an expression statement (`g = Greeter("World");`), so `g`
+// was never declared and the type name was never a type_ref. Builtin types and
+// function-body locals were unaffected, so only module-level object variables
+// broke — silently: goto-definition and find-references returned nothing, and
+// renaming the class skipped the type annotation and produced broken code.
+//
+// Pike accepts this (a file is a class, so it is a member variable). These
+// tests pin the LSP-visible consequences; the grammar's own corpus test pins
+// the parse tree.
+// ===========================================================================
+
+describe("regression: file-scope variable with user-defined type", () => {
+  const src = [
+    'class Greeter {',
+    '  string name;',
+    '  void create(string n) { name = n; }',
+    '}',
+    'Greeter g = Greeter("World");',
+  ].join('\n');
+
+  function table(): SymbolTable {
+    const tree = parse(src);
+    return buildSymbolTable(tree, "file:///regress.pike", 1, undefined, src);
+  }
+
+  test("the variable is declared, not swallowed by an expression statement", () => {
+    const decl = findDecl(table(), "g", "variable");
+    expect(decl).toBeDefined();
+    expect(decl!.nameRange.start.line).toBe(4);
+  });
+
+  test("the type annotation is a resolved reference to the class", () => {
+    const t = table();
+    const typeRef = t.references.find(
+      (r) => r.name === "Greeter" && r.kind === "type_ref",
+    );
+    expect(typeRef).toBeDefined();
+    // Column 0 of line 4 — the annotation, not the constructor call at col 12.
+    expect(typeRef!.loc.line).toBe(4);
+    expect(typeRef!.loc.character).toBe(0);
+
+    const classDecl = findDecl(t, "Greeter", "class");
+    expect(typeRef!.resolvesTo).toBe(classDecl!.id);
+  });
+
+  test("the declared type is recorded, so member completion can resolve it", () => {
+    const decl = findDecl(table(), "g", "variable");
+    expect(decl!.declaredType).toBe("Greeter");
   });
 });
 
@@ -756,8 +826,9 @@ describe("definition API: getDefinitionAt", () => {
 
   test("class member reference resolves via getDefinitionAt", () => {
     const table = buildTable("class-single-inherit.pike");
-    // name at line 11, char 8 resolves to class variable
-    const decl = getDefinitionAt(table, 11, 8);
+    // Line 11 is `    name = _name;` — the identifier starts at column 4.
+    // Column 8 is the space after it, where there is nothing to resolve.
+    const decl = getDefinitionAt(table, 11, 4);
     expect(decl).not.toBeNull();
     expect(decl!.name).toBe("name");
     expect(decl!.kind).toBe("variable");
@@ -843,11 +914,13 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 27, character: 4 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
-    expect(result.range.start.line).toBe(26);
-    expect(result.range.start.character).toBe(10);
+    expect(result!.uri).toBe(uri);
+    // Line 26 is `  mixed anything = 42;` — the name starts at column 8.
+    // Nothing begins at column 10.
+    expect(result!.range.start.line).toBe(26);
+    expect(result!.range.start.character).toBe(8);
   });
 
   test("returns Location for function declaration name", async () => {
@@ -857,17 +930,17 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 6, character: 5 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.range.start.line).toBe(6);
-    expect(result.range.start.character).toBe(4);
+    expect(result!.range.start.line).toBe(6);
+    expect(result!.range.start.character).toBe(4);
   });
 
   test("returns null for unknown document", async () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri: "file:///nonexistent.pike" },
       position: { line: 0, character: 0 },
-    });
+    }) as LspLocation | null;
     expect(result).toBeNull();
   });
 
@@ -877,7 +950,7 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 0, character: 0 },
-    });
+    }) as LspLocation | null;
     expect(result).toBeNull();
   });
 
@@ -888,22 +961,33 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 46, character: 12 },
-    });
+    }) as LspLocation | null;
     expect(result).toBeNull();
   });
 
   test("class member definition resolves via LSP", async () => {
     const src = readCorpusSource("class-single-inherit.pike");
     const uri = server.openDoc(corpusUri("class-single-inherit.pike"), src);
-    // name at line 11, char 8 (inside Animal.create: name = _name)
+    const lines = src.split("\n");
+
+    // The `name` assigned inside Animal.create (`name = _name;`), not the
+    // `_name` parameter on the same line. Positions are derived from the
+    // corpus text: hardcoding them silently rots when the file is reindented.
+    const refLine = lines.findIndex(l => l.includes("name = _name;"));
+    const refChar = lines[refLine].indexOf("name");
+    const declLine = lines.findIndex(l => l.includes("protected string name;"));
+    const declChar = lines[declLine].indexOf("name");
+
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
-      position: { line: 11, character: 8 },
-    });
+      position: { line: refLine, character: refChar },
+    }) as { uri: string; range: { start: { line: number; character: number } } } | null;
+
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should point to the 'name' variable declaration in Animal class
-    expect(result.range.start.character).toBe(21); // protected string name
+    expect(result!.range.start.line).toBe(declLine);
+    expect(result!.range.start.character).toBe(declChar);
   });
 
   test("parameter definition resolves via LSP", async () => {
@@ -913,9 +997,9 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 11, character: 15 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.range.start.line).toBe(10); // parameter declaration line
+    expect(result!.range.start.line).toBe(10); // parameter declaration line
   });
 
   test("angle-bracket #include resolves to system include path", async () => {
@@ -929,10 +1013,10 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 0, character: 10 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.uri).toContain("stdio.h");
-    expect(result.uri).toMatch(/include/);
+    expect(result!.uri).toContain("stdio.h");
+    expect(result!.uri).toMatch(/include/);
   });
 
   test("type reference resolves to class declaration via LSP", async () => {
@@ -942,11 +1026,11 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 60, character: 4 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
     // Should resolve to Dog class declaration
-    expect(result.range.start.line).toBe(24);
-    expect(result.range.start.character).toBe(6);
+    expect(result!.range.start.line).toBe(24);
+    expect(result!.range.start.character).toBe(6);
   });
 
   test("inheritance scope access resolves via LSP", async () => {
@@ -957,10 +1041,10 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 36, character: 17 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
     // Should resolve to Animal.describe (line 15)
-    expect(result.range.start.line).toBe(15);
+    expect(result!.range.start.line).toBe(15);
   });
 
   test("enum member resolves via LSP", async () => {
@@ -970,10 +1054,11 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 39, character: 14 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
-    expect(result.range.start.line).toBe(8);
-    expect(result.range.start.character).toBe(4);
+    // Line 8 is `  RED,` — the enum member starts at column 2.
+    expect(result!.range.start.line).toBe(8);
+    expect(result!.range.start.character).toBe(2);
   });
 
   test("closure variable resolves via LSP", async () => {
@@ -983,10 +1068,10 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 15, character: 19 },
-    });
+    }) as LspLocation | null;
     expect(result).not.toBeNull();
     // Should resolve to offset declaration at line 13
-    expect(result.range.start.line).toBe(13);
+    expect(result!.range.start.line).toBe(13);
   });
 });
 
@@ -1013,11 +1098,11 @@ describe("definition LSP: textDocument/references via protocol", () => {
       textDocument: { uri },
       position: { line: 29, character: 7 },
       context: { includeDeclaration: true },
-    });
+    }) as LspLocation[] | null;
     expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(0);
+    expect(result!.length).toBeGreaterThan(0);
     // Should include the call site at line 40
-    expect(result.some((r: any) => r.range.start.line === 40)).toBe(true);
+    expect(result!.some((r: any) => r.range.start.line === 40)).toBe(true);
   });
 
   test("finds references to class variable", async () => {
@@ -1028,12 +1113,12 @@ describe("definition LSP: textDocument/references via protocol", () => {
       textDocument: { uri },
       position: { line: 7, character: 21 },
       context: { includeDeclaration: true },
-    });
+    }) as LspLocation[] | null;
     expect(Array.isArray(result)).toBe(true);
-    expect(result.length).toBeGreaterThan(1);
+    expect(result!.length).toBeGreaterThan(1);
     // Should include references at line 11 and line 16
-    expect(result.some((r: any) => r.range.start.line === 11)).toBe(true);
-    expect(result.some((r: any) => r.range.start.line === 16)).toBe(true);
+    expect(result!.some((r: any) => r.range.start.line === 11)).toBe(true);
+    expect(result!.some((r: any) => r.range.start.line === 16)).toBe(true);
   });
 
   test("returns empty for unknown document", async () => {
@@ -1041,7 +1126,7 @@ describe("definition LSP: textDocument/references via protocol", () => {
       textDocument: { uri: "file:///nonexistent.pike" },
       position: { line: 0, character: 0 },
       context: { includeDeclaration: true },
-    });
+    }) as LspLocation[] | null;
     expect(result).toEqual([]);
   });
 });
@@ -1123,12 +1208,12 @@ describe("definition LSP: cross-file inherited member (US-001)", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri: uriB },
       position: { line: 25, character: 28 },
-    });
+    }) as LspLocation | null;
 
     expect(result).not.toBeNull();
     // Should resolve to Animal.speak in file A
-    expect(result.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
-    expect(result.range.start.line).toBe(18); // speak() is declared at line 18 in file A
+    expect(result!.uri).toBe(corpusUri("cross-inherit-simple-a.pike"));
+    expect(result!.range.start.line).toBe(18); // speak() is declared at line 18 in file A
   });
 
   test("definition: d->speak() resolves via assignedType when declaredType is mixed (US-008)", async () => {
@@ -1144,13 +1229,13 @@ describe("definition LSP: cross-file inherited member (US-001)", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 3, character: 5 }, // on 'speak'
-    });
+    }) as LspLocation | null;
 
     // assignedType='Dog' should let the resolver find Dog.speak
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should point to the speak method inside Dog class
-    expect(result.range.start.line).toBe(0); // Dog class is at line 0
+    expect(result!.range.start.line).toBe(0); // Dog class is at line 0
   });
 });
 
@@ -1184,12 +1269,12 @@ describe("definition: chained access resolution", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 4, character: 20 },
-    });
+    }) as LspLocation | null;
 
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should resolve to Inner.x (variable at line 0)
-    expect(result.range.start.line).toBe(0);
+    expect(result!.range.start.line).toBe(0);
   });
 
   test("obj->field resolves intermediate member in chain", async () => {
@@ -1207,12 +1292,12 @@ describe("definition: chained access resolution", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 4, character: 15 },
-    });
+    }) as LspLocation | null;
 
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should resolve to Outer.val (variable at line 1)
-    expect(result.range.start.line).toBe(1);
+    expect(result!.range.start.line).toBe(1);
   });
 
   test("a->b->c->d resolves three-level chained arrow access", async () => {
@@ -1232,12 +1317,12 @@ describe("definition: chained access resolution", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 6, character: 28 },
-    });
+    }) as LspLocation | null;
 
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should resolve to D.name (variable at line 0)
-    expect(result.range.start.line).toBe(0);
+    expect(result!.range.start.line).toBe(0);
   });
 
   test("mixed d = Dog(); d->bark()->name resolves via assignedType chain", async () => {
@@ -1257,11 +1342,11 @@ describe("definition: chained access resolution", () => {
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 6, character: 24 },
-    });
+    }) as LspLocation | null;
 
     expect(result).not.toBeNull();
-    expect(result.uri).toBe(uri);
+    expect(result!.uri).toBe(uri);
     // Should resolve to Name.val (variable at line 0)
-    expect(result.range.start.line).toBe(0);
+    expect(result!.range.start.line).toBe(0);
   });
 });

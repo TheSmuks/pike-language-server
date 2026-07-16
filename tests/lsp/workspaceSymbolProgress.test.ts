@@ -1,13 +1,10 @@
 /**
  * T047: Workspace symbol progress and cancellation (US2).
  *
- * When the client advertises window.workDoneProgress, the server must report
- * begin/report/end progress notifications for workspace/symbol so users see
- * "Indexing…" during lazy global preparation.
- *
- * RED state: workspace/symbol does not yet route through global query
- * preparation, so no progress notifications are sent. After T057/T058, the
- * handler will create a work-done-progress token and report begin/end.
+ * When the client passes a workDoneToken with workspace/symbol, the server must
+ * report begin/end progress on that token so users see an indicator during lazy
+ * global preparation. The token is client-created, so the server reports on it
+ * directly rather than sending window/workDoneProgress/create.
  *
  * Lives in a separate file from workspaceSymbol.test.ts because that file uses
  * a module-scoped server with beforeAll/afterAll; creating additional server

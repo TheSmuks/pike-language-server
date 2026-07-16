@@ -186,7 +186,7 @@ async function createMeasurementServer(options?: {
       server.worker.stop();
       const shutdown = client.sendRequest("shutdown").catch(() => {});
       await Promise.race([shutdown, new Promise(r => setTimeout(r, 500))]);
-      try { client.sendNotification("exit"); } catch { /* ok */ }
+      // No `exit`: in-process server — the LSP exit handler would kill the test runner.
       c2s.destroy();
       s2c.destroy();
     },
@@ -320,6 +320,11 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     // Use a large-enough file to ensure the Pike compilation takes measurable time.
     // The important thing: we fire hover WHILE the diagnose is queued/in-flight.
     const largeSource = generateLargePikeSource(200);
+    // Register the waiter BEFORE the change that triggers the publish — see the
+    // waitForPublish contract. Awaiting it after the hovers below would race:
+    // the diagnose can publish first, and the listener would then wait for a
+    // notification that has already been delivered.
+    const diagnosePublished = ctx.waitForPublish(fileUri);
     ctx.changeDoc(fileUri, largeSource);
 
     // Wait for debounce timer to fire (500ms) so the diagnose is dispatched
@@ -340,7 +345,7 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     const avgDuring = duringLatencies.reduce((a, b) => a + b, 0) / duringLatencies.length;
 
     // Wait for the in-flight diagnose to complete so we don't leak state
-    await ctx.waitForPublish(fileUri);
+    await diagnosePublished;
 
     const ratio = avgDuring / avgIdle;
 
@@ -364,7 +369,9 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     // If hover were queued behind diagnose, we'd see >>100x.
     expect(avgDuring).toBeLessThan(1000);
     expect(ratio).toBeLessThan(10);
-  });
+    // The 550ms debounce wait plus two real Pike diagnose round-trips exceed
+    // bun's 5s default per-test budget.
+  }, 30_000);
 
   test("FIFO queue blocks concurrent worker requests", async () => {
     // Direct test: fire two diagnose requests concurrently and measure

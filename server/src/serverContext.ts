@@ -25,7 +25,7 @@ import predefAutodocIndexRaw from "./data/predef-autodoc.json";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
 import { DiagnosticManager } from "./features/diagnosticManager";
-import { DEFAULT_RESOURCE_CONFIG } from "./features/resourceConfiguration";
+import { parseResourceConfig } from "./features/resourceConfiguration";
 import type { ResourceConfiguration } from "./features/resourceTypes";
 import { ResourceStateTracker, createResourceStateSender } from "./features/resourceState";
 import { HibernationManager, HIBERNATION_DEFAULTS } from "./features/hibernation";
@@ -258,7 +258,8 @@ export function createServerContext(
     predefAutodoc,
     debugTelemetry: false,
     pendingParserDocuments: new Map<string, TextDocument>(),
-    resourceConfig: DEFAULT_RESOURCE_CONFIG,
+    // Own a fresh config rather than aliasing the frozen defaults singleton.
+    resourceConfig: parseResourceConfig(undefined),
     resourceState,
     hibernationManager,
   };
