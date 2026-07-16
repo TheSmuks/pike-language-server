@@ -23,7 +23,7 @@ if (!args.some(a => a === "--stdio" || a === "--node-ipc" || a.startsWith("--soc
 
 const child = spawn("bun", [serverPath, ...args], {
   stdio: "inherit",
-  env: { ...process.env },
+  env: { ...process.env, PIKE_LSP_STDIO: "1" },
 });
 
 child.on("exit", (code) => process.exit(code ?? 1));

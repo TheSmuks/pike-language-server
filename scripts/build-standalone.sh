@@ -14,7 +14,7 @@ rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
 # Bundle server with esbuild (no vscode externals needed for standalone)
-esbuild "$ROOT/server/src/server.ts" \
+esbuild "$ROOT/server/src/main.ts" \
   --bundle \
   --outfile="$OUT_DIR/server.js" \
   --platform=node \

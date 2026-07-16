@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The standalone server could never start, so Helix, Neovim, and every other
+  non-VSCode LSP client were broken.** Two independent faults: the standalone
+  bundle was built from `server/src/server.ts`, which is a library and
+  deliberately never calls `connection.listen()`; and the server only began
+  listening when `PIKE_LSP_STDIO=1` was set, which only the VSCode client did.
+  The documented command (`bun standalone/server.js --stdio`) therefore started,
+  read no env var, and exited 0 in silence. The bundle is now built from
+  `main.ts`, and `--stdio` — the flag every other LSP client passes — starts the
+  server. `bin/pike-language-server` sets the env var so `--socket=` and
+  `--node-ipc` invocations keep working.
+- **Helix setup instructions never worked.** The published `languages.toml`
+  omitted `scope`, which makes Helix reject the *entire* user language config,
+  and `file-types`, without which Helix never recognises a `.pike` file. The
+  syntax-highlighting section claimed copying `highlights.scm` was sufficient;
+  Helix also needs a compiled tree-sitter grammar or it loads no parser at all.
+- **Neovim configuration was silently ignored.** The documented `settings = {…}`
+  block is delivered via `workspace/configuration`, which this server never
+  requests — it reads `initializationOptions` only. Use `init_options`. The
+  `root_dir` snippet also called `lspconfig.util.find_git_ancestor`, which no
+  longer exists in current nvim-lspconfig.
+
+### Added
+
+- **Step-by-step [Helix installation guide](docs/helix-installation.md)** —
+  install, build, configure, verify, syntax highlighting, and troubleshooting,
+  verified end-to-end against Helix 25.01.1.
+- **`check:standalone` and `check:helix` CI guards** — the first asserts the
+  standalone bundle answers an LSP `initialize` over stdio (via both the
+  documented command and the `bin` wrapper) and exits cleanly on
+  `shutdown` + `exit`; the second drives all 13 supported LSP features using
+  Helix's real client capabilities and asserts they return actual results.
+  Nothing previously exercised the standalone build, which is how a bundle that
+  could not start shipped unnoticed.
+
+### Changed
+
+- **`unbounded-map-set` quality gate now identifies long-lived containers
+  instead of pattern-matching whole files.** It flagged 16 files whose Maps and
+  Sets were function-local or fixed constant tables, while its variable-name
+  capture was broken such that a real class-field leak went undetected. It now
+  reports a violation only when a container is long-lived (module scope, class
+  field, or `this.x =`), grows at runtime, and has no eviction — and emits a
+  failure, matching the `blocking` severity its own rule catalog declares.
+
 ## [0.8.47] — 2026-07-10
 
 ### Added
