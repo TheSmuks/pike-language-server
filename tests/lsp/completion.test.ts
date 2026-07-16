@@ -933,6 +933,40 @@ describe("stdlib secondary index", () => {
     expect(labels).toContain("Stdio");
   });
 
+  test("object member completion never offers the parent module's functions", async () => {
+    // Verified against the pike binary: indices(String.Buffer()) has no
+    // implode_nicely/capitalize — those are String module functions, not
+    // members of a Buffer object. The static index has no children for
+    // predef.String.Buffer, and falling back to predef.String is wrong.
+    const labels = await completeAfter("void foo() { String.Buffer buf; buf-> }", "buf->");
+
+    expect(labels).not.toContain("implode_nicely");
+    expect(labels).not.toContain("capitalize");
+  });
+
+  test("runtime member resolve runs when the static index has no children for the type", async () => {
+    const src = "void foo() { String.Buffer buf; buf-> }";
+    const character = src.indexOf("buf->") + "buf->".length;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/idx.pike", 1, undefined, src);
+    wireInheritance(table);
+    // Stub of PikeWorker.resolve(): before the parent-module fallback was
+    // removed, bogus String members filled the list and this resolver was
+    // never consulted, so the true Buffer members never appeared.
+    const ctx = {
+      ...makeCtx(src),
+      memberResolver: async () => ({
+        resolved: true,
+        methods: [{ name: "add" }, { name: "get" }],
+        constants: [],
+      }),
+    };
+    const labels = completionLabels(await getCompletions(table, tree, 0, character, ctx));
+
+    expect(labels).toContain("add");
+    expect(labels).toContain("get");
+  });
+
   test("predef builtin count is correct", () => {
     const predefKeys = Object.keys(predefBuiltinIndex);
     expect(predefKeys.length).toBe(283);

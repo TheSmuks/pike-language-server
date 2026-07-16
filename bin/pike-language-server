@@ -40,5 +40,44 @@ if (!args.some(a => a === "--stdio" || a === "--node-ipc" || a.startsWith("--soc
 }
 process.env.PIKE_LSP_STDIO = "1";
 
-// pathToFileURL: a bare Windows path (C:\...) is not a valid import specifier.
-await import(pathToFileURL(serverPath).href);
+// ─── V8 memory flags (Node only) ────────────────────────────────────────────
+//
+// The VSCode client launches the server with --max-old-space-size and
+// --expose-gc: the cap bounds V8's allocation high-water during indexing
+// bursts (measured on Pike's own stdlib: ~620MB uncapped vs ~335MB capped,
+// with no latency cost), and --expose-gc lets the memory governor force a
+// collection under budget pressure. Editors that launch this script directly
+// (Neovim, Helix) would get neither, so re-exec Node once with the same flags.
+//
+// Skipped when: already re-execed; running under Bun (no V8 flags); or the
+// user supplied their own Node flags (an explicit execArgv wins).
+// PIKE_LSP_MEMORY_BUDGET_MB overrides the 512MB default budget; the cap
+// formula mirrors computeHeapCapMb in the VSCode client.
+const isNode = !process.versions.bun;
+if (isNode && !process.env.PIKE_LSP_NO_REEXEC && process.execArgv.length === 0) {
+  const rawBudget = Number.parseInt(process.env.PIKE_LSP_MEMORY_BUDGET_MB ?? "512", 10);
+  const budget = Number.isFinite(rawBudget) ? Math.min(8192, Math.max(64, rawBudget)) : 512;
+  const capMb = Math.max(budget + 256, Math.round(budget * 1.5));
+
+  const { spawn } = await import("node:child_process");
+  const child = spawn(
+    process.execPath,
+    [`--max-old-space-size=${capMb}`, "--expose-gc", fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    {
+      stdio: "inherit",
+      env: { ...process.env, PIKE_LSP_NO_REEXEC: "1" },
+    },
+  );
+  // Mirror the child's lifecycle: the editor manages THIS process, so its
+  // signals must reach the server and the server's exit code must come back.
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.on(signal, () => child.kill(signal));
+  }
+  child.on("exit", (code, signal) => {
+    if (signal) process.kill(process.pid, signal);
+    process.exit(code ?? 0);
+  });
+} else {
+  // pathToFileURL: a bare Windows path (C:\...) is not a valid import specifier.
+  await import(pathToFileURL(serverPath).href);
+}

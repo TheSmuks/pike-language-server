@@ -6,6 +6,7 @@ import type { SymbolTable, Declaration } from "./symbolTable";
 import type { SignatureContext, SignatureInfo, ParameterInfo } from "./signatureHelp";
 import { containsRange } from "./scopeBuilder";
 import { resolveTypeName } from "./symbolTable";
+import { stripScopeWrapper } from "../util/stripScope";
 
 // ---------------------------------------------------------------------------
 // Main resolution
@@ -315,6 +316,82 @@ export function buildSignatureFromStdlib(
     documentation: entry.markdown,
     parameters: params,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Predef (efun) signatures
+// ---------------------------------------------------------------------------
+
+/**
+ * Build signatures for a predef builtin (efun) like `write` or `sprintf`.
+ *
+ * Efuns are absent from the stdlib autodoc index; their signatures live in
+ * predef-builtin-index.json as raw Pike type descriptors of the form
+ * `scope(0,function(string : int) | function(array(string), mixed ... : int))`.
+ * Each `function(args : ret)` alternative becomes one overload. Markdown
+ * documentation comes from predef-autodoc.json when available.
+ */
+export function resolvePredefSignatures(
+  calleeName: string,
+  ctx?: SignatureContext,
+): SignatureInfo[] {
+  const raw = ctx?.predefBuiltins?.[calleeName];
+  if (!raw) return [];
+
+  const markdown = ctx?.predefAutodoc?.[calleeName]?.markdown;
+  const signatures: SignatureInfo[] = [];
+
+  for (const alternative of stripScopeWrapper(raw).split(" | function")) {
+    let sig = alternative.trim();
+    if (sig.startsWith("function")) sig = sig.slice("function".length).trim();
+    if (!sig.startsWith("(") || !sig.endsWith(")")) continue;
+
+    const inner = stripAttributes(sig.slice(1, -1));
+    // `params : returnType` — find the top-level colon separator.
+    const colonIdx = topLevelIndexOf(inner, ":");
+    const paramText = (colonIdx === -1 ? inner : inner.slice(0, colonIdx)).trim();
+    const returnType = colonIdx === -1 ? "mixed" : inner.slice(colonIdx + 1).trim();
+
+    const params: ParameterInfo[] = paramText === "" || paramText === "void"
+      ? []
+      : splitParams(paramText).map(p => ({ label: p.trim() }));
+
+    signatures.push({
+      label: `${returnType} ${calleeName}(${params.map(p => p.label).join(", ")})`,
+      documentation: markdown,
+      parameters: params,
+    });
+  }
+
+  return signatures;
+}
+
+/**
+ * Replace `__attribute__("name", TYPE)` annotations with their bare TYPE.
+ * Attribute types in the predef data are simple (string, mixed), so a
+ * paren-free inner match suffices; unmatched text is left as-is (fail-soft).
+ */
+function stripAttributes(text: string): string {
+  let out = text;
+  // Bounded: each pass removes one attribute; the data has at most a handful.
+  for (let i = 0; i < 16; i++) {
+    const next = out.replace(/__attribute__\("[^"]*",\s*([^()]*)\)/, "$1");
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/** Index of the first occurrence of `ch` at paren/brace/bracket depth 0. */
+function topLevelIndexOf(text: string, ch: string): number {
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "(" || c === "{" || c === "[") depth++;
+    else if (c === ")" || c === "}" || c === "]") depth--;
+    else if (c === ch && depth === 0) return i;
+  }
+  return -1;
 }
 
 // ---------------------------------------------------------------------------

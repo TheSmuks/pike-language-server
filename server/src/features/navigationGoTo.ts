@@ -16,7 +16,9 @@ import {
   getDefinitionAt,
   getReferencesTo,
 } from "./symbolTable";
-import { resolveAccessDefinition } from "./accessResolver";
+import { resolveAccessDefinition, modulePathAtPosition } from "./accessResolver";
+import { existsSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import { resolveType, type TypeResolutionContext } from "./typeResolver";
 import { findImplementations } from "./implementation";
 import { resolveIncludeTarget } from "./navigationInclude";
@@ -31,10 +33,13 @@ export function registerGoToHandlers(
   ctx: NavigationContext,
 ): void {
   const makeTypeInferrer = buildTypeInferrerFactory(ctx);
+  // Getters, not value captures: registration runs before `initialize`
+  // replaces ctx.index / ctx.stdlibIndex with the real instances. A value
+  // capture here would freeze the empty placeholders into every request.
   const resolutionCtx: ResolutionContext = {
     documents: ctx.documents,
-    index: ctx.index,
-    stdlibIndex: ctx.stdlibIndex,
+    get index() { return ctx.index; },
+    get stdlibIndex() { return ctx.stdlibIndex; },
   };
 
   connection.onDefinition((params, token) =>
@@ -163,7 +168,67 @@ async function handleDefinition(
     return declToLspLocation(crossFile.uri, crossFile.decl);
   }
 
-  return resolveAccessForDefinition(ctx, resolutionCtx, makeTypeInferrer, table, params);
+  const accessResult = await resolveAccessForDefinition(ctx, resolutionCtx, makeTypeInferrer, table, params);
+  if (accessResult) return accessResult;
+
+  return resolveModulePathTarget(ctx, table, includeDoc, params);
+}
+
+/**
+ * Last-resort definition targets the earlier tiers cannot see:
+ * - an inherit alias (`base` in `base::create()`) → the inherit declaration;
+ * - a module/type path segment (`Util` in `.Util.double_it`, `Stdio` in
+ *   `Stdio.File`) → the module's file;
+ * - a stdlib class path (`String.Buffer`) → the source location the Pike
+ *   worker's runtime resolve reports.
+ */
+async function resolveModulePathTarget(
+  ctx: NavigationContext,
+  table: import("./symbolTable").SymbolTable,
+  doc: { getText(): string } | undefined,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Promise<LspLocation | null> {
+  if (!doc) return null;
+  const lines = doc.getText().split('\n');
+  const path = modulePathAtPosition(lines, params.position.line, params.position.character);
+  if (!path) return null;
+
+  // Inherit alias: jump to the inherit declaration that binds it.
+  if (!path.includes(".")) {
+    const aliasDecl = table.declarations.find(
+      d => d.kind === "inherit" && d.alias === path,
+    );
+    if (aliasDecl) return declToLspLocation(table.uri, aliasDecl);
+  }
+
+  const moduleUri = await ctx.index.resolveModule(path, params.textDocument.uri);
+  // Directory modules without a module.pmod resolve to the directory itself,
+  // which an editor cannot open — skip those.
+  if (moduleUri && !moduleUri.endsWith("/")) {
+    return {
+      uri: moduleUri,
+      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    };
+  }
+
+  // Stdlib class the filesystem walk cannot reach (a class inside a file
+  // module, e.g. String.Buffer): the worker's introspection knows its source.
+  // C-implemented symbols report the path Pike was BUILT from (a foreign
+  // machine), so only offer the target when the file exists here.
+  if (!path.startsWith(".") && path.includes(".") && ctx.worker) {
+    try {
+      const resolved = await ctx.worker.resolve(path);
+      if (resolved.resolved && resolved.source_file && existsSync(resolved.source_file)) {
+        const line = Math.max(0, (resolved.source_line ?? 1) - 1);
+        return {
+          uri: pathToFileURL(resolved.source_file).href,
+          range: { start: { line, character: 0 }, end: { line, character: 0 } },
+        };
+      }
+    } catch { /* Worker unavailable — no target */ }
+  }
+
+  return null;
 }
 
 /** Resolve a local declaration to its LSP location(s). */

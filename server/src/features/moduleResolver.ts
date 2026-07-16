@@ -17,13 +17,13 @@
  * (.so skipped — not parseable by tree-sitter)
  */
 
-import { join, dirname, resolve, sep } from "node:path";
+import { join, dirname, resolve } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import {
   pathExists,
-  isDir,
-  isFile,
   findWithExtension,
+  findModuleInPath,
+  resolveSubModule,
   resolveIncludeUncached,
   resolveRelativeInheritTarget,
   resolveDirectoryModulePmod,
@@ -170,13 +170,9 @@ export class ModuleResolver {
       // Strip quotes from string literal
       const rawPath = pathText.replace(/^"|"$/g, "");
       result = await this.resolveInheritString(rawPath, currentFile);
-    } else if (pathText.startsWith(".")) {
-      // Relative: .Foo → Foo.pike/Foo.pmod in same directory
-      const relativeName = pathText.slice(1);
-      result = await this.resolveRelativeModule(relativeName, currentFile);
     } else {
-      // Identifier or dot-path: resolve as module
-      result = await this.resolveModule(pathText, currentFile);
+      // Identifier, dot-path, or relative (leading-dot) module path
+      result = await this.resolveInheritModulePath(pathText, currentFile);
     }
 
     this.cache.set(cacheKey, result);
@@ -228,52 +224,67 @@ export class ModuleResolver {
   // ---------------------------------------------------------------------------
 
   private async doResolveModule(modulePath: string, currentFile: string): Promise<ResolveResult | null> {
-    const segments = modulePath.split(".");
+    // A leading dot (`.Util`, `.Util.Sub`) is Pike's relative-module syntax:
+    // the first segment resolves ONLY against the current file's directory,
+    // never the module search paths (matches master.pike's handling of the
+    // empty first segment in a dotted resolv path).
+    const isRelative = modulePath.startsWith(".");
+    const segments = (isRelative ? modulePath.slice(1) : modulePath).split(".");
     if (segments.length === 0) return null;
+    if (segments[0] === "") return null;
 
     // Build the search paths for this file
-    const searchPaths = await this.getSearchPaths(currentFile);
+    const searchPaths = isRelative
+      ? [dirname(currentFile)]
+      : await this.getSearchPaths(currentFile);
 
-    // Resolve first segment as a module/file
-    const firstName = segments[0];
-    // Pike converts hyphens to underscores in module names
-    const normalizedName = firstName.replace(/-/g, "_");
-
-    let currentUri: string | null = null;
-    let source: ResolveResult["source"] = "not_found";
-
-    // Search paths in order
-    for (const searchPath of searchPaths) {
-      // Try original name first, then normalized (hyphens→underscores)
-      let found = await this.findModuleInPath(firstName, searchPath);
-      if (!found && normalizedName !== firstName) {
-        found = await this.findModuleInPath(normalizedName, searchPath);
-      }
-      if (found) {
-        currentUri = found;
-        // Determine source based on search path type
-        if (searchPath === dirname(currentFile) || searchPath === this.workspaceRoot) {
-          source = "workspace_module";
-        } else if (searchPath.startsWith(this.pikePaths.pikeHome)) {
-          source = "system_module";
-        } else {
-          source = "workspace_module";
-        }
-        break;
-      }
-    }
-
-    if (!currentUri) return null;
+    const head = await this.findFirstSegment(segments[0], searchPaths, isRelative, currentFile);
+    if (!head) return null;
 
     // Resolve subsequent segments by indexing into the found module
+    let currentUri = head.uri;
     for (let i = 1; i < segments.length; i++) {
       const segment = segments[i];
-      const segmentResult = await this.resolveSubModule(currentUri, segment);
+      const segmentResult = await resolveSubModule(currentUri, segment);
       if (!segmentResult) return null;
       currentUri = segmentResult;
     }
 
-    return { uri: currentUri, source };
+    return { uri: currentUri, source: head.source };
+  }
+
+  /** Resolve the first module-path segment against the ordered search paths. */
+  private async findFirstSegment(
+    firstName: string,
+    searchPaths: string[],
+    isRelative: boolean,
+    currentFile: string,
+  ): Promise<ResolveResult | null> {
+    // Pike converts hyphens to underscores in module names
+    const normalizedName = firstName.replace(/-/g, "_");
+
+    for (const searchPath of searchPaths) {
+      // Try original name first, then normalized (hyphens→underscores)
+      let found = await findModuleInPath(firstName, searchPath);
+      if (!found && normalizedName !== firstName) {
+        found = await findModuleInPath(normalizedName, searchPath);
+      }
+      if (!found) continue;
+
+      // Determine source based on search path type
+      let source: ResolveResult["source"];
+      if (isRelative) {
+        source = "relative";
+      } else if (searchPath === dirname(currentFile) || searchPath === this.workspaceRoot) {
+        source = "workspace_module";
+      } else if (searchPath.startsWith(this.pikePaths.pikeHome)) {
+        source = "system_module";
+      } else {
+        source = "workspace_module";
+      }
+      return { uri: found, source };
+    }
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -362,8 +373,41 @@ export class ModuleResolver {
 
   private async resolveRelativeModule(name: string, currentFile: string): Promise<ResolveResult | null> {
     const currentDir = dirname(currentFile);
-    const found = await this.findModuleInPath(name, currentDir);
+    const found = await findModuleInPath(name, currentDir);
     return found ? { uri: found, source: "relative" } : null;
+  }
+
+  /**
+   * Resolve a module-path inherit target: `inherit Foo`, `inherit Foo.Bar`,
+   * or the relative forms `inherit .Foo` / `inherit .Foo.Bar`.
+   *
+   * The trailing segments of a dotted path may name a class INSIDE a file
+   * module rather than a file on disk — Pike resolves those at compile time
+   * from the program's symbols, not the filesystem. When a tail segment
+   * cannot be resolved to a file, return the deepest file that did resolve:
+   * the symbol-table layer then finds the class within it by name.
+   */
+  private async resolveInheritModulePath(pathText: string, currentFile: string): Promise<ResolveResult | null> {
+    const isRelative = pathText.startsWith(".");
+    const segments = (isRelative ? pathText.slice(1) : pathText).split(".");
+    if (segments.length === 0) return null;
+    if (segments[0] === "") return null;
+
+    // Resolve the first segment: relative paths search only the current
+    // file's directory; plain paths use the full module search order.
+    const head = isRelative
+      ? await this.resolveRelativeModule(segments[0], currentFile)
+      : await this.resolveModule(segments[0], currentFile);
+    if (!head) return null;
+
+    let currentUri = head.uri;
+    for (let i = 1; i < segments.length; i++) {
+      const next = await resolveSubModule(currentUri, segments[i]);
+      // Tail segment is not a file — it names a class inside currentUri.
+      if (!next) break;
+      currentUri = next;
+    }
+    return { uri: currentUri, source: head.source };
   }
 
   // ---------------------------------------------------------------------------
@@ -399,67 +443,6 @@ export class ModuleResolver {
     }
 
     return paths;
-  }
-
-  /**
-   * Find a module named `name` within the given search path.
-   * Tries directory module (.pmod/), then file module (.pmod), then .pike.
-   * Priority: .pmod > .pike (same as Pike, minus .so).
-   */
-  private async findModuleInPath(name: string, searchPath: string): Promise<string | null> {
-    // Validate the module name doesn't contain path separators or traversal.
-    if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
-
-    // 1. Directory module: name.pmod/module.pmod
-    const dirPath = join(searchPath, `${name}.pmod`);
-    if (await isDir(dirPath)) {
-      // Return the module.pmod if it exists, otherwise the directory itself
-      const moduleFile = join(dirPath, "module.pmod");
-      if (await pathExists(moduleFile)) {
-        return pathToFileURL(moduleFile).href;
-      }
-      // Directory module without module.pmod — still a valid module
-      return pathToFileURL(dirPath + sep).href;
-    }
-
-    // 2. File module: name.pmod
-    const fileModulePath = join(searchPath, `${name}.pmod`);
-    if (await isFile(fileModulePath)) {
-      return pathToFileURL(fileModulePath).href;
-    }
-
-    // 3. Pike file: name.pike
-    const pikePath = join(searchPath, `${name}.pike`);
-    if (await pathExists(pikePath)) {
-      return pathToFileURL(pikePath).href;
-    }
-
-    return null;
-  }
-
-  /**
-   * Resolve a sub-module within a resolved module.
-   * If parent is a .pmod directory, look for child.pike, child.pmod, child.pmod/module.pmod.
-   * If parent is a .pike file, sub-module doesn't apply (it's a program, not a module).
-   */
-  private async resolveSubModule(parentUri: string, segment: string): Promise<string | null> {
-    const parentPath = fileURLToPath(parentUri);
-
-    // If parent is a directory module, search inside it
-    if (parentPath.endsWith(sep) || parentPath.endsWith("/")) {
-      return this.findModuleInPath(segment, parentPath);
-    }
-
-    // If parent is module.pmod inside a .pmod directory, search the directory
-    if (parentPath.endsWith("module.pmod")) {
-      const parentDir = dirname(parentPath);
-      return this.findModuleInPath(segment, parentDir);
-    }
-
-    // If parent is a .pmod file (not directory), it can't have sub-modules
-    // If parent is a .pike file, sub-modules would be classes inside it
-    // (handled by symbol table lookup, not file system resolution)
-    return null;
   }
 
   /**
