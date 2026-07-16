@@ -63,9 +63,9 @@
         }
       },
       "severity": 2,
-      "code": "P3002",
+      "code": "P3001",
       "source": "pike-lsp-lint",
-      "message": "Parameter 'key' is unused"
+      "message": "Variable 'key' is unused"
     },
     {
       "range": {
@@ -79,9 +79,9 @@
         }
       },
       "severity": 2,
-      "code": "P3002",
+      "code": "P3001",
       "source": "pike-lsp-lint",
-      "message": "Parameter 'val' is unused"
+      "message": "Variable 'val' is unused"
     },
     {
       "range": {
