@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.48] — 2026-07-16
+
 ### Fixed
 
 - **Hover lost the signature whenever the AutoDoc XML cache was cold.** A `//!`-documented symbol rendered as bare prose with no `pike` code block — no signature, no type. The Tier 2b comment fallback marked its result `isAutodoc`, which `formatHover` reads as "the documentation already embeds the signature"; that is true of the Tier 1 XML render but not of `renderAutodocLines`, which emits comment prose only (it strips `@decl`). Hover now shows the tree-sitter signature alongside the comment text whenever the extractor is unavailable or the cache has not warmed.
