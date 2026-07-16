@@ -68,28 +68,19 @@ export function addStdlibMembersByType(
   items: CompletionItem[],
   seenNames: Set<string>,
 ): void {
-  // Try multiple FQN patterns: "predef.Stdio.File", "predef.Stdio"
-  const candidates = [
-    "predef." + typeName,
-    // Also try the first segment for module-level children
-    ...typeName.split(".").length > 1
-      ? ["predef." + typeName.split(".")[0]]
-      : [],
-  ];
-
+  // Exact FQN only. Falling back to the parent module's children
+  // (predef.String for String.Buffer) is wrong: a module's functions are
+  // not members of an object of that type (`buf->implode_nicely` does not
+  // exist). When the static index has nothing for the exact type, the
+  // caller's runtime-resolve fallback enumerates the true members.
   const childrenMap = getStdlibChildrenMap(ctx.stdlibIndex);
-  for (const prefix of candidates) {
-    const stdlibMembers = childrenMap.get(prefix);
-    if (!stdlibMembers) continue;
+  const stdlibMembers = childrenMap.get("predef." + typeName);
+  if (!stdlibMembers) return;
 
-    for (const member of stdlibMembers) {
-      if (seenNames.has(member.name)) continue;
-      seenNames.add(member.name);
-      items.push(buildStdlibMemberItem(member));
-    }
-    // First match wins — don't accumulate from multiple prefixes
-    // since longer prefixes are more specific.
-    return;
+  for (const member of stdlibMembers) {
+    if (seenNames.has(member.name)) continue;
+    seenNames.add(member.name);
+    items.push(buildStdlibMemberItem(member));
   }
 }
 

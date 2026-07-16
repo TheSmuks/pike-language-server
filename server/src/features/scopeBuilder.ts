@@ -169,7 +169,11 @@ function wireCrossFileInheritance(
   fromUri: string,
   startId: number,
 ): { scopeId: number; nextId: number } | null {
-  const inheritName = inheritDecl.name;
+  // A dotted inherit path (`inherit .Util.Counter`, `inherit Foo.Bar`) names
+  // the target class by its final segment; the head segments name the module
+  // file the resolver locates. Resolution below always gets the full path.
+  const inheritPath = inheritDecl.name;
+  const inheritName = inheritTailName(inheritPath);
 
   const fileScope = table.scopes.find(s => s.kind === 'file');
   if (!fileScope) return null;
@@ -202,9 +206,9 @@ function wireCrossFileInheritance(
     return createSyntheticScope(table, scope, targetClass, targetClassScope, targetTable, targetUri, startId);
   }
 
-  if (inheritName.startsWith('"')) return null;
-  const resolvedUri = index.resolveImport(inheritName, fromUri)
-    ?? index.resolveInherit(inheritName, false, fromUri);
+  if (inheritPath.startsWith('"')) return null;
+  const resolvedUri = index.resolveImport(inheritPath, fromUri)
+    ?? index.resolveInherit(inheritPath, false, fromUri);
   if (!resolvedUri) return null;
   const targetTable = index.getSymbolTable(resolvedUri);
   if (!targetTable) return null;
@@ -213,6 +217,18 @@ function wireCrossFileInheritance(
   return createSyntheticScope(
     table, scope, target.decl, target.scope, targetTable, resolvedUri, startId,
   );
+}
+
+/**
+ * The class name an inherit path targets: the final segment of a dotted
+ * module path (`.Util.Counter` → `Counter`), or the name itself when it has
+ * no dots. String-literal paths are returned unchanged — they name files,
+ * not classes.
+ */
+function inheritTailName(name: string): string {
+  if (name.startsWith('"')) return name;
+  const segments = name.split('.').filter(s => s.length > 0);
+  return segments.length > 0 ? segments[segments.length - 1] : name;
 }
 
 function findTargetClassScope(

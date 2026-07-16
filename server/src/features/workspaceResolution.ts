@@ -286,6 +286,17 @@ function findFirstClassOrSynthesize(
   name: string,
   targetUri: string,
 ): { uri: string; decl: Declaration } {
+  // A dotted inherit path names its target class by the final segment
+  // (`.Util.Counter` → class Counter). Prefer that exact class so a module
+  // file holding several classes resolves to the right one.
+  const tail = name.split(".").filter(s => s.length > 0).pop();
+  if (tail) {
+    const named = table.declarations.find(
+      d => d.kind === "class" && d.name === tail,
+    );
+    if (named) return { uri: targetUri, decl: named };
+  }
+
   for (const targetDecl of table.declarations) {
     if (targetDecl.kind === "class") {
       return { uri: targetUri, decl: targetDecl };

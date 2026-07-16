@@ -51,11 +51,14 @@ export function registerCompletionHandlers(
 ): void {
   const makeTypeInferrer = buildTypeInferrerFactory(ctx);
   const memberResolver = buildMemberResolver(ctx);
+  // Getters, not value captures: registration runs before `initialize`
+  // replaces ctx.index / the stdlib data with the real instances. A value
+  // capture here would freeze the empty placeholders into every request.
   const completionBase = {
-    index: ctx.index,
-    stdlibIndex: ctx.stdlibIndex,
-    predefBuiltins: ctx.predefBuiltins,
-    predefAutodoc: ctx.predefAutodoc,
+    get index() { return ctx.index; },
+    get stdlibIndex() { return ctx.stdlibIndex; },
+    get predefBuiltins() { return ctx.predefBuiltins; },
+    get predefAutodoc() { return ctx.predefAutodoc; },
     memberResolver,
   };
 

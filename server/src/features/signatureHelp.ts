@@ -10,7 +10,7 @@
 
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable } from "./symbolTable";
-import { resolveSignature, splitParams as _splitParams } from "./signatureHelp-resolve";
+import { resolveSignature, resolvePredefSignatures, splitParams as _splitParams } from "./signatureHelp-resolve";
 import { utf16ToUtf8, utf8ToUtf16, getLineText } from "../util/positionConverter";
 
 // Re-export for backward compatibility (tests import splitParams directly)
@@ -43,6 +43,10 @@ export interface SignatureContext {
   uri: string;
   index: import("./workspaceIndex").WorkspaceIndex;
   stdlibIndex?: Record<string, { signature: string; markdown: string }>;
+  /** Raw efun type descriptors (predef-builtin-index.json). */
+  predefBuiltins?: Record<string, string>;
+  /** Efun autodoc: rendered signature + markdown (predef-autodoc.json). */
+  predefAutodoc?: Record<string, { signature?: string; markdown?: string }>;
   typeInferrer?: (varName: string) => Promise<string | null>;
 }
 
@@ -92,13 +96,38 @@ export function produceSignatureHelp(
 
   // Try to resolve to a local/workspace function
   const sig = resolveSignature(calleeName, objectName, table, stdlibIndex, ctx);
-  if (!sig) return null;
+  if (sig) {
+    return {
+      signatures: [sig],
+      activeSignature: 0,
+      activeParameter: activeParam,
+    };
+  }
+
+  // Efun fallback: write(), sprintf(), … live in the predef indexes, not the
+  // stdlib autodoc index. Their raw types carry multiple overloads — offer
+  // them all and pre-select the one that can hold the active argument.
+  const predefSigs = resolvePredefSignatures(calleeName, ctx);
+  if (predefSigs.length === 0) return null;
 
   return {
-    signatures: [sig],
-    activeSignature: 0,
+    signatures: predefSigs,
+    activeSignature: pickActiveOverload(predefSigs, activeParam),
     activeParameter: activeParam,
   };
+}
+
+/**
+ * Pick the first overload with enough parameters for the active argument.
+ * Variadic overloads (last parameter contains `...`) always qualify.
+ */
+function pickActiveOverload(sigs: SignatureInfo[], activeParam: number): number {
+  for (let i = 0; i < sigs.length; i++) {
+    const params = sigs[i].parameters;
+    if (activeParam < params.length) return i;
+    if (params.length > 0 && params[params.length - 1].label.includes("...")) return i;
+  }
+  return sigs.length - 1;
 }
 
 // ---------------------------------------------------------------------------

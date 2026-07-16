@@ -454,6 +454,7 @@ async function handleSignatureHelp(
 
   return produceSignatureHelp(tree, table, params.position.line, params.position.character, ctx.stdlibIndex, {
     table, uri: params.textDocument.uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex,
+    predefBuiltins: ctx.predefBuiltins, predefAutodoc: ctx.predefAutodoc,
     typeInferrer: buildTypeInferrer(ctx, doc.uri),
   }, source);
 }

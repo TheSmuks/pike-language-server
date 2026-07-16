@@ -569,3 +569,68 @@ describe("didOpen AutoDoc extraction", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Type-name and inherit-alias hover (audit follow-ups)
+// ---------------------------------------------------------------------------
+
+describe("hover on stdlib type names", () => {
+  test("hover on the class segment of Stdio.File shows the class docs", async () => {
+    const uri = "file:///test/typename.pike";
+    const source = 'int main() {\n  Stdio.File f = Stdio.File();\n  return 0;\n}\n';
+    server.openDoc(uri, source);
+
+    // Line 1: `  Stdio.File f = ...` — cursor on `File` (col 8).
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 1, character: 9 } },
+    ) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    // predef.Stdio.File carries the class markdown in the stdlib index.
+    expect(result!.contents.value).toContain("I/O object");
+  });
+
+  test("hover on the module segment shows the module", async () => {
+    const uri = "file:///test/typename2.pike";
+    const source = 'int main() {\n  Stdio.File f = Stdio.File();\n  return 0;\n}\n';
+    server.openDoc(uri, source);
+
+    // Cursor on `Stdio` (col 2).
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 1, character: 4 } },
+    ) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("module Stdio");
+  });
+});
+
+describe("hover on inherit alias", () => {
+  test("alias use in scope access shows the inherit it names", async () => {
+    const uri = "file:///test/alias.pike";
+    const source = [
+      "class Vec {",
+      "  int x, y;",
+      "  void create(int ax, int ay) { x = ax; y = ay; }",
+      "}",
+      "class Named {",
+      "  inherit Vec : base;",
+      "  void create() {",
+      "    base::create(0, 0);",
+      "  }",
+      "}",
+    ].join("\n");
+    server.openDoc(uri, source);
+
+    // Line 7: `    base::create(0, 0);` — cursor on `base` (col 4).
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position: { line: 7, character: 5 } },
+    ) as HoverResult | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.contents.value).toContain("inherit Vec : base");
+  });
+});

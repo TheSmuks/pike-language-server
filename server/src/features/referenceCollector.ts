@@ -21,6 +21,24 @@ import { collectPostfixRef } from './postfixRefs';
 // ---------------------------------------------------------------------------
 
 /**
+ * Node types `collectReferences` treats specially — either dispatched to a
+ * handler or skipped entirely (inherit/import). The cursor descent below
+ * materializes a JS node object ONLY for these types; all other nodes are
+ * passed through inside the WASM cursor. Keep in sync with the switch in
+ * `collectReferences`.
+ */
+const DISPATCHED_REF_TYPES = new Set<string>([
+  'identifier_expr',
+  'scope_expr',
+  'this_expr',
+  'postfix_expr',
+  'type',
+  'function_decl',
+  'inherit_decl',
+  'import_decl',
+]);
+
+/**
  * Collect references by walking the tree.
  */
 export function collectReferences(node: Node, state: BuildState): void {
@@ -31,7 +49,7 @@ export function collectReferences(node: Node, state: BuildState): void {
   // them (same rationale as collectDeclarations): partial-parse states during
   // editing must still produce reference tokens rather than clearing the file.
   if (node.isError) {
-    for (const child of node.children) collectReferences(child, state);
+    descendForReferences(node, state, false);
     return;
   }
 
@@ -71,11 +89,66 @@ export function collectReferences(node: Node, state: BuildState): void {
   // already handled by collectFunctionReturnTypeRefs above. This prevents
   // the generic type walker from collecting duplicate type_refs for the
   // return type identifier.
-  for (const child of node.children) {
-    if (node.type === 'function_decl' && child.type === 'return_type') {
+  descendForReferences(node, state, node.type === 'function_decl');
+}
+
+/**
+ * Generic descent through `node`'s subtree using a tree-sitter cursor.
+ *
+ * `for (const child of node.children)` materializes a JS wrapper (plus a
+ * children array) for every node visited. Reference-free subtrees dominate
+ * data-heavy files — a 216KB stdlib table file parses to 378k nodes, ~95% of
+ * them literal/precedence-cascade nodes — and the wrapper churn cost ~70MB
+ * of allocator high-water per walk. The cursor walks inside WASM; only nodes
+ * whose type the reference switch dispatches get materialized, and those
+ * re-enter `collectReferences`, which owns their subtree.
+ *
+ * @param skipReturnType Skip direct `return_type` children of `node`
+ *   (function_decl return types are collected by
+ *   `collectFunctionReturnTypeRefs`, not the generic walk).
+ */
+function descendForReferences(node: Node, state: BuildState, skipReturnType: boolean): void {
+  const cursor = node.walk();
+  if (!cursor.gotoFirstChild()) {
+    cursor.delete();
+    return;
+  }
+
+  // depth = how far the cursor is below `node`; the walk never escapes the
+  // subtree because we stop when depth returns to 0.
+  let depth = 1;
+  // Bounded: a finite tree — every iteration descends, advances to a sibling,
+  // or retreats toward `node`, and the walk ends when depth returns to 0.
+  for (;;) {
+    let enterChildren = false;
+    // Missing nodes are zero-width recovery leaves — nothing to reference.
+    if (!cursor.nodeIsMissing) {
+      const type = cursor.nodeType;
+      const skipped = skipReturnType && depth === 1 && type === 'return_type';
+      if (!skipped) {
+        if (DISPATCHED_REF_TYPES.has(type)) {
+          // collectReferences dispatches this node and descends its subtree
+          // itself, so the walk must not enter its children again.
+          collectReferences(cursor.currentNode, state);
+        } else {
+          enterChildren = true;
+        }
+      }
+    }
+
+    if (enterChildren && cursor.gotoFirstChild()) {
+      depth++;
       continue;
     }
-    collectReferences(child, state);
+    // Bounded: retreats one level per iteration, at most `depth` levels.
+    for (;;) {
+      if (cursor.gotoNextSibling()) break;
+      depth--;
+      if (depth === 0 || !cursor.gotoParent()) {
+        cursor.delete();
+        return;
+      }
+    }
   }
 }
 

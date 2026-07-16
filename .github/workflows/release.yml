@@ -139,7 +139,7 @@ jobs:
 
   # npm package — `npm i -g pike-language-server`, runs on Node 18+.
   #
-  # Requires the NPM_TOKEN repository secret (an npm automation token). Without
+  # Requires the NPM_SECRET repository secret (an npm automation token). Without
   # it this job fails loudly rather than skipping, so a release never silently
   # ships without the npm artifact.
   publish-npm:
@@ -177,10 +177,10 @@ jobs:
 
       - name: Publish to npm
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_SECRET }}
         run: |
           if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "NPM_TOKEN secret is not set; refusing to publish" >&2
+            echo "NPM_SECRET secret is not set; refusing to publish" >&2
             exit 1
           fi
           cd dist-npm
