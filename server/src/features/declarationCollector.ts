@@ -50,6 +50,29 @@ export const DECL_KIND_MAP: Record<string, DeclKind> = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Node types `dispatchCollectDeclarations` handles specially. The cursor
+ * descent below materializes a JS node object ONLY for these types; every
+ * other node is passed through inside the WASM cursor. Keep this set exactly
+ * in sync with the dispatch function — a type listed here but not dispatched
+ * loses its subtree; a dispatched type missing here is never dispatched
+ * during generic descent.
+ */
+const DISPATCHED_DECL_TYPES = new Set<string>([
+  ...Object.keys(DECL_KIND_MAP),
+  'preproc_include',
+  'preprocessor_directive',
+  'local_function_decl',
+  'lambda_expr',
+  'for_statement',
+  'foreach_statement',
+  'if_statement',
+  'while_statement',
+  'do_while_statement',
+  'catch_expr',
+  'switch_statement',
+]);
+
+/**
  * Collect declarations by walking the tree and creating scopes as needed.
  */
 export function collectDeclarations(node: Node, state: BuildState): void {
@@ -63,12 +86,65 @@ export function collectDeclarations(node: Node, state: BuildState): void {
   // Descend and collect what parsed instead of dropping the whole subtree, which
   // used to blank every semantic token in the file on almost every keystroke.
   if (node.isError) {
-    for (const child of node.children) collectDeclarations(child, state);
+    descendForDeclarations(node, state);
     return;
   }
 
   // Dispatch by node type
   dispatchCollectDeclarations(node, state);
+}
+
+/**
+ * Generic descent through `node`'s subtree using a tree-sitter cursor.
+ *
+ * The naive `for (const child of node.children)` recursion materializes a JS
+ * wrapper object (plus a children array) for EVERY node. Data-heavy files
+ * make that catastrophic: a 216KB stdlib table file (FIPS10_4.pmod) parses to
+ * 378k nodes — mostly literal/precedence-cascade nodes that can never hold a
+ * declaration — and the wrapper churn alone cost ~70MB of allocator
+ * high-water per walk. The cursor walks inside WASM and only nodes whose
+ * type is actually dispatched get materialized.
+ */
+function descendForDeclarations(node: Node, state: BuildState): void {
+  const cursor = node.walk();
+  if (!cursor.gotoFirstChild()) {
+    cursor.delete();
+    return;
+  }
+
+  // depth = how far the cursor is below `node`; the walk never escapes the
+  // subtree because we stop when depth returns to 0.
+  let depth = 1;
+  // Bounded: a finite tree — every iteration descends, advances to a sibling,
+  // or retreats toward `node`, and the walk ends when depth returns to 0.
+  for (;;) {
+    let enterChildren = false;
+    // Missing nodes are zero-width recovery leaves — nothing to collect or
+    // descend into (mirrors the isMissing guard in collectDeclarations).
+    if (!cursor.nodeIsMissing) {
+      if (DISPATCHED_DECL_TYPES.has(cursor.nodeType)) {
+        // The dispatch handler manages its own subtree (scopes + descent),
+        // so the walk must not enter this node's children again.
+        dispatchCollectDeclarations(cursor.currentNode, state);
+      } else {
+        enterChildren = true;
+      }
+    }
+
+    if (enterChildren && cursor.gotoFirstChild()) {
+      depth++;
+      continue;
+    }
+    // Bounded: retreats one level per iteration, at most `depth` levels.
+    for (;;) {
+      if (cursor.gotoNextSibling()) break;
+      depth--;
+      if (depth === 0 || !cursor.gotoParent()) {
+        cursor.delete();
+        return;
+      }
+    }
+  }
 }
 
 /** Handle block-scoped statements — returns true if node was handled. */
@@ -109,12 +185,12 @@ function dispatchCollectDeclarations(node: Node, state: BuildState): void {
   // Handle declarations in current scope
   if (DECL_KIND_MAP[node.type]) {
     collectSimpleDecl(node, state);
-    for (const child of node.children) collectDeclarations(child, state);
+    descendForDeclarations(node, state);
     return;
   }
 
   // Recurse into children
-  for (const child of node.children) collectDeclarations(child, state);
+  descendForDeclarations(node, state);
 }
 
 function collectClassDecl(node: Node, state: BuildState): void {
