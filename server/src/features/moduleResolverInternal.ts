@@ -3,7 +3,7 @@
  * and `#include` path resolution. Extracted as free functions to keep
  * moduleResolver.ts focused on the class and under the file-length budget.
  */
-import { join, dirname, resolve, basename } from "node:path";
+import { join, dirname, resolve, basename, sep } from "node:path";
 import { stat } from "node:fs/promises";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import type { ResolveResult } from "./moduleResolver";
@@ -127,6 +127,67 @@ export async function resolveRelativeInheritTarget(deps: IncludeDeps, resolvedBa
   if (withExt && relativeTargetAllowed(deps, withExt)) {
     return { uri: pathToFileURL(withExt).href, source: "relative" };
   }
+  return null;
+}
+
+/**
+ * Find a module named `name` within the given search path.
+ * Tries directory module (.pmod/), then file module (.pmod), then .pike.
+ * Priority: .pmod > .pike (same as Pike, minus .so).
+ */
+export async function findModuleInPath(name: string, searchPath: string): Promise<string | null> {
+  // Validate the module name doesn't contain path separators or traversal.
+  if (name.includes("/") || name.includes("\\") || name.includes("..")) return null;
+
+  // 1. Directory module: name.pmod/module.pmod
+  const dirPath = join(searchPath, `${name}.pmod`);
+  if (await isDir(dirPath)) {
+    // Return the module.pmod if it exists, otherwise the directory itself
+    const moduleFile = join(dirPath, "module.pmod");
+    if (await pathExists(moduleFile)) {
+      return pathToFileURL(moduleFile).href;
+    }
+    // Directory module without module.pmod — still a valid module
+    return pathToFileURL(dirPath + sep).href;
+  }
+
+  // 2. File module: name.pmod
+  const fileModulePath = join(searchPath, `${name}.pmod`);
+  if (await isFile(fileModulePath)) {
+    return pathToFileURL(fileModulePath).href;
+  }
+
+  // 3. Pike file: name.pike
+  const pikePath = join(searchPath, `${name}.pike`);
+  if (await pathExists(pikePath)) {
+    return pathToFileURL(pikePath).href;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve a sub-module within a resolved module.
+ * If parent is a .pmod directory, look for child.pike, child.pmod, child.pmod/module.pmod.
+ * If parent is a .pike file, sub-module doesn't apply (it's a program, not a module).
+ */
+export async function resolveSubModule(parentUri: string, segment: string): Promise<string | null> {
+  const parentPath = fileURLToPath(parentUri);
+
+  // If parent is a directory module, search inside it
+  if (parentPath.endsWith(sep) || parentPath.endsWith("/")) {
+    return findModuleInPath(segment, parentPath);
+  }
+
+  // If parent is module.pmod inside a .pmod directory, search the directory
+  if (parentPath.endsWith("module.pmod")) {
+    const parentDir = dirname(parentPath);
+    return findModuleInPath(segment, parentDir);
+  }
+
+  // If parent is a .pmod file (not directory), it can't have sub-modules
+  // If parent is a .pike file, sub-modules would be classes inside it
+  // (handled by symbol table lookup, not file system resolution)
   return null;
 }
 

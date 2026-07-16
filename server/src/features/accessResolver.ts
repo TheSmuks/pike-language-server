@@ -67,7 +67,13 @@ export async function resolveAccessCore(
   if (!site) return null;
 
   const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0, site.lines);
-  if (!lhsDecl) return null;
+  if (!lhsDecl) {
+    // The LHS names no declaration in any symbol table. It may be a module
+    // reference (`.Util.member` — Pike's relative-module syntax — or a
+    // module-path like `Foo.Bar.member`): resolve it as a module file and
+    // look the member up among that module's top-level symbols.
+    return resolveModuleMemberAccess(ctx, site, uri);
+  }
 
   const targetDecl = await resolveMemberAccess(
     site.lhsNode.type === 'identifier' ? site.lhsNode.text : '',
@@ -101,8 +107,12 @@ async function locateAccessSite(
   character: number,
   tree?: Tree,
 ): Promise<AccessSite | null> {
+  // Range match, not exact-start match: the cursor may sit anywhere inside
+  // the member identifier (`f->op|en`), and clients send that position as-is.
   const ref = table.references.find(
-    r => r.loc.line === line && r.loc.character === character &&
+    r => r.loc.line === line &&
+      character >= r.loc.character &&
+      character < r.loc.character + r.name.length &&
       (r.kind === 'arrow_access' || r.kind === 'dot_access'),
   );
   if (!ref) return null;
@@ -214,6 +224,45 @@ function findLhsNode(postfixNode: Node, target: Node): Node | null {
         children[i + 1].startPosition.row === target.startPosition.row &&
         children[i + 1].startPosition.column === target.startPosition.column) {
       return children[i - 1] ?? null;
+    }
+  }
+  return null;
+}
+
+/**
+ * A module path as it appears on the LHS of a dot access: an optional
+ * leading dot (relative module) followed by dot-separated identifiers.
+ */
+const MODULE_PATH_RE = /^\.?[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
+
+/**
+ * Resolve `Module.member` / `.Module.member` where the LHS is a module
+ * reference rather than a declaration. The module resolver maps the path to
+ * a file; the member is then looked up among that file's top-level symbols
+ * (file scope only — `Module.member` cannot name a member of a class inside
+ * the module).
+ */
+async function resolveModuleMemberAccess(
+  ctx: ResolutionContext,
+  site: AccessSite,
+  uri: string,
+): Promise<AccessResult | null> {
+  const lhsText = site.lhsNode.text;
+  if (!MODULE_PATH_RE.test(lhsText)) return null;
+
+  const moduleUri = await ctx.index.resolveModule(lhsText, uri);
+  if (!moduleUri) return null;
+  // The module file may not have been opened or reached by the background
+  // index yet — index it on demand so navigation works immediately.
+  const moduleTable = await ctx.index.getOrIndexSymbolTable(moduleUri);
+  if (!moduleTable) return null;
+
+  const fileScope = moduleTable.scopes.find(s => s.kind === 'file');
+  if (!fileScope) return null;
+  for (const declId of fileScope.declarations) {
+    const decl = moduleTable.declById.get(declId);
+    if (decl && decl.name === site.memberName) {
+      return { decl, uri: moduleUri };
     }
   }
   return null;
