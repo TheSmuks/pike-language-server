@@ -71,7 +71,7 @@ interface CategorySection {
 // Category classification
 // ---------------------------------------------------------------------------
 
-const CATEGORY_PATTERNS: Array<{ prefix: string; category: string; priority: "P0" | "P1" | "P2" }> = [
+const CATEGORY_PATTERNS: Array<[prefix: string, category: string, priority: "P0" | "P1" | "P2"]> = [
   ["basic-",    "Basic types and variables",             "P0"],
   ["class-",    "Classes and inheritance",              "P0"],
   ["fn-",       "Functions and closures",                "P0"],

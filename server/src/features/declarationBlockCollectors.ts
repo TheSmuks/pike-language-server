@@ -83,7 +83,18 @@ export function collectForeachStatement(node: Node, state: BuildState): void {
 /**
  * Add a parameter declaration from an identifier node.
  */
-function addParamDecl(
+/**
+ * Declare a foreach loop variable.
+ *
+ * kind is 'variable', not 'parameter': `foreach(nums; int i; int val)` declares
+ * locals scoped to the loop, not arguments to a call. Modelling them as
+ * parameters made the linter say "Parameter 'i' is unused" and file it under
+ * the unused-*parameter* rule — so turning off unused-parameter warnings (which
+ * people do, since a signature can force an unused argument) silently also
+ * turned off unused-loop-variable warnings, which are a different and
+ * avoidable problem: Pike lets you omit the index entirely.
+ */
+function addLoopVarDecl(
   state: BuildState,
   idNode: Node,
   scopeId: number,
@@ -91,7 +102,7 @@ function addParamDecl(
 ): void {
   addDeclaration(state, {
     name: idNode.text,
-    kind: 'parameter',
+    kind: 'variable',
     nameRange: toRangeUtf16(idNode, state.lines, state.offsetMap),
     range: toRangeUtf16(idNode, state.lines, state.offsetMap),
     scopeId,
@@ -101,12 +112,12 @@ function addParamDecl(
 
 /**
  * Recursively collect identifier nodes from a container node
- * (comma_expr or array_destructure) and add them as parameter declarations.
+ * (comma_expr or array_destructure) and add them as loop-variable declarations.
  */
 function collectIdsFromContainer(node: Node, state: BuildState, scopeId: number): void {
   for (const child of node.children) {
     if (child.type === 'identifier') {
-      addParamDecl(state, child, scopeId);
+      addLoopVarDecl(state, child, scopeId);
     }
   }
 }
@@ -116,7 +127,7 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
 
   /**
    * Extract identifiers from a 'key' or 'value' field and add them as
-   * parameter declarations. Handles typed form [type, identifier],
+   * loop-variable declarations. Handles typed form [type, identifier],
    * expression form [comma_expr], and array_destructure form.
    */
   const extractIdentifiersFromField = (fieldName: string): void => {
@@ -125,7 +136,7 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
 
     // First pass: direct identifier children.
     for (const n of nodes) {
-      if (n.type === 'identifier') addParamDecl(state, n, scopeId);
+      if (n.type === 'identifier') addLoopVarDecl(state, n, scopeId);
     }
 
     // Second pass: compound expressions.
@@ -144,7 +155,7 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
           // variable exists but has no type to resolve against.
           const nameNode = n.childForFieldName('name');
           const typeNode = n.childForFieldName('type');
-          if (nameNode) addParamDecl(state, nameNode, scopeId, typeNode?.text);
+          if (nameNode) addLoopVarDecl(state, nameNode, scopeId, typeNode?.text);
         } else if (n.type === 'comma_expr' || n.type === 'array_destructure') {
           collectIdsFromContainer(n, state, scopeId);
         }

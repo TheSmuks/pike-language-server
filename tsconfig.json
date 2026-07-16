@@ -20,7 +20,8 @@
     "harness/**/*.ts",
     "server/src/**/*.ts",
     "client/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "scripts/**/*.ts"
   ],
   "exclude": [
     "node_modules",

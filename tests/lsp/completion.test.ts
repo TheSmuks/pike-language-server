@@ -769,8 +769,12 @@ describe("Audit fixes", () => {
     const table = buildSymbolTable(tree, "file:///test/foreach.pike", 1, undefined, src);
     wireInheritance(table);
 
-    // Cursor inside foreach body
-    const symbols = getSymbolsInScope(table, 0, 65);
+    // Cursor inside the foreach body — the body '{' is at 72, so 73 is the
+    // first position inside it. Char 65 (the old probe) sits in `val`'s own
+    // type, before `val` is declared; it only looked right while loop variables
+    // were modelled as parameters, which are visible throughout their scope
+    // regardless of position.
+    const symbols = getSymbolsInScope(table, 0, 73);
     const names = symbols.map(s => s.name);
     expect(names).toContain("idx");
     expect(names).toContain("val");
