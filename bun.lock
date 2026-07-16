@@ -6,7 +6,7 @@
       "name": "pike-language-server",
       "dependencies": {
         "minimatch": "^10.2.5",
-        "pike-fmt": "^0.1.9",
+        "pike-fmt": "^0.1.10",
         "vscode-jsonrpc": "^9.0.1",
         "vscode-languageclient": "^9.0.1",
         "vscode-languageserver": "^9.0.0",
@@ -96,7 +96,7 @@
 
     "minimatch": ["minimatch@10.2.5", "", { "dependencies": { "brace-expansion": "^5.0.5" } }, "sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg=="],
 
-    "pike-fmt": ["pike-fmt@0.1.9", "", { "dependencies": { "web-tree-sitter": "0.26.8" }, "bin": { "pike-fmt": "dist/cli.js" } }, "sha512-lZH6D8uiEEf0epEbDRWi/SG8OwEaZZNormhsIMiDbQtjmSjVPsAl2mGPTw5y+xXds6KbBl5NTUA8Zl9jeFx1Rw=="],
+    "pike-fmt": ["pike-fmt@0.1.10", "", { "dependencies": { "web-tree-sitter": "0.26.8" }, "bin": { "pike-fmt": "dist/cli.js" } }, "sha512-SoY867wpoKAUPR2HEPSGKbjfErOs1EpHDtgCTNdPd1QHIGPn/+Q5ZFNGEKrt+UR8jc4rTjg4yDgujeHna1/oHQ=="],
 
     "semver": ["semver@7.7.4", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-vFKC2IEtQnVhpT78h1Yp8wzwrf8CM+MzKMHGJZfBtzhZNycRFnXsHk6E5TxIkkMsgNS7mdX3AGB7x2QM2di4lA=="],
 

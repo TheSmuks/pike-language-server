@@ -89,7 +89,11 @@ jobs:
         run: bun run test:non-pike
       - name: Run full Bun tests
         if: matrix.os == 'ubuntu-latest'
-        run: bun test
+        # `bun run test`, not bare `bun test`: the script runs the suite in
+        # parallel workers and then the latency benchmarks serially. Running
+        # the benchmarks alongside 16 workers measures CPU contention, not the
+        # server, and they fail on that alone.
+        run: bun run test
 
   quality-gates:
     runs-on: ubuntu-latest
@@ -245,7 +249,7 @@ jobs:
           "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
 
       - name: Run Bun tests with real Pike oracle
-        run: bun test
+        run: bun run test
 
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH

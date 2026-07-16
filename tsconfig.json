@@ -19,7 +19,21 @@
   "include": [
     "harness/**/*.ts",
     "server/src/**/*.ts",
-    "client/**/*.ts"
+    "client/**/*.ts",
+    "tests/**/*.ts"
   ],
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    // tests/integration is a self-contained sub-project for the VS Code
+    // extension host: CommonJS, its own node_modules, and its own tsconfig +
+    // `compile` step (see tests/integration/package.json). Its *.test.ts files
+    // above run under the root `bun test` and are checked here; the harness
+    // below is checked by its own compiler and must not be pulled into this
+    // ESM program.
+    "tests/integration/suite/**",
+    "tests/integration/run-tests.ts",
+    "tests/integration/dist/**",
+    "tests/integration/node_modules/**"
+  ]
 }

@@ -28,7 +28,9 @@ import {
 } from "vscode-jsonrpc/node";
 import {
   createConnection,
+  DiagnosticSeverity,
   type Connection,
+  type Diagnostic,
 } from "vscode-languageserver/node";
 import { createPikeServer, type PikeServer } from "../../server/src/server";
 import { DiagnosticManager } from "../../server/src/features/diagnosticManager";
@@ -191,9 +193,9 @@ async function createDiagnosticTestServer(debounceMs = DEBOUNCE_MS): Promise<Tes
 describe("DiagnosticManager unit", () => {
   test("mergeDiagnostics maps Pike diagnostics to LSP format", async () => {
     const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
-    const parseDiags = [{
+    const parseDiags: Diagnostic[] = [{
       range: { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } },
-      severity: 1,
+      severity: DiagnosticSeverity.Error,
       source: "pike-lsp",
       message: "Parse error",
     }];

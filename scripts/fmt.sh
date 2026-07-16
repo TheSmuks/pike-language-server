@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 cd "$SCRIPT_DIR"
 
-PIKE_FMT_WASM="$SCRIPT_DIR/node_modules/pike-fmt/dist/tree-sitter-pike.wasm" \
-  bun run node_modules/pike-fmt/dist/cli.js \
-  "$@" corpus/
+# pike-fmt >= 0.1.10 locates its own wasm assets relative to dist/cli.js, so no
+# PIKE_FMT_WASM override is needed. Earlier versions could not: the bundler had
+# baked in the build machine's __dirname.
+bun run node_modules/pike-fmt/dist/cli.js "$@" corpus/

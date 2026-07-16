@@ -1008,7 +1008,12 @@ export async function main(): Promise<void> {
   console.log(`   Pike available: ${pikeAvailable ? "yes v" + pikeVersion : "NO"}`);
   console.log(`   Node: ${env.nodeVersion}, Bun: ${env.bunVersion}\n`);
 
-  const server = await createTestServer({ rootUri: "file:///tank/appdata/pike-dev/projects/pike-language-server", pikeBinaryPath: "pike" });
+  // pikeBinaryPath is read from initializationOptions (see serverInitHandler);
+  // passing it at the top level was silently ignored.
+  const server = await createTestServer({
+    rootUri: "file:///tank/appdata/pike-dev/projects/pike-language-server",
+    initializationOptions: { pikeBinaryPath: "pike" },
+  });
   const allChecks: CheckResult[] = [];
 
   const phases = [

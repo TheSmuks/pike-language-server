@@ -24,6 +24,16 @@ import {
   prepareRename,
 } from "../../server/src/features/rename";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
+
+/** What textDocument/prepareRename returns over the wire. */
+interface PrepareRenameResult {
+  placeholder: string;
+  range: {
+    start: { line: number; character: number };
+    end: { line: number; character: number };
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -423,7 +433,7 @@ describe("getRenameLocations — cross-file", () => {
       uris.set(name, uri);
       const src = readCorpus(name);
       const tree = parse(src);
-      await index.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await index.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     }
     return { index, uris };
   }
@@ -649,11 +659,11 @@ describe("textDocument/prepareRename — LSP protocol", () => {
     const result = await server.client.sendRequest("textDocument/prepareRename", {
       textDocument: { uri },
       position: { line: 0, character: 4 }, // "myVar"
-    });
+    }) as PrepareRenameResult | null;
 
     expect(result).not.toBeNull();
-    expect(result.placeholder).toBe("myVar");
-    expect(result.range.start.line).toBe(0);
+    expect(result!.placeholder).toBe("myVar");
+    expect(result!.range.start.line).toBe(0);
   });
 
   test("returns null for non-renameable position", async () => {
@@ -665,7 +675,7 @@ describe("textDocument/prepareRename — LSP protocol", () => {
     const result = await server.client.sendRequest("textDocument/prepareRename", {
       textDocument: { uri },
       position: { line: 0, character: 0 },
-    });
+    }) as PrepareRenameResult | null;
 
     expect(result).toBeNull();
   });
@@ -679,10 +689,10 @@ describe("textDocument/prepareRename — LSP protocol", () => {
     const result = await server.client.sendRequest("textDocument/prepareRename", {
       textDocument: { uri },
       position: { line: 1, character: 0 }, // "x" reference
-    });
+    }) as PrepareRenameResult | null;
 
     expect(result).not.toBeNull();
-    expect(result.placeholder).toBe("x");
+    expect(result!.placeholder).toBe("x");
   });
 });
 
@@ -837,7 +847,7 @@ describe("rename across 3-file inheritance chain", () => {
       uris.set(name, uri);
       const src = readCorpus(name);
       const tree = parse(src);
-      await idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     }
     return { index: idx, uris };
   }
@@ -1025,7 +1035,7 @@ describe("US-004: rename cross-file refs with type filtering", () => {
       uris.set(name, uri);
       const src = readCorpus(name);
       const tree = parse(src);
-      await idx.upsertFile(uri, 1, tree, src, ModificationSource.didOpen);
+      await idx.upsertFile(uri, 1, tree, src, ModificationSource.DidOpen);
     }
     return { index: idx, uris };
   }

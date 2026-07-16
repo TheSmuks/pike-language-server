@@ -6,6 +6,7 @@ import { describe, test, expect, beforeAll } from "bun:test";
 import { initParser, parse } from "../../server/src/parser";
 import { buildSymbolTable } from "../../server/src/features/symbolTable";
 import { getDefinitionAt } from "../../server/src/features/symbolTable";
+import type { BuildIndex } from "../../server/src/features/symbolTable";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
@@ -14,10 +15,12 @@ const FILES = [
   "/usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/Yabu.pike",
 ];
 
-const nullIndex = {
-  getSymbolTable: () => null as any,
-  resolveImport: () => null as string | null,
-  resolveInherit: () => null as string | null,
+/** A BuildIndex that resolves nothing — these files are read in isolation. */
+const nullIndex: BuildIndex = {
+  getSymbolTable: () => null,
+  resolveImport: () => null,
+  resolveInherit: () => null,
+  resolveInclude: () => null,
 };
 
 describe("Hover on stdlib files outside workspace", () => {

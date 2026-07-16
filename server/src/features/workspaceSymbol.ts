@@ -15,7 +15,55 @@ import type { WorkspaceIndex, FileEntry } from "./workspaceIndex";
 import type { Declaration, DeclKind } from "./symbolTable";
 import type { Connection } from "vscode-languageserver/node";
 import type { CancellationToken } from "vscode-jsonrpc";
+import { ProgressType } from "vscode-jsonrpc";
 import { prepareGlobalQuery } from "./workspaceResolution";
+
+// ---------------------------------------------------------------------------
+// Work-done progress on a client-supplied token
+// ---------------------------------------------------------------------------
+
+const workDoneProgress = new ProgressType<{
+  kind: string;
+  title?: string;
+  message?: string;
+  percentage?: number;
+}>();
+
+/**
+ * Report progress on a token the client put in the request params.
+ *
+ * Distinct from backgroundIndex's reporter, which asks the client to create a
+ * server-initiated token. When the client supplies `workDoneToken` it has
+ * already created it, so `window/workDoneProgress/create` must NOT be sent —
+ * we report on the given token directly (LSP 3.15 §workDoneProgress).
+ *
+ * Returns a no-op reporter when the client supplied no token.
+ */
+function beginClientProgress(
+  connection: Connection,
+  token: string | number | undefined,
+  title: string,
+): { end: (message?: string) => void } {
+  if (token === undefined) return { end: () => {} };
+
+  const send = (value: { kind: string; title?: string; message?: string }) => {
+    try {
+      connection.sendProgress(workDoneProgress, token, value);
+    } catch {
+      // A client that vanished mid-request must not fail the request.
+    }
+  };
+
+  send({ kind: "begin", title });
+  let ended = false;
+  return {
+    end: (message?: string) => {
+      if (ended) return; // `end` must be sent at most once per token.
+      ended = true;
+      send({ kind: "end", message });
+    },
+  };
+}
 
 // ---------------------------------------------------------------------------
 // DeclKind → LSP SymbolKind mapping
@@ -96,22 +144,33 @@ export async function searchWorkspaceSymbolsLazy(
   index: WorkspaceIndex,
   connection: Connection,
   cancellationToken?: CancellationToken,
+  workDoneToken?: string | number,
 ): Promise<SymbolInformation[]> {
-  // With a resident symbol index, answer from it (+ live entries) — no need to
-  // force-index the whole workspace into RAM. Fall back to a full scan only when
-  // there is no index (old caches predating the manifest, or a fresh workspace).
-  if (!index.symbolIndex) {
-    await prepareGlobalQuery({
-      connection,
-      index,
-      workspaceRoot: index.workspaceRoot,
-      cancellationToken,
-    });
-    // Cancellation during preparation — return empty (protocol allows this).
-    if (cancellationToken?.isCancellationRequested) return [];
-  }
+  // A client that supplies a token is waiting on begin…end for this request, so
+  // bracket the whole query — including the lazy preparation below, which is the
+  // part that can take long enough to need an "Indexing…" indicator.
+  const progress = beginClientProgress(connection, workDoneToken, "Searching workspace symbols");
+  try {
+    // With a resident symbol index, answer from it (+ live entries) — no need to
+    // force-index the whole workspace into RAM. Fall back to a full scan only when
+    // there is no index (old caches predating the manifest, or a fresh workspace).
+    if (!index.symbolIndex) {
+      await prepareGlobalQuery({
+        connection,
+        index,
+        workspaceRoot: index.workspaceRoot,
+        cancellationToken,
+      });
+      // Cancellation during preparation — return empty (protocol allows this).
+      if (cancellationToken?.isCancellationRequested) return [];
+    }
 
-  return searchWorkspaceSymbols(query, index);
+    return searchWorkspaceSymbols(query, index);
+  } finally {
+    // `end` must be sent even when preparation throws (e.g. degraded mode),
+    // or the client's progress indicator hangs forever.
+    progress.end();
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -19,9 +19,14 @@ import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
 describe("lifecycle: capabilities", () => {
   test("capability advertisement matches implemented protocol model", () => {
     const caps = buildServerCapabilities().capabilities;
+    // Diagnostics are push-only by design — advertising a pull provider we do
+    // not implement would make clients wait on requests we never answer.
     expect(caps.diagnosticProvider).toBeUndefined();
-    expect(caps.semanticTokensProvider).toMatchObject({ full: true, range: true });
-    expect(caps.completionProvider?.triggerCharacters).toEqual(['.']);
+    // full/delta and range are each backed by a handler in
+    // navigationDocumentFeatures.ts.
+    expect(caps.semanticTokensProvider).toMatchObject({ full: { delta: true }, range: true });
+    // '.' member access, '>' for `->`, ':' for `::`, '!' for the `//!` autodoc marker.
+    expect(caps.completionProvider?.triggerCharacters).toEqual(['.', '>', ':', '!']);
   });
 
   test("initialize returns documentSymbolProvider and textDocumentSync", async () => {
@@ -203,22 +208,23 @@ describe("lifecycle: resource-resilience context", () => {
     await teardown();
   });
 
-  test("request activity updates resource state tracker", async () => {
+  test("opening and closing a document updates the hibernation tracker", async () => {
+    // HibernationManager — not ResourceStateTracker — owns activity and
+    // open-document tracking, and open documents are what hold hibernation off.
     const { server, client, openDoc, teardown } = await createTestServer();
+    const hibernation = server.context.hibernationManager;
 
-    const beforeIdle = server.context.resourceState.idleMs();
-    expect(beforeIdle).toBeGreaterThanOrEqual(0);
+    expect(hibernation.openDocumentCount).toBe(0);
 
-    // Open a document — this should record activity
     const uri = openDoc("file:///test/resource-activity.pike", "int x = 1;");
     await new Promise((r) => setTimeout(r, 50));
 
-    expect(server.context.resourceState.getOpenDocumentCount()).toBe(1);
+    expect(hibernation.openDocumentCount).toBe(1);
 
-    // Make a request — activity should be recent
-    await client.sendRequest("textDocument/documentSymbol", { textDocument: { uri } });
-    const afterIdle = server.context.resourceState.idleMs();
-    expect(afterIdle).toBeLessThan(500);
+    client.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(hibernation.openDocumentCount).toBe(0);
 
     await teardown();
   });
@@ -226,16 +232,18 @@ describe("lifecycle: resource-resilience context", () => {
   test("resource state transition emits notification to client", async () => {
     const { server, client, teardown } = await createTestServer();
 
-    let receivedState: string | null = null;
+    // Held in an object: TypeScript's control-flow analysis narrows a plain
+    // `let` to `null` here, since it cannot see the callback assign to it.
+    const received: { state: string | null } = { state: null };
     client.onNotification("pike/resourceState", (params: { state: string }) => {
-      receivedState = params.state;
+      received.state = params.state;
     });
 
     server.context.resourceState.transition("indexing", "test transition");
 
     // Allow notification to propagate
     await new Promise((r) => setTimeout(r, 100));
-    expect(receivedState).toBe("indexing");
+    expect(received.state).toBe("indexing");
 
     await teardown();
   });

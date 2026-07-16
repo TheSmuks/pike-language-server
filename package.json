@@ -45,7 +45,9 @@
     "probe": "bun run scripts/lsp-probe.ts",
     "watch:client": "bun run scripts/watch-client.mjs",
     "watch:server": "bun run scripts/watch-server.mjs",
-    "test": "bun test tests/ harness/",
+    "test": "bun run test:parallel && bun run test:perf",
+    "test:parallel": "bun test --parallel=4 tests/lsp tests/integration tests/quality-gates harness server",
+    "test:perf": "bun test tests/perf",
     "test:non-pike": "bun test harness/__tests__/snapshot-canonicalizer.test.ts harness/__tests__/tmLanguage.test.ts harness/__tests__/tmLanguage-tokenization.test.ts harness/__tests__/web-tree-sitter-leak.test.ts tests/lsp/languageConfiguration.test.ts tests/lsp/packageConfiguration.test.ts",
     "test:lsp": "bun test tests/lsp/",
     "test:harness": "bun test harness/",
@@ -59,8 +61,7 @@
     "harness:snapshot": "bun run harness/src/runner.ts --snapshot",
     "harness:verify": "bun run harness/src/runner.ts --verify",
     "harness:resolve-snapshot": "bun run harness/src/runner.ts --resolve-snapshot",
-    "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify",
-    "postinstall": "node scripts/postinstall-pike-fmt.js"
+    "harness:resolve-verify": "bun run harness/src/runner.ts --resolve-verify"
   },
   "devDependencies": {
     "@types/bun": "latest",
@@ -74,7 +75,7 @@
   },
   "dependencies": {
     "minimatch": "^10.2.5",
-    "pike-fmt": "^0.1.9",
+    "pike-fmt": "^0.1.10",
     "vscode-jsonrpc": "^9.0.1",
     "vscode-languageclient": "^9.0.1",
     "vscode-languageserver": "^9.0.0",

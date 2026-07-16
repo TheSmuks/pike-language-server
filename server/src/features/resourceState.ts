@@ -5,9 +5,13 @@
  * hibernating, hibernated, waking) and emits `pike/resourceState` notifications
  * to the client on transitions.
  *
- * Also tracks request activity and open-document count for hibernation idle
- * decisions, and manages cancellation sources for background work that must
- * be cancelled on hibernation or shutdown.
+ * Also manages cancellation sources for background work that must be cancelled
+ * on hibernation or shutdown.
+ *
+ * Activity and open-document tracking live on HibernationManager, which owns
+ * the idle/hibernate decision and is wired to the request and document paths.
+ * This tracker deliberately keeps no copy of them: a second, unwired counter
+ * would read zero forever and silently mislead anyone who consulted it.
  */
 
 import type { Connection } from "vscode-languageserver/node";
@@ -25,8 +29,6 @@ import type {
 
 export class ResourceStateTracker {
   private currentState: ResourceStateValue = "active";
-  private lastActivityMs: number;
-  private openDocumentCount = 0;
   private readonly cts: CancellationTokenSource;
   private readonly send: (notification: ResourceStateNotification) => void;
 
@@ -36,7 +38,6 @@ export class ResourceStateTracker {
   ) {
     this.send = sendFn;
     this.cts = cts;
-    this.lastActivityMs = nowMs();
   }
 
   // --- State transitions ---
@@ -61,38 +62,6 @@ export class ResourceStateTracker {
       timestamp: nowMs(),
     });
     return true;
-  }
-
-  // --- Activity tracking ---
-
-  /** Record that a request or user interaction occurred. */
-  recordActivity(): void {
-    this.lastActivityMs = nowMs();
-  }
-
-  /** Get the timestamp of the last activity. */
-  getLastActivityMs(): number {
-    return this.lastActivityMs;
-  }
-
-  /** Milliseconds since last activity. */
-  idleMs(): number {
-    return nowMs() - this.lastActivityMs;
-  }
-
-  // --- Open document tracking ---
-
-  onDocumentOpen(): void {
-    this.openDocumentCount++;
-    this.recordActivity();
-  }
-
-  onDocumentClose(): void {
-    if (this.openDocumentCount > 0) this.openDocumentCount--;
-  }
-
-  getOpenDocumentCount(): number {
-    return this.openDocumentCount;
   }
 
   // --- Cancellation ---

@@ -38,10 +38,12 @@ function makePikePaths(workspaceRoot: string): PikePaths {
     modulePaths: [workspaceRoot, SYSTEM_MODULES],
     includePaths: [workspaceRoot],
     programPaths: [workspaceRoot],
+    // Mirrors the auto-detected default: pikeHome/lib.
+    ldLibraryPath: join(PIKE_HOME, "lib"),
   };
 }
 
-function makeResolver(pikeVersion?: { major: number; minor: number }): ModuleResolver {
+function makeResolver(pikeVersion?: { major: number; minor: number } | null): ModuleResolver {
   return new ModuleResolver({
     workspaceRoot: CORPUS_URI,
     pikePaths: makePikePaths(CORPUS_DIR),
@@ -202,6 +204,7 @@ describe("ModuleResolver — file outside workspace root", () => {
       modulePaths: ["/tmp/unrelated-workspace", SYSTEM_MODULES],
       includePaths: ["/tmp/unrelated-workspace"],
       programPaths: ["/tmp/unrelated-workspace"],
+      ldLibraryPath: join(PIKE_HOME, "lib"),
     },
     pikeVersion: null,
   });
