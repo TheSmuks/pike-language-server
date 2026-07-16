@@ -84,16 +84,13 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      # This job installs no Pike, so it runs the Pike-independent subset on
+      # every OS. The full suite needs a real Pike oracle and runs in the `test`
+      # job below, which builds one. Running `bun test` here only ever "passed"
+      # because the suite used to exit 0 while killing itself mid-run; with an
+      # honest runner it fails on `Executable not found in $PATH: "pike"`.
       - name: Run non-Pike tests
-        if: matrix.os != 'ubuntu-latest'
         run: bun run test:non-pike
-      - name: Run full Bun tests
-        if: matrix.os == 'ubuntu-latest'
-        # Deliberately the serial, single-process run (not test:fast). Sharing
-        # one process is what catches cross-file pollution from global mutable
-        # state — the bug class that `--isolate` hides and that a long-lived
-        # server actually suffers from.
-        run: bun run test
 
   quality-gates:
     runs-on: ubuntu-latest
@@ -248,11 +245,17 @@ jobs:
           echo "PIKE_BINARY=$HOME/.pike/pike/$PIKE_VERSION/bin/pike" >> "$GITHUB_ENV"
           "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
 
-      - name: Run Bun tests with real Pike oracle
-        run: bun run test
-
+      # Must precede the test run. The server shells out to `pike` from PATH
+      # (initializationOptions.pikeBinaryPath defaults to "pike") to read
+      # --show-paths. With Pike off PATH it falls back to well-known locations
+      # (/usr/local/pike/<ver>, /opt/pike, ...) — none of which match a CI build
+      # under $HOME/.pike, so include paths came back empty and #include
+      # resolution silently returned the including file.
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
+
+      - name: Run Bun tests with real Pike oracle
+        run: bun run test
 
       - name: Install pmp
         run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh

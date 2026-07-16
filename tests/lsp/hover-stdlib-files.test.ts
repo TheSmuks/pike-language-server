@@ -1,6 +1,6 @@
 /**
  * Reproduction test: hover on stdlib files outside the workspace.
- * Gdbm.pike and Yabu.pike at /usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/
+ * Uses Cache.pmod/Storage.pmod/{Gdbm,Yabu}.pike from the running Pike.
  */
 import { describe, test, expect, beforeAll } from "bun:test";
 import { initParser, parse } from "../../server/src/parser";
@@ -9,11 +9,13 @@ import { getDefinitionAt } from "../../server/src/features/symbolTable";
 import type { BuildIndex } from "../../server/src/features/symbolTable";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { pikeAvailable, stdlibModulePath } from "../helpers/pikeAvailable";
 
+// Resolved from the running Pike, not hardcoded — see upsert-stdlib-files.test.ts.
 const FILES = [
-  "/usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/Gdbm.pike",
-  "/usr/local/pike/8.0.1116/lib/modules/Cache.pmod/Storage.pmod/Yabu.pike",
-];
+  stdlibModulePath("Cache.pmod/Storage.pmod/Gdbm.pike"),
+  stdlibModulePath("Cache.pmod/Storage.pmod/Yabu.pike"),
+].filter((p): p is string => p !== null);
 
 /** A BuildIndex that resolves nothing — these files are read in isolation. */
 const nullIndex: BuildIndex = {
@@ -23,7 +25,7 @@ const nullIndex: BuildIndex = {
   resolveInclude: () => null,
 };
 
-describe("Hover on stdlib files outside workspace", () => {
+describe.skipIf(!pikeAvailable || FILES.length === 0)("Hover on stdlib files outside workspace", () => {
   beforeAll(async () => {
     await initParser();
   });
