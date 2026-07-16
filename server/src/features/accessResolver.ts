@@ -235,6 +235,54 @@ function findLhsNode(postfixNode: Node, target: Node): Node | null {
  */
 const MODULE_PATH_RE = /^\.?[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/;
 
+const IDENT_CHAR_RE = /[A-Za-z0-9_]/;
+
+/**
+ * Extract the dotted module/type path that ENDS at the identifier under the
+ * cursor: for `Stdio.File f` with the cursor on `File` this returns
+ * "Stdio.File"; on `Stdio` it returns "Stdio"; for `.Util.double_it` on
+ * `Util` it returns ".Util" (Pike's relative-module form). Pure text scan —
+ * works the same in type positions, expressions, and inherit paths.
+ * Returns null when the cursor is not on an identifier.
+ */
+export function modulePathAtPosition(
+  lines: string[],
+  line: number,
+  character: number,
+): string | null {
+  const text = lines[line];
+  if (text === undefined) return null;
+
+  // Identifier bounds around the cursor.
+  let start = character;
+  let end = character;
+  while (start > 0 && IDENT_CHAR_RE.test(text[start - 1])) start--;
+  while (end < text.length && IDENT_CHAR_RE.test(text[end])) end++;
+  if (start === end) return null;
+  if (/^[0-9]/.test(text[start])) return null;
+
+  // Extend left over `Segment.` prefixes, then over one bare leading dot
+  // (the relative-module marker `.Util`).
+  let pathStart = start;
+  while (pathStart > 0 && text[pathStart - 1] === ".") {
+    let segStart = pathStart - 1;
+    while (segStart > 0 && IDENT_CHAR_RE.test(text[segStart - 1])) segStart--;
+    if (segStart === pathStart - 1) {
+      // Bare dot with no identifier before it: include it only when it is
+      // not itself preceded by an identifier or another dot (a chained
+      // member access like `a().b` must not swallow the dot).
+      const before = segStart > 0 ? text[segStart - 1] : "";
+      if (before === "." || IDENT_CHAR_RE.test(before) || before === ")") break;
+      pathStart = segStart;
+      break;
+    }
+    pathStart = segStart;
+  }
+
+  const path = text.slice(pathStart, end);
+  return MODULE_PATH_RE.test(path) ? path : null;
+}
+
 /**
  * Resolve `Module.member` / `.Module.member` where the LHS is a module
  * reference rather than a declaration. The module resolver maps the path to

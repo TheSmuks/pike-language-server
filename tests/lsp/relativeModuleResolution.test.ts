@@ -130,6 +130,24 @@ describe("relative module member access (.Util.double_it)", () => {
     expect(hover).not.toBeNull();
     expect(hover!.contents.value).toContain("double_it(int n)");
   });
+
+  // member.pike line 1: `  int d = .Util.double_it(21);` — Util at col 11.
+  test("definition on the module name itself opens the module file", async () => {
+    const def = await definitionAt(memberUri, 1, 12);
+    expect(def).not.toBeNull();
+    expect(def!.uri).toBe(utilUri);
+    expect(def!.range.start.line).toBe(0);
+  });
+
+  test("hover on the module name shows the module and its file", async () => {
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: memberUri },
+      position: { line: 1, character: 12 },
+    }) as { contents: { value: string } } | null;
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("module .Util");
+    expect(hover!.contents.value).toContain("Util.pmod");
+  });
 });
 
 // ---------------------------------------------------------------------------

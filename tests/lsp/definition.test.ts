@@ -12,6 +12,7 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { createTestServer, type TestServer } from "./helpers";
+import { pikeAvailable } from "../helpers/pikeAvailable";
 import { initParser, parse } from "../../server/src/parser";
 import {
   buildSymbolTable,
@@ -954,15 +955,22 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     expect(result).toBeNull();
   });
 
-  test("returns null for unresolved external symbol", async () => {
+  test("stdlib module reference resolves to the module file", async () => {
     const src = readCorpusSource("basic-types.pike");
     const uri = server.openDoc(corpusUri("basic-types.pike"), src);
-    // Stdio at line 46, char 12
+    // `program p = Stdio.File;` — cursor on `Stdio` (line 46, char 12). This
+    // used to be pinned to null; the module-path fallback now opens the
+    // stdlib source when a Pike installation is present.
     const result = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
       position: { line: 46, character: 12 },
     }) as LspLocation | null;
-    expect(result).toBeNull();
+    if (pikeAvailable) {
+      expect(result).not.toBeNull();
+      expect(result!.uri).toContain("Stdio.pmod");
+    } else {
+      expect(result).toBeNull();
+    }
   });
 
   test("class member definition resolves via LSP", async () => {

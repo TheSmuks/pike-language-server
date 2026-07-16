@@ -16,6 +16,8 @@ import {
   produceSignatureHelp,
   splitParams,
 } from "../../server/src/features/signatureHelp";
+import predefBuiltinIndex from "../../server/src/data/predef-builtin-index.json";
+import predefAutodocIndex from "../../server/src/data/predef-autodoc.json";
 
 // Source layout (0-indexed lines):
 //  0: class Dog {
@@ -175,6 +177,80 @@ describe("splitParams", () => {
 
   test("empty string returns empty array", () => {
     expect(splitParams("")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Predef (efun) signatures — write(), sprintf(), … are absent from the
+// stdlib autodoc index; their signatures come from predef-builtin-index.json.
+// ---------------------------------------------------------------------------
+
+describe("predef efun signature help", () => {
+  beforeAll(async () => {
+    await initParser();
+  });
+
+  const EFUN_SOURCE = `int main() {
+  write("%d", 42);
+  string s = sprintf("%d", 42);
+  return 0;
+}`;
+
+  function helpAt(line: number, character: number) {
+    const tree = parse(EFUN_SOURCE, "file:///efun.pike");
+    assert(tree);
+    const table = buildSymbolTable(tree, "file:///efun.pike", 1, undefined, EFUN_SOURCE);
+    const ctx = {
+      table,
+      uri: "file:///efun.pike",
+      index: null as unknown as import("../../server/src/features/workspaceIndex").WorkspaceIndex,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+      predefAutodoc: predefAutodocIndex as Record<string, { signature?: string; markdown?: string }>,
+    };
+    return produceSignatureHelp(tree, table, line, character, undefined, ctx, EFUN_SOURCE);
+  }
+
+  test("write( offers the efun's overloads with docs", () => {
+    // Line 1: `  write("%d", 42);` — cursor inside the parens.
+    const result = helpAt(1, 9);
+    assert(result, "Expected signature help for write(");
+    // The raw type carries three alternatives; each becomes an overload.
+    expect(result.signatures.length).toBeGreaterThan(1);
+    for (const sig of result.signatures) {
+      expect(sig.label).toContain("write(");
+    }
+    expect(result.signatures[0].documentation).toContain("stdout");
+  });
+
+  test("write( second argument selects a variadic overload", () => {
+    // Cursor after the comma → activeParameter 1; the single-arg overload
+    // `write(string)` cannot hold it.
+    const result = helpAt(1, 14);
+    assert(result, "Expected signature help for write(");
+    expect(result.activeParameter).toBe(1);
+    const active = result.signatures[result.activeSignature];
+    expect(active.parameters.length).toBeGreaterThan(1);
+  });
+
+  test("sprintf( resolves with parameters", () => {
+    // Line 2: `  string s = sprintf("%d", 42);`
+    const result = helpAt(2, 21);
+    assert(result, "Expected signature help for sprintf(");
+    expect(result.signatures[0].label).toContain("sprintf(");
+    expect(result.signatures[0].parameters.length).toBeGreaterThan(0);
+  });
+
+  test("unknown callee still returns null", () => {
+    const src = `int main() { no_such_fn(1); return 0; }`;
+    const tree = parse(src, "file:///nf.pike");
+    assert(tree);
+    const table = buildSymbolTable(tree, "file:///nf.pike", 1, undefined, src);
+    const result = produceSignatureHelp(tree, table, 0, 24, undefined, {
+      table, uri: "file:///nf.pike",
+      index: null as unknown as import("../../server/src/features/workspaceIndex").WorkspaceIndex,
+      predefBuiltins: predefBuiltinIndex as Record<string, string>,
+    }, src);
+    expect(result).toBeNull();
   });
 });
 

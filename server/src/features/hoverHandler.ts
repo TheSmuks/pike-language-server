@@ -22,6 +22,7 @@ import { getDefinitionAt, type SymbolTable, type Declaration } from "./symbolTab
 import {
   resolveAccessDeclaration,
   resolveAccessQualifiedType,
+  modulePathAtPosition,
   type ResolutionContext,
 } from "./accessResolver";
 import type { PikeWorker } from "./pikeWorker";
@@ -241,7 +242,107 @@ async function resolveHoverFallback(
   );
   if (qualifiedHover) return qualifiedHover;
 
-  return resolveHoverBuiltin(ctx, hoverTree, doc, params);
+  const builtinHover = resolveHoverBuiltin(ctx, hoverTree, doc, params);
+  if (builtinHover) return builtinHover;
+
+  const aliasHover = hoverFromInheritAlias(table, hoverTree, doc, params);
+  if (aliasHover) return aliasHover;
+
+  return hoverFromModulePath(ctx, doc, params);
+}
+
+/**
+ * Hover on an inherit alias — `inherit Vec : base;` on `base`, or the
+ * `base` in `base::create()`. The alias is not a reference in the symbol
+ * table, so the earlier tiers miss it; show the inherit it names.
+ */
+function hoverFromInheritAlias(
+  table: SymbolTable,
+  hoverTree: Tree,
+  doc: { getText(): string },
+  params: { position: { line: number; character: number } },
+): Hover | null {
+  const identName = identifierAtPosition(
+    hoverTree, params.position.line, params.position.character, doc.getText().split('\n'),
+  );
+  if (!identName) return null;
+
+  const inheritDecl = table.declarations.find(
+    d => d.kind === "inherit" && d.alias === identName,
+  );
+  if (!inheritDecl) return null;
+
+  return formatHover({
+    name: identName,
+    signature: `inherit ${inheritDecl.name} : ${identName}`,
+    documentation: "",
+    line: params.position.line,
+    character: params.position.character,
+  });
+}
+
+/**
+ * Hover on a dotted type/module path — `Stdio.File` in a declaration, or a
+ * relative module reference like `.Util`. Tries the static stdlib index
+ * (rich class docs), then the workspace module resolver, then the Pike
+ * worker's runtime resolve for stdlib types the index doesn't carry
+ * (e.g. `String.Buffer`).
+ */
+async function hoverFromModulePath(
+  ctx: HoverContext,
+  doc: { getText(): string },
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Promise<Hover | null> {
+  const lines = doc.getText().split('\n');
+  const path = modulePathAtPosition(lines, params.position.line, params.position.character);
+  if (!path) return null;
+
+  // Static stdlib entry: class/module docs. Signatures are empty for class
+  // entries (`predef.Stdio.File`), so synthesize a readable header.
+  if (!path.startsWith(".")) {
+    const entry = ctx.stdlibIndex[`predef.${path}`];
+    if (entry) {
+      return formatHover({
+        name: path,
+        signature: entry.signature || `class ${path}`,
+        documentation: entry.markdown,
+        line: params.position.line,
+        character: params.position.character,
+        isAutodoc: true,
+      });
+    }
+  }
+
+  // Workspace module (including Pike's relative `.Util` form).
+  const moduleUri = await ctx.index.resolveModule(path, params.textDocument.uri);
+  if (moduleUri) {
+    const basename = moduleUri.replace(/\/+$/, "").split("/").pop() ?? moduleUri;
+    return formatHover({
+      name: path,
+      signature: `module ${path}`,
+      documentation: `Defined in \`${basename}\``,
+      line: params.position.line,
+      character: params.position.character,
+    });
+  }
+
+  // Runtime resolve: stdlib types absent from the static index.
+  if (!path.startsWith(".") && path.includes(".")) {
+    try {
+      const resolved = await ctx.worker.resolve(path);
+      if (resolved.resolved && resolved.kind) {
+        return formatHover({
+          name: path,
+          signature: `${resolved.kind} ${path}`,
+          documentation: "",
+          line: params.position.line,
+          character: params.position.character,
+        });
+      }
+    } catch { /* Worker unavailable — no hover */ }
+  }
+
+  return null;
 }
 
 /**
