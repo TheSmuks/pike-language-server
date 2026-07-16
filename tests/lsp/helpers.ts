@@ -202,11 +202,11 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
         shutdownPromise,
         new Promise((r) => setTimeout(r, 500)),
       ]);
-      try {
-        client.sendNotification("exit");
-      } catch {
-        // ignore
-      }
+      // Deliberately NOT sending the LSP `exit` notification. This server runs
+      // in-process, so vscode-languageserver's built-in exit handler would call
+      // process.exit(0) on the test runner itself — killing the suite mid-run
+      // and reporting success. onShutdown (above) already does every cleanup
+      // step, including ctx.worker.stop(); `exit` only kills the process.
       // Drain pending events before destroying streams to avoid
       // "Connection is closed" errors from in-flight notifications.
       await new Promise((r) => setTimeout(r, 50));

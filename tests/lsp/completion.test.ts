@@ -165,12 +165,19 @@ function completionLabels(result: CompletionResult): string[] {
 }
 
 /** Build a minimal CompletionContext for direct API tests. */
-function makeCtx(uri = "file:///test/test.pike"): CompletionContext {
+/**
+ * `source` is required by CompletionContext — detectTriggerContext extracts the
+ * current line from it. Passing the document text is not optional: omitting it
+ * threw `ctx.source.split is not a function` inside getCompletions.
+ */
+function makeCtx(source: string, uri = "file:///test/test.pike"): CompletionContext {
   return {
     index: new WorkspaceIndex({ workspaceRoot: "/test" }),
     stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
     predefBuiltins: predefBuiltinIndex as Record<string, string>,
+    predefAutodoc: {},
     uri,
+    source,
   };
 }
 
@@ -314,7 +321,7 @@ describe("getCompletions — unqualified", () => {
       "}",
     ].join("\n");
     const tree = parse(src);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Build the actual symbol table
     const table = buildSymbolTable(tree, "file:///test/unqual.pike", 1, undefined, src);
@@ -334,7 +341,7 @@ describe("getCompletions — unqualified", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/predef.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Cursor at line 0, char 15 — after "wr"
     const result = await getCompletions(table, tree, 0, 15, ctx);
@@ -351,7 +358,7 @@ describe("getCompletions — unqualified", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/stdlib.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 0, 16, ctx);
     const labels = completionLabels(result);
@@ -372,7 +379,7 @@ describe("getCompletions — unqualified", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/shadow-predef.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 2, 3, ctx);
     const writeItems = result.items.filter(i => i.label === "write");
@@ -618,7 +625,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/ops.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 0, 18, ctx);
     const ops = result.items.filter(i =>
@@ -634,7 +641,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/stdio-dot.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 0, 20, ctx);
     const labels = completionLabels(result);
@@ -651,7 +658,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/array-dot.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Cursor at char 20 (after the dot) — LSP sends position after trigger char
     const result = await getCompletions(table, tree, 0, 20, ctx);
@@ -663,6 +670,57 @@ describe("Audit fixes", () => {
     expect(labels).toContain("flatten");
     // Should NOT contain predef builtins — this is a dot-access context
     expect(labels).not.toContain("write");
+  });
+
+  // Regression: the typed foreach form declared nothing at all.
+  //
+  // The grammar wraps `int idx` in a `typed_lvalue` node, but the lvalue
+  // collector only handled bare `identifier`, `comma_expr`, and
+  // `array_destructure` — so `foreach(items; int idx; string val)` produced a
+  // foreach scope containing no declarations. No completion, hover, goto, or
+  // rename for the loop variables. The bare form (`foreach(items; k; v)`)
+  // yields comma_expr and always worked, which is why this went unnoticed.
+  //
+  // Verified against pike 8.0: both forms compile and run.
+
+  test("typed foreach declares its loop variables with their types", () => {
+    const src = 'void t(array(Dog) dogs) {\n  foreach(dogs; int i; Dog d) { }\n}';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/foreach-typed.pike", 1, undefined, src);
+
+    const i = table.declarations.find(d => d.name === "i");
+    const d = table.declarations.find(x => x.name === "d");
+    expect(i).toBeDefined();
+    expect(d).toBeDefined();
+    // The annotation must survive: `d->` can only resolve to Dog's members if
+    // the declaration carries its declared type.
+    expect(i!.declaredType).toBe("int");
+    expect(d!.declaredType).toBe("Dog");
+  });
+
+  test("bare foreach does not declare — the names must already exist", () => {
+    // pike 8.0 rejects `foreach(items; k; v)` unless k and v are already
+    // declared ("Undefined identifier k."), so the bare form assigns to
+    // existing variables. Inventing declarations here would point
+    // goto-definition at the loop header instead of the real declaration.
+    const src = 'void t(array items) {\n  int k; mixed v;\n  foreach(items; k; v) { }\n}';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/foreach-bare.pike", 1, undefined, src);
+
+    // Exactly one declaration each — from `int k; mixed v;`, not the foreach.
+    expect(table.declarations.filter(d => d.name === "k")).toHaveLength(1);
+    expect(table.declarations.filter(d => d.name === "v")).toHaveLength(1);
+    expect(table.declarations.find(d => d.name === "k")!.declaredType).toBe("int");
+  });
+
+  test("comma foreach form declares its typed value variable", () => {
+    const src = 'void t(array items) {\n  foreach(items, mixed v) { }\n}';
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/foreach-comma.pike", 1, undefined, src);
+
+    const v = table.declarations.find(d => d.name === "v");
+    expect(v).toBeDefined();
+    expect(v!.declaredType).toBe("mixed");
   });
 
   test("foreach loop variables are visible in scope", () => {
@@ -684,7 +742,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/arrow-trail.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Cursor at char 36 (after '>')
     const result = await getCompletions(table, tree, 0, 36, ctx);
@@ -705,7 +763,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/scope-access.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 5, 25, ctx);
     const labels = completionLabels(result);
@@ -724,7 +782,7 @@ describe("Audit fixes", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/class-dot.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Cursor after the dot on line 5: 'void test() { Animal. }'
     // The dot is at column 20, cursor at column 21
@@ -753,7 +811,7 @@ describe("Completion ranking", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/ranking.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 3, 2, ctx);
     const labels = completionLabels(result);
@@ -777,7 +835,7 @@ describe("Completion ranking", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/sort.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const result = await getCompletions(table, tree, 0, 18, ctx);
 
@@ -799,9 +857,9 @@ describe("Completion ranking", () => {
 
 describe("stdlib secondary index", () => {
   test("Stdio.File has known members", async () => {
-    const ctx = makeCtx();
     // Trigger a completion that forces index building
     const src = "void foo() {}";
+    const ctx = makeCtx(src);
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/idx.pike", 1, undefined, src);
     wireInheritance(table);
@@ -833,7 +891,7 @@ describe("Declared-type member completion", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-var.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const arrowIdx = src.indexOf('a->');
     const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
@@ -851,7 +909,7 @@ describe("Declared-type member completion", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-param.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const arrowIdx = src.indexOf('d->');
     const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
@@ -865,7 +923,7 @@ describe("Declared-type member completion", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/typed-inherit.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const arrowIdx = src.indexOf('c->');
     const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
@@ -880,7 +938,7 @@ describe("Declared-type member completion", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/primitive.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const arrowIdx = src.indexOf('s->');
     const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
@@ -892,7 +950,7 @@ describe("Declared-type member completion", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/mixed-type.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const arrowIdx = src.indexOf('x->');
     const result = await getCompletions(table, tree, 0, arrowIdx + 3, ctx);
@@ -948,6 +1006,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri: uriB,
+      predefAutodoc: {},
+      source: srcB,
     };
 
     // Line 18 (0-indexed 17): "    write(\"greet: %s\\n\", g->greet(\"Alice\"));"
@@ -974,6 +1034,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri: uriB,
+      predefAutodoc: {},
+      source: srcB,
     };
 
     // Line 25: d->speak() — cursor after d-> at column 28
@@ -1004,6 +1066,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri: uriC,
+      predefAutodoc: {},
+      source: srcC,
     };
 
     // Line 21 (0-indexed 20): "    write("identify: %s\n", e->identify());"
@@ -1037,6 +1101,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri: uriB,
+      predefAutodoc: {},
+      source: srcB,
     };
 
     // Cursor after d-> at end of file_b
@@ -1072,6 +1138,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri,
+      predefAutodoc: {},
+      source: src,
     };
 
     // Cursor on 'speak' identifier (line 3, col 13)
@@ -1104,6 +1172,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri,
+      predefAutodoc: {},
+      source: src,
     };
     const result = await getCompletions(table, tree, 3, 13, ctx);
     const labels = completionLabels(result);
@@ -1134,6 +1204,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri,
+      predefAutodoc: {},
+      source: src,
     };
 
     // Cursor on 'speak' identifier (line 4, col 5)
@@ -1170,6 +1242,8 @@ describe("Cross-file completion via WorkspaceIndex", () => {
       stdlibIndex: stdlibAutodocIndex as Record<string, { signature: string; markdown: string }>,
       predefBuiltins: predefBuiltinIndex as Record<string, string>,
       uri,
+      predefAutodoc: {},
+      source: src,
     };
 
     // Cursor on 'speak' identifier (line 3, col 5)
@@ -1243,7 +1317,7 @@ describe("Private member filtering", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/dot-private.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     // Cursor after 'Vault.' on line 6
     const result = await getCompletions(table, tree, 6, 20, ctx);
@@ -1269,7 +1343,7 @@ describe("Private member filtering", () => {
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/arrow-private.pike", 1, undefined, src);
     wireInheritance(table);
-    const ctx = makeCtx();
+    const ctx = makeCtx(src);
 
     const line6 = src.split('\n')[6];
     const arrowCol = line6.indexOf('v->') + 3;

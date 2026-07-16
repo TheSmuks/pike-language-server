@@ -317,7 +317,7 @@ describe("Server onShutdown: full LSP shutdown sequence", () => {
     expect(ts.server.autodocCache.size).toBe(0);
   });
 
-  test("exit notification after shutdown does not crash", () => {
-    expect(() => ts.client.sendNotification("exit")).not.toThrow();
-  });
+  // No `exit` notification test here: the server is in-process, so the LSP
+  // library's exit handler would process.exit() the test runner. Real exit
+  // behaviour is covered by scripts/check-standalone.mjs against a subprocess.
 });

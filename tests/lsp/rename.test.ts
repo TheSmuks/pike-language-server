@@ -341,8 +341,9 @@ void feed(Dog d) {}`;
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
 
-    // Rename the inner x (line 2, character 10 → position of 'x' in 'string x')
-    const result = await getRenameLocations(table, "file:///test.pike", 2, 10, null);
+    // Rename the inner x. In '  string x = "a";' the identifier is at column 9;
+    // column 10 is the space after it, where there is no declaration to rename.
+    const result = await getRenameLocations(table, "file:///test.pike", 2, 9, null);
     expect(result).not.toBeNull();
     expect(result!.oldName).toBe("x");
 
@@ -532,13 +533,21 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    // Declaration (line 0) + assignment (line 1) + 3 refs on line 1 = 5
-    expect(edit.changes[uri]).toHaveLength(5);
+    // `tally` occurs exactly 3 times: declaration (line 0), assignment target
+    // and read operand (both line 1). This asserted 5 while getRenameLocations
+    // emitted every same-file reference twice; see dedupeLocations().
+    expect(edit.changes[uri]).toHaveLength(3);
 
     // All edits should use the new name
     for (const te of edit.changes[uri]) {
       expect(te.newText).toBe("myTally");
     }
+
+    // No two edits may target the same range — overlapping edits corrupt text.
+    const ranges = edit.changes[uri].map(
+      (te) => `${te.range.start.line}:${te.range.start.character}`,
+    );
+    expect(new Set(ranges).size).toBe(ranges.length);
   });
 
   test("renames a function", async () => {
@@ -556,8 +565,9 @@ describe("textDocument/rename — LSP protocol", () => {
     expect(result).not.toBeNull();
     const edit = result as { changes: Record<string, any[]> };
     expect(edit.changes[uri]).toBeDefined();
-    // Declaration (line 0) + call site (line 1) + both computeSum refs (line 1) = 3
-    expect(edit.changes[uri]).toHaveLength(3);
+    // `computeSum` occurs exactly twice: the declaration (line 0) and the call
+    // site (line 1). This asserted 3 while the call site was emitted twice.
+    expect(edit.changes[uri]).toHaveLength(2);
   });
 
   test("returns error for empty position", async () => {
@@ -726,6 +736,50 @@ describe("prepareRename — stdlib/predef rejection", () => {
     const result = prepareRename(table, 0, 5);
     expect(result).not.toBeNull();
     expect(result!.name).toBe("write");
+  });
+
+  // Protection applies to file-scope declarations only. These names collide
+  // with the ~3,700-name stdlib/predef set, but a local, parameter, or class
+  // member cannot shadow a predef across files, so it must stay renameable.
+  const collidingNames = new Set(["write", "search", "sizeof", "strlen", "getcwd", "count", "name"]);
+
+  test("allows renaming a local variable whose name collides with stdlib", () => {
+    const src = `void f() {\n  int count = 0;\n  count = count + 1;\n}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    const result = prepareRename(table, 1, 6, collidingNames); // `count` declaration
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("count");
+  });
+
+  test("allows renaming a parameter whose name collides with stdlib", () => {
+    const src = `void f(string name) {\n  name = "x";\n}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    const result = prepareRename(table, 0, 14, collidingNames); // `name` parameter
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("name");
+  });
+
+  test("allows renaming a class member whose name collides with stdlib", () => {
+    const src = `class C {\n  string name;\n}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    const result = prepareRename(table, 1, 9, collidingNames); // `name` member
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("name");
+  });
+
+  test("still rejects a file-scope variable that shadows a stdlib name", () => {
+    const src = `int count = 0;`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    const result = prepareRename(table, 0, 4, collidingNames);
+    expect(result).toBeNull();
   });
 });
 

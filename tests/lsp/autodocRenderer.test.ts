@@ -395,7 +395,7 @@ describe("renderAutodoc — class", () => {
   </namespace>`;
 
   test("renders class documentation", () => {
-    const result = renderAutodoc(xml, "Widget");
+    const result = renderAutodoc(xml, "Widget", "class Widget");
     expect(result).not.toBeNull();
     expect(result?.markdown).toContain("A widget class.");
   });
@@ -496,7 +496,7 @@ describe("renderAutodoc — corpus snapshot", () => {
 </autodoc>`;
 
   test("renders DocumentedClass", () => {
-    const result = renderAutodoc(xml, "DocumentedClass");
+    const result = renderAutodoc(xml, "DocumentedClass", "class DocumentedClass");
     expect(result).not.toBeNull();
     expect(result?.markdown).toContain("A class that demonstrates AutoDoc documentation.");
     expect(result?.markdown).toContain("This class has multiple doc lines.");

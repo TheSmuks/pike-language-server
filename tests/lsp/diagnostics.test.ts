@@ -172,9 +172,8 @@ async function createDiagnosticTestServer(debounceMs = DEBOUNCE_MS): Promise<Tes
         shutdownPromise,
         new Promise((r) => setTimeout(r, 500)),
       ]);
-      try {
-        client.sendNotification("exit");
-      } catch { /* ignore */ }
+      // No `exit` notification: the server is in-process, so the LSP library's
+      // exit handler would process.exit(0) the test runner. See tests/lsp/helpers.ts.
       c2s.destroy();
       s2c.destroy();
     },
@@ -422,7 +421,7 @@ describe.skipIf(!pikeAvailable)("Diagnostic mode", () => {
 
     const shutdownPromise = client.sendRequest("shutdown").catch(() => {});
     await Promise.race([shutdownPromise, new Promise((r) => setTimeout(r, 500))]);
-    try { client.sendNotification("exit"); } catch { /* ignore */ }
+    // No `exit`: in-process server — the LSP exit handler would kill the test runner.
     c2s.destroy();
     s2c.destroy();
   });
@@ -618,7 +617,7 @@ describe.skipIf(!pikeAvailable)("Cross-file diagnostic propagation", () => {
     server.worker.stop();
     const shutdownPromise = client.sendRequest("shutdown").catch(() => {});
     await Promise.race([shutdownPromise, new Promise((r) => setTimeout(r, 500))]);
-    try { client.sendNotification("exit"); } catch { /* ignore */ }
+    // No `exit`: in-process server — the LSP exit handler would kill the test runner.
     c2s.destroy();
     s2c.destroy();
   });

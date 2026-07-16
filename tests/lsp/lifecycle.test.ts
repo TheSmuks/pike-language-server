@@ -55,20 +55,11 @@ describe("lifecycle: shutdown and exit", () => {
     await teardown();
   });
 
-  test("exit after shutdown does not throw", async () => {
-    const { client, c2s, s2c } = await createTestServer();
-
-    const result = await client.sendRequest("shutdown");
-    expect(result).toBeNull();
-
-    // exit is a notification (no response); must not throw
-    client.sendNotification("exit");
-
-    // Clean up streams directly — skip teardown() which re-sends
-    // shutdown/exit and can hang when the connection is already gone.
-    c2s.destroy();
-    s2c.destroy();
-  });
+  // The `exit` notification is NOT exercised here. These tests run the server
+  // in-process, so vscode-languageserver's exit handler calls process.exit() on
+  // the test runner itself — which silently killed this suite mid-run and
+  // reported success. Real exit behaviour is covered against a real subprocess
+  // by scripts/check-standalone.mjs ("exits cleanly on shutdown + exit").
 });
 
 // ---------------------------------------------------------------------------

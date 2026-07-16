@@ -1,7 +1,7 @@
 {
   "file": "corpus/files/stdlib-mapping.pike",
   "parseCount": 1,
-  "lintCount": 10,
+  "lintCount": 12,
   "diagnostics": [
     {
       "range": {
@@ -50,6 +50,38 @@
       "code": "P3001",
       "source": "pike-lsp-lint",
       "message": "Variable 'removed' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 29,
+          "character": 21
+        },
+        "end": {
+          "line": 29,
+          "character": 24
+        }
+      },
+      "severity": 2,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'key' is unused"
+    },
+    {
+      "range": {
+        "start": {
+          "line": 29,
+          "character": 30
+        },
+        "end": {
+          "line": 29,
+          "character": 33
+        }
+      },
+      "severity": 2,
+      "code": "P3002",
+      "source": "pike-lsp-lint",
+      "message": "Parameter 'val' is unused"
     },
     {
       "range": {

@@ -171,6 +171,62 @@ describe("definition API: top-level classes", () => {
 });
 
 // ===========================================================================
+// Regression: file-scope variables with a user-defined type
+//
+// tree-sitter-pike < 1.3.2 did not parse `Greeter g = Greeter("World");` at
+// file scope as a declaration. It split into a bare-identifier declaration
+// (`Greeter`) plus an expression statement (`g = Greeter("World");`), so `g`
+// was never declared and the type name was never a type_ref. Builtin types and
+// function-body locals were unaffected, so only module-level object variables
+// broke — silently: goto-definition and find-references returned nothing, and
+// renaming the class skipped the type annotation and produced broken code.
+//
+// Pike accepts this (a file is a class, so it is a member variable). These
+// tests pin the LSP-visible consequences; the grammar's own corpus test pins
+// the parse tree.
+// ===========================================================================
+
+describe("regression: file-scope variable with user-defined type", () => {
+  const src = [
+    'class Greeter {',
+    '  string name;',
+    '  void create(string n) { name = n; }',
+    '}',
+    'Greeter g = Greeter("World");',
+  ].join('\n');
+
+  function table(): SymbolTable {
+    const tree = parse(src);
+    return buildSymbolTable(tree, "file:///regress.pike", 1, undefined, src);
+  }
+
+  test("the variable is declared, not swallowed by an expression statement", () => {
+    const decl = findDecl(table(), "g", "variable");
+    expect(decl).toBeDefined();
+    expect(decl!.nameRange.start.line).toBe(4);
+  });
+
+  test("the type annotation is a resolved reference to the class", () => {
+    const t = table();
+    const typeRef = t.references.find(
+      (r) => r.name === "Greeter" && r.kind === "type_ref",
+    );
+    expect(typeRef).toBeDefined();
+    // Column 0 of line 4 — the annotation, not the constructor call at col 12.
+    expect(typeRef!.loc.line).toBe(4);
+    expect(typeRef!.loc.character).toBe(0);
+
+    const classDecl = findDecl(t, "Greeter", "class");
+    expect(typeRef!.resolvesTo).toBe(classDecl!.id);
+  });
+
+  test("the declared type is recorded, so member completion can resolve it", () => {
+    const decl = findDecl(table(), "g", "variable");
+    expect(decl!.declaredType).toBe("Greeter");
+  });
+});
+
+// ===========================================================================
 // 3. Direct API tests — class member resolution
 // ===========================================================================
 
@@ -756,8 +812,9 @@ describe("definition API: getDefinitionAt", () => {
 
   test("class member reference resolves via getDefinitionAt", () => {
     const table = buildTable("class-single-inherit.pike");
-    // name at line 11, char 8 resolves to class variable
-    const decl = getDefinitionAt(table, 11, 8);
+    // Line 11 is `    name = _name;` — the identifier starts at column 4.
+    // Column 8 is the space after it, where there is nothing to resolve.
+    const decl = getDefinitionAt(table, 11, 4);
     expect(decl).not.toBeNull();
     expect(decl!.name).toBe("name");
     expect(decl!.kind).toBe("variable");
@@ -846,8 +903,10 @@ describe("definition LSP: textDocument/definition via protocol", () => {
     });
     expect(result).not.toBeNull();
     expect(result.uri).toBe(uri);
+    // Line 26 is `  mixed anything = 42;` — the name starts at column 8.
+    // Nothing begins at column 10.
     expect(result.range.start.line).toBe(26);
-    expect(result.range.start.character).toBe(10);
+    expect(result.range.start.character).toBe(8);
   });
 
   test("returns Location for function declaration name", async () => {
@@ -972,8 +1031,9 @@ describe("definition LSP: textDocument/definition via protocol", () => {
       position: { line: 39, character: 14 },
     });
     expect(result).not.toBeNull();
+    // Line 8 is `  RED,` — the enum member starts at column 2.
     expect(result.range.start.line).toBe(8);
-    expect(result.range.start.character).toBe(4);
+    expect(result.range.start.character).toBe(2);
   });
 
   test("closure variable resolves via LSP", async () => {

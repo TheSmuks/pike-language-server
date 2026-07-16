@@ -186,7 +186,7 @@ async function createMeasurementServer(options?: {
       server.worker.stop();
       const shutdown = client.sendRequest("shutdown").catch(() => {});
       await Promise.race([shutdown, new Promise(r => setTimeout(r, 500))]);
-      try { client.sendNotification("exit"); } catch { /* ok */ }
+      // No `exit`: in-process server — the LSP exit handler would kill the test runner.
       c2s.destroy();
       s2c.destroy();
     },

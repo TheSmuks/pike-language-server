@@ -191,9 +191,8 @@ async function createFormattingTestServer(opts: {
         shutdownPromise,
         new Promise((r) => setTimeout(r, 500)),
       ]);
-      try {
-        client.sendNotification("exit");
-      } catch { /* ignore */ }
+      // No `exit` notification: the server is in-process, so the LSP library's
+      // exit handler would process.exit(0) the test runner. See tests/lsp/helpers.ts.
       await new Promise((r) => setTimeout(r, 50));
       c2s.destroy();
       s2c.destroy();
