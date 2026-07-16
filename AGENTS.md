@@ -284,7 +284,7 @@ VSIX build + Marketplace publish via `release.yml`).
 ## Template Version
 
 
-This project was generated from `ai-project-template` version **0.8.47**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect. Bump it (and every other version marker) with [`scripts/bump-version.sh`](./scripts/bump-version.sh) — see [Releasing](#releasing).
+This project was generated from `ai-project-template` version **0.8.48**. See [`.template-version`](./.template-version) for the current release. Agents can read this file to determine which conventions and files to expect. Bump it (and every other version marker) with [`scripts/bump-version.sh`](./scripts/bump-version.sh) — see [Releasing](#releasing).
 
 
 <!-- SPECKIT START -->
