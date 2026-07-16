@@ -115,6 +115,10 @@ jobs:
       - name: Install VSCE
         run: bun add -g @vscode/vsce
       - run: bash scripts/smoke-test.sh
+      - name: Standalone server serves LSP over stdio (Neovim/Helix path)
+        run: bun run check:standalone
+      - name: Helix LSP features return real results
+        run: bun run check:helix
 
   vscode-integration:
     runs-on: ubuntu-latest

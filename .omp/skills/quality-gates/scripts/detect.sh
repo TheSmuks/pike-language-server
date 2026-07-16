@@ -341,22 +341,45 @@ def check_roottext():
         print("[PASS] No rootNode.text usage")
 
 
+EVICTION_RE = re.compile(r"(\.delete\(|\.clear\(|LRU|CACHE_MAX|MAX_ENTRIES|evict|size > |size >=)")
+
+# A container can only leak if it outlives the call that filled it: a
+# module-scope binding, a class field, or a `this.x = new Map()` assignment.
+# A Map/Set built inside a function dies with the call.
+LONGLIVED_DECL_RE = re.compile(
+    r"^(?:export\s+)?(?:const|let|var)\s+(\w+)[^=]*?=\s*new\s+(?:Map|Set)\s*[<(]"
+    r"|^\s+(?:(?:private|protected|public|readonly|static|declare)\s+)*(\w+)\s*(?::[^=]+)?=\s*new\s+(?:Map|Set)\s*[<(]"
+    r"|^\s*this\.(\w+)\s*=\s*new\s+(?:Map|Set)\s*[<(]"
+)
+
+
 def check_unbounded():
     print("\n=== Unbounded Map/Set (no eviction logic in file) ===")
     count = 0
-    eviction_re = re.compile(r"(\.delete\(|\.clear\(|LRU|CACHE_MAX|MAX_ENTRIES|evict|size > |size >=)")
     for path in iter_files(source_exts):
         if not rel(path).startswith("server/src/"):
             continue
         text = read(path)
-        if not re.search(r"new (Map|Set)<|= new (Map|Set)\(\)", text):
+        if EVICTION_RE.search(text):
             continue
-        if eviction_re.search(text):
-            continue
-        warn("unbounded-map-set", path, 1, "no eviction logic found in file")
-        count += 1
+        for number, line in enumerate(text.splitlines(), 1):
+            match = LONGLIVED_DECL_RE.match(line)
+            if not match:
+                continue
+            name = match.group(1) or match.group(2) or match.group(3)
+            # Populated once from a literal at construction? Then it is bounded
+            # by that literal and cannot grow — only runtime .set()/.add() can.
+            grows = re.search(
+                r"(?:\b%s|this\.%s)\.(?:set|add)\(" % (re.escape(name), re.escape(name)),
+                text,
+            )
+            if not grows:
+                continue
+            fail("unbounded-map-set", path, number,
+                 f"long-lived '{name}' grows at runtime with no eviction in file")
+            count += 1
     if count == 0:
-        print("[PASS] All Maps/Sets appear to have eviction logic")
+        print("[PASS] All long-lived Maps/Sets have eviction logic or fixed bounds")
 
 
 def check_importmeta():

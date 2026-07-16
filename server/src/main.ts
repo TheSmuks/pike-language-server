@@ -12,8 +12,11 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { saveCache, computeWasmHash } from "./features/persistentCache.js";
 
+// Either signal starts the server: PIKE_LSP_STDIO=1 (what the VSCode client
+// sets) or an explicit --stdio flag (what every other LSP client passes).
+// Tests import createPikeServer() from server.ts and reach neither.
 function shouldListen(): boolean {
-  return process.env.PIKE_LSP_STDIO === "1";
+  return process.env.PIKE_LSP_STDIO === "1" || process.argv.includes("--stdio");
 }
 
 if (shouldListen()) {
