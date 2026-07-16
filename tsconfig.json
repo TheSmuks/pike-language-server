@@ -1,7 +1,9 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ES2022",
+    // ESNext (not ES2022) so `with { type: "file" }` import attributes
+    // typecheck — compileEntry.ts uses them to embed WASM into the binary.
+    "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
     "esModuleInterop": true,

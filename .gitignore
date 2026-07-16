@@ -83,6 +83,12 @@ out/
 standalone/
 PLAN.md
 
+# Release artifacts — built by CI, attached to the GitHub Release / published
+# to npm. dist-binary alone is ~100MB across the five targets.
+dist-binary/
+dist-tarball/
+dist-npm/
+
 # VSCode extension packaging
 *.vsix
 

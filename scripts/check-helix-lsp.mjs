@@ -75,7 +75,31 @@ const HELIX_CAPS = {
 
 const env = { ...process.env };
 delete env.PIKE_LSP_STDIO;
-const proc = spawn("bun", [`${ROOT}/standalone/server.js`, "--stdio"], { stdio: ["pipe", "pipe", "pipe"], env });
+
+/**
+ * Server under test. Defaults to the standalone bundle; PIKE_LSP_SERVER_CMD
+ * (a JSON array, e.g. '["./pike-language-server","--stdio"]') points it at a
+ * release artifact instead, so CI runs this same sweep against the binary, the
+ * tarball, and the npm install rather than trusting that they resemble it.
+ */
+function serverCommand() {
+  const override = process.env.PIKE_LSP_SERVER_CMD;
+  if (!override) return ["bun", [`${ROOT}/standalone/server.js`, "--stdio"]];
+  let parts;
+  try {
+    parts = JSON.parse(override);
+  } catch {
+    throw new Error(`PIKE_LSP_SERVER_CMD must be a JSON array, got: ${override}`);
+  }
+  if (!Array.isArray(parts) || parts.length === 0) {
+    throw new Error(`PIKE_LSP_SERVER_CMD must be a non-empty JSON array, got: ${override}`);
+  }
+  return [parts[0], parts.slice(1)];
+}
+
+const [cmd, cmdArgs] = serverCommand();
+if (process.env.PIKE_LSP_SERVER_CMD) console.log(`  (server: ${cmd} ${cmdArgs.join(" ")})`);
+const proc = spawn(cmd, cmdArgs, { stdio: ["pipe", "pipe", "pipe"], env });
 
 let buf = Buffer.alloc(0);
 let nextId = 1;

@@ -8,13 +8,38 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 OUT_DIR="$ROOT/standalone"
 
+# Resolve esbuild explicitly. A bare `esbuild` only works when the script is
+# invoked through `bun run`, which puts node_modules/.bin on PATH; called
+# directly (as check-distributions.sh and CI do) it failed with
+# "esbuild: command not found" and exit 127.
+ESBUILD="$ROOT/node_modules/.bin/esbuild"
+if [ ! -x "$ESBUILD" ]; then
+  ESBUILD="$(command -v esbuild || true)"
+fi
+if [ -z "$ESBUILD" ]; then
+  echo "esbuild not found — run 'bun install' first" >&2
+  exit 1
+fi
+
 echo "Building standalone server to $OUT_DIR..."
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-# Bundle server with esbuild (no vscode externals needed for standalone)
-esbuild "$ROOT/server/src/main.ts" \
+# Bundle the server. Only `vscode` itself is external — it is the extension-host
+# API and does not exist outside VSCode; nothing in the server imports it.
+#
+# `vscode-languageserver`/`vscode-jsonrpc` are ordinary npm packages and MUST be
+# bundled: marking them external left server.js importing them from
+# node_modules at runtime, so the bundle only ran from inside a checkout and any
+# copy of it elsewhere died with "Cannot find module
+# 'vscode-languageserver-protocol/lib/common/api'".
+# The createRequire banner is required, not cosmetic: esbuild's ESM output
+# cannot satisfy the dynamic require() that web-tree-sitter's emscripten glue
+# performs, so under plain Node the bundle died with "Dynamic require of 'fs'
+# is not supported". With the shim it runs on Node and Bun alike, which is what
+# lets the npm package work without Bun.
+"$ESBUILD" "$ROOT/server/src/main.ts" \
   --bundle \
   --outfile="$OUT_DIR/server.js" \
   --platform=node \
@@ -22,8 +47,8 @@ esbuild "$ROOT/server/src/main.ts" \
   --format=esm \
   --sourcemap \
   --external:vscode \
-  --external:vscode-* \
-  --banner:js='// Pike Language Server — standalone build'
+  --banner:js="// Pike Language Server — standalone build
+import{createRequire as __pikeCreateRequire}from'node:module';const require=__pikeCreateRequire(import.meta.url);"
 
 # Copy WASM grammar
 cp "$ROOT/server/tree-sitter-pike.wasm" "$OUT_DIR/"

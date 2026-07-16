@@ -120,6 +120,34 @@ jobs:
       - name: Helix LSP features return real results
         run: bun run check:helix
 
+  # Every artifact a user can install must serve LSP when run outside the
+  # repository. Guards the whole no-build install path: an earlier bundle only
+  # worked because it could reach the checkout's node_modules, and the compiled
+  # binary silently lost its WASM and answered 2/15 features.
+  distributions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact: [tarball, npm, binary]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Cache bun install
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - name: ${{ matrix.artifact }} serves LSP
+        run: bash scripts/check-distributions.sh ${{ matrix.artifact }}
+
   vscode-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 20

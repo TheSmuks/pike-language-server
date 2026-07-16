@@ -13,6 +13,22 @@
   "bin": {
     "pike-language-server": "./bin/pike-language-server"
   },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheSmuks/pike-language-server.git"
+  },
+  "homepage": "https://github.com/TheSmuks/pike-language-server#readme",
+  "bugs": {
+    "url": "https://github.com/TheSmuks/pike-language-server/issues"
+  },
+  "keywords": [
+    "pike",
+    "lsp",
+    "language-server",
+    "helix",
+    "neovim"
+  ],
   "scripts": {
     "build": "bun run build:extension",
     "build:extension": "bun run scripts/sync-manifest.ts && bash scripts/build-server.sh && bash scripts/build-client.sh",
@@ -22,6 +38,10 @@
     "check:deps": "node scripts/check-phantom-deps.mjs",
     "check:standalone": "bun run build:standalone && node scripts/check-standalone.mjs",
     "check:helix": "node scripts/check-helix-lsp.mjs",
+    "check:distributions": "bash scripts/check-distributions.sh",
+    "build:binary": "bash scripts/build-binary.sh",
+    "build:tarball": "bash scripts/build-tarball.sh",
+    "build:npm": "bash scripts/build-npm-package.sh",
     "probe": "bun run scripts/lsp-probe.ts",
     "watch:client": "bun run scripts/watch-client.mjs",
     "watch:server": "bun run scripts/watch-server.mjs",
