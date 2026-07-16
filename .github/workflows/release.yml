@@ -72,3 +72,116 @@ jobs:
           # Publish the exact VSIX already attached to the release, so the
           # Marketplace and GitHub artifacts are byte-identical.
           "$VSCE_BIN" publish --packagePath "$VSIX_PATH"
+
+  # ---------------------------------------------------------------------------
+  # Non-VSCode artifacts: everything below installs without a build step.
+  # ---------------------------------------------------------------------------
+
+  # Native single-file binaries — need neither Bun nor Node on the user's box.
+  # Cross-compiled from one runner; `bun build --compile --target=` emits every
+  # platform, so this needs no per-OS matrix.
+  build-binaries:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - name: Verify tag matches version manifest
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          expected="v$(tr -d '[:space:]' < .template-version)"
+          if [ "$tag" != "$expected" ]; then
+            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
+            exit 1
+          fi
+
+      - name: Build binaries for every target
+        run: bash scripts/build-binary.sh --all
+
+      # A binary that starts but cannot parse is worse than no binary: it took
+      # an end-to-end sweep to notice the compiled build had lost its WASM.
+      - name: Verify the host binary actually serves LSP
+        run: bash scripts/check-distributions.sh binary
+
+      - name: Upload binaries to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" dist-binary/* --clobber
+
+  # Standalone tarball — no build, but needs Node or Bun on the user's box.
+  build-tarball:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: bun install --frozen-lockfile
+
+      - name: Build standalone bundle and tarball
+        run: |
+          bun run build:standalone
+          bash scripts/build-tarball.sh
+
+      - name: Verify the tarball actually serves LSP
+        run: bash scripts/check-distributions.sh tarball
+
+      - name: Upload tarball to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" dist-tarball/*.tar.gz --clobber
+
+  # npm package — `npm i -g pike-language-server`, runs on Node 18+.
+  #
+  # Requires the NPM_TOKEN repository secret (an npm automation token). Without
+  # it this job fails loudly rather than skipping, so a release never silently
+  # ships without the npm artifact.
+  publish-npm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: bun install --frozen-lockfile
+
+      - name: Build and stage the npm package
+        run: |
+          bun run build:standalone
+          bash scripts/build-npm-package.sh
+
+      # The staged manifest takes its version from .template-version, not from
+      # package.json (which is deliberately decoupled and stale). Fail rather
+      # than publish a mislabelled package.
+      - name: Verify staged version matches the release tag
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          staged="v$(node -p "require('./dist-npm/package.json').version")"
+          if [ "$tag" != "$staged" ]; then
+            echo "release tag '$tag' does not match staged npm version ('$staged')" >&2
+            exit 1
+          fi
+          echo "staged npm version matches tag: $staged"
+
+      - name: Verify the packed package actually serves LSP
+        run: bash scripts/check-distributions.sh npm
+
+      - name: Publish to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "NPM_TOKEN secret is not set; refusing to publish" >&2
+            exit 1
+          fi
+          cd dist-npm
+          npm publish --access public

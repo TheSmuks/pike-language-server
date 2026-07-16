@@ -1,31 +1,44 @@
 #!/usr/bin/env node
 /**
- * Pike Language Server — standalone entry point.
+ * Pike Language Server — executable entry point.
  *
- * Communicates over stdio. Run with: pike-language-server --stdio
+ * Speaks LSP over stdio. Point your editor at this file:
+ *   pike-language-server --stdio
  *
- * Requires: bun runtime.
- * Install: bun install && bun run build:standalone
+ * Runs the server in-process on whichever runtime launched it (Node or Bun) —
+ * the standalone bundle is built with a createRequire banner so it works on
+ * both. It used to spawn a `bun` child process, which made Bun a hard
+ * requirement and broke `npx pike-language-server` for Node-only users.
+ *
+ * Resolves the bundle from either layout:
+ *   - npm package:  <pkg>/standalone/server.js
+ *   - repo clone:   <repo>/standalone/server.js   (after build:standalone)
  */
 
 import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { existsSync } from "node:fs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const serverPath = resolve(__dirname, "..", "standalone", "server.js");
+const here = dirname(fileURLToPath(import.meta.url));
+const serverPath = resolve(here, "..", "standalone", "server.js");
 
-// Forward all args, defaulting to --stdio
-const args = process.argv.slice(2);
-if (!args.some(a => a === "--stdio" || a === "--node-ipc" || a.startsWith("--socket="))) {
-  args.push("--stdio");
+if (!existsSync(serverPath)) {
+  process.stderr.write(
+    `pike-language-server: server bundle not found at ${serverPath}\n` +
+    `If you are running from a clone, build it first:\n` +
+    `  bun install && bun run build:standalone\n`,
+  );
+  process.exit(1);
 }
 
-const child = spawn("bun", [serverPath, ...args], {
-  stdio: "inherit",
-  env: { ...process.env, PIKE_LSP_STDIO: "1" },
-});
+// main.ts starts listening only when PIKE_LSP_STDIO=1 or --stdio is present.
+// Default to stdio so a bare `pike-language-server` still serves, and keep the
+// env var so an explicit --socket=/--node-ipc transport also starts listening.
+const args = process.argv.slice(2);
+if (!args.some(a => a === "--stdio" || a === "--node-ipc" || a.startsWith("--socket="))) {
+  process.argv.push("--stdio");
+}
+process.env.PIKE_LSP_STDIO = "1";
 
-child.on("exit", (code) => process.exit(code ?? 1));
-process.on("SIGTERM", () => child.kill("SIGTERM"));
-process.on("SIGINT", () => child.kill("SIGINT"));
+// pathToFileURL: a bare Windows path (C:\...) is not a valid import specifier.
+await import(pathToFileURL(serverPath).href);

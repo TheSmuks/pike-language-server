@@ -28,43 +28,79 @@ Verify:
 hx --version
 ```
 
-## 2. Install the prerequisites
+## 2. Install the server
 
-| Tool | Why | Check |
-|------|-----|-------|
-| [Bun](https://bun.sh/) | runs the server | `bun --version` |
-| [Pike](https://pike.lysator.liu.se/) 8.0+ | produces diagnostics | `pike --version` |
-| A C compiler + `git` | only for step 6 (grammar) | `cc --version` |
+Pick **one**. Nothing here requires cloning or building.
 
-Bun is required. Pike is only needed for diagnostics — everything else (hover,
-completion, goto, rename) works without it.
+[Pike](https://pike.lysator.liu.se/) 8.0+ on `PATH` is optional: it powers
+diagnostics only. Hover, completion, goto, references, and rename all work
+without it.
 
-## 3. Build the server
+### a. Native binary — no runtime at all (simplest)
+
+One self-contained executable. No Node, no Bun.
+
+```bash
+# pick your platform: linux-x64, linux-arm64, darwin-x64, darwin-arm64, windows-x64.exe
+curl -L -o pike-language-server \
+  https://github.com/TheSmuks/pike-language-server/releases/latest/download/pike-language-server-linux-x64
+chmod +x pike-language-server
+sudo mv pike-language-server /usr/local/bin/
+```
+
+The binary embeds its own tree-sitter grammar and stdlib index, so it works from
+anywhere. It is ~90MB — that is a whole JavaScript runtime inside.
+
+### b. npm — needs Node 18+ (easiest to update)
+
+```bash
+npm install -g pike-language-server
+```
+
+### c. Tarball — needs Node 18+ or Bun
+
+```bash
+curl -L https://github.com/TheSmuks/pike-language-server/releases/latest/download/pike-language-server-standalone.tar.gz \
+  | tar xz -C ~/.local/share
+```
+
+Extracts to `~/.local/share/pike-language-server/`. Keep the `.wasm` and `.json`
+files next to `server.js` — they are resolved relative to it.
+
+### Verify
+
+```bash
+pike-language-server --stdio    # binary or npm
+```
+
+It waits silently for LSP traffic on stdin; `Ctrl-D` exits. (It will also exit
+immediately on end-of-input, which is normal — a client keeps the stream open.)
+
+### d. From source
+
+Only if you want to modify the server:
 
 ```bash
 git clone https://github.com/TheSmuks/pike-language-server.git
 cd pike-language-server
 bun install
 bun run build:standalone
+bun run check:standalone   # asserts it really answers LSP
 ```
-
-This produces `standalone/server.js`. Confirm it serves LSP over stdio:
-
-```bash
-bun run check:standalone
-```
-
-Note the absolute path to `standalone/server.js` — you need it next. The rest of
-this guide writes it as `/path/to/pike-language-server`.
 
 ## 4. Configure Helix
 
-Add to `~/.config/helix/languages.toml` (create the file if it does not exist):
+Add to `~/.config/helix/languages.toml` (create the file if it does not exist).
+
+If you installed the **binary** or the **npm package**, `command` is just the
+executable name:
 
 ```toml
 [language-server.pike-lsp]
-command = "bun"
-args = ["/path/to/pike-language-server/standalone/server.js", "--stdio"]
+command = "pike-language-server"
+args = ["--stdio"]
+# Optional — see "Helix configuration" below:
+# config = { diagnosticMode = "realtime" }
 
 [[language]]
 name = "pike"
@@ -74,6 +110,15 @@ comment-token = "//"
 indent = { tab-width = 2, unit = "  " }
 roots = ["pike.json", ".git"]
 language-servers = ["pike-lsp"]
+```
+
+If you installed the **tarball** (or built from source), replace the first two
+lines with the interpreter plus the path to `server.js` — everything else is
+identical:
+
+```toml
+command = "node"                                    # or "bun"
+args = ["/home/you/.local/share/pike-language-server/server.js", "--stdio"]
 ```
 
 Helix ships no built-in Pike language, so you define it yourself. Two fields are
@@ -161,10 +206,7 @@ created. Helix delivers it as `initializationOptions`, which is the only place
 this server reads settings from:
 
 ```toml
-[language-server.pike-lsp]
-command = "bun"
-args = ["/path/to/pike-language-server/standalone/server.js", "--stdio"]
-config = { diagnosticMode = "realtime" }
+config = { diagnosticMode = "realtime" }  # "realtime" | "saveOnly" | "off"
 ```
 
 Do **not** repeat the `[language-server.pike-lsp]` header a second time in the
