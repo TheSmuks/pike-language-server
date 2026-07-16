@@ -133,10 +133,13 @@ export function registerHoverHandler(
   ctx: HoverContext,
 ): void {
   const makeTypeInferrer = buildHoverTypeInferrer(ctx);
+  // Getters, not value captures: registration runs before `initialize`
+  // replaces ctx.index / ctx.stdlibIndex with the real instances. A value
+  // capture here would freeze the empty placeholders into every request.
   const baseResolutionCtx: ResolutionContext = {
     documents: ctx.documents,
-    index: ctx.index,
-    stdlibIndex: ctx.stdlibIndex,
+    get index() { return ctx.index; },
+    get stdlibIndex() { return ctx.stdlibIndex; },
   };
   connection.onHover(async (params, token) => {
     await ctx.beforeRequest?.();

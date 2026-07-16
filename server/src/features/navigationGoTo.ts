@@ -31,10 +31,13 @@ export function registerGoToHandlers(
   ctx: NavigationContext,
 ): void {
   const makeTypeInferrer = buildTypeInferrerFactory(ctx);
+  // Getters, not value captures: registration runs before `initialize`
+  // replaces ctx.index / ctx.stdlibIndex with the real instances. A value
+  // capture here would freeze the empty placeholders into every request.
   const resolutionCtx: ResolutionContext = {
     documents: ctx.documents,
-    index: ctx.index,
-    stdlibIndex: ctx.stdlibIndex,
+    get index() { return ctx.index; },
+    get stdlibIndex() { return ctx.stdlibIndex; },
   };
 
   connection.onDefinition((params, token) =>
