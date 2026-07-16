@@ -8,6 +8,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 OUT_DIR="$ROOT/standalone"
 
+# Resolve esbuild explicitly. A bare `esbuild` only works when the script is
+# invoked through `bun run`, which puts node_modules/.bin on PATH; called
+# directly (as check-distributions.sh and CI do) it failed with
+# "esbuild: command not found" and exit 127.
+ESBUILD="$ROOT/node_modules/.bin/esbuild"
+if [ ! -x "$ESBUILD" ]; then
+  ESBUILD="$(command -v esbuild || true)"
+fi
+if [ -z "$ESBUILD" ]; then
+  echo "esbuild not found — run 'bun install' first" >&2
+  exit 1
+fi
+
 echo "Building standalone server to $OUT_DIR..."
 
 rm -rf "$OUT_DIR"
@@ -26,7 +39,7 @@ mkdir -p "$OUT_DIR"
 # performs, so under plain Node the bundle died with "Dynamic require of 'fs'
 # is not supported". With the shim it runs on Node and Bun alike, which is what
 # lets the npm package work without Bun.
-esbuild "$ROOT/server/src/main.ts" \
+"$ESBUILD" "$ROOT/server/src/main.ts" \
   --bundle \
   --outfile="$OUT_DIR/server.js" \
   --platform=node \
