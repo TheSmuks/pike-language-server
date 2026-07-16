@@ -30,6 +30,18 @@ jobs:
           # Override by setting BLOB_SIZE_LIMIT in your repository variables
           MAX_SIZE=${BLOB_SIZE_LIMIT:-1048576}
 
+          # Files exempt from the limit: large by nature, generated, and shipped
+          # on purpose. Exempting a specific path keeps the limit meaningful for
+          # everything else — raising BLOB_SIZE_LIMIT globally would wave through
+          # the accidental blobs this policy exists to catch.
+          #
+          # server/src/data/stdlib-autodoc.json (~1.6MB) is the extracted AutoDoc
+          # for Pike's whole stdlib and backs completion + hover. It is generated
+          # by scripts/build-stdlib-index.ts and has been over the limit since it
+          # was added — no PR had modified it since this policy landed, so nothing
+          # had tripped it yet.
+          ALLOWLIST="server/src/data/stdlib-autodoc.json"
+
           FAILED=0
 
           if [ -z "$FILES" ]; then
@@ -39,6 +51,11 @@ jobs:
 
           for FILE in $FILES; do
             if [ ! -f "$FILE" ]; then
+              continue
+            fi
+
+            if echo "$ALLOWLIST" | tr ' ' '\n' | grep -qxF "$FILE"; then
+              echo "ALLOWED (generated data): $FILE"
               continue
             fi
 

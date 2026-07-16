@@ -5,14 +5,10 @@
  *
  * Usage: bun run scripts/build-stdlib-index.ts
  *
- * WARNING — the committed server/src/data/stdlib-autodoc.json has drifted from
- * this script's output. Running it here regenerates cleanly (489 files, 5170
- * symbols, 0 errors) but rewrites roughly half the index, so the checked-in data
- * was produced by an older version of this script or against a different Pike.
- * Do not regenerate casually: the index backs completion and hover, so a rewrite
- * needs its own review. This script imported `parseXml`/`XmlNode` from
- * autodocRenderer (which consumes but never re-exported them) and so threw on
- * load — it could not run at all, and nothing type-checked scripts/ to notice.
+ * The output is committed as server/src/data/stdlib-autodoc.json — it backs
+ * stdlib completion and hover. Regenerating is safe: the script refuses to write
+ * an index that lost symbols relative to the committed one (pass --force to
+ * override).
  */
 import { execFileSync } from "node:child_process";
 import {
@@ -21,6 +17,7 @@ import {
   writeFileSync,
   mkdirSync,
   readFileSync,
+  existsSync,
 } from "node:fs";
 import { join, extname, basename, dirname } from "node:path";
 import { renderAutodoc } from "../server/src/features/autodocRenderer";
@@ -256,6 +253,31 @@ function main(): void {
     }
 
     console.log(`${symbols.length} symbols`);
+  }
+
+  // Refuse to silently shrink the index.
+  //
+  // This script once dropped every doc-only symbol (335 of them) because
+  // renderAutodoc bailed on an empty signature list. Nothing noticed: the
+  // script is not run in CI, and a smaller index just means quieter hovers.
+  // Losing symbols is always a bug in the extractor, never an intended edit —
+  // so say so and stop, rather than overwrite good data with less of it.
+  // Pass --force to override (e.g. when Pike itself genuinely lost a module).
+  const force = process.argv.includes("--force");
+  if (existsSync(OUTPUT_PATH)) {
+    const previous = JSON.parse(readFileSync(OUTPUT_PATH, "utf-8")) as Record<string, unknown>;
+    const lost = Object.keys(previous).filter((fqn) => !(fqn in index));
+    if (lost.length > 0) {
+      console.error(
+        `\nrefusing to write: ${lost.length} symbol(s) present in the existing ` +
+        `index are missing from this run, e.g. ${lost.slice(0, 5).join(", ")}`,
+      );
+      if (!force) {
+        console.error("re-run with --force if this loss is intended.");
+        process.exit(1);
+      }
+      console.error("--force given; writing anyway.");
+    }
   }
 
   // Write JSON

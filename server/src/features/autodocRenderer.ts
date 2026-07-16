@@ -106,11 +106,16 @@ export function renderAutodoc(
   );
 
   const signatures = collectSignatures(docGroup, fallbackSignature);
-  if (signatures.length === 0) return null;
+  // A documented class or module need not have a signature of its own — e.g.
+  // Arg.Options is a bare doc block. Bailing on an empty signature list dropped
+  // those symbols entirely; only give up when there is nothing at all to show.
+  // Callers in the server always pass a fallbackSignature, so this widening is
+  // invisible to them: collectSignatures never returns empty for those paths.
+  if (signatures.length === 0 && !docEl) return null;
 
   const parts = buildMarkdownParts(signatures, docEl);
   return {
     markdown: parts.join("\n"),
-    signature: signatures[0],
+    signature: signatures[0] ?? "",
   };
 }
