@@ -17,12 +17,21 @@ bun install
 # Build
 bun run build
 
-# Run tests
+# Run tests (serial, single process — this is the gate)
 bun test
+
+# Run tests faster while iterating (parallel workers, ~41s vs ~106s)
+bun run test:fast
 
 # Type check
 bun run typecheck
 ```
+
+`bun test` is deliberately serial. `--parallel` implies `--isolate`, so each
+file gets its own process and cross-file pollution from global mutable state
+stops being detectable — the server is one long-lived process, so that bug class
+is real. Use `test:fast` for local iteration, but let the serial run be the
+thing you trust before pushing.
 
 ## Code Style
 

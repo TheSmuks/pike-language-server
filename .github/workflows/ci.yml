@@ -89,10 +89,10 @@ jobs:
         run: bun run test:non-pike
       - name: Run full Bun tests
         if: matrix.os == 'ubuntu-latest'
-        # `bun run test`, not bare `bun test`: the script runs the suite in
-        # parallel workers and then the latency benchmarks serially. Running
-        # the benchmarks alongside 16 workers measures CPU contention, not the
-        # server, and they fail on that alone.
+        # Deliberately the serial, single-process run (not test:fast). Sharing
+        # one process is what catches cross-file pollution from global mutable
+        # state — the bug class that `--isolate` hides and that a long-lived
+        # server actually suffers from.
         run: bun run test
 
   quality-gates:
