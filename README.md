@@ -40,6 +40,13 @@ code --install-extension thesmuks.pike-language-server
 
 Open any `.pike`, `.pmod`, or `.mmod` file and the server starts automatically. The status bar item (bottom-right) shows its state — click it to open the output channel.
 
+**Other editors**
+
+The server speaks plain LSP over stdio and works outside VS Code:
+
+- **Helix** — step-by-step [installation guide](./docs/helix-installation.md)
+- **Neovim** and any other LSP client — see [docs/other-editors.md](./docs/other-editors.md)
+
 ## Features
 
 A comprehensive LSP feature set, all backed by real compiler information:
