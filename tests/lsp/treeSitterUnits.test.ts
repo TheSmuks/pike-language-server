@@ -26,7 +26,9 @@ describe("web-tree-sitter index units", () => {
     expect(utf16Length).not.toBe(utf8Length); // the fixture must discriminate
 
     const tree = parser.parse(line + "\n")!;
-    const comment = tree.rootNode.descendantForPosition({ row: 0, column: 7 });
+    const commentNode = tree.rootNode.descendantForPosition({ row: 0, column: 7 });
+    expect(commentNode).not.toBeNull();
+    const comment = commentNode!;
 
     expect(comment.type).toBe("line_comment");
     expect(comment.startPosition.column).toBe(7);
@@ -44,7 +46,9 @@ describe("web-tree-sitter index units", () => {
     // "😀" is 2 UTF-16 code units and 4 UTF-8 bytes.
     const line = "int x; // 😀 tail";
     const tree = parser.parse(line + "\n")!;
-    const comment = tree.rootNode.descendantForPosition({ row: 0, column: 7 });
+    const commentNode = tree.rootNode.descendantForPosition({ row: 0, column: 7 });
+    expect(commentNode).not.toBeNull();
+    const comment = commentNode!;
 
     expect(comment.endPosition.column).toBe(line.length);
     tree.delete();
