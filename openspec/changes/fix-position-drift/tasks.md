@@ -20,9 +20,9 @@
 
 ## 3. Remove the conversion layer
 
-- [ ] 3.1 Enumerate all 36 call sites of `utf8ToUtf16` / `utf16ToUtf8` across
-      the 15 files and classify each as outbound (node → LSP) or inbound
-      (LSP → node)
+- [ ] 3.1 Enumerate all 51 call sites — 36 of `utf8ToUtf16` / `utf16ToUtf8`
+      plus 15 of the offset map — across the 18 files, classifying each as
+      outbound (node → LSP) or inbound (LSP → node)
 - [ ] 3.2 Remove outbound conversions, passing `node.startPosition.column` and
       `node.endPosition.column` through unchanged
 - [ ] 3.3 Remove inbound conversions, passing `params.position.character`
@@ -30,9 +30,12 @@
 - [ ] 3.4 Delete `utf8ToUtf16` / `utf16ToUtf8` and the false premise in the
       module header; delete `positionConverter.ts` entirely if nothing else
       lands there
-- [ ] 3.5 Rewrite `tests/lsp/positionConverter.test.ts`, which asserts the
-      incorrect behavior — replace, do not adjust
-- [ ] 3.6 Verify tasks 2.2's tests now pass
+- [ ] 3.5 Remove the offset map: drop the `offsetMap` parameter from
+      `scope-helpers.ts`, `scope-helpers-lookup.ts`, `referenceCollector.ts`,
+      and `symbolTable.ts`, and delete `server/src/util/offsetMap.ts`
+- [ ] 3.6 Strip the `utf8ToUtf16` / `utf16ToUtf8` sections from
+      `tests/lsp/positionConverter.test.ts`, keeping its `getLineText` coverage
+- [ ] 3.7 Verify task 2.2's tests now pass
 
 ## 4. Encoding detection
 
@@ -62,4 +65,7 @@
       are unchanged
 - [ ] 6.3 Manually verify in the editor against a real ISO-8859-1 Roxen module:
       hover, Ctrl+Click, and diagnostics all land on the correct span
-- [ ] 6.4 Run quality gates (file ≤500 lines, function ≤50 lines)
+- [ ] 6.4 Run the perf suite and confirm removing the offset map did not
+      regress position-heavy paths; record the memory effect of dropping the
+      per-file `Int32Array`
+- [ ] 6.5 Run quality gates (file ≤500 lines, function ≤50 lines)
