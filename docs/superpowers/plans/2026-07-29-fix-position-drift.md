@@ -731,5 +731,5 @@ No gaps.
 
 **Known plan-level uncertainties, stated rather than hidden:**
 
-- Task 2 Step 2 asks the implementer to record which assertions fail and by how much, rather than predicting exact drift values. The shift is per-line and depends on which line each feature reads, so a predicted number would likely be wrong and would train the implementer to distrust the plan.
+- Task 2's expected pre-fix values were measured against the current build with a throwaway probe, not predicted. That probe corrected two errors in an earlier draft of this plan: the original fixture placed the non-ASCII character on a different line from the token, which produces no drift at all and would have passed before the fix; and it asserted on `textDocument/documentLink`, which returns `[]` in the in-process test server and would have failed for the wrong reason.
 - Task 3's `lines` parameter removals cascade into call signatures the plan does not enumerate exhaustively. The typecheck in Step 6 is the mechanism that finds them; this is deliberate, not an omission.
