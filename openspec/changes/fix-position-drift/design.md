@@ -20,6 +20,14 @@ The consequences are symmetric and both wrong:
   *right*, resolving a different node than the one under the cursor. Hover and
   Ctrl+Click return an unrelated symbol.
 
+The premise is implemented twice. `server/src/util/offsetMap.ts` pre-computes a
+per-line `Int32Array` mapping byte offsets to UTF-16 offsets, so that the wrong
+conversion can be performed in O(1) rather than O(line length); its header
+records the motivation as ~11M calls costing ~160s. It carries 15 further call
+sites in `symbolTable.ts`, `referenceCollector.ts`, and the two `scope-helpers`
+modules. An optimisation of an incorrect computation is still incorrect, so it
+is deleted rather than corrected — which also removes a per-file allocation.
+
 Because file headers are where non-ASCII characters cluster — copyright signs,
 author names — the mis-resolved node is disproportionately an `import` or
 `#include`, which matches the reported symptom.
@@ -105,9 +113,18 @@ persistent cache must be invalidated. Its existing hash-based versioning covers
 this if the cache format version is bumped; not bumping it would surface as
 stale, drifting positions that survive the fix.
 
-**Wide blast radius: 15 files, 36 call sites** → Each removal is mechanical and
+**Wide blast radius: 18 files, 51 call sites** → Each removal is mechanical and
 local, but a missed inbound call site is silent. The non-ASCII feature tests are
 the backstop, so they must cover every category of call site, not a sample.
+Deleting both util modules converts any missed call site from a silent wrong
+answer into a compile error, which is the main reason to delete rather than
+neutralise them.
+
+**Removing the offset map regresses performance** → It was introduced against a
+measured cost, so its removal must be measured too rather than assumed free.
+The pass-through it is replaced by is a field read, strictly cheaper than the
+array lookup plus the parse-time map construction it eliminates; the perf suite
+confirms rather than assumes this.
 
 ## Migration Plan
 
