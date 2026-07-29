@@ -13,7 +13,8 @@
 - Files ≤500 lines, functions ≤50 lines (quality gates).
 - Conventional commit types only. No AI/Claude attribution anywhere.
 - Default test run is serial: `bun test`. `test:fast` is opt-in parallel.
-- The suite has a **pre-existing** failure baseline. Capture it in Task 1 and compare against it; do not assume green.
+- The suite is **green**: measured baseline `2280 pass / 2 skip / 0 fail` across 98 files. Any failure this change introduces is a regression, full stop. (An earlier draft of this plan claimed a known-red baseline; that was stale and was corrected by measurement in Task 1.)
+- `bun run typecheck` must exit clean at every task boundary. Task 3 uses it as the proof that no call site was missed, so an unrelated typecheck error would mask a real defect.
 - `PRE_COMMIT_ALLOW_NO_CONFIG=1` must prefix `git commit`.
 - Server-owned JSON (caches, manifests, `pike.json`) stays UTF-8. Encoding detection applies only to Pike source.
 
@@ -673,7 +674,9 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "fix: invalidate caches built with co
 - [ ] **Step 1: Full serial suite against the baseline**
 
 Run: `bun test 2>&1 | tail -20`
-Expected: no failure that was not in the Task 1 baseline. Any newly-failing test is a regression from this change and must be fixed before proceeding, not accepted.
+Expected: green — at least `2280 pass / 0 fail`, plus the tests this change adds. The baseline was measured in Task 1 as `2280 pass / 2 skip / 0 fail`. Any failure is a regression from this change and must be fixed before proceeding, not accepted.
+
+Also run: `bun run typecheck` — must exit clean.
 
 - [ ] **Step 2: Perf and memory check**
 
