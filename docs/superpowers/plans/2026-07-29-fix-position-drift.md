@@ -115,6 +115,10 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "test: assert web-tree-sitter reports
 
 Written before any fix, so the fix is confirmed to remove the drift rather than merely change it.
 
+**The drift is per-line.** `utf8ToUtf16(lines[row], column)` only consults the token's own line, so a non-ASCII character on line 0 cannot affect a token on line 3. Every fixture below therefore puts the non-ASCII character **on the same line, before the token**, inside a block comment. The values in these tests were measured against the current build, not predicted.
+
+**Do not use `textDocument/documentLink` here.** In the in-process test server it returns `[]` for these fixtures — module and include resolution finds nothing without a real workspace on disk — so a link assertion would fail for the wrong reason. (This is also why the existing `tests/lsp/documentLink.test.ts` guards every range assertion behind `if (result.length > 0)` and effectively asserts nothing.)
+
 **Files:**
 - Create: `tests/lsp/nonAsciiPositions.test.ts`
 
@@ -130,11 +134,16 @@ Create `tests/lsp/nonAsciiPositions.test.ts`:
 /**
  * Non-ASCII position correctness.
  *
- * tree-sitter and LSP both index in UTF-16 code units, so ranges must be
- * emitted unconverted. Before this was fixed, every range on a line holding a
- * non-ASCII character shifted left by one per such character, and every
- * position lookup shifted right — resolving a different node than the one
- * under the cursor.
+ * tree-sitter and LSP both index in UTF-16 code units, so positions must pass
+ * through unconverted. While the conversion layer existed, every range shifted
+ * LEFT by one per non-ASCII character preceding the token on its own line, and
+ * every lookup shifted RIGHT by the same amount — which is why hovering one
+ * symbol could return the documentation for a different one.
+ *
+ * Measured against the pre-fix build:
+ *   - "helper" at true index 12 was reported at 11
+ *   - "main" at true index 13 (two © before it) was reported at 11
+ *   - hovering "alpha" at its true index returned "int beta()"
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -144,7 +153,7 @@ interface Range {
   start: { line: number; character: number };
   end: { line: number; character: number };
 }
-interface LinkResult { range: Range; target?: string }
+interface Sym { name: string; range: Range; selectionRange: Range }
 interface HoverResult { contents: { value: string } | string; range?: Range }
 interface LocationResult { uri: string; range: Range }
 
@@ -153,95 +162,137 @@ let server: TestServer;
 beforeAll(async () => { server = await createTestServer(); });
 afterAll(async () => { await server.teardown(); });
 
-// Line 0 carries two © characters, so any byte/code-unit confusion shifts
-// positions on it by exactly 2.
-const SRC = [
-  '// Copyright © 2000 - 2009, Roxen IS. ©',
-  'import Stdio;',
-  '',
-  'int helper() { return 1; }',
-  '',
-  'int main() {',
-  '  return helper();',
-  '}',
+// One © before "helper" on line 0; two © before "main" on line 1.
+const OUTBOUND = [
+  '/* © */ int helper() { return 1; }',
+  '/* ©© */ int main() { return helper(); }',
 ].join('\n');
 
-describe("positions on lines containing non-ASCII characters", () => {
-  test("document link range covers the import path exactly", async () => {
-    const uri = server.openDoc("file:///test/nonascii-link.pike", SRC);
+// Ten © before the call site, enough that a right-shifted lookup on "alpha"
+// lands squarely on "beta".
+const INBOUND = [
+  'int alpha() { return 1; }',
+  'int beta() { return 2; }',
+  '/* ©©©©©©©©©© */ int main() { return alpha() + beta(); }',
+].join('\n');
 
-    const links = await server.client.sendRequest("textDocument/documentLink", {
+describe("outbound ranges are not shifted by non-ASCII on the same line", () => {
+  test("declaration ranges match their true UTF-16 indices", async () => {
+    const uri = server.openDoc("file:///test/nonascii-outbound.pike", OUTBOUND);
+
+    const syms = await server.client.sendRequest("textDocument/documentSymbol", {
       textDocument: { uri },
-    }) as LinkResult[] | null;
+    }) as Sym[] | null;
 
-    expect(links).not.toBeNull();
-    const link = links!.find(l => l.range.start.line === 1);
-    expect(link).toBeDefined();
-    // "import Stdio;" — "Stdio" spans characters 7..12 on line 1.
-    expect(link!.range.start.character).toBe(7);
-    expect(link!.range.end.character).toBe(12);
+    expect(syms).not.toBeNull();
+
+    const lines = OUTBOUND.split('\n');
+    const helper = syms!.find(s => s.name === "helper");
+    expect(helper).toBeDefined();
+    // "/* © */ int helper() ..." — "helper" is at UTF-16 index 12.
+    expect(lines[0]!.indexOf("helper")).toBe(12);
+    expect(helper!.selectionRange.start.character).toBe(12);
+    expect(helper!.selectionRange.end.character).toBe(18);
+
+    const main = syms!.find(s => s.name === "main");
+    expect(main).toBeDefined();
+    // "/* ©© */ int main() ..." — "main" is at UTF-16 index 13.
+    expect(lines[1]!.indexOf("main")).toBe(13);
+    expect(main!.selectionRange.start.character).toBe(13);
+    expect(main!.selectionRange.end.character).toBe(17);
   });
 
-  test("hover on a symbol resolves that symbol, not a neighbour", async () => {
-    const uri = server.openDoc("file:///test/nonascii-hover.pike", SRC);
+  test("an ASCII-only control file is unaffected", async () => {
+    // Same layout, © replaced by spaces, so indices shift but nothing drifts.
+    const control = [
+      '/*   */ int helper() { return 1; }',
+      '/*    */ int main() { return helper(); }',
+    ].join('\n');
+    const uri = server.openDoc("file:///test/nonascii-control.pike", control);
 
-    // Line 6, "  return helper();" — "helper" starts at character 9.
+    const syms = await server.client.sendRequest("textDocument/documentSymbol", {
+      textDocument: { uri },
+    }) as Sym[] | null;
+
+    const helper = syms!.find(s => s.name === "helper");
+    expect(helper!.selectionRange.start.character).toBe(12);
+    const main = syms!.find(s => s.name === "main");
+    expect(main!.selectionRange.start.character).toBe(13);
+  });
+});
+
+describe("inbound lookups resolve the token actually at the position", () => {
+  test("hover on a call returns that function, not its neighbour", async () => {
+    const uri = server.openDoc("file:///test/nonascii-inbound.pike", INBOUND);
+    const line2 = INBOUND.split('\n')[2]!;
+    const alphaAt = line2.indexOf("alpha");
+    expect(alphaAt).toBe(37); // guard: the fixture must not drift silently
+
     const hover = await server.client.sendRequest("textDocument/hover", {
       textDocument: { uri },
-      position: { line: 6, character: 9 },
+      position: { line: 2, character: alphaAt },
     }) as HoverResult | null;
 
     expect(hover).not.toBeNull();
     const text = typeof hover!.contents === "string"
       ? hover!.contents
       : hover!.contents.value;
-    expect(text).toContain("helper");
-    expect(text).not.toContain("import");
+    expect(text).toContain("alpha");
+    expect(text).not.toContain("beta"); // pre-fix, this returned "int beta()"
   });
 
-  test("go-to-definition from a call lands on the declaration", async () => {
-    const uri = server.openDoc("file:///test/nonascii-def.pike", SRC);
+  test("hover on the second call resolves rather than returning null", async () => {
+    const uri = server.openDoc("file:///test/nonascii-inbound2.pike", INBOUND);
+    const line2 = INBOUND.split('\n')[2]!;
+    const betaAt = line2.indexOf("beta");
+    expect(betaAt).toBe(47);
+
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: { line: 2, character: betaAt },
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull(); // pre-fix, the shifted lookup fell off the end
+    const text = typeof hover!.contents === "string"
+      ? hover!.contents
+      : hover!.contents.value;
+    expect(text).toContain("beta");
+  });
+
+  test("go-to-definition from a shifted call lands on the right declaration", async () => {
+    const uri = server.openDoc("file:///test/nonascii-def.pike", INBOUND);
+    const line2 = INBOUND.split('\n')[2]!;
 
     const def = await server.client.sendRequest("textDocument/definition", {
       textDocument: { uri },
-      position: { line: 6, character: 9 },
+      position: { line: 2, character: line2.indexOf("alpha") },
     }) as LocationResult | LocationResult[] | null;
 
     expect(def).not.toBeNull();
     const loc = Array.isArray(def) ? def[0]! : def!;
-    // "int helper()" is on line 3; "helper" starts at character 4.
-    expect(loc.range.start.line).toBe(3);
+    // "int alpha()" is line 0; "alpha" starts at character 4.
+    expect(loc.range.start.line).toBe(0);
     expect(loc.range.start.character).toBe(4);
-  });
-
-  test("a non-ASCII character on the same line does not shift the range", async () => {
-    // "int © count;" is invalid Pike, so put the © in a trailing comment where
-    // it is legal but still precedes nothing — then assert the declaration on
-    // the NEXT line is unaffected, and the comment's own line is exact.
-    const src = [
-      'int alpha;   // © marker',
-      'int beta;',
-    ].join('\n');
-    const uri = server.openDoc("file:///test/nonascii-sym.pike", src);
-
-    const syms = await server.client.sendRequest("textDocument/documentSymbol", {
-      textDocument: { uri },
-    }) as Array<{ name: string; range: Range; selectionRange: Range }> | null;
-
-    expect(syms).not.toBeNull();
-    const alpha = syms!.find(s => s.name === "alpha");
-    expect(alpha).toBeDefined();
-    expect(alpha!.selectionRange.start.character).toBe(4);
   });
 });
 ```
 
-- [ ] **Step 2: Run them and record the drift**
+- [ ] **Step 2: Run to verify they fail — and fail for the stated reason**
 
 Run: `bun test tests/lsp/nonAsciiPositions.test.ts`
-Expected: FAIL. Record the actual values in each failure message — the document-link case should report `start.character` as 5 rather than 7 (left-shifted by the two `©` characters on line 0 is not the cause here; the shift arises per-line, so confirm which assertions fail and by how much before proceeding).
 
-If any test passes unexpectedly, note which — it means that code path does not carry a conversion, and Task 3 must not "fix" it.
+Expected: FAIL. The specific pre-fix values, measured on the current build:
+
+| Assertion | Expected | Pre-fix actual |
+|---|---|---|
+| `helper` selectionRange start | 12 | 11 |
+| `main` selectionRange start | 13 | 11 |
+| hover on `alpha` | contains "alpha" | `int beta()` |
+| hover on `beta` | non-null | `null` |
+
+The ASCII control test should **pass** already — it is the discriminator proving the fixtures differ only in encoding.
+
+If the failures do not match this table, stop and report before changing any source. A different failure mode means the diagnosis needs revisiting.
 
 - [ ] **Step 3: Commit the failing tests**
 
