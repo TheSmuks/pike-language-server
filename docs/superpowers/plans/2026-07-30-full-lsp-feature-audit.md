@@ -1635,7 +1635,16 @@ In `scripts/lsp-probe.ts`, add a branch alongside the existing `raw` one:
       const method = rest[0];
       if (!method) throw new Error("notify requires a <method> argument");
       const extraParams = rest[2] ? JSON.parse(rest[2]) : {};
-      server.client.sendNotification(method, { textDocument: { uri }, ...extraParams });
+      // The version is REQUIRED. vscode-languageserver's TextDocuments throws
+      // "without valid version identifier" on a versionless didChange, and
+      // vscode-jsonrpc catches that inside its notification dispatcher and
+      // routes it to a log channel nothing here listens to — so the change is
+      // dropped in total silence and the command reports success. The document
+      // is opened at version 1, so 2 is the next one.
+      server.client.sendNotification(method, {
+        textDocument: { uri, version: 2 },
+        ...extraParams,
+      });
       const alive = await server.client.sendRequest("textDocument/documentSymbol", {
         textDocument: { uri },
       });
@@ -1650,12 +1659,18 @@ Also add the usage line to the header comment block:
  *   bun run scripts/lsp-probe.ts notify <method> <file> [jsonParams]
 ```
 
-Verify it runs:
+Verify it has a LIVE EFFECT — not merely that it exits cleanly:
 
 ```bash
-bun run scripts/lsp-probe.ts notify textDocument/didChange corpus/files/class-create.pike '{"contentChanges":[{"text":"int x;\n"}]}'
+# Baseline: how many top-level symbols does the file have?
+bun run scripts/lsp-probe.ts symbols corpus/files/class-create.pike | head -3
+
+# Replace the whole document with nothing. The alive-check must now report 0.
+bun run scripts/lsp-probe.ts notify textDocument/didChange corpus/files/class-create.pike '{"contentChanges":[{"text":""}]}'
 ```
-Expected: prints `notification sent:` and a still-responding line. It must NOT print "Unhandled method".
+Expected: `notification sent: textDocument/didChange` followed by `server still responding: 0 symbols`.
+
+**If it reports the original symbol count instead of 0, the notification was silently dropped and the reproduction is worthless** — that is the exact defect this step exists to prevent, and "it printed success" does not rule it out.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1813,6 +1828,30 @@ test("notification capabilities use notify, not raw", () => {
     expect(finding.reproduction).not.toContain(`raw ${method}`);
   }
 });
+
+test("a notify reproduction has a live effect, not just a clean exit", async () => {
+  // Three rounds of this task shipped reproduction commands that ran without
+  // error while doing nothing. Asserting on the command STRING cannot catch
+  // that; only observing the server's state can. Replacing the document with
+  // an empty string must drop the symbol count to zero.
+  const { spawnSync } = await import("node:child_process");
+  const run = (args: string[]) =>
+    spawnSync("bun", ["run", "scripts/lsp-probe.ts", ...args], {
+      encoding: "utf8",
+      timeout: 120_000,
+    }).stdout ?? "";
+
+  const output = run([
+    "notify",
+    "textDocument/didChange",
+    "corpus/files/class-create.pike",
+    '{"contentChanges":[{"text":""}]}',
+  ]);
+
+  expect(output).toContain("notification sent: textDocument/didChange");
+  // The whole document was replaced with nothing, so nothing can be left.
+  expect(output).toContain("server still responding: 0 symbols");
+}, 180_000);
 
 test("request capabilities still use raw, not notify", () => {
   const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
