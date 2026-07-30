@@ -68,7 +68,35 @@ const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
   "textDocument/codeAction": { context: { diagnostics: [] } },
   "textDocument/formatting": { options: { tabSize: 2, insertSpaces: true } },
   "textDocument/rangeFormatting": { options: { tabSize: 2, insertSpaces: true } },
-  "textDocument/onTypeFormatting": { ch: "}", options: { tabSize: 2, insertSpaces: true } },
+  // onTypeFormatting is document-driven, so the ledger stores position null —
+  // but the matrix always sends {0,0}. Without it here the reproduction fires a
+  // request with no position at all, which is not what produced the finding.
+  "textDocument/onTypeFormatting": {
+    ch: "}",
+    position: { line: 0, character: 0 },
+    options: { tabSize: 2, insertSpaces: true },
+  },
+  // The query is what makes this request meaningful; `{}` reproduces nothing.
+  // lsp-probe's raw handler also injects a textDocument the real request has
+  // no need for — harmless, since the server ignores it for workspace/symbol.
+  "workspace/symbol": { query: "create" },
+  // A delta reply needs SOME previousResultId. "" is exactly what the matrix
+  // itself falls back to when no delta has been primed yet
+  // (`ctx.previousResultId ?? ""`), so it reproduces the same request shape a
+  // cold `full/delta` call would send.
+  "textDocument/semanticTokens/full/delta": { previousResultId: "" },
+  // The rename handler is exercised by the shape of the payload, not by which
+  // file it names — any well-formed oldUri/newUri pair reaches the same code
+  // path a crash-on-rename would hit. Substitute a real pair to target a
+  // specific file.
+  "workspace/didRenameFiles": {
+    files: [{ oldUri: "file:///placeholder.pike", newUri: "file:///placeholder-renamed.pike" }],
+  },
+  // The matrix always sends a whole-document replace; the exact text does not
+  // change whether the handler crashes on it, so a placeholder body still
+  // exercises the same path. Substitute the file's real content for a
+  // faithful edit.
+  "textDocument/didChange": { contentChanges: [{ text: "" }] },
 };
 
 /** Methods whose params require a range. A whole-file range stands in. */
