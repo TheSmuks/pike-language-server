@@ -20,7 +20,6 @@ import type { Tree, Node } from "web-tree-sitter";
 import type { Diagnostic } from "vscode-languageserver-types";
 import { DiagnosticSeverity } from "vscode-languageserver-types";
 import type { SymbolTable, Declaration } from "../symbolTable";
-import { utf16ToUtf8, getLineText } from "../../util/positionConverter";
 
 /** Diagnostic code for missing return. */
 export const CODE_MISSING_RETURN = "P3004";
@@ -36,6 +35,9 @@ const IMPLICIT_VOID_TYPES = new Set(["void", "mixed"]);
  * @param table - symbol table with declarations and scopes
  * @returns diagnostics for functions missing return statements
  */
+// `source` is unused now that tree-sitter columns and LSP characters are both
+// UTF-16 code units — kept on the signature so existing callers don't need
+// to change.
 export function detectMissingReturn(
   tree: Tree,
   table: SymbolTable,
@@ -52,12 +54,10 @@ export function detectMissingReturn(
     // Skip constructors
     if (decl.name === "create") continue;
 
-    // Find the function's AST node — decl.range is in UTF-16, convert to UTF-8 for tree-sitter
-    const declLineText = getLineText(source, decl.range.start.line);
-    const utf8Col = utf16ToUtf8(declLineText, decl.range.start.character);
+    // decl.range and tree-sitter columns are both UTF-16 code units.
     const funcNode = tree.rootNode.descendantForPosition({
       row: decl.range.start.line,
-      column: utf8Col,
+      column: decl.range.start.character,
     });
     if (!funcNode) continue;
 

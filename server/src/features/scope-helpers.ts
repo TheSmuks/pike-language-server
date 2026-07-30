@@ -4,16 +4,14 @@
  * Extracted from scopeBuilder.ts to reduce file size.
  *
  * Performance note: all position conversion functions accept an optional
- * OffsetMap for O(1) byte→UTF-16 lookup. When the map is provided (during
- * buildSymbolTable), conversions are array-index lookups instead of
- * per-character scans. When omitted (feature handlers), falls back to
- * the original utf8ToUtf16 function.
+ * OffsetMap for O(1) lookup during buildSymbolTable. Tree-sitter columns and
+ * LSP characters are both UTF-16 code units, so without a map the column
+ * passes through unchanged.
  */
 import type { Node, Point } from 'web-tree-sitter';
 import type { BuildState, Declaration, Range } from './symbolTable';
 import type { OffsetMap } from '../util/offsetMap';
 import { lookupUtf16 } from '../util/offsetMap';
-import { utf8ToUtf16 } from '../util/positionConverter';
 
 // Import from the extracted lookup module
 import { findScopeForNode, rangeSize } from './scope-helpers-lookup';
@@ -34,8 +32,8 @@ export function toRange(node: Node): Range {
 }
 
 /**
- * Convert a tree-sitter Point (UTF-8 byte column) to an LSP Location
- * with UTF-16 character offset, using pre-split source lines.
+ * Convert a tree-sitter Point to an LSP Location. Both use UTF-16 code unit
+ * columns, so absent an OffsetMap this is the identity on `column`.
  */
 export function toLocUtf16(
   point: Point,
@@ -45,11 +43,7 @@ export function toLocUtf16(
   if (offsetMap) {
     return { line: point.row, character: lookupUtf16(offsetMap, point.row, point.column) };
   }
-  const lineText = lines[point.row];
-  if (lineText === undefined) {
-    return { line: point.row, character: point.column };
-  }
-  return { line: point.row, character: utf8ToUtf16(lineText, point.column) };
+  return { line: point.row, character: point.column };
 }
 
 /**
@@ -86,9 +80,6 @@ export function containsPosition(
   if (offsetMap) {
     startCol = lookupUtf16(offsetMap, start.row, start.column);
     endCol = lookupUtf16(offsetMap, end.row, end.column);
-  } else if (lines) {
-    startCol = utf8ToUtf16(lines[start.row] ?? '', start.column);
-    endCol = utf8ToUtf16(lines[end.row] ?? '', end.column);
   } else {
     startCol = start.column;
     endCol = end.column;

@@ -16,7 +16,6 @@ import type { ModuleResolver } from "./moduleResolver";
 import { parse } from "../parser";
 import type { Node } from "web-tree-sitter";
 import { uriToPath } from "../util/uri";
-import { utf8ToUtf16 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // DocumentLink handler
@@ -63,12 +62,11 @@ async function produceDocumentLinks(
   const tree = parse(source, uri);
   if (!tree?.rootNode) return [];
 
-  const lines = source.split('\n');
   const fromPath = uriToPath(uri);
   const links: DocumentLink[] = [];
   const pending: Promise<void>[] = [];
 
-  collectLinks(tree.rootNode, fromPath, links, pending, resolver, lines);
+  collectLinks(tree.rootNode, fromPath, links, pending, resolver);
   await Promise.all(pending);
 
   return links;
@@ -87,27 +85,26 @@ function collectLinks(
   links: DocumentLink[],
   pending: Promise<void>[],
   resolver: ModuleResolver,
-  lines: string[],
 ): void {
   if (node.isError || node.isMissing) return;
 
   switch (node.type) {
     case "import_decl": {
-      collectModuleLink(node, fromPath, links, resolver, lines);
+      collectModuleLink(node, fromPath, links, resolver);
       break;
     }
     case "inherit_decl": {
-      collectInheritLink(node, fromPath, links, pending, resolver, lines);
+      collectInheritLink(node, fromPath, links, pending, resolver);
       break;
     }
     case "preproc_include": {
-      collectIncludeLink(node, fromPath, links, pending, resolver, lines);
+      collectIncludeLink(node, fromPath, links, pending, resolver);
       break;
     }
   }
 
   for (const child of node.children) {
-    collectLinks(child, fromPath, links, pending, resolver, lines);
+    collectLinks(child, fromPath, links, pending, resolver);
   }
 }
 
@@ -121,14 +118,13 @@ function collectModuleLink(
   fromPath: string,
   links: DocumentLink[],
   resolver: ModuleResolver,
-  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const cached = resolver.getCachedModule(pathNode.text, fromPath);
   if (cached?.uri) {
-    links.push({ range: toLinkRange(pathNode, lines), target: cached.uri });
+    links.push({ range: toLinkRange(pathNode), target: cached.uri });
   }
 }
 
@@ -143,12 +139,11 @@ function collectInheritLink(
   links: DocumentLink[],
   pending: Promise<void>[],
   resolver: ModuleResolver,
-  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
-  const range = toLinkRange(pathNode, lines);
+  const range = toLinkRange(pathNode);
 
   if (pathNode.type === "string") {
     pending.push(
@@ -176,13 +171,12 @@ function collectIncludeLink(
   links: DocumentLink[],
   pending: Promise<void>[],
   resolver: ModuleResolver,
-  lines: string[],
 ): void {
   const pathNode = node.childForFieldName("path");
   if (!pathNode) return;
 
   const isSystem = pathNode.type === "system_lib_string";
-  const range = toLinkRange(pathNode, lines);
+  const range = toLinkRange(pathNode);
   pending.push(
     resolver.resolveInclude(pathNode.text, isSystem, fromPath).then((res) => {
       if (res?.uri) links.push({ range, target: res.uri });
@@ -202,15 +196,9 @@ interface LspRange {
 /**
  * Convert tree-sitter positions to LSP range for DocumentLink.
  */
-function toLinkRange(node: Node, lines: string[]): LspRange {
+function toLinkRange(node: Node): LspRange {
   return {
-    start: {
-      line: node.startPosition.row,
-      character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
-    },
-    end: {
-      line: node.endPosition.row,
-      character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column),
-    },
+    start: { line: node.startPosition.row, character: node.startPosition.column },
+    end: { line: node.endPosition.row, character: node.endPosition.column },
   };
 }

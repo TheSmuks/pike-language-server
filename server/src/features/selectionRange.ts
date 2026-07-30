@@ -13,7 +13,6 @@
 
 import { Tree, Node } from "web-tree-sitter";
 import type { SelectionRange } from "vscode-languageserver/node";
-import { utf8ToUtf16, utf16ToUtf8 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Node types that produce meaningful selection ranges.
@@ -84,26 +83,22 @@ const MEANINGFUL_TYPES = new Set([
  *
  * @param tree Parse tree
  * @param line Cursor line (0-based)
- * @param character Cursor character (0-based UTF-16)
- * @param lines Pre-split source lines.
+ * @param character Cursor character (0-based UTF-16, same units as tree-sitter columns)
  */
 export function getSelectionRange(
   tree: Tree,
   line: number,
   character: number,
-  lines: string[],
 ): SelectionRange | null {
   const root = tree.rootNode;
-  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
-  const pos = { row: line, column: utf8Col };
+  const pos = { row: line, column: character };
 
   // Find the deepest node at this position
   let node: Node | null = root.descendantForPosition(pos);
   if (!node) return null;
 
-  const ranges = collectRangesUp(node, lines);
-  if (ranges.length === 0) return makeRootRange(root, lines);
+  const ranges = collectRangesUp(node);
+  if (ranges.length === 0) return makeRootRange(root);
 
   // Build linked list from outermost to innermost.
   // ranges[] is innermost-first; we need to chain parent → child.
@@ -119,11 +114,11 @@ export function getSelectionRange(
  * Walk from node up to root, collecting meaningful selection ranges.
  * Returns innermost-first order.
  */
-function collectRangesUp(node: Node | null, lines: string[]): SelectionRange[] {
+function collectRangesUp(node: Node | null): SelectionRange[] {
   const ranges: SelectionRange[] = [];
   while (node) {
     if (MEANINGFUL_TYPES.has(node.type)) {
-      const range = nodeToRange(node, ranges[ranges.length - 1], lines);
+      const range = nodeToRange(node, ranges[ranges.length - 1]);
       if (range) ranges.push(range);
     }
     node = node.parent;
@@ -131,16 +126,16 @@ function collectRangesUp(node: Node | null, lines: string[]): SelectionRange[] {
   return ranges;
 }
 
-function nodeToRange(node: Node, lastRange: SelectionRange | null, lines: string[]): SelectionRange | null {
+function nodeToRange(node: Node, lastRange: SelectionRange | null): SelectionRange | null {
   const range: SelectionRange = {
     range: {
       start: {
         line: node.startPosition.row,
-        character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column),
+        character: node.startPosition.column,
       },
       end: {
         line: node.endPosition.row,
-        character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column),
+        character: node.endPosition.column,
       },
     },
   };
@@ -154,11 +149,11 @@ function nodeToRange(node: Node, lastRange: SelectionRange | null, lines: string
   return range;
 }
 
-function makeRootRange(root: Node, lines: string[]): SelectionRange {
+function makeRootRange(root: Node): SelectionRange {
   return {
     range: {
-      start: { line: root.startPosition.row, character: utf8ToUtf16(lines[root.startPosition.row] ?? '', root.startPosition.column) },
-      end: { line: root.endPosition.row, character: utf8ToUtf16(lines[root.endPosition.row] ?? '', root.endPosition.column) },
+      start: { line: root.startPosition.row, character: root.startPosition.column },
+      end: { line: root.endPosition.row, character: root.endPosition.column },
     },
   };
 }

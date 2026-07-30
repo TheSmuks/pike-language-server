@@ -9,7 +9,6 @@ import { Tree, Node } from "web-tree-sitter";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import type { ResolveResult } from "./pikeWorker";
 import { type StdlibEntry, resetStdlibCache, resetAutoImportCache } from "./completion-stdlib";
-import { utf16ToUtf8 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -193,12 +192,12 @@ function resolveTriggerFromLineText(
 
   if (character >= 2) {
     const twoBefore = lineText.substring(character - 2, character);
-    const twoCharCtx = tryTwoCharTrigger(twoBefore, rootNode, line, character - 2, lineText);
+    const twoCharCtx = tryTwoCharTrigger(twoBefore, rootNode, line, character - 2);
     if (twoCharCtx) return twoCharCtx;
   }
 
   if (lineText[character - 1] === "(") {
-    const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1, lineText);
+    const callee = findCalleeBeforeOpenParen(rootNode, line, character - 1);
     if (callee) {
       return { type: "call_args", calleeNode: callee, calleeName: callee.text };
     }
@@ -215,12 +214,12 @@ function tryDotOrArrowFromChar(
   line: number,
 ): TriggerContext | null {
   if (oneBefore === ".") {
-    const lhs = findLhsBeforePosition(rootNode, line, character - 1, lineText);
+    const lhs = findLhsBeforePosition(rootNode, line, character - 1);
     if (lhs) return { type: "dot", lhsNode: lhs };
   }
 
   if (oneBefore === ">" && character >= 2 && lineText[character - 2] === "-") {
-    const lhs = findLhsBeforePosition(rootNode, line, character - 2, lineText);
+    const lhs = findLhsBeforePosition(rootNode, line, character - 2);
     if (lhs) return { type: "arrow", lhsNode: lhs };
   }
 
@@ -232,15 +231,14 @@ function tryTwoCharTrigger(
   rootNode: Node,
   line: number,
   pos: number,
-  lineText: string,
 ): TriggerContext | null {
   if (twoBefore === "->") {
-    const lhs = findLhsBeforePosition(rootNode, line, pos, lineText);
+    const lhs = findLhsBeforePosition(rootNode, line, pos);
     if (lhs) return { type: "arrow", lhsNode: lhs };
   }
 
   if (twoBefore === "::") {
-    const lhs = findLhsBeforePosition(rootNode, line, pos, lineText);
+    const lhs = findLhsBeforePosition(rootNode, line, pos);
     if (lhs) return { type: "scope", scopeNode: lhs };
   }
 

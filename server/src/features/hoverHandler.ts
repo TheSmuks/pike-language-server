@@ -39,7 +39,6 @@ import {
   type HoverInfo,
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
-import { utf16ToUtf8 } from "../util/positionConverter";
 
 // Re-export for any external consumers
 export type { HoverInfo } from "./hoverContent";
@@ -102,15 +101,12 @@ function identifierAtPosition(
   tree: Tree,
   line: number,
   character: number,
-  lines: string[],
 ): string | null {
-  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
-
-  // Get the deepest node at the position
+  // Get the deepest node at the position. LSP characters and tree-sitter
+  // columns are both UTF-16 code units, so no conversion is needed.
   let node: Node | null = tree.rootNode.descendantForPosition({
     row: line,
-    column: utf8Col,
+    column: character,
   });
   // Walk up to find the identifier node at this position
   while (node) {
@@ -242,10 +238,10 @@ async function resolveHoverFallback(
   );
   if (qualifiedHover) return qualifiedHover;
 
-  const builtinHover = resolveHoverBuiltin(ctx, hoverTree, doc, params);
+  const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
   if (builtinHover) return builtinHover;
 
-  const aliasHover = hoverFromInheritAlias(table, hoverTree, doc, params);
+  const aliasHover = hoverFromInheritAlias(table, hoverTree, params);
   if (aliasHover) return aliasHover;
 
   return hoverFromModulePath(ctx, doc, params);
@@ -259,11 +255,10 @@ async function resolveHoverFallback(
 function hoverFromInheritAlias(
   table: SymbolTable,
   hoverTree: Tree,
-  doc: { getText(): string },
   params: { position: { line: number; character: number } },
 ): Hover | null {
   const identName = identifierAtPosition(
-    hoverTree, params.position.line, params.position.character, doc.getText().split('\n'),
+    hoverTree, params.position.line, params.position.character,
   );
   if (!identName) return null;
 
@@ -427,11 +422,10 @@ async function hoverFromQualifiedStdlib(
 function resolveHoverBuiltin(
   ctx: HoverContext,
   hoverTree: Tree,
-  doc: { getText(): string },
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
 ): Hover | null {
   const identName = identifierAtPosition(
-    hoverTree, params.position.line, params.position.character, doc.getText().split('\n'),
+    hoverTree, params.position.line, params.position.character,
   );
   if (!identName) return null;
 

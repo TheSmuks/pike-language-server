@@ -12,16 +12,16 @@ import {
   Position,
 } from 'vscode-languageserver/node';
 import { Tree, Node, Point } from 'web-tree-sitter';
-import { utf8ToUtf16 } from '../util/positionConverter';
 
 export { Diagnostic, DiagnosticSeverity, DiagnosticTag, Range, Position };
 
-function toPosition(point: Point, lines: string[]): Position {
-  return Position.create(point.row, utf8ToUtf16(lines[point.row] ?? '', point.column));
+// LSP characters and tree-sitter columns are both UTF-16 code units.
+function toPosition(point: Point): Position {
+  return Position.create(point.row, point.column);
 }
 
-function toRange(node: Node, lines: string[]): Range {
-  return Range.create(toPosition(node.startPosition, lines), toPosition(node.endPosition, lines));
+function toRange(node: Node): Range {
+  return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
 }
 
 function findErrorNodes(node: Node): Node[] {
@@ -47,14 +47,14 @@ function findErrorNodes(node: Node): Node[] {
  * - Single child: use the child's range (the unexpected token).
  * - Multiple children: use the first child that isn't whitespace/newline.
  */
-function narrowErrorRange(node: Node, lines: string[]): Range {
+function narrowErrorRange(node: Node): Range {
   const childCount = node.childCount;
 
   // Single child: use just that child's range.
   if (childCount === 1) {
     const child = node.child(0);
-    if (!child) return Range.create(toPosition(node.startPosition, lines), toPosition(node.endPosition, lines));
-    return Range.create(toPosition(child.startPosition, lines), toPosition(child.endPosition, lines));
+    if (!child) return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
+    return Range.create(toPosition(child.startPosition), toPosition(child.endPosition));
   }
 
   // Multiple children: find the first non-padding token.
@@ -66,7 +66,7 @@ function narrowErrorRange(node: Node, lines: string[]): Range {
     if (type === 'ERROR') continue; // Don't nest.
     if (type === 'missing') continue;
     if (child.text.trim().length > 0) {
-      return Range.create(toPosition(child.startPosition, lines), toPosition(child.endPosition, lines));
+      return Range.create(toPosition(child.startPosition), toPosition(child.endPosition));
     }
   }
 
@@ -75,14 +75,14 @@ function narrowErrorRange(node: Node, lines: string[]): Range {
     const child = node.child(i);
     if (!child) continue;
     if (child.type !== 'ERROR' && child.type !== 'missing') {
-      return Range.create(toPosition(child.startPosition, lines), toPosition(child.endPosition, lines));
+      return Range.create(toPosition(child.startPosition), toPosition(child.endPosition));
     }
   }
 
   // Absolute fallback: just the first byte of the ERROR node.
   return Range.create(
-    toPosition(node.startPosition, lines),
-    Position.create(node.startPosition.row, utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column) + 1),
+    toPosition(node.startPosition),
+    Position.create(node.startPosition.row, node.startPosition.column + 1),
   );
 }
 
@@ -137,6 +137,9 @@ function describeError(node: Node, unexpected: string): string {
   }
 }
 
+// `lines` is unused now that tree-sitter columns and LSP characters are both
+// UTF-16 code units — kept on the signature so existing callers don't need
+// to change.
 export function getParseDiagnostics(tree: Tree, lines: string[]): Diagnostic[] {
   const errorNodes = findErrorNodes(tree.rootNode);
   return errorNodes.map((node, index) => {
@@ -155,7 +158,7 @@ export function getParseDiagnostics(tree: Tree, lines: string[]): Diagnostic[] {
       }
     }
     return Diagnostic.create(
-      narrowErrorRange(node, lines),
+      narrowErrorRange(node),
       message,
       DiagnosticSeverity.Error,
       `P1${String(index).padStart(3, '0')}`, // Parse error code
