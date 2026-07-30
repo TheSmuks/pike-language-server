@@ -149,12 +149,12 @@ describe("inbound lookups resolve the token actually at the position", () => {
   test("missing-return lint fires for a declaration preceded by non-ASCII", () => {
     // "int helper() { }" declares a non-void return type but never returns —
     // detectMissingReturn should flag it regardless of what precedes it on
-    // the line. decl.range.start.character comes from buildSymbolTable,
-    // which still populates ranges via the OffsetMap (Task 4's removal
-    // target): true UTF-16 column of "int" is 11, but the OffsetMap-shifted
-    // value fed to descendantForPosition lands on the comment node instead
-    // of the function, so findFunctionDefinition fails and the rule finds
-    // nothing to flag. This is expected to fail until Task 4.
+    // the line. decl.range.start.character comes from buildSymbolTable. Before
+    // Task 4, buildSymbolTable populated ranges via the OffsetMap: true UTF-16
+    // column of "int" is 11, but the OffsetMap-shifted value fed to
+    // descendantForPosition landed on the comment node instead of the
+    // function, so findFunctionDefinition failed and the rule found nothing
+    // to flag. Removing the offset map (Task 4) fixed it.
     const src = "/* ©©©© */ int helper() { }";
     const tree = parse(src);
     const table = buildSymbolTable(tree, "file:///test/nonascii-missingreturn.pike", 1, undefined, src);
