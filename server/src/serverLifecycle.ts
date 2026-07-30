@@ -28,6 +28,7 @@ import { loadManifest, restoreStubs } from "./features/cacheManifest";
 import { SymbolIndex } from "./features/symbolIndex";
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
+import { readSource } from "./util/sourceDecoder.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
 import { hashContent } from "./features/cacheHash";
 import { createIndexWarmRefresh } from "./features/indexWarmRefresh";
@@ -96,7 +97,6 @@ async function checkEntryStaleness(
   entry: CachedFileEntry,
   index: WorkspaceIndex,
 ): Promise<string | undefined> {
-  const { readFile: readFileAsync } = await import("node:fs/promises");
   const current = index.getFile(entry.uri);
   if (!current) return undefined;
   if (
@@ -108,7 +108,7 @@ async function checkEntryStaleness(
 
   try {
     const filePath = fileURLToPath(entry.uri);
-    const diskContent = await readFileAsync(filePath, "utf-8");
+    const diskContent = await readSource(filePath);
     const diskHash = hashContent(diskContent);
     if (diskHash === entry.contentHash) return undefined;
     return diskContent;

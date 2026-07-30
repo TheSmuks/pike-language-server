@@ -5,7 +5,6 @@
  * TigerStyle function limit.
  */
 
-import { readFile } from "node:fs/promises";
 import type { Connection } from "vscode-languageserver/node";
 import type { InitializeParams } from "vscode-languageserver/node";
 import { buildServerCapabilities } from "./serverCapabilities";
@@ -14,6 +13,7 @@ import { parse } from "./parser";
 import { WorkspaceIndex, ModificationSource } from "./features/workspaceIndex";
 import { hydrateFromCache } from "./features/cacheHydrate";
 import { logInfo, logWarn, logError, ErrorCategory, setLogPathRedactionEnabled } from "./util/errorLog.js";
+import { readSource } from "./util/sourceDecoder.js";
 import { getPikePaths } from "./features/pikeDetection.js";
 import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
@@ -153,7 +153,7 @@ async function onDemandIndex(
 ): Promise<import("./features/workspaceTypes").FileEntry | null> {
   try {
     const filePath = uriToPath(targetUri);
-    const content = await readFile(filePath, "utf-8");
+    const content = await readSource(filePath);
     // Fast path: hydrate a stub from cache when the source is unchanged.
     if (await hydrateFromCache(ctx.index, ctx.index.workspaceRoot, targetUri, content)) {
       return ctx.index.getFile(targetUri) ?? null;
