@@ -1931,7 +1931,18 @@ Expected: `standalone/server.js` exists.
 
 - [ ] **Step 3: Write the sweep**
 
-Create `tools/lsp-audit/standalone-sweep.mjs`. Copy the spawn/framing helpers from `scripts/check-helix-lsp.mjs` verbatim — it already solves Content-Length framing and the handshake — then use this driver:
+First extract the shared framing helpers, then write the driver.
+
+**Step 3a — extract `tools/lsp-audit/lsp-stdio.mjs`.** Move `send`, `notify`, and the Content-Length receive loop out of `scripts/check-helix-lsp.mjs` into this new module, exporting them unchanged. Then update `scripts/check-helix-lsp.mjs` to import them instead of defining them. Do not alter their behaviour — this is a move, not a rewrite.
+
+Verify the guard still works before going further:
+
+```bash
+bun run build:standalone && bun run check:helix
+```
+Expected: same result as before the extraction. `check:helix` is part of the repository-guards CI job, so a regression here breaks CI.
+
+**Step 3b — write the driver.** Create `tools/lsp-audit/standalone-sweep.mjs`, importing `send` and `notify` from `./lsp-stdio.mjs`:
 
 ```js
 #!/usr/bin/env node
@@ -1949,6 +1960,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { send, notify } from "./lsp-stdio.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -2023,7 +2035,6 @@ async function main() {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  // send()/receive() come from scripts/check-helix-lsp.mjs — copy them here.
   await send(proc, "initialize", {
     processId: process.pid,
     rootUri: `file://${dir}`,
@@ -2078,7 +2089,7 @@ Expected: a line per capability. Every `error` and every `empty` on a capability
 - [ ] **Step 6: Commit**
 
 ```bash
-PRE_COMMIT_ALLOW_NO_CONFIG=1 git add tools/lsp-audit/standalone-sweep.mjs package.json
+PRE_COMMIT_ALLOW_NO_CONFIG=1 git add tools/lsp-audit/lsp-stdio.mjs tools/lsp-audit/standalone-sweep.mjs scripts/check-helix-lsp.mjs package.json
 PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "feat(audit): sweep all capabilities over real stdio as a non-VSCode client"
 ```
 
