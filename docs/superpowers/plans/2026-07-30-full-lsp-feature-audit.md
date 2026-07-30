@@ -466,21 +466,27 @@ export const MATRIX: CapabilitySpec[] = [
     params: () => ({ query: "create" }),
     validate: nonEmpty,
   },
+  // Lifecycle. These are NOTIFICATIONS, not requests — the server implements
+  // onDidRenameFiles and onDidChange, neither of which returns a response.
+  // Firing them with sendRequest would hang until the timeout and report a
+  // false Critical on every file, so the driver sends them as notifications
+  // and records that the server survived. The entries exist here so the
+  // coverage test still sees their declared keys.
   {
-    method: "workspace/willRenameFiles",
-    driver: "workspace",
+    method: "workspace/didRenameFiles",
+    driver: "lifecycle",
     declaredBy: "workspace",
     params: (ctx) => ({ files: [{ oldUri: ctx.uri, newUri: ctx.uri.replace(/\.pike$/, "-renamed.pike") }] }),
     validate: anyResult,
   },
-
-  // Lifecycle. Swept by the driver's own open/change/save churn rather than a
-  // single request; the entry exists so the coverage test sees the key.
   {
     method: "textDocument/didChange",
     driver: "lifecycle",
     declaredBy: "textDocumentSync",
-    params: doc,
+    params: (ctx) => ({
+      textDocument: { uri: ctx.uri, version: 3 },
+      contentChanges: [{ text: ctx.text }],
+    }),
     validate: anyResult,
   },
 ];
@@ -909,6 +915,44 @@ async function primeDelta(server: TestServer, uri: string, text: string, timeout
   }
 }
 
+/**
+ * Send a lifecycle notification and record that the server survived it.
+ *
+ * A notification has no reply, so there is nothing to validate. What is being
+ * tested is that the server accepts it without throwing — a handler that
+ * crashes on didRenameFiles takes the whole session down, which is exactly the
+ * kind of defect this audit exists to find.
+ */
+function notifyAndRecord(
+  server: TestServer,
+  spec: CapabilitySpec,
+  ctx: RequestContext,
+  options: SweepOptions,
+  relPath: string,
+): LedgerRecord {
+  const started = performance.now();
+  let status: Status = "ok";
+  let detail: string | undefined;
+  try {
+    server.client.sendNotification(spec.method, spec.params(ctx));
+  } catch (error) {
+    status = "error";
+    detail = error instanceof Error ? error.message : String(error);
+  }
+  return {
+    surface: options.surface,
+    workspace: options.workspaceName,
+    capability: spec.method,
+    file: relPath,
+    position: null,
+    status,
+    durationMs: Math.round(performance.now() - started),
+    rssBytes: process.memoryUsage().rss,
+    digest: "notification",
+    detail,
+  };
+}
+
 /** Sweep one file across the whole matrix. */
 async function sweepFile(
   server: TestServer,
@@ -927,6 +971,12 @@ async function sweepFile(
   const previousResultId = await primeDelta(server, uri, text, timeoutMs);
 
   for (const spec of MATRIX) {
+    // Lifecycle entries are notifications with no response; sendRequest would
+    // hang on them until the timeout. They are driven separately, below.
+    if (spec.driver === "lifecycle") {
+      write(notifyAndRecord(server, spec, { uri, position: null, text }, options, relPath));
+      continue;
+    }
     const targets: (SweepPosition | null)[] =
       spec.driver === "position" ? positions : [null];
     for (const target of targets) {
