@@ -6,8 +6,7 @@
  */
 import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
-import { toLocUtf16 } from './scope-helpers';
-import { lookupUtf16 } from '../util/offsetMap';
+import { toLoc } from './scope-helpers';
 import {
   findScopeForNode,
   findEnclosingClassScopeId,
@@ -178,7 +177,7 @@ function collectReturnTypeIdRecursive(node: Node, state: BuildState): void {
         const declId = resolveName(name, identChild, state);
         state.references.push({
           name,
-          loc: toLocUtf16(identChild.startPosition, state.lines, state.offsetMap),
+          loc: toLoc(identChild.startPosition),
           kind: 'type_ref',
           resolvesTo: declId,
           confidence: declId !== null ? 'high' : 'low',
@@ -213,7 +212,7 @@ function collectIdentifierRef(node: Node, state: BuildState): void {
 
   state.references.push({
     name,
-    loc: toLocUtf16(nameNode.startPosition, state.lines, state.offsetMap),
+    loc: toLoc(nameNode.startPosition),
     kind,
     resolvesTo: declId,
     confidence: declId !== null ? 'high' : 'low',
@@ -271,7 +270,7 @@ function collectScopeRef(node: Node, state: BuildState): void {
 
   state.references.push({
     name,
-    loc: toLocUtf16(nameNode.startPosition, state.lines, state.offsetMap),
+    loc: toLoc(nameNode.startPosition),
     kind: 'scope_access',
     resolvesTo: declId,
     confidence: declId !== null ? 'medium' : 'low',
@@ -283,7 +282,7 @@ function collectThisRef(node: Node, state: BuildState): void {
   const classDecl = findEnclosingClassDecl(node, state);
   state.references.push({
     name: node.text,
-    loc: toLocUtf16(node.startPosition, state.lines, state.offsetMap),
+    loc: toLoc(node.startPosition),
     kind: 'this_ref',
     resolvesTo: classDecl,
     confidence: classDecl !== null ? 'high' : 'low',
@@ -309,7 +308,7 @@ function collectTypeRefsRecursive(node: Node, state: BuildState): void {
         const declId = resolveName(name, identChild, state);
         state.references.push({
           name,
-          loc: toLocUtf16(identChild.startPosition, state.lines, state.offsetMap),
+          loc: toLoc(identChild.startPosition),
           kind: 'type_ref',
           resolvesTo: declId,
           confidence: declId !== null ? 'high' : 'low',
@@ -364,10 +363,9 @@ function resolveName(name: string, refNode: Node, state: BuildState): number | n
           return declId;
         }
         // Block/function scope: declaration must be before reference
-        const refColUtf16 = lookupUtf16(state.offsetMap, refNode.startPosition.row, refNode.startPosition.column);
         if (decl.range.start.line < refNode.startPosition.row ||
             (decl.range.start.line === refNode.startPosition.row &&
-             decl.range.start.character <= refColUtf16)) {
+             decl.range.start.character <= refNode.startPosition.column)) {
           return declId;
         }
       }
