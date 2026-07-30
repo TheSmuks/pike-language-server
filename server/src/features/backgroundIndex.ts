@@ -20,7 +20,7 @@ import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import type { IndexingMode } from "./resourceTypes";
 import { resolveAutoMode } from "./resourceConfiguration";
-import { logError, logInfo, logWarn, ErrorCategory } from "../util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory, logUnsupportedCharset } from "../util/errorLog.js";
 import { readSource } from "../util/sourceDecoder.js";
 import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
 
@@ -220,7 +220,11 @@ async function parseFile(
   const uri = pathToFileURL(filepath).href;
   try {
     startSpan("readFile");
-    const content = await measureAsync("readFile", () => readSource(filepath));
+    const content = await measureAsync("readFile", () =>
+      readSource(filepath, (declared) =>
+        logUnsupportedCharset(connection, `readFile(${filepath})`, declared),
+      ),
+    );
     stopSpan("readFile");
     bump("fileReads");
     const tree = parse(content);

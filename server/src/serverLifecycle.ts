@@ -7,12 +7,7 @@
 
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  Connection,
-  TextDocuments,
-  DidChangeWatchedFilesNotification,
-  CancellationTokenSource,
-} from "vscode-languageserver/node";
+import { Connection, TextDocuments, DidChangeWatchedFilesNotification, CancellationTokenSource } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { isParserReady, parse, initParser } from "./parser";
 import type { WorkspaceIndex } from "./features/workspaceIndex";
@@ -27,7 +22,7 @@ import {
 import { loadManifest, restoreStubs } from "./features/cacheManifest";
 import { SymbolIndex } from "./features/symbolIndex";
 import { PikeWorker, PikeUnavailableError } from "./features/pikeWorker";
-import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory, logUnsupportedCharset } from "./util/errorLog.js";
 import { readSource } from "./util/sourceDecoder.js";
 import type { DiagnosticManager } from "./features/diagnosticManager";
 import { hashContent } from "./features/cacheHash";
@@ -94,6 +89,7 @@ function restoreCachedEntries(
  * Returns the disk content string if stale, undefined if up-to-date.
  */
 async function checkEntryStaleness(
+  connection: Connection,
   entry: CachedFileEntry,
   index: WorkspaceIndex,
 ): Promise<string | undefined> {
@@ -108,7 +104,9 @@ async function checkEntryStaleness(
 
   try {
     const filePath = fileURLToPath(entry.uri);
-    const diskContent = await readSource(filePath);
+    const diskContent = await readSource(filePath, (declared) =>
+      logUnsupportedCharset(connection, `checkEntryStaleness(${filePath})`, declared),
+    );
     const diskHash = hashContent(diskContent);
     if (diskHash === entry.contentHash) return undefined;
     return diskContent;
@@ -134,7 +132,7 @@ async function refreshStaleCacheEntries(
   for (const entry of cached) {
     if (!entry.symbolTable) continue;
 
-    const diskContent = await checkEntryStaleness(entry, index);
+    const diskContent = await checkEntryStaleness(connection, entry, index);
     if (!diskContent) continue;
 
     index.invalidateWithDependents(entry.uri);
