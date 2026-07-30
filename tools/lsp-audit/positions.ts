@@ -39,6 +39,70 @@ export function lexicalIdentifiers(text: string): string[] {
   return found;
 }
 
+/**
+ * Mark every offset that sits inside a comment or a string/char literal.
+ *
+ * Without this the sweep asks for hover, definition and references on words
+ * inside `//!` autodoc prose and string bodies. The server correctly answers
+ * nothing there, and the harness reports every one of them as a defect — 55 of
+ * the corpus tier's first 63 hover/definition "empty" results came from exactly
+ * this. Those are not positions a user's cursor can meaningfully rest on for
+ * these capabilities, so they must never be swept.
+ *
+ * A lexical scan, not a parse: positions must not depend on a feature under
+ * audit, and the parser is one.
+ */
+export function commentAndLiteralMask(text: string): Uint8Array {
+  const mask = new Uint8Array(text.length);
+  let i = 0;
+  while (i < text.length) {
+    const two = text.slice(i, i + 2);
+    if (two === "//") {
+      const end = text.indexOf("\n", i);
+      i = maskTo(mask, i, end === -1 ? text.length : end);
+    } else if (two === "/*") {
+      const end = text.indexOf("*/", i + 2);
+      i = maskTo(mask, i, end === -1 ? text.length : end + 2);
+    } else if (text[i] === '"' || text[i] === "'") {
+      // Pike's `#"..."` form is the one string literal that spans lines; every
+      // other unterminated quote ends at the newline, so a stray apostrophe
+      // cannot swallow the rest of the file.
+      i = maskLiteral(text, mask, i, text[i], text[i - 1] === "#");
+    } else {
+      i++;
+    }
+  }
+  return mask;
+}
+
+function maskTo(mask: Uint8Array, start: number, stop: number): number {
+  mask.fill(1, start, stop);
+  return Math.max(stop, start + 1);
+}
+
+function maskLiteral(
+  text: string,
+  mask: Uint8Array,
+  start: number,
+  quote: string,
+  multiline: boolean,
+): number {
+  let i = start + 1;
+  while (i < text.length) {
+    if (text[i] === "\\") {
+      i += 2;
+      continue;
+    }
+    if (text[i] === quote) {
+      i++;
+      break;
+    }
+    if (text[i] === "\n" && !multiline) break;
+    i++;
+  }
+  return maskTo(mask, start, Math.min(i, text.length));
+}
+
 /** Convert a string offset to a line/character pair in UTF-16 code units. */
 function toPosition(text: string, offset: number): { line: number; character: number } {
   let line = 0;
@@ -66,11 +130,15 @@ export function derivePositions(
 ): SweepPosition[] {
   const names = symbolNames.length > 0 ? symbolNames : [...new Set(lexicalIdentifiers(text))];
   const positions: SweepPosition[] = [];
+  const masked = commentAndLiteralMask(text);
 
   for (const name of names) {
     const pattern = new RegExp(`(?<![A-Za-z0-9_])${escapeRegExp(name)}(?![A-Za-z0-9_])`, "g");
     let seen = 0;
     for (const match of text.matchAll(pattern)) {
+      // Checked before `seen` moves, so prose occurrences do not consume the
+      // per-declaration budget and push real code positions out of the sweep.
+      if (masked[match.index]) continue;
       if (seen > maxRefsPerDecl) break;
       const { line, character } = toPosition(text, match.index);
       positions.push({ line, character, symbol: name, kind: seen === 0 ? "declaration" : "reference" });

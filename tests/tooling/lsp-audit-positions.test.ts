@@ -46,3 +46,52 @@ test("lexicalIdentifiers skips Pike keywords", () => {
   expect(lexicalIdentifiers("int x; return x;")).not.toContain("return");
   expect(lexicalIdentifiers("int x; return x;")).toContain("x");
 });
+
+test("positions never land inside a comment", () => {
+  // corpus/files/autodoc-documented.pike names the class in its own `//!`
+  // prose. Sweeping that word asked for hover and definition inside a comment,
+  // where nothing is the correct answer — 39 of the corpus tier's first-round
+  // hover/definition "empty" findings came from comment text alone.
+  const text = [
+    "//! Create a new Widget with the given value.",
+    "class Widget {",
+    "  int value;",
+    "}",
+    "",
+  ].join("\n");
+  const positions = derivePositions(text, ["Widget"]);
+  expect(positions).toHaveLength(1);
+  expect(positions[0].line).toBe(1);
+});
+
+test("positions never land inside a string literal", () => {
+  const text = 'string tag = "Widget";\nclass Widget { }\n';
+  const positions = derivePositions(text, ["Widget"]);
+  expect(positions.map((p) => p.line)).toEqual([1]);
+});
+
+test("a block comment hides its contents from the sweep", () => {
+  const text = "/* Widget is described here */\nclass Widget { }\n";
+  expect(derivePositions(text, ["Widget"]).map((p) => p.line)).toEqual([1]);
+});
+
+test("commented occurrences do not consume the per-declaration budget", () => {
+  // The mask is applied BEFORE `seen` advances. If it were not, three lines of
+  // prose would exhaust maxRefsPerDecl and push the real code positions out of
+  // the sweep entirely — a subtler failure than a bad position, because the
+  // capability then reports clean at zero positions.
+  const text = [
+    "// Widget",
+    "// Widget",
+    "// Widget",
+    "class Widget { }",
+    "Widget make() { return Widget(); }",
+  ].join("\n");
+  const positions = derivePositions(text, ["Widget"], 1);
+  expect(positions.map((p) => p.line)).toEqual([3, 4]);
+});
+
+test("an unterminated quote does not swallow the rest of the file", () => {
+  const text = "string broken = \"oops;\nclass Widget { }\n";
+  expect(derivePositions(text, ["Widget"]).map((p) => p.line)).toEqual([1]);
+});

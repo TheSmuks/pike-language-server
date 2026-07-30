@@ -164,6 +164,10 @@ function reproductionFor(record: LedgerRecord): string {
 }
 
 function tierOf(record: LedgerRecord, slowMs: number): Tier | null {
+  // "declined" is deliberately not listed: a protocol-level ResponseError the
+  // server chose to send (its rename guard, a cancellation) is the handler
+  // working. It falls through to the latency check like "ok" does, because a
+  // decline is still an answer and a slow one is still slow.
   if (record.status === "error" || record.status === "timeout") return 0;
   if (record.status === "empty") return 1;
   if (record.status === "wrong") return 2;

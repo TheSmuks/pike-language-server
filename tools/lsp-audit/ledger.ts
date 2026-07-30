@@ -15,8 +15,14 @@ export type Surface = "server" | "roxen" | "client" | "standalone";
  * "wrong" means the server answered, but not with the known-correct answer.
  * It can only be decided while the result is in hand, so the sweep sets it —
  * the ledger stores a digest, not the result, and triage cannot recover it.
+ *
+ * "declined" means the server answered with a protocol-level ResponseError on
+ * purpose — its rename guard saying "no renamable symbol here", a cancelled or
+ * content-modified request. That is the handler working, not failing, so it is
+ * kept distinct from "error", which is reserved for a crash or an unexpected
+ * exception. Conflating the two buries every real defect under false Criticals.
  */
-export type Status = "ok" | "empty" | "error" | "timeout" | "wrong";
+export type Status = "ok" | "empty" | "error" | "timeout" | "wrong" | "declined";
 
 export interface LedgerRecord {
   surface: Surface;

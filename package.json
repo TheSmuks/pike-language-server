@@ -43,6 +43,8 @@
     "build:tarball": "bash scripts/build-tarball.sh",
     "build:npm": "bash scripts/build-npm-package.sh",
     "probe": "bun run scripts/lsp-probe.ts",
+    "audit:sweep": "bun run tools/lsp-audit/cli.ts sweep",
+    "audit:triage": "bun run tools/lsp-audit/cli.ts triage",
     "watch:client": "bun run scripts/watch-client.mjs",
     "watch:server": "bun run scripts/watch-server.mjs",
     "test": "bun test",
