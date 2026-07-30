@@ -711,7 +711,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Ledger, readLedger } from "../../tools/lsp-audit/ledger";
-import { runSweep } from "../../tools/lsp-audit/sweep";
+import { runSweep, withTimeout } from "../../tools/lsp-audit/sweep";
 import { MATRIX } from "../../tools/lsp-audit/matrix";
 
 test("sweeps one file and records a result for every capability", async () => {
@@ -738,10 +738,20 @@ test("sweeps one file and records a result for every capability", async () => {
   }
 }, 120_000);
 
-test("records a timeout rather than hanging", async () => {
+test("withTimeout rejects a request that never answers", async () => {
+  // Tested directly rather than through the sweep. A Promise.race against a
+  // timer cannot preempt an ALREADY-RESOLVED promise — the resolved value is a
+  // microtask and the timer is a macrotask, so a fast handler wins even at
+  // timeoutMs 0. Asserting "every capability times out" is therefore
+  // unachievable, and this is the assertion that actually proves the bound.
+  const never = new Promise(() => {});
+  await expect(withTimeout(never, 10)).rejects.toThrow("__audit_timeout__");
+});
+
+test("a punishing timeout still completes the sweep instead of hanging", async () => {
   const dir = mkdtempSync(join(tmpdir(), "lsp-audit-timeout-"));
   const file = join(dir, "tiny.pike");
-  writeFileSync(file, "int x;\n");
+  writeFileSync(file, "int counter;\nint bump() { return counter + 1; }\n");
 
   const ledgerPath = join(dir, "ledger.jsonl");
   const ledger = new Ledger(ledgerPath);
@@ -751,16 +761,43 @@ test("records a timeout rather than hanging", async () => {
     surface: "server",
     files: [file],
     ledger,
-    timeoutMs: 1, // Everything times out at 1ms.
+    timeoutMs: 1,
   });
   ledger.close();
 
-  // Diagnostics arrive as notifications, not request replies, so they are not
-  // subject to the request timeout and are excluded here.
-  const records = readLedger(ledgerPath)
-    .filter((r) => r.capability !== "textDocument/publishDiagnostics");
+  const records = readLedger(ledgerPath);
   expect(records.length).toBeGreaterThan(0);
-  expect(records.every((r) => r.status === "timeout")).toBe(true);
+  // The point is resilience: no record may be left in an unknown state, and
+  // runSweep must return rather than hang. Which capabilities happen to beat a
+  // 1ms bound is a scheduling detail and is deliberately not asserted.
+  const legal = new Set(["ok", "empty", "error", "timeout", "wrong"]);
+  expect(records.every((r) => legal.has(r.status))).toBe(true);
+}, 120_000);
+
+test("lifecycle entries go through the notification path, not sendRequest", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-lifecycle-"));
+  const file = join(dir, "tiny.pike");
+  writeFileSync(file, "int counter;\n");
+
+  const ledgerPath = join(dir, "ledger.jsonl");
+  const ledger = new Ledger(ledgerPath);
+  await runSweep({
+    workspaceRoot: dir,
+    workspaceName: "fixture",
+    surface: "server",
+    files: [file],
+    ledger,
+  });
+  ledger.close();
+
+  // digest "notification" is set only by notifyAndRecord. If these had been
+  // fired with sendRequest they would have hung to the timeout instead.
+  const lifecycle = readLedger(ledgerPath).filter(
+    (r) => r.capability === "workspace/didRenameFiles" || r.capability === "textDocument/didChange",
+  );
+  expect(lifecycle).toHaveLength(2);
+  expect(lifecycle.every((r) => r.digest === "notification")).toBe(true);
+  expect(lifecycle.every((r) => r.status === "ok")).toBe(true);
 }, 120_000);
 ```
 
@@ -858,7 +895,8 @@ async function attempt(
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/** Exported so the timeout bound can be tested directly — see Task 4's tests. */
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -963,7 +1001,9 @@ async function sweepFile(
   write: (record: LedgerRecord) => void,
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const text = decodeSource(readFileSync(file));
+  // decodeSource returns a DecodedSource record, not a string — the sniffed
+  // encoding rides along with the text. Never substitute a hardcoded utf-8 read.
+  const text = decodeSource(readFileSync(file)).text;
   const uri = pathToFileURL(file).href;
   server.openDoc(uri, text, "pike");
 
