@@ -4,7 +4,6 @@
   "failing": [
     "server/base_server/global_variables.pike",
     "server/base_server/hosts.pike",
-    "server/base_server/prototypes.pike",
     "server/base_server/roxenloader.pike",
     "server/config_interface/actions/cachestatus.pike",
     "server/etc/modules/DBManager.pmod",
