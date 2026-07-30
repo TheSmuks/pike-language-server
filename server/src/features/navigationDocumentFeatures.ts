@@ -487,5 +487,5 @@ async function handleInlayHint(
   const tree = parse(source, doc.uri);
   if (!tree) return [];
 
-  return produceInlayHints({ tree, table, range: params.range, lines: source.split('\n') });
+  return produceInlayHints({ tree, table, range: params.range });
 }

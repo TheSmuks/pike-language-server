@@ -29,7 +29,7 @@ function buildAndLint(src: string) {
   const tree = parse(src);
   const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
   const unused = detectUnusedSymbols(table);
-  const unreachable = detectUnreachableCode(tree, src.split('\n'), "file:///test.pike");
+  const unreachable = detectUnreachableCode(tree, "file:///test.pike");
   return { tree, table, unused, unreachable };
 }
 
