@@ -10,4 +10,4 @@ Each iteration is a separate markdown file. Append new iterations rather than ed
 | [4](iteration-4.md) | 2026-05-27 | Full codebase | Complete — 20 findings fixed (2C/3H/7M/8L) |
 | [5](iteration-5.md) | 2026-05-27 | Full codebase | Complete — 34 findings fixed (1C/7H/14M/12L) |
 | [6](iteration-6.md) | 2026-05-29 | Highlighting, formatting, code move, completion | Complete — 16 findings (4H/7M/5L) |
-| [7](iteration-7.md) | 2026-07-30 | Behavioural sweep, all four surfaces | In progress — 14 distinct defects found (0C/7H/2M/5L) across 208,816 requests; 2 fixed (N1, C3), 12 open |
+| [7](iteration-7.md) | 2026-07-30 | Behavioural sweep, all four surfaces | In progress — 14 distinct defects found (0C/7H/2M/5L) across 208,816 requests; N1 + C3 fixed, N2/N3/C1/C2 partially fixed (corpus −86%, Roxen −25%) |

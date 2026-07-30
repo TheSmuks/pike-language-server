@@ -247,8 +247,9 @@ Stated plainly, because a reader would otherwise over-read these results.
 
 ## Fixes Applied
 
-N1 and C3 were fixed after this report was first written. Both are covered by
-new regression tests; the remaining findings are untouched.
+N1, C3, and part of the N2/N3/C1/C2 cluster were fixed after this report was
+first written. Each is covered by new regression tests; the remaining findings
+are untouched.
 
 ### N1 — `documentHighlight` on a lone declaration (`1fbd95c`)
 
@@ -279,25 +280,53 @@ at. The fix keeps the declaration for renameability and the placeholder, but
 returns the range of the occurrence under the cursor, and rejects a position
 that is not an occurrence of that symbol at all.
 
+### N2/N3/C1/C2 (partial) — the inherit qualifier in `A::member()` (`e10a6e3`)
+
+The post-N1 corpus run showed `definition`, `declaration`, `references`,
+`hover`, `completion` and `documentHighlight` all failing at one position:
+`class-multi-inherit.pike:18`, on the **`A` in `A::value()`**. Probing isolated
+it exactly — the member *after* `::` resolved, the qualifier *before* it did
+not:
+
+| Position | Before |
+|---|---|
+| `A` in `inherit A` | resolves |
+| `value` in `A::value()` | resolves |
+| `A` in `A::value()` | **null** |
+
+`collectScopeRef` recorded a reference only for the member, reading the
+qualifier solely to resolve it and never recording it. Nothing existed at that
+position, so every position-driven feature returned null. The fix records the
+qualifier as a reference resolved the same way a type reference is — it names a
+class, exactly like one. Six capabilities, one cause.
+
 ### Measured impact
 
-Corpus tier re-swept after both fixes, same harness, same 87 files:
+Corpus tier re-swept after all three fixes, same harness, same 87 files:
 
 | | Before | After |
 |---|---|---|
-| Findings | 253 | **56** (−78%) |
-| Distinct defects | 8 | **7** |
-| `documentHighlight` empties | 211 | **15** (−93%) |
+| Findings | 253 | **36** (−86%) |
+| `documentHighlight` empties | 211 | **11** (−95%) |
 | Tier-2 wrong answers | 2 | **1** |
 
-Both Roxen-tier reproductions for N1 (`replicate.pike:4`,
-`basic_defvar.pike:12`) were re-run by hand and now return highlights.
+**The Roxen tier improved far less, and the reason matters.** A re-sweep of 40
+Roxen files that previously produced empties gives:
 
-The 15 remaining `documentHighlight` empties are no longer a highlight defect:
-they sit at `class-multi-inherit.pike:18`, the same position where `definition`,
-`declaration`, `references` and `hover` also return nothing. That is the
-N2/N3/C1/C2 cluster showing through — one unresolved symbol, six capabilities
-reporting it.
+| | Before | After |
+|---|---|---|
+| Empty results | 1,567 | **1,172** (−25%) |
+
+The gap is not noise. The Roxen instances of this cluster have a **different
+root cause**, confirmed by inspection: the reported example
+(`basic_defvar.pike:40`) sits on `set` in `variables[var]->set( value )` —
+member access through a subscript expression, where the element type is not
+inferred. The multi-inheritance qualifier fix does not touch that, and no
+amount of re-running changes it.
+
+So N2/N3/C1/C2 are **partially fixed**: one root cause resolved, at least one
+more outstanding. The remaining Roxen empties are the type-inference gap on
+indexed member access.
 
 ## Recommended Order of Work
 
@@ -305,9 +334,8 @@ Not a plan, just what the evidence supports.
 
 1. ~~**N1**~~ — fixed (`1fbd95c`).
 2. ~~**C3**~~ — fixed (`7d3017c`).
-3. **N2/N3/C1/C2** — the empty-result cluster (2,624 instances), now the
-   dominant remaining defect. These four likely share a root cause in
-   symbol-table population; N2 already proves two of them are literally the
-   same handler, and the post-fix corpus run shows all of them failing at the
-   same multi-inherit position.
+3. **N2/N3/C1/C2, remaining half** — type inference through indexed member
+   access (`variables[var]->set(...)`). This is what the bulk of the 2,624
+   Roxen instances actually are; the multi-inheritance qualifier fix above
+   cleared the corpus cases but only 25% of the Roxen ones.
 4. **D3** — a 9-second response on a 4-line file suggests unbounded work.
