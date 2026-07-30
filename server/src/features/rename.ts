@@ -379,10 +379,50 @@ export function prepareRename(
   if (isProtectedFromRename(table, decl, protectedNames)) return null;
   if (PIKE_KEYWORDS.has(decl.name)) return null;
 
+  // LSP requires the returned range to CONTAIN the requested position: clients
+  // use it to pre-select the text being renamed. Returning the declaration's
+  // range instead highlights the wrong span whenever rename is invoked from a
+  // reference, and — because getDefinitionAt resolves `this` to the enclosing
+  // class — it turned a cursor on `this` into an offer to rename that class.
+  // The keyword guard above cannot catch that: it sees the resolved name.
+  const occurrence = occurrenceAt(table, decl, line, character);
+  if (!occurrence) return null;
+
   return {
-    line: decl.nameRange.start.line,
-    character: decl.nameRange.start.character,
+    line: occurrence.line,
+    character: occurrence.character,
     length: decl.name.length,
     name: decl.name,
   };
+}
+
+/**
+ * Locate the occurrence of `decl` that the cursor sits inside — the
+ * declaration itself or one of its references.
+ *
+ * Returns null when the position is not on an occurrence of this symbol at
+ * all, which is how a cursor on `this` (whose declaration is the enclosing
+ * class, somewhere else entirely) is rejected.
+ */
+function occurrenceAt(
+  table: SymbolTable,
+  decl: Declaration,
+  line: number,
+  character: number,
+): { line: number; character: number } | null {
+  const covers = (start: { line: number; character: number }) =>
+    start.line === line &&
+    character >= start.character &&
+    character <= start.character + decl.name.length;
+
+  if (covers(decl.nameRange.start)) {
+    return { line: decl.nameRange.start.line, character: decl.nameRange.start.character };
+  }
+
+  for (const ref of getReferencesTo(table, line, character)) {
+    if (ref.name === decl.name && covers(ref.loc)) {
+      return { line: ref.loc.line, character: ref.loc.character };
+    }
+  }
+  return null;
 }
