@@ -259,7 +259,8 @@ function assertSourceCoversTree(sourceText: string, root: { endIndex: number }, 
   if ((sourceText === undefined || sourceText.length === 0) && root.endIndex > 0) {
     throw new Error(
       `buildSymbolTable(${uri}): sourceText is required for a non-empty tree ` +
-        `(endIndex=${root.endIndex}); omitting it would corrupt every position.`,
+        `(endIndex=${root.endIndex}); an empty/undefined value here means the ` +
+        `caller passed the wrong variable or a stale/empty buffer for a real document.`,
     );
   }
 }
