@@ -738,6 +738,46 @@ test("sweeps one file and records a result for every capability", async () => {
   }
 }, 120_000);
 
+test("the sweep records real answers, not just records", async () => {
+  // The coverage test above proves the matrix is wired into the loop, but it
+  // would pass unchanged if every handler threw — attempt() writes a record on
+  // every outcome, including "error". This test is what fails if the server is
+  // actually broken. The four capabilities below are the ones a Pike class
+  // fixture must always answer; they were verified to return "ok" against this
+  // exact fixture before being asserted here.
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-health-"));
+  const file = join(dir, "greeter.pike");
+  writeFileSync(file, `class Greeter {
+  string label;
+  void create(string initial) { label = initial; }
+  string speak() { return label + "!"; }
+}
+`);
+
+  const ledgerPath = join(dir, "ledger.jsonl");
+  const ledger = new Ledger(ledgerPath);
+  await runSweep({
+    workspaceRoot: dir,
+    workspaceName: "fixture",
+    surface: "server",
+    files: [file],
+    ledger,
+    maxRefsPerDecl: 1,
+  });
+  ledger.close();
+
+  const records = readLedger(ledgerPath);
+  for (const capability of [
+    "textDocument/hover",
+    "textDocument/definition",
+    "textDocument/documentSymbol",
+    "textDocument/semanticTokens/full",
+  ]) {
+    const answered = records.filter((r) => r.capability === capability && r.status === "ok");
+    expect(answered.length).toBeGreaterThan(0);
+  }
+}, 120_000);
+
 test("withTimeout rejects a request that never answers", async () => {
   // Tested directly rather than through the sweep. A Promise.race against a
   // timer cannot preempt an ALREADY-RESOLVED promise — the resolved value is a
