@@ -62,14 +62,16 @@ export const EXPECTATIONS: Expectation[] = [
     method: "textDocument/definition",
     expect: { kind: "definitionAt", file: "cross-lib-base.pike", line: 8 },
   },
-  // get_prefix() is declared `string get_prefix()`; its signature contains
-  // the return type "string".
+  // get_prefix() is declared `string get_prefix()`. Assert the full
+  // declaration, not the bare type keyword "string" — every hover in this
+  // corpus mentions some type, so that alone would pass even if hover
+  // resolved to a completely different symbol.
   {
     file: "cross-lib-base.pike",
     line: 20,
     character: 9,
     method: "textDocument/hover",
-    expect: { kind: "hoverContains", text: "string" },
+    expect: { kind: "hoverContains", text: "string get_prefix" },
   },
 
   // --- cross-inherit-simple-a.pike ---------------------------------------
@@ -104,12 +106,15 @@ export const EXPECTATIONS: Expectation[] = [
   },
   // `breed` (the second occurrence on that line — the first is the literal
   // text "breed:" inside the string) is a `protected string breed;` field.
+  // "string breed" (type immediately followed by name, as written in source)
+  // is a literal substring of that declaration regardless of whether the
+  // rendered signature keeps the `protected` modifier.
   {
     file: "class-single-inherit.pike",
     line: 36,
     character: 40,
     method: "textDocument/hover",
-    expect: { kind: "hoverContains", text: "string" },
+    expect: { kind: "hoverContains", text: "string breed" },
   },
 
   // --- class-create.pike ---------------------------------------------------
@@ -131,13 +136,15 @@ export const EXPECTATIONS: Expectation[] = [
   },
 
   // --- class-this-object.pike -----------------------------------------------
-  // `buf` is `string buf = "";`.
+  // `buf` is `string buf = "";` — "string buf" (type immediately followed by
+  // name) is a literal substring of that declaration regardless of whether
+  // the rendered signature keeps the initializer.
   {
     file: "class-this-object.pike",
     line: 7,
     character: 4,
     method: "textDocument/hover",
-    expect: { kind: "hoverContains", text: "string" },
+    expect: { kind: "hoverContains", text: "string buf" },
   },
   // `this` is a reserved keyword referring to the current object, not a
   // declared symbol — there is nothing to rename.
@@ -230,6 +237,24 @@ export const EXPECTATIONS: Expectation[] = [
 ];
 
 /**
+ * Every position an expectation targets, keyed by corpus-relative filename.
+ *
+ * Fed to the sweep as `extraPositions`. Without it the sweep only visits
+ * positions named by TOP-LEVEL documentSymbol entries, which reaches 1 of 20
+ * expectations — fields, locals and class members are never emitted as
+ * top-level symbols, so tier 2 would check almost nothing.
+ */
+export function expectationPositions(): Map<string, Array<{ line: number; character: number }>> {
+  const byFile = new Map<string, Array<{ line: number; character: number }>>();
+  for (const e of EXPECTATIONS) {
+    const list = byFile.get(e.file) ?? [];
+    list.push({ line: e.line, character: e.character });
+    byFile.set(e.file, list);
+  }
+  return byFile;
+}
+
+/**
  * Adapt the expectation set to the sweep's CorrectnessChecker interface.
  *
  * Returns null when nothing covers this (file, method, position) — the common
@@ -253,8 +278,16 @@ export function expectationChecker() {
 }
 
 export function checkExpectation(expectation: Expectation, result: unknown): boolean {
-  if (result === null || result === undefined) return false;
   const want = expectation.expect;
+
+  // renameAllowed is checked BEFORE the null guard, because null is precisely
+  // the correct prepareRename response for a non-renameable position. Guarding
+  // first would make `allowed: false` unsatisfiable — it would report "wrong"
+  // exactly when the server behaves correctly.
+  if (want.kind === "renameAllowed") {
+    return (result !== null && result !== undefined) === want.allowed;
+  }
+  if (result === null || result === undefined) return false;
 
   switch (want.kind) {
     case "definitionAt": {
@@ -269,8 +302,9 @@ export function checkExpectation(expectation: Expectation, result: unknown): boo
     }
     case "referenceCount":
       return Array.isArray(result) && result.length === want.count;
-    case "renameAllowed":
-      return (result !== null) === want.allowed;
+    // "renameAllowed" is handled by the early return above, before the null
+    // guard — control-flow narrowing has already removed it from `want`'s
+    // type here, so a case for it would not type-check as reachable.
     case "completionIncludes": {
       const items = Array.isArray(result) ? result : (result as { items?: unknown[] }).items ?? [];
       return items.some((item: { label?: string }) => item.label === want.label);

@@ -40,6 +40,14 @@ export interface SweepOptions {
   maxRefsPerDecl?: number;
   /** Tier-2 checking. Omitted for the Roxen tier, where answers are unknown. */
   checker?: CorrectnessChecker;
+  /**
+   * Extra positions to visit beyond what documentSymbol names produce, keyed
+   * by corpus-relative filename — see Task 6's expectationPositions(). Without
+   * this the sweep only reaches TOP-LEVEL documentSymbol entries; fields,
+   * locals and class members (where most tier-2 expectations live) are never
+   * emitted as top-level symbols and would otherwise go unvisited.
+   */
+  extraPositions?: Map<string, Array<{ line: number; character: number }>>;
 }
 
 interface Outcome {
@@ -101,6 +109,34 @@ function digestOf(result: unknown): string {
   const items = (result as { items?: unknown[] }).items;
   if (Array.isArray(items)) return `items:${items.length}`;
   return `object:${Object.keys(result as object).length}`;
+}
+
+/**
+ * Merge extra positions (e.g. Task 6's expectationPositions()) into the
+ * positions derived from documentSymbol, keyed by relPath.
+ *
+ * An extra position already covered by a derived declaration/reference is not
+ * duplicated. Extras carry no symbol name or declaration/reference kind — only
+ * `line`/`character` are read downstream when building the request context —
+ * so both fields are filled with an inert placeholder.
+ */
+function withExtraPositions(
+  positions: SweepPosition[],
+  relPath: string,
+  extraPositions: SweepOptions["extraPositions"],
+): SweepPosition[] {
+  const extras = extraPositions?.get(relPath);
+  if (!extras || extras.length === 0) return positions;
+
+  const seen = new Set(positions.map((p) => `${p.line}:${p.character}`));
+  const merged = [...positions];
+  for (const { line, character } of extras) {
+    const key = `${line}:${character}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ line, character, symbol: "", kind: "reference" });
+  }
+  return merged;
 }
 
 /** Ask the server for declaration names, tolerating a broken documentSymbol. */
@@ -195,8 +231,15 @@ async function sweepFile(
   server.openDoc(uri, text, "pike");
 
   const names = await symbolNames(server, uri, timeoutMs);
-  const positions = derivePositions(text, names, options.maxRefsPerDecl ?? 5);
+  // relPath must be computed before positions: withExtraPositions looks up
+  // options.extraPositions by relPath, the same key expectationPositions()
+  // uses.
   const relPath = relative(options.workspaceRoot, file) || basename(file);
+  const positions = withExtraPositions(
+    derivePositions(text, names, options.maxRefsPerDecl ?? 5),
+    relPath,
+    options.extraPositions,
+  );
   const previousResultId = await primeDelta(server, uri, text, timeoutMs);
 
   for (const spec of MATRIX) {
