@@ -325,6 +325,24 @@
           "minimum": 10000,
           "maximum": 86400000,
           "scope": "window"
+        },
+        "pike.roxen.mode": {
+          "type": "string",
+          "default": "auto",
+          "enum": ["auto", "on", "off"],
+          "enumDescriptions": [
+            "Treat a file as Roxen code when it carries a Roxen marker, sits beside one that does, or lives inside a detected Roxen installation",
+            "Treat every Pike file in the workspace as Roxen code",
+            "Never treat a file as Roxen code, even inside a Roxen installation"
+          ],
+          "description": "Controls which files get Roxen includes, symbols, and completions.",
+          "scope": "window"
+        },
+        "pike.roxen.path": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a Roxen installation (the directory containing server/). Leave empty to detect one from pike.json, the workspace's ancestors, or /usr/local/roxen*. Roxen symbols work without an installation; a detected one adds go-to-definition into real sources.",
+          "scope": "machine-overridable"
         }
       }
     }

@@ -59,6 +59,7 @@ export function registerCompletionHandlers(
     get stdlibIndex() { return ctx.stdlibIndex; },
     get predefBuiltins() { return ctx.predefBuiltins; },
     get predefAutodoc() { return ctx.predefAutodoc; },
+    get roxenIndex() { return ctx.roxenIndex; },
     memberResolver,
   };
 
@@ -113,7 +114,7 @@ function buildMemberResolver(
 async function handleCompletion(
   connection: Connection,
   ctx: NavigationContext,
-  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins; predefAutodoc: typeof ctx.predefAutodoc; memberResolver: (typeName: string) => Promise<import("./pikeWorker").ResolveResult | null> },
+  completionBase: { index: typeof ctx.index; stdlibIndex: typeof ctx.stdlibIndex; predefBuiltins: typeof ctx.predefBuiltins; predefAutodoc: typeof ctx.predefAutodoc; roxenIndex: typeof ctx.roxenIndex; memberResolver: (typeName: string) => Promise<import("./pikeWorker").ResolveResult | null> },
   makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
   token: CancellationToken,
@@ -138,7 +139,15 @@ async function handleCompletion(
 
     const result = await getCompletions(
       table, tree, params.position.line, params.position.character,
-      { ...completionBase, uri: params.textDocument.uri, source, typeInferrer: makeTypeInferrer(source) },
+      {
+        ...completionBase,
+        uri: params.textDocument.uri,
+        source,
+        // Read, not recomputed: activation was decided when the document last
+        // changed, so completion never touches the filesystem.
+        roxenActive: ctx.roxenActive.get(params.textDocument.uri) === true,
+        typeInferrer: makeTypeInferrer(source),
+      },
     );
 
     if (prefixRange) attachPrefixTextEdits(result.items, prefixRange);

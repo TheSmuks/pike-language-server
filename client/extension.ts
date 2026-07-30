@@ -195,6 +195,9 @@ function computeHeapCapMb(): number {
  */
 function getSettings(): Record<string, unknown> {
   const config = vscode.workspace.getConfiguration("pike.languageServer");
+  // Roxen settings sit under pike.roxen, not pike.languageServer: they describe
+  // the code being edited, not the server's own behaviour.
+  const roxen = vscode.workspace.getConfiguration("pike.roxen");
   return {
     pikeBinaryPath: config.get<string>("path", "pike"),
     diagnosticMode: config.get<string>("diagnosticMode", "realtime"),
@@ -228,6 +231,10 @@ function getSettings(): Record<string, unknown> {
 
     // Logging
     logPathRedactionEnabled: config.get<boolean>("log.redactPaths", true),
+
+    // Roxen
+    roxenMode: roxen.get<string>("mode", "auto"),
+    roxenPath: roxen.get<string>("path", ""),
 
     // Resource-resilience settings
     indexingMode: config.get<string>("indexing.mode", "openFiles"),
@@ -518,7 +525,9 @@ export function activate(context: vscode.ExtensionContext): void {
   let restarting = false;
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("pike.languageServer")) {
+      // pike.roxen is watched alongside pike.languageServer: both are delivered
+      // as initializationOptions, so both only take effect on a restart.
+      if (event.affectsConfiguration("pike.languageServer") || event.affectsConfiguration("pike.roxen")) {
         if (restarting) return;
         restarting = true;
         log("info", "EXT", "Settings changed — restarting server...");

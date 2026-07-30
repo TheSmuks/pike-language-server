@@ -21,6 +21,7 @@ import {
 } from "./util/staticDataValidation.js";
 import stdlibAutodocIndexRaw from "./data/stdlib-autodoc.json";
 import predefBuiltinIndexRaw from "./data/predef-builtin-index.json";
+import roxenIndexRaw from "./data/roxen-index.json";
 import predefAutodocIndexRaw from "./data/predef-autodoc.json";
 import { logError, logInfo, logWarn, ErrorCategory } from "./util/errorLog.js";
 import { parse } from "./parser";
@@ -30,6 +31,8 @@ import type { ResourceConfiguration } from "./features/resourceTypes";
 import { ResourceStateTracker, createResourceStateSender } from "./features/resourceState";
 import { HibernationManager, HIBERNATION_DEFAULTS } from "./features/hibernation";
 import { CancellationTokenSource } from "vscode-languageserver/node";
+import { DEFAULT_ROXEN_MODE } from "./features/roxenActivation";
+import { asRoxenIndex, type RoxenIndexData } from "./features/roxenIndex";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -72,6 +75,19 @@ export interface ServerContext {
   }>;
   /** Enables verbose internal telemetry logs for race/staleness debugging. */
   debugTelemetry: boolean;
+  /** `pike.roxen.mode` — whether files may be treated as Roxen files. */
+  roxenMode: import("./features/roxenActivation").RoxenMode;
+  /** Bundled Roxen vocabulary, used when no installation resolves a symbol. */
+  roxenIndex: RoxenIndexData;
+  /**
+   * Which open documents are Roxen files, keyed by URI.
+   *
+   * Activation is decided once per document change, where the text is already
+   * in hand and the handler is already async, rather than on every hover and
+   * keystroke — the directory-inheritance tier reads the filesystem, and
+   * completion must not.
+   */
+  roxenActive: Map<string, boolean>;
   /** Latest document version dropped while parser initialization was pending. */
   pendingParserDocuments: Map<string, TextDocument>;
   /** Resource-resilience configuration (indexing, memory, worker, hibernation). */
@@ -162,6 +178,7 @@ function loadStaticIndices(connection: Connection) {
     stdlibIndex: loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection),
     predefBuiltins: loadPredefBuiltinIndex(predefBuiltinIndexRaw, connection),
     predefAutodoc: loadPredefAutodocIndex(predefAutodocIndexRaw, connection),
+    roxenIndex: asRoxenIndex(roxenIndexRaw),
   };
 }
 
@@ -225,7 +242,7 @@ export function createServerContext(
   const diagnosticManager = createDiagnosticManager(
     worker, documents, connection, index, pikeCache,
   );
-  const { stdlibIndex, predefBuiltins, predefAutodoc } = loadStaticIndices(connection);
+  const { stdlibIndex, predefBuiltins, predefAutodoc, roxenIndex } = loadStaticIndices(connection);
 
   const resourceStateSender = createResourceStateSender(connection);
   const resourceCts = new CancellationTokenSource();
@@ -257,6 +274,9 @@ export function createServerContext(
     predefBuiltins,
     predefAutodoc,
     debugTelemetry: false,
+    roxenMode: DEFAULT_ROXEN_MODE,
+    roxenIndex,
+    roxenActive: new Map<string, boolean>(),
     pendingParserDocuments: new Map<string, TextDocument>(),
     // Own a fresh config rather than aliasing the frozen defaults singleton.
     resourceConfig: parseResourceConfig(undefined),

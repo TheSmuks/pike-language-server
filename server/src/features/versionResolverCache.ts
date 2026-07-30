@@ -23,11 +23,21 @@ export class ScopedResolverCache {
   private readonly baseResolver: ModuleResolver;
   private readonly workspaceRoot: string;
   private readonly pikePaths: PikePaths;
+  private readonly roxenModuleDirs: readonly string[] | undefined;
 
-  constructor(baseResolver: ModuleResolver, workspaceRoot: string, pikePaths: PikePaths) {
+  constructor(
+    baseResolver: ModuleResolver,
+    workspaceRoot: string,
+    pikePaths: PikePaths,
+    roxenModuleDirs?: readonly string[],
+  ) {
     this.baseResolver = baseResolver;
     this.workspaceRoot = workspaceRoot;
     this.pikePaths = pikePaths;
+    // Carried so a version-scoped resolver can still resolve `roxen-module://`.
+    // Without it, a Roxen file carrying a #pike directive silently loses the
+    // one resolution concept Roxen actually adds.
+    this.roxenModuleDirs = roxenModuleDirs;
   }
 
   /**
@@ -48,6 +58,7 @@ export class ScopedResolverCache {
       workspaceRoot: pathToUri(this.workspaceRoot),
       pikePaths: this.pikePaths,
       pikeVersion: entry.pikeVersion,
+      ...(this.roxenModuleDirs ? { roxenModuleDirs: this.roxenModuleDirs } : {}),
     });
     this.cache.set(versionKey, scoped);
     return scoped;

@@ -15,6 +15,7 @@ import { hydrateFromCache } from "./features/cacheHydrate";
 import { logError, logInfo, ErrorCategory, logUnsupportedCharset } from "./util/errorLog.js";
 import { readSource } from "./util/sourceDecoder.js";
 import type { ServerContext } from "./serverContext";
+import { isRoxenFile } from "./features/roxenActivation";
 
 // ---------------------------------------------------------------------------
 // Registration
@@ -27,11 +28,13 @@ export function registerDocumentHandlers(
 ): void {
   documents.onDidOpen(async (event) => {
     ctx.hibernationManager.onDocumentOpen();
+    await refreshRoxenActivation(ctx, event.document);
     await handleDidOpen(ctx, event.document);
   });
 
   documents.onDidChangeContent(async (event) => {
     ctx.hibernationManager.recordActivity();
+    await refreshRoxenActivation(ctx, event.document);
     await handleDidChangeContent(ctx, event.document);
   });
 
@@ -338,7 +341,37 @@ function handleDidClose(
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
   ctx.pendingParserDocuments.delete(uri);
+  ctx.roxenActive.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
+}
+
+/**
+ * Record whether this document is a Roxen file.
+ *
+ * Done here, on open and on change, because this is where the text is already
+ * in hand and the handler is already async. Hover and completion then read a
+ * plain map instead of touching the filesystem on every keystroke.
+ *
+ * A file that stops carrying a marker stops being a Roxen file on the next
+ * change, which is why this re-runs on every change rather than only on open.
+ */
+async function refreshRoxenActivation(ctx: ServerContext, doc: TextDocument): Promise<void> {
+  if (ctx.roxenMode === "off") {
+    ctx.roxenActive.delete(doc.uri);
+    return;
+  }
+  try {
+    const active = await isRoxenFile(fileURLToPath(doc.uri), doc.getText(), {
+      mode: ctx.roxenMode,
+      roxenHome: ctx.index.roxenPaths?.roxenHome ?? null,
+      workspaceRoot: ctx.index.workspaceRoot,
+    });
+    ctx.roxenActive.set(doc.uri, active);
+  } catch {
+    // A non-file URI (untitled buffer) has no path to walk. Not a Roxen file,
+    // and not a reason to fail the change that triggered this.
+    ctx.roxenActive.set(doc.uri, ctx.roxenMode === "on");
+  }
 }
 
 async function flushPendingParserDocuments(ctx: ServerContext): Promise<void> {

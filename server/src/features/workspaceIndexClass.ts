@@ -3,11 +3,11 @@
  * See architecture decision 0010 for design rationale.
  */
 
-import { ModuleResolver, detectPikePaths, type PikePaths, type PikePathOverrides } from "./moduleResolver";
+import type { ModuleResolver, PikePaths, PikePathOverrides } from "./moduleResolver";
 import { rewireDependents as rewireDependentsFn } from "./dependentsInvalidator";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
-import { pathToUri, uriToPath as uriToPathUtil } from "../util/uri";
+import { uriToPath as uriToPathUtil } from "../util/uri";
 import {
   resolveCrossFileDefinition as resolveCrossFileDefinitionFn,
   getCrossFileReferences as getCrossFileReferencesFn,
@@ -17,31 +17,20 @@ import { warmResolverCache, extractDependencies, type DependencyContext } from "
 import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
 import { hashContent } from "./cacheHash";
 import {
-  normUri,
-  createSyncIndexAdapter,
-  registerReverseDeps,
-  removeDependencies,
-  parsePikeVersion,
-  buildFullFileEntry,
-  buildBackgroundFileEntry,
-  buildCachedFileEntry,
-  type SyncIndexAdapter,
+  normUri, createSyncIndexAdapter, registerReverseDeps, removeDependencies,
+  parsePikeVersion, buildFullFileEntry, buildBackgroundFileEntry,
+  buildCachedFileEntry, buildResolvers, detectIndexPaths, type SyncIndexAdapter,
 } from "./workspaceIndexImpl";
-import { ScopedResolverCache } from "./versionResolverCache";
+import type { ScopedResolverCache } from "./versionResolverCache";
+import type { RoxenMode } from "./roxenActivation";
+import type { RoxenPaths } from "./roxenDetection";
 import {
-  invalidateWithDependentsImpl,
-  demoteNonEssentialEntriesImpl,
-  restoreDependenciesImpl,
-  restoreStubImpl,
-  hydrateStubImpl,
-  rehydrateEntryImpl,
-  ensureDependenciesResolvedImpl,
-  buildDependencyForwardEdges,
-  indexOnDemand,
+  invalidateWithDependentsImpl, demoteNonEssentialEntriesImpl,
+  restoreDependenciesImpl, restoreStubImpl, hydrateStubImpl, rehydrateEntryImpl,
+  ensureDependenciesResolvedImpl, buildDependencyForwardEdges, indexOnDemand,
 } from "./workspaceLifecycle";
-
-import type { FileEntry, WorkspaceIndexOptions, OnDemandIndexFn, PikeVersionDirective, DependencyMap } from "./workspaceTypes";
-import { ModificationSource } from "./workspaceTypes";
+import { ModificationSource, type FileEntry, type WorkspaceIndexOptions,
+  type OnDemandIndexFn, type PikeVersionDirective, type DependencyMap } from "./workspaceTypes";
 
 // ---------------------------------------------------------------------------
 // WorkspaceIndex
@@ -58,6 +47,8 @@ export class WorkspaceIndex {
   readonly resolver: ModuleResolver;
   readonly workspaceRoot: string;
   readonly pikePaths: PikePaths;
+  /** The detected Roxen installation, or null. Read by activation and hover. */
+  readonly roxenPaths: RoxenPaths | null;
   /** Resident outline-symbol index for cheap workspace/symbol (set at startup). */
   symbolIndex: import("./symbolIndex").SymbolIndex | null = null;
   private onDemandIndex: OnDemandIndexFn | null = null;
@@ -66,28 +57,26 @@ export class WorkspaceIndex {
 
   constructor(options: WorkspaceIndexOptions) {
     this.workspaceRoot = options.workspaceRoot;
-    this.pikePaths = options.pikePaths ?? {
-      pikeHome: "",
-      modulePaths: [options.workspaceRoot],
-      includePaths: [options.workspaceRoot],
-      programPaths: [options.workspaceRoot],
-      ldLibraryPath: "",
-    };
-    this.resolver = new ModuleResolver({
-      workspaceRoot: pathToUri(this.workspaceRoot),
-      pikePaths: this.pikePaths,
-      pikeVersion: null,
-    });
-    this.scopedResolvers = new ScopedResolverCache(this.resolver, this.workspaceRoot, this.pikePaths);
+    this.roxenPaths = options.roxenPaths ?? null;
+    const built = buildResolvers(this.workspaceRoot, options.pikePaths, this.roxenPaths);
+    this.pikePaths = built.pikePaths;
+    this.resolver = built.resolver;
+    this.scopedResolvers = built.scopedResolvers;
   }
 
   setOnDemandIndexFn(fn: OnDemandIndexFn): void {
     this.onDemandIndex = fn;
   }
 
-  static async create(workspaceRoot: string, pikeBinaryPath?: string, overrides?: PikePathOverrides): Promise<WorkspaceIndex> {
-    const pikePaths = await detectPikePaths(workspaceRoot, pikeBinaryPath, overrides);
-    return new WorkspaceIndex({ workspaceRoot, pikePaths });
+  /** Build an index, detecting Pike and (unless Roxen mode is `off`) Roxen. */
+  static async create(
+    workspaceRoot: string,
+    pikeBinaryPath?: string,
+    overrides?: PikePathOverrides,
+    roxen?: { mode: RoxenMode; explicitPath?: string },
+  ): Promise<WorkspaceIndex> {
+    const paths = await detectIndexPaths(workspaceRoot, pikeBinaryPath, overrides, roxen);
+    return new WorkspaceIndex({ workspaceRoot, ...paths });
   }
 
   // -- Context helpers for delegating to sub-modules --

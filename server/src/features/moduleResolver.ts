@@ -29,6 +29,7 @@ import {
   resolveDirectoryModulePmod,
   type IncludeDeps,
 } from "./moduleResolverInternal";
+import { isRoxenScheme, resolveRoxenInherit } from "./roxenResolution";
 
 // Re-export pike detection utilities for backward compatibility
 export { detectPikePaths, getPikePaths } from "./pikeDetection";
@@ -42,7 +43,7 @@ export interface ResolveResult {
   /** The resolved file URI. */
   uri: string;
   /** How the resolution was performed (for debugging/testing). */
-  source: "relative" | "workspace_module" | "workspace_program" | "system_module" | "not_found";
+  source: "relative" | "workspace_module" | "workspace_program" | "system_module" | "roxen_module" | "not_found";
 }
 
 export interface ModuleResolverOptions {
@@ -52,6 +53,12 @@ export interface ModuleResolverOptions {
   pikePaths: import("./pikeDetection").PikePaths;
   /** #pike version directive for the current file, if present. */
   pikeVersion: { major: number; minor: number } | null;
+  /**
+   * Roxen module directories, when a Roxen installation was detected. Only the
+   * `roxen-module://` scheme uses these; Roxen's include/module/program paths
+   * arrive already merged into `pikePaths`.
+   */
+  roxenModuleDirs?: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -62,6 +69,7 @@ export class ModuleResolver {
   private readonly workspaceRoot: string;
   private readonly pikePaths: import("./pikeDetection").PikePaths;
   private readonly pikeVersion: { major: number; minor: number } | null;
+  private readonly roxenModuleDirs: readonly string[];
   /** Cache: module path → resolved URI. Bounded to prevent unbounded growth on large workspaces. */
   private readonly cache = new Map<string, ResolveResult | null>();
   private static readonly CACHE_MAX_ENTRIES = 2000;
@@ -70,6 +78,7 @@ export class ModuleResolver {
     this.workspaceRoot = fileURLToPath(options.workspaceRoot);
     this.pikePaths = options.pikePaths;
     this.pikeVersion = options.pikeVersion;
+    this.roxenModuleDirs = options.roxenModuleDirs ?? [];
   }
 
   /** Pike include paths (-I), from `pike --show-paths`. */
@@ -293,6 +302,14 @@ export class ModuleResolver {
 
   private async resolveInheritString(rawPath: string, currentFile: string): Promise<ResolveResult | null> {
     const currentDir = dirname(currentFile);
+
+    // Roxen URIs must be intercepted before anything else: `roxen-module://x`
+    // otherwise reads as an ordinary relative path and resolves against the
+    // filesystem, which is both wrong and a way out of the workspace.
+    if (isRoxenScheme(rawPath)) {
+      const uri = await resolveRoxenInherit(this.roxenModuleDirs, rawPath);
+      return uri ? { uri, source: "roxen_module" } : null;
+    }
 
     if (rawPath.startsWith("/")) {
       // Absolute path — normalize and check boundary. No baseDir: an absolute

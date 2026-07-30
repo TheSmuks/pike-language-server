@@ -12,7 +12,10 @@ import type { FileEntry } from "./workspaceTypes";
 import { ModificationSource } from "./workspaceTypes";
 import type { SymbolTable } from "./symbolTable";
 import { hashContent } from "./cacheHash";
-import { uriToPath as uriToPathUtil, normalizeUri } from "../util/uri";
+import { uriToPath as uriToPathUtil, normalizeUri, pathToUri } from "../util/uri";
+import { ModuleResolver, type PikePaths } from "./moduleResolver";
+import { ScopedResolverCache } from "./versionResolverCache";
+import { mergeRoxenIntoPikePaths } from "./roxenResolution";
 
 // ---------------------------------------------------------------------------
 // URI normalization
@@ -230,4 +233,75 @@ export function buildCachedFileEntry(
 /** Convert a file URI to a filesystem path. */
 export function uriToPath(uri: string): string {
   return uriToPathUtil(uri);
+}
+
+// ---------------------------------------------------------------------------
+// Resolver assembly
+// ---------------------------------------------------------------------------
+
+/**
+ * Fold a detected Roxen installation into the Pike search paths and build the
+ * resolvers over the result.
+ *
+ * Extracted from WorkspaceIndex's constructor to keep that file under the
+ * 500-line limit. Roxen's directories are ordinary search paths, so merging
+ * them here means every resolver downstream — including the version-scoped
+ * ones — sees them without knowing Roxen exists. The `roxen-module://` scheme
+ * is the one thing that cannot be expressed as a path, so the module
+ * directories are handed to the resolvers explicitly.
+ */
+export function buildResolvers(
+  workspaceRoot: string,
+  configured: PikePaths | undefined,
+  roxenPaths: import("./roxenDetection").RoxenPaths | null,
+): { pikePaths: PikePaths; resolver: ModuleResolver; scopedResolvers: ScopedResolverCache } {
+  // With no detection at all, the workspace root is the only search path — a
+  // single-file editing session still resolves its own siblings.
+  const basePaths: PikePaths = configured ?? {
+    pikeHome: "",
+    modulePaths: [workspaceRoot],
+    includePaths: [workspaceRoot],
+    programPaths: [workspaceRoot],
+    ldLibraryPath: "",
+  };
+  const pikePaths = roxenPaths ? mergeRoxenIntoPikePaths(basePaths, roxenPaths) : basePaths;
+  const roxenModuleDirs = roxenPaths?.moduleDirs;
+
+  const resolver = new ModuleResolver({
+    workspaceRoot: pathToUri(workspaceRoot),
+    pikePaths,
+    pikeVersion: null,
+    ...(roxenModuleDirs ? { roxenModuleDirs } : {}),
+  });
+
+  return {
+    pikePaths,
+    resolver,
+    scopedResolvers: new ScopedResolverCache(resolver, workspaceRoot, pikePaths, roxenModuleDirs),
+  };
+}
+
+/**
+ * Detect the search paths a new index should use.
+ *
+ * Roxen detection is skipped entirely when the mode is `off`, so turning the
+ * feature off costs nothing — not a filesystem scan, not a stat.
+ */
+export async function detectIndexPaths(
+  workspaceRoot: string,
+  pikeBinaryPath: string | undefined,
+  overrides: import("./moduleResolver").PikePathOverrides | undefined,
+  roxen: { mode: import("./roxenActivation").RoxenMode; explicitPath?: string } | undefined,
+): Promise<{ pikePaths: PikePaths; roxenPaths: import("./roxenDetection").RoxenPaths | null }> {
+  const { detectPikePaths } = await import("./moduleResolver");
+  const { getRoxenPaths } = await import("./roxenDetection");
+
+  const pikePaths = await detectPikePaths(workspaceRoot, pikeBinaryPath, overrides);
+  if (!roxen || roxen.mode === "off") return { pikePaths, roxenPaths: null };
+
+  const detection = await getRoxenPaths(
+    workspaceRoot,
+    roxen.explicitPath ? { explicitPath: roxen.explicitPath } : undefined,
+  );
+  return { pikePaths, roxenPaths: detection.paths };
 }

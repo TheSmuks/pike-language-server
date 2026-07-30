@@ -33,6 +33,7 @@ import { pathToFileURL } from "node:url";
 import { createTestServer, type TestServer } from "../tests/lsp/helpers";
 import { SEMANTIC_TOKENS_LEGEND } from "../server/src/features/semanticTokens";
 import { buildServerCapabilities } from "../server/src/serverCapabilities";
+import { decodeSource } from "../server/src/util/sourceDecoder";
 
 /** A decoded semantic token with absolute coordinates and resolved names. */
 interface DecodedToken {
@@ -53,10 +54,17 @@ function parsePosition(arg: string): { line: number; character: number } {
   return { line: Number(match[1]) - 1, character: Number(match[2]) - 1 };
 }
 
-/** Resolve a file path argument to an absolute file:// URI and its text. */
+/**
+ * Resolve a file path argument to an absolute file:// URI and its text.
+ *
+ * Decoded by detected encoding, not as UTF-8. This tool exists to show what
+ * the server returns for a real file, and the server decodes the same way —
+ * reading an ISO-8859-1 file as UTF-8 here would replace every high byte with
+ * U+FFFD and silently shift every position the probe prints.
+ */
 function loadFile(pathArg: string): { uri: string; text: string; sourceLines: string[] } {
   const absolute = resolve(pathArg);
-  const text = readFileSync(absolute, "utf8");
+  const text = decodeSource(readFileSync(absolute)).text;
   return { uri: pathToFileURL(absolute).href, text, sourceLines: text.split("\n") };
 }
 

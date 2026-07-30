@@ -13,6 +13,7 @@ import {
   CompletionItemKind,
   CompletionList,
   InsertTextFormat,
+  MarkupKind,
 } from "vscode-languageserver/node";
 import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt, resolveTypeName } from "./symbolTable";
 import {
@@ -43,6 +44,7 @@ import { completeCallArgs } from "./completion-callArgs";
 import { collectKeywordSnippets } from "./completion-keywords";
 import { addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import { buildAutodocCompletion } from "./completion-autodoc";
+import { roxenCompletionCandidates } from "./roxenIndex";
 
 // Re-export for backward compatibility
 export { type CompletionContext, resetCompletionCache } from "./completionTrigger";
@@ -158,6 +160,7 @@ async function completeUnqualified(
   await collectImportedItems(table, ctx, items, seenNames);
   await collectDirectoryModuleItems(ctx, items, seenNames);
   collectPredefBuiltinItems(ctx, items, seenNames);
+  collectRoxenItems(ctx, items, seenNames);
   collectStdlibTopLevelItems(ctx, items, seenNames);
   collectKeywordSnippets(items, seenNames);
   await collectAutoImportItems(table, tree, ctx, node, items, seenNames);
@@ -216,6 +219,43 @@ async function collectDirectoryModuleItems(
     if (seenNames.has(decl.name)) continue;
     seenNames.add(decl.name);
     items.push(declToCompletionItem(decl, 15, moduleTable));
+  }
+}
+
+/**
+ * Add the bundled Roxen vocabulary to the completion list.
+ *
+ * Only in a Roxen file. This is the gate the activation spec's mixed-workspace
+ * requirement rests on: a plain Pike program in the same workspace must be
+ * offered no Roxen symbol, and `roxenActive` is false for it.
+ *
+ * Names already contributed by the workspace index are skipped via
+ * `seenNames`, which is what makes a detected installation's real declaration
+ * win over the bundled copy — real symbols are collected first.
+ */
+function collectRoxenItems(
+  ctx: CompletionContext,
+  items: CompletionItem[], seenNames: Set<string>,
+): void {
+  if (!ctx.roxenActive || !ctx.roxenIndex) return;
+
+  for (const candidate of roxenCompletionCandidates(ctx.roxenIndex)) {
+    if (seenNames.has(candidate.name)) continue;
+    if (!isCompletableIdentifier(candidate.name)) continue;
+    seenNames.add(candidate.name);
+    items.push({
+      label: candidate.name,
+      kind: candidate.isConstant ? CompletionItemKind.Constant : CompletionItemKind.Method,
+      detail: candidate.detail,
+      documentation: candidate.documentation
+        ? { kind: MarkupKind.Markdown, value: candidate.documentation }
+        : undefined,
+      // Below locals and imports, above stdlib: Roxen names are the vocabulary
+      // of the file being edited, but a local declaration still outranks them.
+      sortText: padSortKey(25) + candidate.name,
+      filterText: candidate.name,
+      data: { source: "roxen", name: candidate.name },
+    });
   }
 }
 
