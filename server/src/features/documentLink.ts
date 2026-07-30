@@ -24,11 +24,22 @@ import { uriToPath } from "../util/uri";
 /**
  * Register the textDocument/documentLink handler.
  * Makes import paths, inherit paths, and #include directives clickable.
+ *
+ * `getResolver` is a thunk, not a plain value: this registration runs at
+ * server construction, before the LSP `initialize` handshake replaces the
+ * placeholder WorkspaceIndex (workspaceRoot `/tmp/unused`, no detected Pike
+ * paths) with the real one built from `pike --show-paths`. Capturing
+ * `ctx.index.resolver` by value here would freeze on that placeholder's
+ * resolver forever — every `#include <...>` and workspace-relative link
+ * would silently fail to resolve for the life of the connection. Calling
+ * the thunk inside the request handler reads the current resolver instead,
+ * mirroring the `get index()` getter pattern already used in server.ts for
+ * the same reason.
  */
 export function registerDocumentLinkHandler(
   connection: Connection,
   documents: TextDocuments<TextDocument>,
-  resolver: ModuleResolver,
+  getResolver: () => ModuleResolver,
 ): void {
   connection.onDocumentLinks(async (params, token): Promise<DocumentLink[]> => {
     if (token.isCancellationRequested) return [];
@@ -37,7 +48,7 @@ export function registerDocumentLinkHandler(
     const doc = documents.get(uri);
     if (!doc) return [];
 
-    return produceDocumentLinks(doc, uri, resolver);
+    return produceDocumentLinks(doc, uri, getResolver());
   });
 }
 
