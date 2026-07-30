@@ -15,6 +15,7 @@ import type { Node } from 'web-tree-sitter';
 import type { BuildState, Declaration } from './symbolTable';
 import { PRIMITIVE_TYPES } from './symbolTable';
 import { toLoc, resolveTypeName } from './scope-helpers';
+import { elementTypeOf } from './typeResolver';
 import {
   findScopeForNode,
   findDeclInScope,
@@ -52,6 +53,27 @@ export function extractLhsIdentifier(lhsNode: Node | undefined): string | undefi
   return undefined;
 }
 
+/**
+ * Describe the receiver of a member access: its identifier, and whether it was
+ * subscripted (`items[k]->m` rather than `single->m`).
+ *
+ * A subscript changes which type owns the member. `items` is a
+ * `mapping(string:Item)`, but `items[k]` is an `Item` — looking the member up
+ * on the container finds nothing.
+ */
+function describeReceiver(lhsNode: Node | undefined): { name?: string; indexed: boolean } {
+  if (!lhsNode) return { indexed: false };
+
+  // A subscript is [base, '[', index…, ']'] — the base is the receiver, and
+  // extractLhsIdentifier cannot find it because it descends via the LAST
+  // child, which here is the ']' token.
+  const closing = lhsNode.child(lhsNode.childCount - 1);
+  if (lhsNode.type === 'postfix_expr' && closing?.type === ']') {
+    return { name: extractLhsIdentifier(lhsNode.child(0) ?? undefined), indexed: true };
+  }
+  return { name: extractLhsIdentifier(lhsNode), indexed: false };
+}
+
 export function collectPostfixRef(node: Node, state: BuildState): void {
   const children = node.children;
 
@@ -66,10 +88,10 @@ export function collectPostfixRef(node: Node, state: BuildState): void {
     if (!memberNode || (memberNode.type !== 'identifier' && memberNode.type !== 'magic_identifier')) continue;
 
     const memberName = memberNode.text;
-    const lhsName = extractLhsIdentifier(children[i - 1]);
+    const { name: lhsName, indexed } = describeReceiver(children[i - 1]);
     const kind = isArrowOp ? 'arrow_access' : 'dot_access';
 
-    const { resolvesTo, confidence } = resolvePostfixMember(lhsName, memberName, node, state);
+    const { resolvesTo, confidence } = resolvePostfixMember(lhsName, memberName, node, state, indexed);
 
     state.references.push({
       name: memberName,
@@ -88,6 +110,7 @@ function resolvePostfixMember(
   memberName: string,
   node: Node,
   state: BuildState,
+  indexed = false,
 ): { resolvesTo: number | null; confidence: 'high' | 'low' } {
   if (!lhsName) return { resolvesTo: null, confidence: 'low' };
 
@@ -97,7 +120,12 @@ function resolvePostfixMember(
   const lhsDecl = state.declMap.get(lhsDeclId);
   if (!lhsDecl) return { resolvesTo: null, confidence: 'low' };
 
-  const typeName = resolveTypeName(lhsDecl);
+  const declaredTypeName = resolveTypeName(lhsDecl);
+  if (!declaredTypeName) return { resolvesTo: null, confidence: 'low' };
+
+  // Through a subscript the member belongs to the ELEMENT type, not the
+  // container: `items` is a mapping, `items[k]` is what the mapping holds.
+  const typeName = indexed ? elementTypeOf(declaredTypeName) : declaredTypeName;
   if (!typeName || PRIMITIVE_TYPES.has(typeName)) return { resolvesTo: null, confidence: 'low' };
 
   const typeClassDecl = state.declarations.find(

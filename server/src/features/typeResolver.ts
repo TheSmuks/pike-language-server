@@ -127,10 +127,18 @@ export async function resolveMemberAccess(
   lhsDecl: Declaration | null,
   context: TypeResolutionContext,
   depth = 0,
+  /** Set when the receiver was subscripted (`items[k]->m`). */
+  indexed = false,
 ): Promise<Declaration | null> {
   if (depth >= MAX_RESOLUTION_DEPTH) return null;
 
-  const typeName = await resolveLhsTypeName(lhsName, lhsDecl, context);
+  const declaredTypeName = await resolveLhsTypeName(lhsName, lhsDecl, context);
+  // Through a subscript the member belongs to the ELEMENT type: `items` is a
+  // mapping, `items[k]` is what it holds. Looking the member up on the
+  // container searches for a class literally named `mapping(string:Item)`.
+  const typeName = indexed && declaredTypeName
+    ? elementTypeOf(declaredTypeName)
+    : declaredTypeName;
   if (typeName) {
     const member = await findMemberViaType(memberName, typeName, context, depth);
     if (member) return member;
@@ -144,6 +152,21 @@ export async function resolveMemberAccess(
 }
 
 /** Resolve the type name of an LHS expression (declared, inferred, or function return). */
+/**
+ * The type of `container[...]` given the container's declared type.
+ *
+ * `mapping(K:V)` indexes to V, `array(T)` to T. Anything else — including a
+ * bare `mapping` with no type arguments, and `multiset`, whose subscript
+ * yields an int rather than an element — has no usable element type.
+ */
+export function elementTypeOf(typeName: string): string | null {
+  const mapping = /^mapping\(\s*[^:]+:\s*(.+?)\s*\)$/.exec(typeName);
+  if (mapping) return mapping[1];
+  const array = /^array\(\s*(.+?)\s*\)$/.exec(typeName);
+  if (array) return array[1];
+  return null;
+}
+
 export async function resolveLhsTypeName(
   lhsName: string,
   lhsDecl: Declaration | null,
