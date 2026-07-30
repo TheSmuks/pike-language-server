@@ -1,6 +1,16 @@
 import { test, expect } from "bun:test";
 import { triage, renderFindings } from "../../tools/lsp-audit/triage";
 import type { LedgerRecord } from "../../tools/lsp-audit/ledger";
+import { MATRIX } from "../../tools/lsp-audit/matrix";
+
+/** Methods lsp-probe has a dedicated subcommand for; the rest use `raw`. */
+const DEDICATED_METHODS = new Set([
+  "textDocument/hover",
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/documentSymbol",
+  "textDocument/semanticTokens/full",
+]);
 
 const base: LedgerRecord = {
   surface: "server",
@@ -105,6 +115,27 @@ test("a pipe in a server error message cannot break the table row", () => {
   const row = markdown.split("\n").find((l) => l.startsWith("| A1"))!;
   expect(row.split(/(?<!\\)\|/).length - 1).toBe(6); // 5 columns => 6 delimiters
   expect(markdown).toContain("string\\|Stdio.File");
+});
+
+test("every raw-fallback reproduction matches the params the matrix actually sends", () => {
+  // A reproduction that runs but fires a DIFFERENT request than the sweep did
+  // is worse than one that crashes: it looks fine and reproduces nothing. This
+  // pins each raw-form capability against its matrix entry.
+  for (const spec of MATRIX) {
+    if (DEDICATED_METHODS.has(spec.method)) continue;
+    const record = { ...base, capability: spec.method, status: "empty" as const };
+    const reproduction = triage([record])[0].reproduction;
+    const json = reproduction.match(/'(\{.*\})'$/)?.[1];
+    expect(json).toBeDefined();
+    const params = JSON.parse(json!) as Record<string, unknown>;
+
+    // Whatever the matrix sends beyond textDocument must appear here too.
+    const sent = spec.params({ uri: "file:///x.pike", position: record.position, text: "" });
+    for (const key of Object.keys(sent as object)) {
+      if (key === "textDocument") continue;
+      expect(params[key]).toBeDefined();
+    }
+  }
 });
 
 test("a slow record that is also empty gets the more severe tier", () => {
