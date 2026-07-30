@@ -161,6 +161,33 @@ describe("US-015: textDocument/documentHighlight", () => {
     expect(result!.length).toBe(1);
   });
 
+  test("resolves the inherit qualifier in A::member() (N2/N3/C1/C2 cluster)", async () => {
+    // Audit iteration 7: definition, declaration, references, hover, completion
+    // and documentHighlight ALL returned null on the `A` in `A::value()`.
+    // collectScopeRef recorded a reference only for the member after `::`,
+    // reading the qualifier solely to resolve that member — so nothing existed
+    // at the qualifier's position for any feature to find.
+    const src = [
+      "class A {",
+      "  int value() { return 1; }",
+      "}",
+      "class C {",
+      "  inherit A;",
+      "  int sum() { return A::value(); }",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/scope-qualifier.pike", src);
+
+    // Cursor on the `A` qualifier at line 5, char 21.
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri },
+      position: { line: 5, character: 21 },
+    }) as HighlightResult[] | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeGreaterThanOrEqual(1);
+  });
+
   test("returns null for position with no symbol", async () => {
     const src = "int main() { return 0; }";
     const uri = server.openDoc("file:///test/highlight-empty.pike", src);
