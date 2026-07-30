@@ -7,7 +7,7 @@
 import type { Node } from 'web-tree-sitter';
 import type { BuildState, DeclKind } from './symbolTable';
 import {
-  toRangeUtf16,
+  toRange,
   pushScope,
   popScope,
   addDeclaration,
@@ -199,7 +199,7 @@ function collectClassDecl(node: Node, state: BuildState): void {
     // Anonymous class — still enter scope for children
     const body = node.childForFieldName('body');
     if (body) {
-      pushScope(state, 'class', toRangeUtf16(node, state.lines, state.offsetMap));
+      pushScope(state, 'class', toRange(node));
       collectDeclarations(body, state);
       popScope(state);
     }
@@ -210,13 +210,13 @@ function collectClassDecl(node: Node, state: BuildState): void {
   addDeclaration(state, {
     name: nameNode.text,
     kind: 'class',
-    nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
-    range: toRangeUtf16(node, state.lines, state.offsetMap),
+    nameRange: toRange(nameNode),
+    range: toRange(node),
     scopeId,
   });
 
   // Enter class scope
-  pushScope(state, 'class', toRangeUtf16(node, state.lines, state.offsetMap));
+  pushScope(state, 'class', toRange(node));
 
   const body = node.childForFieldName('body');
   if (body) {
@@ -235,15 +235,15 @@ function collectFunctionDecl(node: Node, state: BuildState): void {
     addDeclaration(state, {
       name: nameNode.text,
       kind: 'function',
-      nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
-      range: toRangeUtf16(node, state.lines, state.offsetMap),
+      nameRange: toRange(nameNode),
+      range: toRange(node),
       scopeId,
       declaredType: returnType?.text,
     });
   }
 
   // Enter function scope — parameters are in this scope
-  pushScope(state, 'function', toRangeUtf16(node, state.lines, state.offsetMap));
+  pushScope(state, 'function', toRange(node));
 
   // Collect parameters
   const params = node.childForFieldName('parameters');
@@ -262,7 +262,7 @@ function collectFunctionDecl(node: Node, state: BuildState): void {
 
 function collectLambda(node: Node, state: BuildState): void {
   // Enter lambda scope
-  pushScope(state, 'lambda', toRangeUtf16(node, state.lines, state.offsetMap));
+  pushScope(state, 'lambda', toRange(node));
 
   const params = node.childForFieldName('parameters');
   if (params) {
@@ -286,8 +286,8 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
         addDeclaration(state, {
           name: nameNode.text,
           kind: 'parameter',
-          nameRange: toRangeUtf16(nameNode, state.lines, state.offsetMap),
-          range: toRangeUtf16(child, state.lines, state.offsetMap),
+          nameRange: toRange(nameNode),
+          range: toRange(child),
           scopeId,
           declaredType: extractTypeText(child),
         });

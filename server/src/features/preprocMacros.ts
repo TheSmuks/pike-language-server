@@ -16,8 +16,8 @@
 import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
 import {
-  toLocUtf16,
-  toRangeUtf16,
+  toLoc,
+  toRange,
   addDeclaration,
   currentScopeId,
 } from './scopeBuilder';
@@ -45,15 +45,15 @@ export function collectPreprocDirective(node: Node, state: BuildState): boolean 
   const row = node.startPosition.row;
   const startCol = node.startPosition.column + prefixLen;
   const nameRange = {
-    start: toLocUtf16({ row, column: startCol }, state.lines, state.offsetMap),
-    end: toLocUtf16({ row, column: startCol + name.length }, state.lines, state.offsetMap),
+    start: toLoc({ row, column: startCol }),
+    end: toLoc({ row, column: startCol + name.length }),
   };
 
   addDeclaration(state, {
     name,
     kind: 'macro',
     nameRange,
-    range: toRangeUtf16(node, state.lines, state.offsetMap),
+    range: toRange(node),
     scopeId: currentScopeId(state),
     functionLike,
   });
@@ -74,8 +74,8 @@ export function collectPreprocInclude(node: Node, state: BuildState): void {
   addDeclaration(state, {
     name,
     kind: 'include',
-    nameRange: toRangeUtf16(pathNode, state.lines, state.offsetMap),
-    range: toRangeUtf16(node, state.lines, state.offsetMap),
+    nameRange: toRange(pathNode),
+    range: toRange(node),
     scopeId: currentScopeId(state),
   });
 }

@@ -1,5 +1,4 @@
 import { Tree } from 'web-tree-sitter';
-import type { OffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Types — mirrors decision 0009
@@ -122,8 +121,6 @@ export interface BuildState {
   declMap: Map<number, Declaration>; // ID → Declaration for O(1) lookup
   scopeStack: number[]; // stack of scope IDs (innermost last)
   lines: string[]; // pre-split source lines for UTF-16 position conversion
-  /** Pre-computed byte→UTF-16 offset map per line. Built once at init, O(1) per lookup. */
-  offsetMap: OffsetMap;
   /** Scopes sorted by (startLine, startChar) after declaration pass, for binary search. */
   sortedScopes: Scope[];
 }
@@ -148,14 +145,13 @@ export { wireIncludes } from './includeWiring';
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { toRangeUtf16, resolveTypeName } from './scope-helpers';
+import { toRange, resolveTypeName } from './scope-helpers';
 import { pushScope, popScope } from './scope-helpers-state';
 import { wireInheritance } from './scopeBuilder';
 import { wireIncludes } from './includeWiring';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 import { startSpan, stopSpan, bump, measureSync } from './profiler';
-import { buildOffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Build orchestrator
@@ -274,14 +270,13 @@ function initBuildState(sourceText: string): BuildState {
     declMap: new Map(),
     scopeStack: [],
     lines,
-    offsetMap: buildOffsetMap(lines),
     sortedScopes: [],
   };
 }
 
 /** Pass 1: collect declarations and build scope tree. */
 function runDeclarationPass(root: any, state: BuildState): void {
-  pushScope(state, 'file', toRangeUtf16(root, state.lines, state.offsetMap));
+  pushScope(state, 'file', toRange(root));
   collectDeclarations(root, state);
   popScope(state);
 
