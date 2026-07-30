@@ -565,9 +565,11 @@ test("does not match identifiers inside longer words", () => {
 
 test("positions are UTF-16 code units, so astral characters count as two", () => {
   // The emoji is one code point but two UTF-16 units, matching how both LSP
-  // and tree-sitter count. A byte-based scan would report 4.
+  // and tree-sitter count. Verified against the real values: a UTF-16 scan
+  // puts "after" at 21, a byte-based scan would put it at 23. Asserting 21 is
+  // what makes this test catch an accidental byte conversion.
   const positions = derivePositions('string s = "\u{1F600}"; int after;\n', ["after"]);
-  expect(positions[0].character).toBe(24);
+  expect(positions[0].character).toBe(21);
 });
 
 test("lexicalIdentifiers skips Pike keywords", () => {
