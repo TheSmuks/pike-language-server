@@ -35,7 +35,7 @@ Establishes what "no regression" means, and locks the library semantics the whol
 
 Run: `bun test 2>&1 | tail -20`
 
-Record the pass/fail counts. The suite is known-red; this number is the comparison point for the rest of the plan. Do not attempt to fix unrelated failures.
+Record the pass/fail counts — this number is the comparison point for the rest of the plan. (This step originally said the suite was known-red. It is not: the measurement came back `2280 pass / 2 skip / 0 fail`. See Global Constraints.)
 
 - [ ] **Step 2: Write the binding-semantics test**
 
@@ -403,39 +403,33 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "fix: stop converting tree-sitter pos
 
 ### Task 4: Delete the offset map
 
-The same false premise, optimised. Separate task because a reviewer could accept Task 3 and reject this one on performance grounds.
+The same false premise, optimised. **This task is mandatory, not optional.** An earlier draft framed it as separable "because a reviewer could accept Task 3 and reject this one on performance grounds" — that framing was wrong and is retracted. Task 3 removed one half of a compensating pair of errors: the symbol table's positions are still OffsetMap-shifted, so `missingReturn` and `accessResolver` now compare a true UTF-16 column against a shifted one. Task 3 alone is a net regression; only Tasks 3+4 together are correct.
 
 **Files:**
 - Delete: `server/src/util/offsetMap.ts`
-- Modify: `server/src/features/scope-helpers.ts`, `scope-helpers-lookup.ts`, `referenceCollector.ts`, `symbolTable.ts`
+- Modify (listed in the original draft): `server/src/features/scope-helpers.ts` (14 refs), `scope-helpers-lookup.ts` (3), `referenceCollector.ts` (7), `symbolTable.ts` (5)
+- Modify (**omitted from the original draft — the plan would not have typechecked without these**): `server/src/features/declarationBlockCollectors.ts` (25 refs), `declarationCollector.ts` (10), `preprocMacros.ts` (5), `postfixRefs.ts` (1)
+- Modify: `server/src/features/scopeBuilder.ts` — drops one unused import (see Step 2)
 
 **Interfaces:**
 - Consumes: Task 3's converter-free call sites.
-- Produces: `toLocUtf16(point, lines?)` and `containsPosition(range, start, end)` in `scope-helpers.ts` with their `offsetMap` parameters gone. Later readers of this plan: these functions keep their names, only their signatures shrink.
+- Produces: `toLoc(point)` and `toRange(node)` in `scope-helpers.ts`. Note the rename: the `Utf16`-suffixed pair is **deleted**, not shrunk (see Step 1). Later tasks and readers should expect `toLoc`/`toRange`.
 
-- [ ] **Step 1: Collapse the offset-map branches**
+- [ ] **Step 1: Collapse `scope-helpers.ts` onto its existing plain functions**
 
-In `scope-helpers.ts`, the three-way branch reduces to a pass-through:
+`scope-helpers.ts` already contains `toLoc`/`toRange` alongside the `toLocUtf16`/`toRangeUtf16` pair. Once the offset map is gone, the `Utf16` pair reduces to exactly what the plain pair already does, so **repoint callers at `toLoc`/`toRange` and delete the `Utf16` pair** rather than shrinking it. Two near-identical function pairs is the outcome to avoid.
 
-```typescript
-export function toLocUtf16(point: Point): Position {
-  return { line: point.row, character: point.column };
-}
+`containsPosition` is **dead** — zero call sites repo-wide; its only reference is an unused import at `server/src/features/scopeBuilder.ts:31`. Delete the function and that import. Do not simplify it.
 
-export function toRangeUtf16(node: Node): Range {
-  return { start: toLocUtf16(node.startPosition), end: toLocUtf16(node.endPosition) };
-}
+Also update the file header (lines 6-9), which still frames the OffsetMap as a performance win rather than a corrupter being removed.
 
-export function containsPosition(range: Range, start: Point, end: Point): boolean {
-  // ...existing body, using start.column and end.column directly
-}
-```
+- [ ] **Step 2: Drop `offsetMap` from all eight consumers**
 
-Both functions keep the `Utf16` suffix in their names — the values genuinely are UTF-16 code units; what was wrong was believing they needed converting.
+Remove `offsetMap` arguments, `OffsetMap` type imports, and `lookupUtf16` calls across all eight files listed above, including the `buildOffsetMap` call at parse time in `symbolTable.ts` and the `offsetMap` field on `BuildState` (`symbolTable.ts:126`, populated at `:277`).
 
-- [ ] **Step 2: Drop the parameter from the four consumers**
-
-Remove `offsetMap` arguments and the `OffsetMap` type import from `scope-helpers-lookup.ts`, `referenceCollector.ts`, and `symbolTable.ts`, including wherever `buildOffsetMap` is called at parse time.
+Two call sites bypass the `scope-helpers.ts` wrappers and call `lookupUtf16` **directly** — they are easy to miss because they do not go through `toLocUtf16`:
+- `server/src/features/scope-helpers-lookup.ts:121-122`
+- `server/src/features/referenceCollector.ts:367`
 
 - [ ] **Step 3: Delete the module**
 
@@ -446,18 +440,45 @@ git rm server/src/util/offsetMap.ts
 - [ ] **Step 4: Typecheck**
 
 Run: `bun run typecheck`
-Expected: PASS.
+Expected: PASS. As in Task 3, a clean typecheck is the completeness proof — deleting the module turns any missed consumer into a compile error.
 
-- [ ] **Step 5: Run the tests from Task 2 — they must now pass**
+- [ ] **Step 5: The Task 2 gate must go fully green**
 
 Run: `bun test tests/lsp/nonAsciiPositions.test.ts`
-Expected: PASS, all four.
+Expected: **all 6 tests pass** — the 2 that already passed, the 3 inbound tests that Task 3 left red, and the `missingReturn` regression test added in Task 3's fix round.
 
-- [ ] **Step 6: Commit**
+This is the moment the whole plan is verified. If any test here still fails, stop and report rather than adjusting the test.
+
+- [ ] **Step 6: Full suite and quality gates**
+
+Run: `bun test`
+Expected: green. Before this task the state was 2236 pass / 2 skip / 4 fail across 2242 tests; all 4 failures must now be gone, with no new ones.
+
+Run: `bash scripts/quality-gates.sh`
+Expected: PASS.
+
+- [ ] **Step 7: Confirm the performance claim rather than assuming it**
+
+Run: `bun test tests/perf`
+
+Removing the map deletes a per-file `Int32Array` built at parse time and replaces an array lookup with a field read, so this should be neutral-to-better. Record the numbers. A regression would mean something was replaced rather than removed.
+
+- [ ] **Step 8: Commit**
 
 ```bash
 git add -A server/src
 PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "perf: remove byte-to-UTF-16 offset map"
+```
+
+- [ ] **Step 9: Retire the superseded ADR and stale comments**
+
+`docs/decisions/0024-offset-map-binary-scope-search.md` documents the offset map and restates the false premise at lines 9, 25, 30, and 48 ("Tree-sitter produces UTF-8 byte column offsets", plus references to the now-deleted `utf8ToUtf16`). Mark it superseded by this change, following whatever convention the other ADRs in that directory use. Leave `docs/perf/*` alone — those are dated historical reports.
+
+Also fix the one-line stale comment at `server/src/parser.ts:174` ("Convert a byte offset in a string to a tree-sitter Point"): `offsetToPoint` walks JS string indices, so the code is correct UTF-16 and only the comment is wrong.
+
+```bash
+git add -A docs server/src/parser.ts
+PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "docs: supersede ADR 0024 and correct stale UTF-8 comments"
 ```
 
 ---
