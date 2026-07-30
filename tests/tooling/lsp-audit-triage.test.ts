@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test";
-import { triage, renderFindings } from "../../tools/lsp-audit/triage";
+import { triage, renderFindings, groupFindings, renderGrouped } from "../../tools/lsp-audit/triage";
 import type { LedgerRecord } from "../../tools/lsp-audit/ledger";
 import { MATRIX } from "../../tools/lsp-audit/matrix";
 
@@ -218,4 +218,38 @@ test("a declined request is not a finding", () => {
   expect(triage([declined])).toEqual([]);
   // A crash at the same position still is one.
   expect(triage([{ ...declined, status: "error", detail: "boom" }])[0].severity).toBe("Critical");
+});
+
+test("findings sharing a root cause collapse into one group", () => {
+  // On the corpus, 211 of 253 findings were a single defect repeated once per
+  // single-occurrence symbol. Listed individually across 448 Roxen files that
+  // cluster buries every other finding.
+  const records: LedgerRecord[] = [
+    { ...base, capability: "textDocument/documentHighlight", file: "a.pike", status: "empty" },
+    { ...base, capability: "textDocument/documentHighlight", file: "b.pike", status: "empty" },
+    { ...base, capability: "textDocument/documentHighlight", file: "b.pike", status: "empty" },
+    { ...base, capability: "textDocument/completion", file: "c.pike", status: "empty" },
+  ];
+  const groups = groupFindings(triage(records));
+  expect(groups).toHaveLength(2);
+  const highlight = groups.find((g) => g.representative.capability === "textDocument/documentHighlight")!;
+  expect(highlight.occurrences).toBe(3);
+  expect(highlight.files).toBe(2);
+});
+
+test("grouping does not merge different severities", () => {
+  const groups = groupFindings(triage([
+    { ...base, capability: "textDocument/hover", status: "empty" },   // High
+    { ...base, capability: "textDocument/hover", status: "error" },   // Critical
+  ]));
+  expect(groups).toHaveLength(2);
+});
+
+test("the grouped table reports occurrence counts", () => {
+  const markdown = renderGrouped(triage([
+    { ...base, capability: "textDocument/documentHighlight", file: "a.pike", status: "empty" },
+    { ...base, capability: "textDocument/documentHighlight", file: "b.pike", status: "empty" },
+  ]));
+  expect(markdown).toContain("2 across 2 files");
+  expect(markdown).toContain("G1");
 });

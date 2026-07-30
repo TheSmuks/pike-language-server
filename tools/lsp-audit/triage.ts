@@ -238,6 +238,41 @@ function cell(value: string): string {
   return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
+/** One defect, however many times the sweep hit it. */
+export interface FindingGroup {
+  representative: Finding;
+  occurrences: number;
+  files: number;
+}
+
+/**
+ * Collapse findings that share a root cause into one group.
+ *
+ * On the corpus, 211 of 253 findings were a single server defect repeated once
+ * per single-occurrence symbol. Listed individually on 448 Roxen files that
+ * cluster runs to five figures and buries everything else, so the report shows
+ * one row per (severity, capability, tier) with a count and one exemplar.
+ * Grouping is presentation only — triage() still yields every finding.
+ */
+export function groupFindings(findings: Finding[]): FindingGroup[] {
+  const groups = new Map<string, { rep: Finding; count: number; files: Set<string> }>();
+  for (const finding of findings) {
+    const key = `${finding.severity}|${finding.capability}|${finding.tier}|${finding.oracleVerdict ?? ""}`;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count++;
+      existing.files.add(finding.file);
+    } else {
+      groups.set(key, { rep: finding, count: 1, files: new Set([finding.file]) });
+    }
+  }
+  return [...groups.values()].map((g) => ({
+    representative: g.rep,
+    occurrences: g.count,
+    files: g.files.size,
+  }));
+}
+
 export function renderFindings(findings: Finding[]): string {
   const rows = findings.map((f) => {
     const where = f.position ? `${f.file}:${f.position.line + 1}` : f.file;
@@ -247,6 +282,22 @@ export function renderFindings(findings: Finding[]): string {
   return [
     "| # | Severity | Finding | Location | Reproduction |",
     "|---|----------|---------|----------|--------------|",
+    ...rows,
+  ].join("\n");
+}
+
+/** Render one row per distinct defect, with its occurrence count and an exemplar. */
+export function renderGrouped(findings: Finding[]): string {
+  const rows = groupFindings(findings).map((g, index) => {
+    const f = g.representative;
+    const where = f.position ? `${f.file}:${f.position.line + 1}` : f.file;
+    const verdict = f.oracleVerdict ? ` (oracle: ${f.oracleVerdict})` : "";
+    const scope = `${g.occurrences} across ${g.files} file${g.files === 1 ? "" : "s"}`;
+    return `| G${index + 1} | ${f.severity[0]} | ${cell(f.capability)} | ${cell(f.summary + verdict)} | ${scope} | \`${cell(where)}\` | \`${cell(f.reproduction)}\` |`;
+  });
+  return [
+    "| # | Sev | Capability | Finding | Occurrences | Example | Reproduction |",
+    "|---|-----|------------|---------|-------------|---------|--------------|",
     ...rows,
   ].join("\n");
 }
