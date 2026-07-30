@@ -92,11 +92,12 @@ cp "$ROOT/server/tree-sitter-pike.wasm" "$STAGE/server/"
 # Copy data files
 mkdir -p "$STAGE/server/src/data"
 cp "$ROOT/server/src/data/"*.json "$STAGE/server/src/data/"
-# Copy harness scripts (needed by pikeWorker.ts at runtime)
-if [ -d "$ROOT/harness" ]; then
-  mkdir -p "$STAGE/harness"
-  cp "$ROOT/harness/"*.pike "$STAGE/harness/"
-fi
+# Copy the Pike runtime the worker is spawned with. Named explicitly, not
+# globbed: this used to be `cp harness/*.pike`, which shipped the dev-only
+# introspect.pike and resolve.pike to every user.
+mkdir -p "$STAGE/server/pike"
+cp "$ROOT/server/pike/worker.pike" "$STAGE/server/pike/"
+cp "$ROOT/server/pike/Common.pike" "$STAGE/server/pike/"
 
 # Copy web-tree-sitter runtime WASM (needed by server AND client).
 # Server resolves relative to server/dist/server.mjs → server/dist/web-tree-sitter.wasm

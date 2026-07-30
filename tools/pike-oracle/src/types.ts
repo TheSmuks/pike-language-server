@@ -1,6 +1,6 @@
 /**
- * Types for the Pike introspection harness.
- * Mirrors the JSON schema produced by harness/introspect.pike.
+ * Types for the Pike introspection oracle.
+ * Mirrors the JSON schema produced by tools/pike-oracle/introspect.pike.
  *
  * IntrospectionResult is intentionally extensible — Phase 3+ will add
  * `symbols`, `types`, and other fields. The snapshot canonicalizer

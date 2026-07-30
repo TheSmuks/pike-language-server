@@ -304,7 +304,7 @@ void test_inherited_symbol_also_in_file_but_distinguishable() {
   assert_true(has_prefix(def, FILE_PATH));
 
   // The distinction must be made by other means (e.g. checking if the symbol
-  // appears in source text, or using the introspect.pike harness which filters
+  // appears in source text, or using the introspect.pike oracle which filters
   // by prefix match on the file path).
 }
 

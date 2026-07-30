@@ -22,7 +22,7 @@ import { join } from "node:path";
 export interface TestWorkerOptions {
   /** Path to the Pike executable. Defaults to "pike". */
   pikeBin?: string;
-  /** Path to harness/worker.pike. */
+  /** Path to server/pike/worker.pike. */
   workerScript?: string;
   /** Heartbeat interval in ms (passed to worker via env). */
   heartbeatIntervalMs?: number;
@@ -48,7 +48,7 @@ export interface SpawnedTestWorker {
 // ---------------------------------------------------------------------------
 
 const DEFAULT_PIKE_BIN = "pike";
-const DEFAULT_WORKER_SCRIPT = join(process.cwd(), "harness", "worker.pike");
+const DEFAULT_WORKER_SCRIPT = join(process.cwd(), "server", "pike", "worker.pike");
 
 // ---------------------------------------------------------------------------
 // Public API

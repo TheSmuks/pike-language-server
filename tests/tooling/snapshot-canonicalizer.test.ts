@@ -13,7 +13,7 @@ import {
   canonicalStringify,
   deepSortKeys,
   diffSnapshot,
-} from "../src/snapshot";
+} from "../../tools/pike-oracle/src/snapshot";
 
 // ---------------------------------------------------------------------------
 // 1. Canonicalizer handles arbitrary nesting

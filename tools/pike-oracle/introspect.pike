@@ -1,4 +1,4 @@
-// introspect.pike — Pike introspection script for the language server harness
+// introspect.pike — Pike introspection oracle for the language server test suite
 //
 // Compiles a Pike source file using compile_string with a custom
 // CompilationHandler, extracts AutoDoc (best-effort), normalizes

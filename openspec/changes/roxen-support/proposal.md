@@ -51,7 +51,7 @@ but no spec currently covers resolution.
 - New: Roxen detection, activation, and index modules under
   `server/src/features/`; `scripts/build-roxen-index.ts` modelled on the
   existing `scripts/build-stdlib-index.ts`; a generated index under
-  `server/src/data/`; `harness/roxen-lab/`.
+  `server/src/data/`; `tools/roxen-lab/`.
 - Modified: `ModuleResolver` gains the `roxen-module://` scheme; include
   resolution consults Roxen include paths when Roxen mode is active;
   completion and hover consult the Roxen index.

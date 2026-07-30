@@ -1,4 +1,4 @@
-// resolve.pike — Cross-file resolution introspection for the Pike LSP harness.
+// resolve.pike — Cross-file resolution introspection oracle for the Pike LSP.
 //
 // For each cross-file reference (inherit/import) in a source file, reports what
 // Pike resolves it to: the target file path and available symbols.

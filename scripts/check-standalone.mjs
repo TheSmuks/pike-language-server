@@ -10,6 +10,7 @@
  */
 
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -110,7 +111,28 @@ function exitsOnShutdown() {
   });
 }
 
+/**
+ * The bundle must carry the Pike worker.
+ *
+ * Without it the server silently degrades to tree-sitter only — no compiler
+ * diagnostics, no typeof, no resolve, no autodoc — and says so once, to the
+ * log, on the first request that needed Pike. The VSIX shipped the worker and
+ * the standalone bundle did not, so the non-VSCode clients this script exists
+ * to guard were running at half capability without anything failing.
+ */
+function shipsPikeWorker() {
+  const missing = ["worker.pike", "Common.pike"]
+    .filter((f) => !existsSync(resolve(ROOT, "standalone", "pike", f)));
+  return missing.length === 0
+    ? { ok: true }
+    : { ok: false, why: `standalone/pike/ is missing ${missing.join(", ")}` };
+}
+
 let failed = false;
+const workerCheck = shipsPikeWorker();
+console.log(workerCheck.ok ? "  PASS  ships the Pike worker" : `  FAIL  ships the Pike worker — ${workerCheck.why}`);
+if (!workerCheck.ok) failed = true;
+
 for (const c of CASES) {
   const { ok, why } = await initialize(c);
   console.log(ok ? `  PASS  ${c.name}` : `  FAIL  ${c.name} — ${why}`);

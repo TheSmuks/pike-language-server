@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`harness/` is gone, split by what each part actually is.** It held three unrelated things under a name that said "test scaffolding": the Pike runtime the server ships and spawns, dev-only introspection oracles, and a test root parallel to `tests/`. That is what let the runtime go missing from three distributions unnoticed. Now: `server/pike/` (shipped runtime), `tools/pike-oracle/` (dev-only ground-truth tooling and its snapshots), `tools/roxen-lab/`, and `tests/tooling/` for the tests that lived under `harness/__tests__`. The VSIX also stops shipping `introspect.pike` and `resolve.pike`, which it had been copying with a `harness/*.pike` wildcard. Script renames: `harness:*` → `oracle:*`, `test:harness` → `test:tooling`.
+
 ### Added
 
 - **Roxen support.** Roxen WebServer source is Pike, but `#include <module.h>` and the other twelve Roxen headers never resolved, and the `TYPE_*`, `VAR_*`, `MOD_*` and `MODULE_*` families they define were unknown, so Roxen files arrived red. A local installation is now detected — explicit setting, then `pike.json`, then a workspace ancestor, then `/usr/local/roxen*`, highest version winning — and its module, include, and program paths are folded into Pike's, so resolution needed only one genuinely new concept: the `roxen-module://` inherit scheme. A generated index of Roxen 6.1's constants and its Roxen/RXML/module-prototype API ships with the server, so hover and completion work with no Roxen installed at all; a detected installation takes precedence and additionally gives go-to-definition into real sources. On an index-only symbol, go-to-definition returns nothing rather than a path that does not exist on the user's machine.
@@ -16,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Roxen lab and corpus tooling.** `harness/roxen-lab/` builds Pike 8.0.1116 and Roxen 6.1 from pinned revisions and exposes a parse oracle that settles whether a construct the grammar rejects is a grammar defect or invalid source. `scripts/roxen-corpus-parse.ts` runs the grammar across the corpus, decoding each file by detected encoding, and tracks the failure count against a committed baseline.
 
 ### Fixed
+
+- **The Pike worker reached no distribution but the VSIX.** `worker.pike` lived in `harness/`, and the standalone, npm, tarball and binary builds all copied what looked like product and skipped what looked like tests. Without it the server silently degrades to tree-sitter only — no compiler diagnostics, no `typeof`, no `resolve`, no autodoc — and says so once, to the log, on the first request that needed Pike, so nothing ever failed. The compiled binary was worse: it resolved the worker against a path baked in at build time, so it worked on the build machine and nowhere else. All four distributions now carry it, the binary embeds it the way it already embedded the WASM blobs, and `check-standalone.mjs` asserts it is there.
 
 - **Named class expressions no longer show as syntax errors.** `Write_back wb = class Write_back { … };` and `lock = class lambda17 { … }();` are valid Pike — one class production, reached from expression position — but the grammar put the name in an `ERROR` node. Fixed upstream in tree-sitter-pike and shipped here as a rebuilt WASM; the Roxen 6.1 corpus goes from 14 parse failures to 11, with nothing regressed.
 - **`lsp-probe` decoded every file as UTF-8.** Probing an ISO-8859-1 file replaced each high byte with a replacement character and shifted every position the tool printed, which is exactly the discrepancy it exists to investigate. It now decodes the way the server does.

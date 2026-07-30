@@ -5,7 +5,7 @@
  * - Direct API: buildSymbolTable + getDefinitionAt
  * - LSP protocol: client.sendRequest("textDocument/definition", ...)
  *
- * Uses corpus files + harness snapshots for real tree-sitter parsing.
+ * Uses corpus files + Pike oracle snapshots for real tree-sitter parsing.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -23,9 +23,9 @@ import {
   type Declaration,
   type Reference,
 } from "../../server/src/features/symbolTable";
-import { readSnapshot } from "../../harness/src/snapshot";
+import { readSnapshot } from "../../tools/pike-oracle/src/snapshot";
 
-import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
+import { listCorpusFiles, CORPUS_DIR } from "../../tools/pike-oracle/src/runner";
 /**
  * What textDocument/definition and textDocument/references return over the
  * wire. `sendRequest` with a string method is typed `unknown`, so protocol

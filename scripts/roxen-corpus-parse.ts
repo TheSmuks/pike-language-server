@@ -45,7 +45,7 @@ const MAX_NODES_PER_FILE = 5;
  * landing together cannot cancel out. Node positions are deliberately excluded:
  * they churn on any grammar change and would make the file unreviewable.
  */
-const BASELINE_PATH = join(import.meta.dir, "..", "harness", "roxen-lab", "corpus-baseline.json");
+const BASELINE_PATH = join(import.meta.dir, "..", "tools", "roxen-lab", "corpus-baseline.json");
 
 interface Baseline {
   corpusRevision: string;

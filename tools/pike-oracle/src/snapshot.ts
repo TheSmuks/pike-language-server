@@ -1,5 +1,5 @@
 /**
- * Snapshot read/write/diff for harness test results.
+ * Snapshot read/write/diff for Pike oracle results.
  *
  * The canonicalizer and diff are fully generic — they handle arbitrary
  * top-level fields and deeply nested structures. When Phase 3+ adds

@@ -51,15 +51,15 @@ token** — that is correct; those are the TextMate grammar's job. So:
 - **Identifier colored wrong** (a function name looks like a variable) → semantic
   tokens. Check the probe output and `semanticTokenScopes` in the manifest.
 - **Keyword/string/comment not colored** → TextMate grammar, not the server. The
-  probe cannot see this layer; test the grammar with the harness (below).
+  probe cannot see this layer; test the grammar directly (below).
 
 ## Testing the TextMate grammar
 
-The TextMate layer has its own harness — it does not involve the server:
+The TextMate layer has its own tests — they do not involve the server:
 
 ```bash
-bun test harness/__tests__/tmLanguage.test.ts
-bun test harness/__tests__/tmLanguage-tokenization.test.ts
+bun test tests/tooling/tmLanguage.test.ts
+bun test tests/tooling/tmLanguage-tokenization.test.ts
 ```
 
 ## Fast rebuild (watch mode)

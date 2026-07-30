@@ -18,7 +18,7 @@ tests/pike/
 modules/
   PUnit.pmod/              # PUnit framework (vendored dependency)
 
-harness/
+server/pike/
   Common.pike              # Shared Pike utilities (DiagnosticHandler, etc.)
 ```
 
@@ -33,42 +33,42 @@ bun run test:pike
 Or directly with Pike:
 
 ```bash
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike tests/pike
 ```
 
 ### Run a single test file
 
 ```bash
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike tests/pike/PUnitSmokeTests.pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike tests/pike/PUnitSmokeTests.pike
 ```
 
 ### Verbose output
 
 ```bash
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike -v tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike -v tests/pike
 ```
 
 ### Other output formats
 
 ```bash
 # TAP output
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike --tap tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike --tap tests/pike
 
 # JUnit XML
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike --junit=report.xml tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike --junit=report.xml tests/pike
 
 # List tests without running
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike --list=verbose tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike --list=verbose tests/pike
 ```
 
 ### Filtering
 
 ```bash
 # By tag
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike --tag=math tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike --tag=math tests/pike
 
 # By method name pattern
-pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike --filter=test_add* tests/pike
+pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike --filter=test_add* tests/pike
 ```
 
 ## Writing Tests

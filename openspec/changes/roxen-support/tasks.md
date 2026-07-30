@@ -5,7 +5,7 @@
 
 ## 2. Docker lab
 
-- [x] 2.1 Create `harness/roxen-lab/` with a Dockerfile building Pike 8.0 and
+- [x] 2.1 Create `tools/roxen-lab/` with a Dockerfile building Pike 8.0 and
       Roxen 6.1 from a pinned `rxnpatch/6.1` revision
 - [x] 2.2 Install Roxen into a conventional location matching where detection
       searches
@@ -13,7 +13,7 @@
       — BLOCKED: reaches module compilation and fails on a cyclic inherit in
       `Variable.pmod` that Pike's two-pass compiler cannot resolve. Reproduces
       identically on Pike v8.0.1116 and on Roxen's own `rxnpatch/8.0`. Recorded
-      as an open defect in `harness/roxen-lab/README.md`.
+      as an open defect in `tools/roxen-lab/README.md`.
 - [x] 2.4 Expose an oracle entry point: compile a given Pike file with Roxen's
       compiler and report success or the compiler's error
 - [x] 2.5 Document how to build and run the lab, including expected build time
@@ -85,7 +85,7 @@
       invalid source
 - [ ] 8.3 Fix grammar gaps upstream in the sibling tree-sitter-pike repository
       — NOT STARTED. Triage is complete and classified in
-      `harness/roxen-lab/corpus-triage.md`: 5 grammar gaps (3 of them one rule
+      `tools/roxen-lab/corpus-triage.md`: 5 grammar gaps (3 of them one rule
       — named class expressions), 8 macro-expansion gaps, 1 genuinely invalid
       source file that both Pike and the grammar correctly reject.
 - [ ] 8.4 Rebuild the WASM, copy it into `server/`, and regenerate goldens

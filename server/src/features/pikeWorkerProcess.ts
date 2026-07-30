@@ -23,7 +23,7 @@ import { processResponseBuffer } from "./pikeWorkerResponseParser.js";
 import { handlePikeStderr } from "./pikeWorkerStderr.js";
 import {
   buildSpawnCommand,
-  assertHarnessReady,
+  assertPikeRuntimeReady,
 } from "./pikeWorkerPaths.js";
 import {
   PikeWorkerHealthMonitor,
@@ -97,7 +97,7 @@ export abstract class PikeWorkerProcess {
   start(): void {
     if (this.proc && !this.proc.killed) return;
 
-    assertHarnessReady();
+    assertPikeRuntimeReady();
 
     const { cmd, args, cwd, env } = buildSpawnCommand(
       this.config.pikeBinaryPath,

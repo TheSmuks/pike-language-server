@@ -11,13 +11,13 @@
  *
  * These tests do NOT require Pike to be installed — they exercise only the
  * tree-sitter fast path (<5ms per file). Pike compiler diagnostics are
- * covered by harness/__tests__/harness.test.ts.
+ * covered by tests/tooling/pikeOracleRunner.test.ts.
  *
  * How to update golden files:
- *   bun run harness/src/diagnosticsGolden.ts --diagnostics-golden
+ *   bun run tools/pike-oracle/src/diagnosticsGolden.ts --diagnostics-golden
  *
  * How to verify:
- *   bun run harness/src/diagnosticsGolden.ts --diagnostics-verify
+ *   bun run tools/pike-oracle/src/diagnosticsGolden.ts --diagnostics-verify
  */
 
 import { describe, test, expect, beforeAll } from "bun:test";
@@ -30,7 +30,7 @@ import {
   produceDiagnostics,
   GOLDEN_DIR,
   CORPUS_DIR,
-} from "../src/diagnosticsGolden";
+} from "../../tools/pike-oracle/src/diagnosticsGolden";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 
@@ -78,7 +78,7 @@ describe("diagnostic golden file verification", () => {
       expect(actual).toBeDefined();
       if (!expected) {
         // Missing golden — this is a test failure, not self-healing.
-        // Run the harness with --golden to regenerate intentionally.
+        // Run the oracle with --golden to regenerate intentionally.
         throw new Error(
           `Missing golden for ${filename} (${name}) — run with --golden to generate`,
         );

@@ -25,7 +25,7 @@ depends on neither the host's autoconf version nor an existing Pike.
 ## Building and running
 
 ```sh
-cd harness/roxen-lab
+cd tools/roxen-lab
 docker build -t pike-lsp/roxen-lab:6.1 .        # 10-20 min, mostly compiling Pike
 ```
 

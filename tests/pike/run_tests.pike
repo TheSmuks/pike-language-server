@@ -12,7 +12,7 @@ import PUnit.TestCase;
 int main(int argc, array(string) argv) {
   // Add module paths for test discovery
   // When TestRunner compiles test files via compile_string, they need access to:
-  // - harness/Common.pike (for get_pike_version, normalize_diagnostics, DiagnosticHandler)
+  // - server/pike/Common.pike (for get_pike_version, normalize_diagnostics, DiagnosticHandler)
   // - modules/PUnit.pmod (for assertions, TestCase, etc.)
   string project_root = getcwd();
   // Handle running from tests/pike/ directory
@@ -23,7 +23,7 @@ int main(int argc, array(string) argv) {
   }
 
   // Add paths to the Pike master so compiled test files can find modules
-  master()->add_module_path(project_root + "/harness");
+  master()->add_module_path(project_root + "/server/pike");
   master()->add_module_path(project_root + "/modules");
   master()->add_module_path(project_root + "/tests/pike");
 

@@ -7,7 +7,7 @@ import {
   wireInheritance,
   getReferencesTo,
 } from "../../server/src/features/symbolTable";
-import { CORPUS_DIR } from "../../harness/src/runner";
+import { CORPUS_DIR } from "../../tools/pike-oracle/src/runner";
 import type { SymbolTable, Declaration, Reference } from "../../server/src/features/symbolTable";
 
 // ---------------------------------------------------------------------------
