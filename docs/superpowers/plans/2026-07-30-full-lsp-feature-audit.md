@@ -1621,6 +1621,42 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "feat(audit): add tier-2 correctness 
 - Consumes: `LedgerRecord`, `Tier` (Task 1); `OracleResult`, `Verdict`, `isOurDefect` (Task 5).
 - Produces: `type Severity = "Critical" | "High" | "Medium" | "Low"`; `interface Finding { id: string; severity: Severity; tier: Tier; surface: string; capability: string; file: string; position: { line: number; character: number } | null; summary: string; reproduction: string; oracleVerdict?: Verdict }`; `interface TriageOptions { slowMs?: number; verdicts?: Map<string, OracleResult>; roxenWorkspace?: string }`; `function triage(records: LedgerRecord[], options?: TriageOptions): Finding[]`; `function renderFindings(findings: Finding[]): string`.
 
+- [ ] **Step 0: Add a `notify` subcommand to lsp-probe**
+
+Two capabilities the sweep exercises — `workspace/didRenameFiles` and `textDocument/didChange` — are notifications. `lsp-probe raw` sends requests, and vscode-jsonrpc rejects a request for a notification-only handler with "Unhandled method" before the server ever sees it, so `raw` can never reproduce a lifecycle finding.
+
+In `scripts/lsp-probe.ts`, add a branch alongside the existing `raw` one:
+
+```ts
+    } else if (command === "notify") {
+      // Lifecycle capabilities are notifications: there is no reply to print.
+      // A lifecycle finding is a crash, so the reproduction sends the
+      // notification and then proves the server is still answering.
+      const method = rest[0];
+      if (!method) throw new Error("notify requires a <method> argument");
+      const extraParams = rest[2] ? JSON.parse(rest[2]) : {};
+      server.client.sendNotification(method, { textDocument: { uri }, ...extraParams });
+      const alive = await server.client.sendRequest("textDocument/documentSymbol", {
+        textDocument: { uri },
+      });
+      console.log(`notification sent: ${method}`);
+      console.log(`server still responding: ${Array.isArray(alive) ? `${alive.length} symbols` : "yes"}`);
+    } else if (command === "raw") {
+```
+
+Also add the usage line to the header comment block:
+
+```
+ *   bun run scripts/lsp-probe.ts notify <method> <file> [jsonParams]
+```
+
+Verify it runs:
+
+```bash
+bun run scripts/lsp-probe.ts notify textDocument/didChange corpus/files/class-create.pike '{"contentChanges":[{"text":"int x;\n"}]}'
+```
+Expected: prints `notification sent:` and a still-responding line. It must NOT print "Unhandled method".
+
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/tooling/lsp-audit-triage.test.ts`:
@@ -1766,6 +1802,24 @@ test("every raw-fallback reproduction matches the params the matrix actually sen
   }
 });
 
+test("notification capabilities use notify, not raw", () => {
+  // `raw` uses sendRequest, and vscode-jsonrpc rejects a request for a
+  // notification-only handler with "Unhandled method" before the server sees
+  // it — so a raw command for these fails identically every time, whatever the
+  // finding was. Verified by running both forms against a real corpus file.
+  for (const method of ["workspace/didRenameFiles", "textDocument/didChange"]) {
+    const finding = triage([{ ...base, capability: method, status: "error" }])[0];
+    expect(finding.reproduction).toContain(`notify ${method}`);
+    expect(finding.reproduction).not.toContain(`raw ${method}`);
+  }
+});
+
+test("request capabilities still use raw, not notify", () => {
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  expect(finding.reproduction).not.toContain("notify");
+});
+
 test("a slow record that is also empty gets the more severe tier", () => {
   const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
   expect(findings[0].severity).toBe("High");
@@ -1867,6 +1921,22 @@ const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
   "workspace/symbol": { query: "create" },
 };
 
+/**
+ * Methods the server handles as NOTIFICATIONS, which `raw` cannot reproduce.
+ *
+ * `lsp-probe raw` uses sendRequest, and vscode-jsonrpc rejects these with
+ * "Unhandled method" before they ever reach the server's notification handler —
+ * so a `raw` command for them fails identically every time regardless of the
+ * finding. They are routed to lsp-probe's `notify` subcommand instead, which
+ * sends the notification and then proves the server is still answering.
+ * A lifecycle finding IS a crash, so "did the server survive this?" is exactly
+ * the right reproduction.
+ */
+const NOTIFICATION_METHODS = new Set([
+  "workspace/didRenameFiles",
+  "textDocument/didChange",
+]);
+
 /** Methods whose params require a range. A whole-file range stands in. */
 const RANGE_METHODS = new Set([
   "textDocument/rangeFormatting",
@@ -1900,7 +1970,8 @@ function reproductionFor(record: LedgerRecord): string {
     return `bun run scripts/lsp-probe.ts ${dedicated} ${target} ${line}:${character}`;
   }
 
-  // raw: these params are spread verbatim into the request, so 0-based.
+  // raw/notify: these params are spread verbatim into the message, so 0-based.
+  const form = NOTIFICATION_METHODS.has(record.capability) ? "notify" : "raw";
   const params: Record<string, unknown> = { ...EXTRA_PARAMS[record.capability] };
   if (RANGE_METHODS.has(record.capability)) params.range = WHOLE_FILE_RANGE;
   if (record.position) {
@@ -1911,7 +1982,7 @@ function reproductionFor(record: LedgerRecord): string {
     }
   }
   const json = JSON.stringify(params);
-  return `bun run scripts/lsp-probe.ts raw ${record.capability} ${target} '${json}'`;
+  return `bun run scripts/lsp-probe.ts ${form} ${record.capability} ${target} '${json}'`;
 }
 
 function tierOf(record: LedgerRecord, slowMs: number): Tier | null {
