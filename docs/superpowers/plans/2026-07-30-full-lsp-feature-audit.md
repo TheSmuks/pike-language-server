@@ -1629,6 +1629,16 @@ Create `tests/tooling/lsp-audit-triage.test.ts`:
 import { test, expect } from "bun:test";
 import { triage, renderFindings } from "../../tools/lsp-audit/triage";
 import type { LedgerRecord } from "../../tools/lsp-audit/ledger";
+import { MATRIX } from "../../tools/lsp-audit/matrix";
+
+/** Methods lsp-probe has a dedicated subcommand for; the rest use `raw`. */
+const DEDICATED_METHODS = new Set([
+  "textDocument/hover",
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/documentSymbol",
+  "textDocument/semanticTokens/full",
+]);
 
 const base: LedgerRecord = {
   surface: "server",
@@ -1735,6 +1745,27 @@ test("a pipe in a server error message cannot break the table row", () => {
   expect(markdown).toContain("string\\|Stdio.File");
 });
 
+test("every raw-fallback reproduction matches the params the matrix actually sends", () => {
+  // A reproduction that runs but fires a DIFFERENT request than the sweep did
+  // is worse than one that crashes: it looks fine and reproduces nothing. This
+  // pins each raw-form capability against its matrix entry.
+  for (const spec of MATRIX) {
+    if (DEDICATED_METHODS.has(spec.method)) continue;
+    const record = { ...base, capability: spec.method, status: "empty" as const };
+    const reproduction = triage([record])[0].reproduction;
+    const json = reproduction.match(/'(\{.*\})'$/)?.[1];
+    expect(json).toBeDefined();
+    const params = JSON.parse(json!) as Record<string, unknown>;
+
+    // Whatever the matrix sends beyond textDocument must appear here too.
+    const sent = spec.params({ uri: "file:///x.pike", position: record.position, text: "" });
+    for (const key of Object.keys(sent as object)) {
+      if (key === "textDocument") continue;
+      expect(params[key]).toBeDefined();
+    }
+  }
+});
+
 test("a slow record that is also empty gets the more severe tier", () => {
   const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
   expect(findings[0].severity).toBe("High");
@@ -1822,7 +1853,18 @@ const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
   "textDocument/codeAction": { context: { diagnostics: [] } },
   "textDocument/formatting": { options: { tabSize: 2, insertSpaces: true } },
   "textDocument/rangeFormatting": { options: { tabSize: 2, insertSpaces: true } },
-  "textDocument/onTypeFormatting": { ch: "}", options: { tabSize: 2, insertSpaces: true } },
+  // onTypeFormatting is document-driven, so the ledger stores position null —
+  // but the matrix always sends {0,0}. Without it here the reproduction fires a
+  // request with no position at all, which is not what produced the finding.
+  "textDocument/onTypeFormatting": {
+    ch: "}",
+    position: { line: 0, character: 0 },
+    options: { tabSize: 2, insertSpaces: true },
+  },
+  // The query is what makes this request meaningful; `{}` reproduces nothing.
+  // lsp-probe's raw handler also injects a textDocument the real request has
+  // no need for — harmless, since the server ignores it for workspace/symbol.
+  "workspace/symbol": { query: "create" },
 };
 
 /** Methods whose params require a range. A whole-file range stands in. */
