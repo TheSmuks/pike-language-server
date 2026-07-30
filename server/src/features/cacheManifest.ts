@@ -20,7 +20,7 @@ import { getCachePath, migrateLegacyCache } from "./cachePaths";
 const MANIFEST_FILENAME = "manifest.json";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
 const CACHE_SUBDIR = "cache";
-const FORMAT_VERSION = 2;
+const FORMAT_VERSION = 3;
 
 /** A range in a document (line/character, 0-based). */
 interface Range {
