@@ -44,6 +44,6 @@ echo "[INFO] Pike version: $(pike --version 2>&1 | head -1)"
 # Run the PUnit test runner
 # Module paths:
 #   -M modules       — PUnit framework
-#   -M harness       — Common.pike helpers (DiagnosticHandler, normalize_diagnostics)
+#   -M server/pike   — Common.pike helpers (DiagnosticHandler, normalize_diagnostics)
 #   -M tests/pike    — Shared test helpers (LspProtocol.pmod, TestBootstrap.pmod)
-exec pike -M modules -M harness -M tests/pike tests/pike/run_tests.pike "$TEST_DIR"
+exec pike -M modules -M server/pike -M tests/pike tests/pike/run_tests.pike "$TEST_DIR"

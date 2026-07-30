@@ -24,10 +24,12 @@ function findProjectRoot(start: string = import.meta.dir): string {
 
 export const PROJECT_ROOT = findProjectRoot();
 export const CORPUS_DIR = join(PROJECT_ROOT, "corpus", "files");
-export const SNAPSHOTS_DIR = join(PROJECT_ROOT, "harness", "snapshots");
-export const RESOLVE_SNAPSHOTS_DIR = join(PROJECT_ROOT, "harness", "resolve-snapshots");
-export const INTROSPECT_SCRIPT = join(PROJECT_ROOT, "harness", "introspect.pike");
-export const RESOLVE_SCRIPT = join(PROJECT_ROOT, "harness", "resolve.pike");
+export const SNAPSHOTS_DIR = join(PROJECT_ROOT, "tools", "pike-oracle", "snapshots");
+export const RESOLVE_SNAPSHOTS_DIR = join(PROJECT_ROOT, "tools", "pike-oracle", "resolve-snapshots");
+export const INTROSPECT_SCRIPT = join(PROJECT_ROOT, "tools", "pike-oracle", "introspect.pike");
+export const RESOLVE_SCRIPT = join(PROJECT_ROOT, "tools", "pike-oracle", "resolve.pike");
+// introspect.pike does `import Common;`, which ships with the server runtime.
+export const PIKE_RUNTIME_DIR = join(PROJECT_ROOT, "server", "pike");
 
 /** Pike binary name/path. Configurable via PIKE_BINARY env var, defaults to "pike". */
 export const PIKE_BINARY = process.env.PIKE_BINARY ?? "pike";
@@ -113,7 +115,7 @@ export async function runIntrospect(
   }
   args.push(absCorpusFile);
 
-  const proc = Bun.spawn([PIKE_BINARY, "-M", "harness", INTROSPECT_SCRIPT, ...args], {
+  const proc = Bun.spawn([PIKE_BINARY, "-M", PIKE_RUNTIME_DIR, INTROSPECT_SCRIPT, ...args], {
     stdout: "pipe",
     stderr: "pipe",
   });

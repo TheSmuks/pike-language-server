@@ -10,8 +10,8 @@ import {
 } from "vscode-jsonrpc/node";
 import { createConnection } from "vscode-languageserver/node";
 import { createPikeServer, type PikeServer } from "../../server/src/server";
-import { readSnapshot } from "../../harness/src/snapshot";
-import { listCorpusFiles, CORPUS_DIR, snapshotNameForFile } from "../../harness/src/runner";
+import { readSnapshot } from "../../tools/pike-oracle/src/snapshot";
+import { listCorpusFiles, CORPUS_DIR, snapshotNameForFile } from "../../tools/pike-oracle/src/runner";
 import type { DocumentSymbol } from "../../server/src/features/documentSymbol";
 import { SymbolKind } from "../../server/src/features/documentSymbol";
 import { createSilentStream } from "./helpers";

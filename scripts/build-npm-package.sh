@@ -37,6 +37,15 @@ chmod +x "$OUT_DIR/bin/pike-language-server"
 cp "$ROOT/standalone/server.js" "$OUT_DIR/standalone/"
 cp "$ROOT/standalone/"*.wasm "$OUT_DIR/standalone/"
 cp "$ROOT/standalone/"*.json "$OUT_DIR/standalone/"
+# The Pike runtime, carried through from the standalone bundle. Its absence is
+# not fatal, only silently degrading, so copy it explicitly and fail loudly if
+# the standalone build did not produce it.
+if [ ! -d "$ROOT/standalone/pike" ]; then
+  echo "standalone/pike missing — rebuild with 'bun run build:standalone'" >&2
+  exit 1
+fi
+mkdir -p "$OUT_DIR/standalone/pike"
+cp "$ROOT/standalone/pike/"*.pike "$OUT_DIR/standalone/pike/"
 cp "$ROOT/LICENSE" "$OUT_DIR/"
 cp "$ROOT/docs/helix-installation.md" "$ROOT/docs/other-editors.md" "$OUT_DIR/docs/"
 

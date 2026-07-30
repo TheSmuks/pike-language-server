@@ -9,7 +9,7 @@
  *
  * This tests the LSP's own fast-path diagnostics — the tree-sitter-based
  * diagnostics that run on every keystroke. It complements the existing
- * harness snapshots that capture Pike compiler diagnostics.
+ * oracle snapshots that capture Pike compiler diagnostics.
  *
  * The golden files are intentionally separate from the Pike introspection
  * snapshots because they test a different pipeline (tree-sitter vs Pike
@@ -53,10 +53,10 @@ export interface DiagnosticGoldenFile {
 // Paths
 // ---------------------------------------------------------------------------
 
-const HARNESS_DIR = resolve(import.meta.dir, "..");
-const PROJECT_ROOT = resolve(HARNESS_DIR, "..");
+const ORACLE_DIR = resolve(import.meta.dir, "..");
+const PROJECT_ROOT = resolve(ORACLE_DIR, "..", "..");
 const CORPUS_DIR = join(PROJECT_ROOT, "corpus", "files");
-const GOLDEN_DIR = join(HARNESS_DIR, "diagnostic-goldens");
+const GOLDEN_DIR = join(ORACLE_DIR, "diagnostic-goldens");
 
 export { PROJECT_ROOT, CORPUS_DIR, GOLDEN_DIR };
 
@@ -85,16 +85,16 @@ function diagnosticToGolden(d: Diagnostic): GoldenDiagnostic {
  * Run the LSP's tree-sitter diagnostics pipeline on a source string.
  *
  * Returns parse diagnostics first, then lint diagnostics.
- * Does NOT include Pike compiler diagnostics (those are in the harness snapshots).
+ * Does NOT include Pike compiler diagnostics (those are in the oracle snapshots).
  */
 export async function produceDiagnostics(
   source: string,
   uri: string,
 ): Promise<DiagnosticGoldenFile> {
-  const { initParser, parse } = await import("../../server/src/parser");
-  const { getParseDiagnostics } = await import("../../server/src/features/diagnostics");
-  const { buildSymbolTable } = await import("../../server/src/features/symbolTable");
-  const { runLintRules } = await import("../../server/src/features/lintRules");
+  const { initParser, parse } = await import("../../../server/src/parser");
+  const { getParseDiagnostics } = await import("../../../server/src/features/diagnostics");
+  const { buildSymbolTable } = await import("../../../server/src/features/symbolTable");
+  const { runLintRules } = await import("../../../server/src/features/lintRules");
 
   await initParser();
 

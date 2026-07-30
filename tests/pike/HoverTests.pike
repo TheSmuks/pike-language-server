@@ -5,14 +5,14 @@
 //! - get_pike_version for "Pike vX.Y" in hover footer
 //!
 //! Also tests that Pike's compile_string correctly attaches type
-//! information to symbols, and that the harness DiagnosticHandler
+//! information to symbols, and that the runtime's DiagnosticHandler
 //! captures the kind of diagnostics that feed into hover tooltips.
 //!
 //! Usage: pike -M modules tests/pike/HoverTests.pike
 
 import PUnit;
 
-// Import harness Common utilities
+// Import the server runtime's Common utilities
 import Common;
 
 // Access Common module object

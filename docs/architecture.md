@@ -40,7 +40,9 @@ graph TD
 ```
 server/           # LSP server (TypeScript, vscode-languageserver-node)
 client/          # VSCode extension that hosts the LSP server
-harness/          # Test harness — invokes pike, captures ground truth, compares LSP output
+server/pike/      # Pike runtime shipped with the server — worker.pike + Common.pike
+tools/pike-oracle/ # Dev-only: invokes pike, captures ground truth, compares LSP output
+tools/roxen-lab/  # Dev-only: Docker Roxen 6.1 environment and parse oracle
 corpus/           # Pike files covering language features the LSP must handle
   files/          # Actual Pike source files
   manifest.md     # Inventory of files and what features each exercises
@@ -59,9 +61,9 @@ TypeScript application using `vscode-languageserver-node`. Handles LSP protocol,
 
 Hosts the LSP server as a subprocess. Registers Pike as a language for `.pike`, `.pmod`, `.mmod` files. Provides configuration UI.
 
-### Test Harness (`harness/`)
+### Pike oracle tooling (`tools/pike-oracle/`)
 
-Invokes `pike` on corpus files, captures output, produces structured ground-truth snapshots. Compares LSP output against ground truth. Includes canary tests for harness integrity.
+Dev-only. Invokes `pike` on corpus files, captures output, produces structured ground-truth snapshots, and compares LSP output against them. Canary tests guard the tooling itself. Never shipped — the Pike code the server actually spawns at runtime lives in `server/pike/`.
 
 ### Corpus (`corpus/`)
 

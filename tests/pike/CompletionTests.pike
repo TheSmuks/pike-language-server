@@ -10,7 +10,7 @@
 
 import PUnit;
 
-// Import harness Common utilities
+// Import the server runtime's Common utilities
 import Common;
 
 // Access Common module object

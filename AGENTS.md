@@ -134,7 +134,9 @@ We do not defer known defects. When we find showstoppers, we solve them. We may 
 ```
 server/           # LSP server (TypeScript, vscode-languageserver-node)
 client/          # VSCode extension that hosts the LSP server
-harness/          # Test harness — invokes pike, captures ground truth, compares LSP output
+server/pike/      # Pike runtime shipped with the server — worker.pike + Common.pike
+tools/pike-oracle/ # Dev-only: invokes pike, captures ground truth, compares LSP output
+tools/roxen-lab/  # Dev-only: Docker Roxen 6.1 environment and parse oracle
 corpus/           # Pike files covering language features the LSP must handle
   files/          # Actual Pike source files
   manifest.md     # Inventory of files and what features each exercises
@@ -231,7 +233,7 @@ When an AI agent is working in this repository:
 1. **Tests are ground truth.** Pike is the oracle. pike-ai-kb is the interface to the oracle. Every test derives expected output from pike.
 2. **No phase begins until the previous phase is 100% complete.** "Mostly working" is not done.
 3. **Specific failures, not category labels.** Describe failures precisely: input X produces output Y at position Z, when it should produce W.
-4. **The test harness can be wrong.** Audit it. Canary tests catch harness bugs.
+4. **The oracle tooling can be wrong.** Audit it. Canary tests catch tooling bugs.
 5. **Decisions go in decisions/.** Write the decision document before committing.
 6. **Check pike-ai-kb before generating Pike code.** The knowledge base is runtime-verified; agent priors on Pike are unreliable.
 7. **Consult docs/lsp-references.md before designing an LSP architectural pattern.** Other LSPs have solved most hard problems; understand their solutions before inventing your own.

@@ -59,6 +59,14 @@ cp "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" "$OUT_DIR/"
 # Copy data files
 cp "$ROOT/server/src/data/"*.json "$OUT_DIR/"
 
+# Copy the Pike runtime the worker is spawned with. Without it the server
+# silently degrades to tree-sitter only — no compiler diagnostics, no typeof,
+# no resolve, no autodoc — which is how the Neovim/Helix path ran for a while.
+# scripts/check-standalone.mjs asserts this is here.
+mkdir -p "$OUT_DIR/pike"
+cp "$ROOT/server/pike/worker.pike" "$OUT_DIR/pike/"
+cp "$ROOT/server/pike/Common.pike" "$OUT_DIR/pike/"
+
 echo "Standalone build complete: $OUT_DIR/"
 echo "Run with: bun $OUT_DIR/server.js --stdio"
 ls -lh "$OUT_DIR/"

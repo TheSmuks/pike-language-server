@@ -2,7 +2,7 @@
  * Cross-file resolution oracle tests.
  *
  * These tests compare the LSP's cross-file resolution against Pike's actual
- * resolution, using ground truth from `harness/resolve.pike`.
+ * resolution, using ground truth from `tools/pike-oracle/resolve.pike`.
  *
  * The principle: "Pike is the oracle." If the LSP resolves a cross-file
  * reference to a different file than Pike does, that's a bug.
@@ -13,10 +13,10 @@ import { initParser, parse } from "../../server/src/parser";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import type { ResolutionResult } from "../../harness/src/runner";
+import type { ResolutionResult } from "../../tools/pike-oracle/src/runner";
 
 const CORPUS_DIR = join(import.meta.dir, "..", "..", "corpus", "files");
-const RESOLVE_SNAPSHOTS_DIR = join(import.meta.dir, "..", "..", "harness", "resolve-snapshots");
+const RESOLVE_SNAPSHOTS_DIR = join(import.meta.dir, "..", "..", "tools", "pike-oracle", "resolve-snapshots");
 
 function corpusUri(name: string): string {
   return `file://${join(CORPUS_DIR, name)}`;

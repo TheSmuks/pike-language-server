@@ -1,5 +1,5 @@
 /**
- * Main harness tests: snapshot coverage, determinism, mutation detection.
+ * Pike oracle runner tests: snapshot coverage, determinism, mutation detection.
  */
 
 import { describe, test, expect, beforeAll } from "bun:test";
@@ -11,11 +11,11 @@ import {
   SNAPSHOTS_DIR,
   getRunnerOptionsForFile,
   snapshotNameForFile,
-} from "../src/runner";
-import { readSnapshot, diffSnapshot, writeSnapshot } from "../src/snapshot";
+} from "../../tools/pike-oracle/src/runner";
+import { readSnapshot, diffSnapshot, writeSnapshot } from "../../tools/pike-oracle/src/snapshot";
 import { existsSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { IntrospectionResult } from "../src/types";
+import type { IntrospectionResult } from "../../tools/pike-oracle/src/types";
 
 const corpusFiles = listCorpusFiles();
 
@@ -57,7 +57,7 @@ describe("snapshot matches ground truth", () => {
       expect(actual).toBeDefined();
       if (!expected) {
         // Missing snapshot — this is a test failure, not self-healing.
-        // Run the harness with --snapshot to regenerate intentionally.
+        // Run the oracle with --snapshot to regenerate intentionally.
         throw new Error(
           `Missing snapshot for ${filename} (${name}) — run with --snapshot to generate`,
         );

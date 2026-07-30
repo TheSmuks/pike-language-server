@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { readFileSync } from "node:fs";
 import { createTestServer, createSilentStream, type TestServer } from "./helpers";
 import { buildServerCapabilities } from "../../server/src/serverCapabilities";
-import { listCorpusFiles, CORPUS_DIR } from "../../harness/src/runner";
+import { listCorpusFiles, CORPUS_DIR } from "../../tools/pike-oracle/src/runner";
 
 // ---------------------------------------------------------------------------
 // 1. Capabilities

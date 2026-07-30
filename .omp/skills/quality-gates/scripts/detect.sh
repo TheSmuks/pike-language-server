@@ -65,7 +65,7 @@ warnings = 0
 setup_errors = 0
 suppressions = []
 
-scan_roots = [".", "server/src", "client", "tests", "harness", "scripts", "docs"]
+scan_roots = [".", "server/src", "client", "tests", "tools", "scripts", "docs"]
 exclude_parts = {
     "node_modules", "dist", "build", "out", ".git", ".pike-lsp", ".specify", ".omp",
     "fixtures", "evidence", ".vscode-test", "dist-temp", "specs", "wiki",

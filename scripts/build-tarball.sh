@@ -40,6 +40,14 @@ mkdir -p "$STAGE"
 cp "$ROOT/standalone/server.js" "$STAGE/"
 cp "$ROOT/standalone/"*.wasm "$STAGE/"
 cp "$ROOT/standalone/"*.json "$STAGE/"
+# The Pike runtime — see build-standalone.sh. Absence degrades silently, so it
+# is an error here rather than a missing file nobody notices.
+if [ ! -d "$ROOT/standalone/pike" ]; then
+  echo "standalone/pike missing — run 'bun run build:standalone' first" >&2
+  exit 1
+fi
+mkdir -p "$STAGE/pike"
+cp "$ROOT/standalone/pike/"*.pike "$STAGE/pike/"
 
 cat > "$STAGE/README.md" <<EOF
 # Pike Language Server — standalone bundle $VERSION

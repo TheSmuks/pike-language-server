@@ -1,6 +1,6 @@
 //! SignatureTests.pike — Tests for function signature parsing
 //!
-//! Exercises the harness signature splitting logic via Pike's
+//! Exercises the worker signature splitting logic via Pike's
 //! compile_string and Program.defined introspection.
 //!
 //! Tests:
@@ -14,7 +14,7 @@
 
 import PUnit;
 
-// Import harness Common utilities
+// Import the server runtime's Common utilities
 import Common;
 
 object get_common() { return Common(); }

@@ -27,9 +27,9 @@ import { initParser, parse } from "../../server/src/parser";
 import { getDocumentSymbols } from "../../server/src/features/documentSymbol";
 import { SymbolKind } from "vscode-languageserver/node";
 import { getParseDiagnostics } from "../../server/src/features/diagnostics";
-import { readSnapshot } from "../src/snapshot";
-import { listCorpusFiles, CORPUS_DIR } from "../src/runner";
-import type { IntrospectionResult, SymbolInfo } from "../src/types";
+import { readSnapshot } from "../../tools/pike-oracle/src/snapshot";
+import { listCorpusFiles, CORPUS_DIR } from "../../tools/pike-oracle/src/runner";
+import type { IntrospectionResult, SymbolInfo } from "../../tools/pike-oracle/src/types";
 
 // ---------------------------------------------------------------------------
 // Setup

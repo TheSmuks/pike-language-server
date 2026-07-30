@@ -8,7 +8,9 @@
 
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { getEmbeddedAssets } from "../embeddedAssets.js";
 
 const _thisDir = typeof __dirname !== 'undefined'
   ? __dirname
@@ -56,14 +58,31 @@ export function resolveFile(...candidates: string[]): string | undefined {
 export const DEV_ROOT = resolve(_thisDir, "..", "..", "..");
 // VSIX layout: _thisDir = server/dist/; 2x ".." = extension root
 export const VSIX_ROOT = resolve(_thisDir, "..", "..");
+// Standalone layout: _thisDir IS the bundle directory (standalone/server.js),
+// so the Pike runtime sits beside the bundle rather than under a server/ dir.
+export const STANDALONE_ROOT = _thisDir;
 
-export const HARNESS_DIR = resolveDir(
-  join(DEV_ROOT, "harness"),
-  join(VSIX_ROOT, "harness"),
+/**
+ * Directory holding the Pike runtime the worker is spawned with — worker.pike
+ * and the Common module it imports.
+ *
+ * This is production code that ships in every distribution, not test
+ * scaffolding. It used to live in `harness/`, which is why the standalone and
+ * npm bundles went out without it for a while: their build scripts copied the
+ * things that looked like product and skipped the directory that looked like
+ * tests. Absence is not fatal — the server degrades to tree-sitter only — which
+ * is exactly why it went unnoticed, and why check-standalone.mjs now asserts
+ * the bundle carries it.
+ */
+export const PIKE_RUNTIME_DIR = resolveDir(
+  join(DEV_ROOT, "server", "pike"),
+  join(VSIX_ROOT, "server", "pike"),
+  join(STANDALONE_ROOT, "pike"),
 );
 export const WORKER_SCRIPT = resolveFile(
-  join(DEV_ROOT, "harness", "worker.pike"),
-  join(VSIX_ROOT, "harness", "worker.pike"),
+  join(DEV_ROOT, "server", "pike", "worker.pike"),
+  join(VSIX_ROOT, "server", "pike", "worker.pike"),
+  join(STANDALONE_ROOT, "pike", "worker.pike"),
 );
 // pmp installs the introspect module under a package-named directory. The
 // package was historically symlinked as `modules/Introspect`, but current pmp
@@ -75,6 +94,52 @@ export const INTROSPECT_PATH = resolveDir(
   join(VSIX_ROOT, "modules", "Introspect", "src"),
   join(VSIX_ROOT, "modules", "pike_introspect", "src"),
 );
+
+/**
+ * Write the Pike sources carried inside a compiled binary to a temp directory,
+ * returning it. Undefined when this build carries none.
+ *
+ * The worker is a separate `pike` process, so in-memory bytes are no use to
+ * it — unlike the WASM blobs, these have to reach a real filesystem. Done once
+ * and memoised: `buildSpawnCommand` runs on every worker restart, and
+ * extracting per spawn would leak a directory each time.
+ */
+let embeddedRuntimeDir: string | undefined;
+
+export function materializeEmbeddedPikeRuntime(): string | undefined {
+  if (embeddedRuntimeDir) return embeddedRuntimeDir;
+
+  const sources = getEmbeddedAssets().pikeRuntime;
+  if (!sources || Object.keys(sources).length === 0) return undefined;
+
+  const dir = mkdtempSync(join(tmpdir(), "pike-lsp-runtime-"));
+  for (const [name, bytes] of Object.entries(sources)) {
+    writeFileSync(join(dir, name), bytes);
+  }
+  embeddedRuntimeDir = dir;
+  return dir;
+}
+
+/** Forget the materialised directory. Returns it so a caller can clean up. */
+export function resetEmbeddedPikeRuntime(): string | undefined {
+  const previous = embeddedRuntimeDir;
+  embeddedRuntimeDir = undefined;
+  return previous;
+}
+
+/**
+ * The directory and worker script to spawn Pike with.
+ *
+ * On-disk layouts first, then the copy carried inside a compiled binary. The
+ * order matters for development: a checkout's `server/pike` should win over
+ * whatever a locally built binary happens to embed.
+ */
+export function resolvePikeRuntime(): { dir?: string; script?: string } {
+  if (PIKE_RUNTIME_DIR && WORKER_SCRIPT) return { dir: PIKE_RUNTIME_DIR, script: WORKER_SCRIPT };
+  const embedded = materializeEmbeddedPikeRuntime();
+  if (!embedded) return {};
+  return { dir: embedded, script: join(embedded, "worker.pike") };
+}
 
 // ---------------------------------------------------------------------------
 // Spawn-command construction
@@ -99,9 +164,10 @@ export function buildSpawnCommand(
   niceValue: number,
   libraryPath: string | undefined,
 ): SpawnCommand {
-  const baseArgs = ["-M", HARNESS_DIR!];
+  const runtime = resolvePikeRuntime();
+  const baseArgs = ["-M", runtime.dir!];
   if (INTROSPECT_PATH) baseArgs.push("-M", INTROSPECT_PATH);
-  baseArgs.push(WORKER_SCRIPT!);
+  baseArgs.push(runtime.script!);
 
   let cmd: string;
   let args: string[];
@@ -124,18 +190,23 @@ export function buildSpawnCommand(
 }
 
 /**
- * Throw a descriptive error if the harness directory or worker script
- * cannot be resolved in either dev or VSIX layout.
+ * Throw a descriptive error if the Pike runtime cannot be resolved in any
+ * supported layout. The message names all three, because which one is expected
+ * depends on how the server was installed.
  */
-export function assertHarnessReady(): void {
-  if (!HARNESS_DIR) throw new Error(
-    `Pike worker: harness directory not found.\n` +
-    `  Dev layout: ${join(DEV_ROOT, "harness")}\n` +
-    `  VSIX layout: ${join(VSIX_ROOT, "harness")}`,
+export function assertPikeRuntimeReady(): void {
+  const runtime = resolvePikeRuntime();
+  if (runtime.dir && runtime.script) return;
+  if (!PIKE_RUNTIME_DIR) throw new Error(
+    `Pike worker: runtime directory not found.\n` +
+    `  Dev layout:        ${join(DEV_ROOT, "server", "pike")}\n` +
+    `  VSIX layout:       ${join(VSIX_ROOT, "server", "pike")}\n` +
+    `  Standalone layout: ${join(STANDALONE_ROOT, "pike")}`,
   );
   if (!WORKER_SCRIPT) throw new Error(
     `Pike worker: worker.pike not found.\n` +
-    `  Dev layout: ${join(DEV_ROOT, "harness", "worker.pike")}\n` +
-    `  VSIX layout: ${join(VSIX_ROOT, "harness", "worker.pike")}`,
+    `  Dev layout:        ${join(DEV_ROOT, "server", "pike", "worker.pike")}\n` +
+    `  VSIX layout:       ${join(VSIX_ROOT, "server", "pike", "worker.pike")}\n` +
+    `  Standalone layout: ${join(STANDALONE_ROOT, "pike", "worker.pike")}`,
   );
 }

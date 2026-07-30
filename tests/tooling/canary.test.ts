@@ -1,6 +1,6 @@
 /**
  * Canary tests: hand-verified expectations for specific corpus files.
- * These serve as harness integrity checks — if they fail, something
+ * These serve as oracle-tooling integrity checks — if they fail, something
  * fundamental is broken in the introspection pipeline.
  */
 
@@ -10,10 +10,10 @@ import {
   listCorpusFiles,
   CORPUS_DIR,
   getRunnerOptionsForFile,
-} from "../src/runner";
+} from "../../tools/pike-oracle/src/runner";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import type { IntrospectionResult } from "../src/types";
+import type { IntrospectionResult } from "../../tools/pike-oracle/src/types";
 
 // ---------------------------------------------------------------------------
 // Helpers

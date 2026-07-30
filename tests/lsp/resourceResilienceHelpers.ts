@@ -148,7 +148,7 @@ export class FakeClock {
  */
 export function countPikeProcesses(): number {
   try {
-    const output = execSync("pgrep -f 'harness/worker.pike' 2>/dev/null || true", {
+    const output = execSync("pgrep -f 'server/pike/worker.pike' 2>/dev/null || true", {
       encoding: "utf-8",
       timeout: 5_000,
     });
