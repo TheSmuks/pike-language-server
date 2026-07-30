@@ -90,7 +90,33 @@ export function decodeSource(buf: Uint8Array): DecodedSource {
   return sniff(buf);
 }
 
-/** UTF-8 if valid, else true byte-identity ISO-8859-1 (which cannot fail). */
+/**
+ * UTF-8 if valid, else true byte-identity ISO-8859-1 (which cannot fail).
+ *
+ * Real pike does NOT do this: absent a `#charset` directive, pike reads
+ * undeclared source as raw byte-identity, full stop — verified directly
+ * against pike v8.0.1116 (a file with valid multi-byte UTF-8 and no
+ * directive decodes as separate raw bytes, not the merged character UTF-8
+ * would produce; a leading UTF-8 BOM doesn't change this either — pike
+ * chokes on its bytes as illegal characters rather than treating them as
+ * an encoding signal).
+ *
+ * We sniff anyway, deliberately: LSP positions must match how the EDITOR
+ * holds the document, not how the compiler reads it. Worked through for
+ * `©`:
+ *   - UTF-8 file (`©` = C2 A9): we sniff UTF-8 → 1 char. VS Code's default
+ *     `files.encoding: utf8` → 1 char. Aligned.
+ *   - ISO-8859-1 file (`©` = A9): we fall back to latin1 → 1 char. VS Code
+ *     decoding as UTF-8 → 1 replacement char. Still 1 char — aligned.
+ *   - pike itself sees raw bytes in both cases: 2 chars and 1 char. It
+ *     differs from both us and the editor either way.
+ *
+ * Do NOT change this to match pike's raw-byte default. It would desync
+ * every position this server emits from what the user actually sees and
+ * clicks on. Pike's byte-oriented view only matters for mapping the pike
+ * compiler's own diagnostic line/column back to LSP positions — a separate,
+ * pre-existing concern this function does not touch.
+ */
 function sniff(buf: Uint8Array): DecodedSource {
   try {
     return { text: strictUtf8.decode(buf), encoding: "utf-8" };
