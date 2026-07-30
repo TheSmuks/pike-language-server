@@ -230,9 +230,6 @@ function collectSymbols(container: Node, parentKind: string | undefined): Docume
 // Public API
 // ---------------------------------------------------------------------------
 
-// `lines` is unused now that tree-sitter columns and LSP characters are both
-// UTF-16 code units — kept on the signature so existing callers don't need
-// to change.
-export function getDocumentSymbols(tree: Tree, lines?: string[]): DocumentSymbol[] {
+export function getDocumentSymbols(tree: Tree): DocumentSymbol[] {
   return collectSymbols(tree.rootNode, undefined);
 }
