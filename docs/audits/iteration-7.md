@@ -245,13 +245,69 @@ Stated plainly, because a reader would otherwise over-read these results.
 
 ---
 
+## Fixes Applied
+
+N1 and C3 were fixed after this report was first written. Both are covered by
+new regression tests; the remaining findings are untouched.
+
+### N1 — `documentHighlight` on a lone declaration (`1fbd95c`)
+
+Removed the `if (refs.length === 0) return null` guard.
+`buildDocumentHighlights` already returns `null` when it finds nothing, so the
+guard only ever suppressed the case it got wrong. The pre-existing "returns
+null for position with no symbol" test still passes, which is what shows the
+legitimate-null path survived.
+
+### C3 — `prepareRename` returning the wrong range (`7d3017c`)
+
+Investigation found the defect was **broader than this report first recorded**.
+`prepareRename` returned the *declaration's* range in every case, not just for
+`this`. On an ordinary reference it also pointed at the declaration:
+
+```
+prepareRename at reference (line 2, char 16) → range {line 1, char 6-11}   ← declaration
+```
+
+LSP requires the returned range to contain the requested position, because
+clients use it to pre-select the text being renamed. So rename-from-a-reference
+highlighted the wrong span for every symbol, everywhere — `this` → `Builder`
+was the most harmful instance of a general bug, not a special case.
+
+The keyword guard could not catch the `this` case by construction: it tests the
+*resolved declaration's* name (`"Builder"`), never the token the user pointed
+at. The fix keeps the declaration for renameability and the placeholder, but
+returns the range of the occurrence under the cursor, and rejects a position
+that is not an occurrence of that symbol at all.
+
+### Measured impact
+
+Corpus tier re-swept after both fixes, same harness, same 87 files:
+
+| | Before | After |
+|---|---|---|
+| Findings | 253 | **56** (−78%) |
+| Distinct defects | 8 | **7** |
+| `documentHighlight` empties | 211 | **15** (−93%) |
+| Tier-2 wrong answers | 2 | **1** |
+
+Both Roxen-tier reproductions for N1 (`replicate.pike:4`,
+`basic_defvar.pike:12`) were re-run by hand and now return highlights.
+
+The 15 remaining `documentHighlight` empties are no longer a highlight defect:
+they sit at `class-multi-inherit.pike:18`, the same position where `definition`,
+`declaration`, `references` and `hover` also return nothing. That is the
+N2/N3/C1/C2 cluster showing through — one unresolved symbol, six capabilities
+reporting it.
+
 ## Recommended Order of Work
 
 Not a plan, just what the evidence supports.
 
-1. **N1** — one line, and it removes 4,242 of the 6,886 finding instances (62%).
-2. **C3** — a destructive rename offer is the most user-harmful defect found.
-3. **N2/N3/C1/C2** — the empty-result cluster (2,624 instances). These four
-   likely share a root cause in symbol-table population; N2 already proves two
-   of them are literally the same handler.
+1. ~~**N1**~~ — fixed (`1fbd95c`).
+2. ~~**C3**~~ — fixed (`7d3017c`).
+3. **N2/N3/C1/C2** — the empty-result cluster (2,624 instances), now the
+   dominant remaining defect. These four likely share a root cause in
+   symbol-table population; N2 already proves two of them are literally the
+   same handler, and the post-fix corpus run shows all of them failing at the
+   same multi-inherit position.
 4. **D3** — a 9-second response on a 4-line file suggests unbounded work.
