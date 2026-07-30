@@ -2,6 +2,8 @@ import { describe, test, expect, afterEach } from "bun:test";
 import {
   logInfo,
   logResourceEvent,
+  logUnsupportedCharset,
+  resetUnsupportedCharsetWarnings,
   setLogPathRedactionEnabled,
 } from "../../server/src/util/errorLog";
 
@@ -123,5 +125,46 @@ describe("US5: Standardized resource log signals (Phase 7, T095)", () => {
     const msg = sent[0].params.lines.join("\n");
     expect(msg).not.toContain("heapUsedMb");
     expect(msg).not.toContain("demotedCount");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// logUnsupportedCharset: an expected, non-fatal condition, not a bug report
+// ---------------------------------------------------------------------------
+
+describe("logUnsupportedCharset", () => {
+  afterEach(() => {
+    resetUnsupportedCharsetWarnings();
+  });
+
+  test("uses the plain warn form, not the issue-report-block category form", () => {
+    const { connection, sent } = makeConnection();
+
+    logUnsupportedCharset(connection, "readFile(/a/b.pike)", "koi8-r");
+
+    expect(sent).toHaveLength(1);
+    expect(sent[0].params.level).toBe("WARN");
+    const msg = sent[0].params.lines.join("\n");
+    expect(msg).toContain("koi8-r");
+    expect(msg).not.toContain("[pike-lsp-report]");
+  });
+
+  test("logs only once per distinct declared label", () => {
+    const { connection, sent } = makeConnection();
+
+    logUnsupportedCharset(connection, "readFile(/a/one.pike)", "koi8-r");
+    logUnsupportedCharset(connection, "readFile(/a/two.pike)", "koi8-r");
+    logUnsupportedCharset(connection, "readFile(/a/three.pike)", "koi8-r");
+
+    expect(sent).toHaveLength(1);
+  });
+
+  test("logs again for a different declared label", () => {
+    const { connection, sent } = makeConnection();
+
+    logUnsupportedCharset(connection, "readFile(/a/one.pike)", "koi8-r");
+    logUnsupportedCharset(connection, "readFile(/a/two.pike)", "iso-8859-15");
+
+    expect(sent).toHaveLength(2);
   });
 });

@@ -2,8 +2,13 @@
  * Pike source decoding.
  *
  * Detection order: an explicit `#charset` directive, else UTF-8 when the bytes
- * are valid UTF-8, else ISO-8859-1. The fallback cannot fail — every byte
- * sequence is valid ISO-8859-1 — so detection always yields text.
+ * are valid UTF-8, else ISO-8859-1 (true byte-identity ISO-8859-1 via
+ * `Buffer.toString("latin1")` — NOT `TextDecoder("iso-8859-1")`, which per
+ * WHATWG is actually the windows-1252 decoder and remaps bytes 0x80-0x9F to
+ * curly quotes and friends instead of leaving them as C1 controls; verified
+ * against real pike, which reads undeclared high bytes as raw byte-identity
+ * values). The ISO-8859-1 fallback cannot fail — every byte sequence is
+ * valid — so detection always yields text.
  *
  * Applies to Pike source only. Server-owned JSON stays UTF-8.
  */
@@ -30,12 +35,15 @@ const CHARSET_ALIASES: Record<string, string> = {
 };
 
 /**
- * Built-in decode tables for WHATWG labels this runtime's TextDecoder does
- * not implement. Observed on Bun 1.3.14: `new TextDecoder("iso-8859-2")`
- * throws `ERR_ENCODING_NOT_SUPPORTED`, even though Node's ICU-backed
- * TextDecoder handles it fine — and the Roxen 6.1 corpus has a real
- * `#charset iso-8859-2` file. Each table covers only bytes 0xA0-0xFF; below
- * that, ISO-8859-* code points equal the byte value (ASCII + C1 controls).
+ * Built-in decode tables for labels a runtime's TextDecoder might not
+ * implement. Node's ICU-backed TextDecoder supports "iso-8859-2" natively;
+ * Bun 1.3.14 does not (`ERR_ENCODING_NOT_SUPPORTED`). The table keeps
+ * decoding identical on both runtimes we ship on — production is Node
+ * (`bin/pike-language-server` is `#!/usr/bin/env node`), but the test suite
+ * runs under Bun, and the Roxen 6.1 corpus has a real `#charset iso-8859-2`
+ * file, so this isn't a workaround for a runtime we don't ship, it's parity
+ * insurance. Each table covers only bytes 0xA0-0xFF; below that, ISO-8859-*
+ * code points equal the byte value (ASCII + C1 controls).
  */
 const HIGH_HALF_TABLES: Record<string, readonly number[]> = {
   "iso-8859-2": [
@@ -82,26 +90,85 @@ export function decodeSource(buf: Uint8Array): DecodedSource {
   return sniff(buf);
 }
 
-/** UTF-8 if valid, else ISO-8859-1 (which cannot fail). */
+/** UTF-8 if valid, else true byte-identity ISO-8859-1 (which cannot fail). */
 function sniff(buf: Uint8Array): DecodedSource {
   try {
     return { text: strictUtf8.decode(buf), encoding: "utf-8" };
   } catch {
-    return {
-      text: new TextDecoder("iso-8859-1").decode(buf),
-      encoding: "iso-8859-1",
-    };
+    return { text: Buffer.from(buf).toString("latin1"), encoding: "iso-8859-1" };
   }
 }
 
 /**
- * Read the `#charset` label, if any. Scans only the first 4KB as ASCII: the
- * directive must precede code, and this avoids decoding the file twice.
+ * Read the `#charset` label, if any. Scans only the first 4KB (as raw
+ * byte-identity text, cheap and avoids decoding the file twice) — real pike
+ * does honor a directive appearing after code, so this is not a "must
+ * precede code" restriction, just a bound on how far we look.
  */
 function findCharset(buf: Uint8Array): string | null {
-  const head = new TextDecoder("iso-8859-1").decode(buf.subarray(0, 4096));
-  const m = CHARSET_RE.exec(head);
+  const head = Buffer.from(buf.subarray(0, 4096)).toString("latin1");
+  const stripped = stripCommentsAndStrings(head);
+  const m = CHARSET_RE.exec(stripped);
   return m ? m[1]!.toLowerCase() : null;
+}
+
+type ScanState = "normal" | "line-comment" | "block-comment" | "string" | "raw-string";
+
+/**
+ * Blank out `// line comments`, `/* block comments *\/`, and `#"raw strings"`
+ * before scanning for `#charset` — proven against real pike (v8.0.1116):
+ * a directive inside any of those three regions is NOT honored, but our
+ * previous plain regex honored all three, silently drifting every position
+ * after such a comment/string by the byte-length delta between encodings.
+ * A directive appearing after real code, outside those regions, IS honored
+ * by pike and must stay matchable here — so this only strips comments and
+ * strings, it does not require the directive to precede all code.
+ *
+ * Regular `"quoted strings"` are also tracked (a stray `/*`-looking sequence
+ * inside one must not be mistaken for a real block comment) even though pike
+ * itself cannot honor a directive there anyway — a regular string can't
+ * span a line (an embedded literal newline is a compile error), so it can
+ * never make `^[ \t]*#charset` match at a line start.
+ *
+ * Newlines are always preserved unblanked so the line-anchored regex still
+ * sees correct line boundaries in the stripped text.
+ */
+function stripCommentsAndStrings(head: string): string {
+  let out = "";
+  let state: ScanState = "normal";
+
+  for (let i = 0; i < head.length; i++) {
+    const ch = head[i]!;
+    const next = head[i + 1];
+
+    if (state === "normal") {
+      if (ch === "/" && next === "*") { state = "block-comment"; out += "  "; i++; }
+      else if (ch === "/" && next === "/") { state = "line-comment"; out += "  "; i++; }
+      else if (ch === "#" && next === '"') { state = "raw-string"; out += "  "; i++; }
+      else if (ch === '"') { state = "string"; out += " "; }
+      else out += ch;
+    } else if (state === "line-comment") {
+      if (ch === "\n") { state = "normal"; out += "\n"; }
+      else out += " ";
+    } else if (state === "block-comment") {
+      if (ch === "*" && next === "/") { state = "normal"; out += "  "; i++; }
+      else out += ch === "\n" ? "\n" : " ";
+    } else if (state === "string") {
+      // Regular strings can't span a line in real pike; bail out at a
+      // literal newline rather than swallowing the rest of the buffer.
+      if (ch === "\\" && next !== undefined) { out += "  "; i++; }
+      else if (ch === '"' || ch === "\n") { state = "normal"; out += ch === "\n" ? "\n" : " "; }
+      else out += " ";
+    } else {
+      // raw-string: spans lines freely, same backslash-escaping as a
+      // regular string, terminates only at an unescaped quote.
+      if (ch === "\\" && next !== undefined) { out += "  "; i++; }
+      else if (ch === '"') { state = "normal"; out += " "; }
+      else out += ch === "\n" ? "\n" : " ";
+    }
+  }
+
+  return out;
 }
 
 /** Decode using a built-in high-half table (see `HIGH_HALF_TABLES`). */
@@ -119,7 +186,9 @@ function decodeHighHalfTable(buf: Uint8Array, table: readonly number[]): string 
  * `onUnsupportedCharset`, when given, is called when the file declared a
  * `#charset` that could not be honored — see `DecodedSource.declaredButUnsupported`.
  * Callers with a connection should use it to log a warning; this keeps the
- * common one-argument call sites (and the return type) unchanged.
+ * common one-argument call sites (and the return type) unchanged. The
+ * callback runs best-effort: a throw from it must never turn a successful
+ * read into a rejected promise, so it is never allowed to propagate.
  */
 export async function readSource(
   path: string,
@@ -127,7 +196,11 @@ export async function readSource(
 ): Promise<string> {
   const decoded = decodeSource(await readFile(path));
   if (decoded.declaredButUnsupported && onUnsupportedCharset) {
-    onUnsupportedCharset(decoded.declaredButUnsupported, path);
+    try {
+      onUnsupportedCharset(decoded.declaredButUnsupported, path);
+    } catch {
+      // Logging is best-effort — never let it fail an otherwise-good read.
+    }
   }
   return decoded.text;
 }
