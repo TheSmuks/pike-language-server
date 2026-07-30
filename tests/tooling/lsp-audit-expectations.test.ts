@@ -1,7 +1,11 @@
 import { test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { EXPECTATIONS, checkExpectation } from "../../tools/lsp-audit/expectations";
+import {
+  EXPECTATIONS,
+  checkExpectation,
+  expectationPositions,
+} from "../../tools/lsp-audit/expectations";
 
 test("covers the five tier-2 capabilities", () => {
   const methods = new Set(EXPECTATIONS.map((e) => e.method));
@@ -30,5 +34,31 @@ test("checkExpectation matches a definition landing on the right line", () => {
 });
 
 test("checkExpectation treats a missing result as a failure", () => {
-  expect(checkExpectation(EXPECTATIONS[0], null)).toBe(false);
+  const notRename = EXPECTATIONS.find((e) => e.expect.kind !== "renameAllowed")!;
+  expect(checkExpectation(notRename, null)).toBe(false);
+});
+
+test("a null prepareRename is the CORRECT answer when rename is disallowed", () => {
+  // null is precisely what the server returns for a non-renameable position.
+  // If the null guard ran first, `allowed: false` could never pass and would
+  // report "wrong" exactly when the server behaved correctly.
+  const disallowed = EXPECTATIONS.find(
+    (e) => e.expect.kind === "renameAllowed" && e.expect.allowed === false,
+  );
+  if (!disallowed) return; // no such expectation in the set
+  expect(checkExpectation(disallowed, null)).toBe(true);
+  expect(checkExpectation(disallowed, { range: {} })).toBe(false);
+});
+
+test("every expectation position is exported for the sweep to visit", () => {
+  // Without this the sweep only visits TOP-LEVEL documentSymbol names, which
+  // reaches 1 of 20 expectations — fields, locals and class members are never
+  // emitted as top-level symbols, so tier 2 would check almost nothing.
+  const positions = expectationPositions();
+  const total = [...positions.values()].reduce((n, list) => n + list.length, 0);
+  expect(total).toBe(EXPECTATIONS.length);
+  for (const e of EXPECTATIONS) {
+    const forFile = positions.get(e.file) ?? [];
+    expect(forFile.some((p) => p.line === e.line && p.character === e.character)).toBe(true);
+  }
 });
