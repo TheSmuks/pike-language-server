@@ -120,7 +120,6 @@ export interface BuildState {
   scopeMap: Map<number, Scope>; // ID → Scope for O(1) lookup
   declMap: Map<number, Declaration>; // ID → Declaration for O(1) lookup
   scopeStack: number[]; // stack of scope IDs (innermost last)
-  lines: string[]; // pre-split source lines for UTF-16 position conversion
   /** Scopes sorted by (startLine, startChar) after declaration pass, for binary search. */
   sortedScopes: Scope[];
 }
@@ -192,7 +191,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
 
     bump("symbolTablesBuilt");
     assertSourceCoversTree(sourceText, root, uri);
-    const state = initBuildState(sourceText ?? '');
+    const state = initBuildState();
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);
@@ -258,9 +257,8 @@ function emptySymbolTable(uri: string, version: number): SymbolTable {
   };
 }
 
-/** Initialize builder state from the pre-split source text. */
-function initBuildState(sourceText: string): BuildState {
-  const lines = sourceText.split('\n');
+/** Initialize fresh builder state. */
+function initBuildState(): BuildState {
   return {
     nextId: 0,
     declarations: [],
@@ -269,7 +267,6 @@ function initBuildState(sourceText: string): BuildState {
     scopeMap: new Map(),
     declMap: new Map(),
     scopeStack: [],
-    lines,
     sortedScopes: [],
   };
 }
