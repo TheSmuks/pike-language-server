@@ -15,7 +15,7 @@ import { Ledger, readLedger, type LedgerRecord } from "./ledger";
 import { runSweep } from "./sweep";
 import { classify } from "./oracle";
 import { expectationChecker, expectationPositions } from "./expectations";
-import { triage, renderFindings } from "./triage";
+import { triage, renderFindings, renderGrouped, groupFindings } from "./triage";
 
 const CORPUS_ROOT = resolve("corpus/files");
 const ROXEN_ROOT = process.env.ROXEN_HOME ?? "/tank/projects/roxen-6.1";
@@ -106,8 +106,16 @@ function triageCommand(): void {
   const verdicts = suspicious.length > 0 ? classify(suspicious, ROXEN_ROOT) : new Map();
 
   const findings = triage(records, { verdicts, roxenWorkspace: "roxen-6.1" });
-  writeFileSync(flag("out"), renderFindings(findings) + "\n");
-  console.error(`${findings.length} findings from ${records.length} records`);
+  const out = flag("out");
+  writeFileSync(out, renderFindings(findings) + "\n");
+  // The grouped table is what a human reads: on the corpus, 211 of 253
+  // findings were one root cause, and at Roxen scale that cluster runs to
+  // thousands of identical rows that bury everything else.
+  const grouped = groupFindings(findings);
+  writeFileSync(out.replace(/\.md$/, "") + "-grouped.md", renderGrouped(findings) + "\n");
+  console.error(
+    `${findings.length} findings (${grouped.length} distinct defects) from ${records.length} records`,
+  );
   console.error(`records by status: ${statusCounts(records)}`);
   const bySeverity = new Map<string, number>();
   for (const finding of findings) {
