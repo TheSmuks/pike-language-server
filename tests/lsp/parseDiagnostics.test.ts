@@ -21,7 +21,7 @@ describe("parse diagnostics", () => {
     ].join("\n");
 
     const tree = parse(source, uri);
-    const diagnostics = getParseDiagnostics(tree, source.split("\n"));
+    const diagnostics = getParseDiagnostics(tree);
 
     expect(tree.rootNode.hasError).toBe(false);
     expect(diagnostics).toEqual([]);

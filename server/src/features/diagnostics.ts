@@ -133,10 +133,7 @@ function describeError(node: Node, unexpected: string): string {
   }
 }
 
-// `lines` is unused now that tree-sitter columns and LSP characters are both
-// UTF-16 code units — kept on the signature so existing callers don't need
-// to change.
-export function getParseDiagnostics(tree: Tree, lines: string[]): Diagnostic[] {
+export function getParseDiagnostics(tree: Tree): Diagnostic[] {
   const errorNodes = findErrorNodes(tree.rootNode);
   return errorNodes.map((node, index) => {
     const child = node.lastChild;
