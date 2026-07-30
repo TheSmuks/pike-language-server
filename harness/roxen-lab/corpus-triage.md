@@ -43,8 +43,42 @@ immediately. The grammar appears to admit only anonymous `class { … }` there.
 | `server/etc/modules/RoxenRPC.pmod/Client.pike` | 131 | `lock = class lambda17{ void lock(){}}();` |
 | `server/modules/tags/rxmltags.pike` | 73 | `private object sexpr_funcs = class SExprFunctions { … }` |
 
-Oracle: `semantic`, `ok`, `semantic` respectively. One grammar rule fixes all
-three, which makes this the highest-value fix in the set.
+Oracle: `semantic`, `ok`, `semantic` respectively.
+
+**Attempted 2026-07-30 and reverted** (tree-sitter-pike `ac2edb0`, reverted by
+`b2e6bc7`). The obvious fix — give `anon_class` an `optional(field('name', …))`
+and declare `[$.class_decl, $.anon_class]` as a conflict — does fix all three
+files and keeps the grammar's own 231-test corpus green. It also **regresses**
+`server/modules/scripting/webapp.pike`, which parsed before:
+
+```pike
+#if 1
+class Foo { int x; }
+#else
+constant z = 1;
+#endif
+```
+
+Once a named class is a legal expression, `class Foo { … }` with no trailing
+`;` can start an `expression_statement`. It then completes by continuing
+through `preproc_conditional_expr` into the `#else` branch and consuming the
+semicolon belonging to `constant z = 1;`. Before the change the class had only
+one parse — `class_decl` — so the conditional never formed.
+
+Dynamic precedence does **not** arbitrate this. Verified by experiment, not
+assumed: `prec.dynamic(2)` and `prec.dynamic(20)` on `class_decl`,
+`prec.dynamic(-1)` and `prec.dynamic(-10)` on `anon_class` within
+`primary_expr`, and `prec.dynamic(-5)` on `preproc_conditional_expr` all leave
+the parse unchanged, so tree-sitter is resolving the conflict statically rather
+than keeping both parses alive. Declaring
+`[$.preproc_conditional_expr, $.declaration]` is reported as an unnecessary
+conflict, so that is not the divergence point either.
+
+A working fix therefore needs the named class expression to be unreachable at
+statement start, rather than merely outranked there. Worth trying next: a
+separate `named_class_expr` rule wired only into the positions the corpus
+actually uses — an assignment or initialiser right-hand side, and the callee of
+a call for the immediately-instantiated form — instead of into `primary_expr`.
 
 ### Iterator `for` loop (1 file)
 
@@ -105,6 +139,7 @@ corpus baseline should keep expecting exactly one failure for this file.
 ## Status
 
 Triage is complete: every failing file is classified and carries the oracle's
-verdict. The upstream grammar work (named class expressions, the iterator `for`
-loop, and narrowing the `DBManager.pmod` MISSING) has **not** been done, and the
-WASM has not been rebuilt — so `corpus-baseline.json` still records 14.
+verdict. The upstream grammar work has **not** landed — the named-class-
+expression fix was attempted and reverted for the regression documented above,
+and the iterator `for` loop and the `DBManager.pmod` MISSING are untouched. The
+WASM is unchanged, so `corpus-baseline.json` still records 14.
