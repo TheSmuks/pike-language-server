@@ -8,12 +8,12 @@
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Connection } from "vscode-languageserver/node";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { initParser, isParserReady, parse, deleteTree } from "./parser";
 import { ModificationSource } from "./features/workspaceIndex";
 import { hydrateFromCache } from "./features/cacheHydrate";
-import { logError, logInfo, ErrorCategory } from "./util/errorLog.js";
+import { logError, logInfo, ErrorCategory, logUnsupportedCharset } from "./util/errorLog.js";
+import { readSource } from "./util/sourceDecoder.js";
 import type { ServerContext } from "./serverContext";
 
 // ---------------------------------------------------------------------------
@@ -263,7 +263,9 @@ async function indexDependencyFromDisk(
 
   let content: string;
   try {
-    content = await readFile(filePath, "utf-8");
+    content = await readSource(filePath, (declared) =>
+      logUnsupportedCharset(ctx.connection, `indexDependencyFromDisk(${filePath})`, declared),
+    );
   } catch {
     // File may not exist on disk (resolved import that's a built-in module).
     return false;

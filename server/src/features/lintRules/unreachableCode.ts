@@ -13,7 +13,6 @@
 
 import { Tree } from "web-tree-sitter";
 import { Diagnostic, DiagnosticSeverity, DiagnosticTag, Range } from "../diagnostics";
-import { utf8ToUtf16 } from "../../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Lint rule code (P3xxx range, per decision 0028)
@@ -51,9 +50,9 @@ const COMMENT_TYPES = new Set([
  *
  * Returns diagnostics with severity Warning.
  */
-export function detectUnreachableCode(tree: Tree, lines: string[], uri: string): Diagnostic[] {
+export function detectUnreachableCode(tree: Tree, uri: string): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  walkBlocks(tree.rootNode, diagnostics, lines, uri);
+  walkBlocks(tree.rootNode, diagnostics, uri);
   return diagnostics;
 }
 
@@ -65,7 +64,7 @@ export function detectUnreachableCode(tree: Tree, lines: string[], uri: string):
  * Recursively walk the tree, finding block nodes and checking for
  * unreachable statements after terminators.
  */
-function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[], lines: string[], uri: string): void {
+function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnostic[], uri: string): void {
   if (node.type === "block") {
     // Switch bodies contain case/default clauses as direct children in a
     // flat block. Each case is an independent control-flow entry point, so
@@ -73,15 +72,15 @@ function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnosti
     // Use segmented checking for switch blocks.
     const parent = node.parent;
     if (parent && parent.type === "switch_statement") {
-      checkSwitchBlock(node, diagnostics, lines, uri);
+      checkSwitchBlock(node, diagnostics, uri);
       return;
     }
-    checkBlock(node, diagnostics, lines, uri);
+    checkBlock(node, diagnostics, uri);
   }
 
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
-    if (child) walkBlocks(child, diagnostics, lines, uri);
+    if (child) walkBlocks(child, diagnostics, uri);
   }
 }
 
@@ -94,7 +93,6 @@ function walkBlocks(node: import("web-tree-sitter").Node, diagnostics: Diagnosti
 function checkBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
-  lines: string[],
   uri: string,
 ): void {
   const children = namedChildren(block);
@@ -108,7 +106,7 @@ function checkBlock(
     if (COMMENT_TYPES.has(child.type)) continue;
 
     if (terminator) {
-      diagnostics.push(makeUnreachableDiagnostic(child, terminator, lines, uri));
+      diagnostics.push(makeUnreachableDiagnostic(child, terminator, uri));
       continue;
     }
 
@@ -118,11 +116,11 @@ function checkBlock(
   }
 }
 
-/** Build an LSP Range spanning a tree-sitter node, UTF-16 corrected. */
-function nodeRange(node: import("web-tree-sitter").Node, lines: string[]): Range {
+/** Build an LSP Range spanning a tree-sitter node. */
+function nodeRange(node: import("web-tree-sitter").Node): Range {
   return Range.create(
-    { line: node.startPosition.row, character: utf8ToUtf16(lines[node.startPosition.row] ?? '', node.startPosition.column) },
-    { line: node.endPosition.row, character: utf8ToUtf16(lines[node.endPosition.row] ?? '', node.endPosition.column) },
+    { line: node.startPosition.row, character: node.startPosition.column },
+    { line: node.endPosition.row, character: node.endPosition.column },
   );
 }
 
@@ -135,11 +133,10 @@ function nodeRange(node: import("web-tree-sitter").Node, lines: string[]): Range
 function makeUnreachableDiagnostic(
   child: import("web-tree-sitter").Node,
   terminator: import("web-tree-sitter").Node,
-  lines: string[],
   uri: string,
 ): Diagnostic {
   const diag = Diagnostic.create(
-    nodeRange(child, lines),
+    nodeRange(child),
     "Unreachable code",
     DiagnosticSeverity.Warning,
     CODE_UNREACHABLE,
@@ -147,7 +144,7 @@ function makeUnreachableDiagnostic(
   );
   diag.tags = [DiagnosticTag.Unnecessary];
   diag.relatedInformation = [{
-    location: { uri, range: nodeRange(terminator, lines) },
+    location: { uri, range: nodeRange(terminator) },
     message: `Any code below this ${terminatorLabel(terminator.type)} is never executed`,
   }];
   return diag;
@@ -189,7 +186,6 @@ const CASE_ENTRY_TYPES = new Set(["case_clause", "default_clause"]);
 function checkSwitchBlock(
   block: import("web-tree-sitter").Node,
   diagnostics: Diagnostic[],
-  lines: string[],
   uri: string,
 ): void {
   const children = namedChildren(block);
@@ -220,7 +216,7 @@ function checkSwitchBlock(
         // But skip case/default entries and break statements — break after
         // return/continue is a common defensive pattern in switch cases.
         if (!CASE_ENTRY_TYPES.has(child.type) && child.type !== "break_statement") {
-          diagnostics.push(makeUnreachableDiagnostic(child, terminator, lines, uri));
+          diagnostics.push(makeUnreachableDiagnostic(child, terminator, uri));
         }
         continue;
       }

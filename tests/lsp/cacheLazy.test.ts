@@ -12,7 +12,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { saveCache } from "../../server/src/features/persistentCache";
+import { saveCache, getCachePath } from "../../server/src/features/persistentCache";
 import { loadManifest, restoreStubs } from "../../server/src/features/cacheManifest";
 import { SymbolIndex } from "../../server/src/features/symbolIndex";
 import { searchWorkspaceSymbols } from "../../server/src/features/workspaceSymbol";
@@ -161,5 +161,29 @@ describe("Lazy (stub) cache restore", () => {
 
     const all = searchWorkspaceSymbols("", fresh).map(r => r.name).sort();
     expect(all).toEqual(["Alpha", "Beta"]);
+  });
+
+  // Guards the upgrade path the format bump exists for: a manifest saved by
+  // an older build (byte-converted positions, or source decoded without
+  // #charset awareness) must not be restored just because the wasm hash
+  // still matches — loadManifest's formatVersion check is what gates that.
+  test("loadManifest rejects a stale format version even with matching wasm hash", async () => {
+    const wasm = "lazy-stale-format";
+    // Own workspace root (not the shared tempDir) so the doctored cacheIndex
+    // does not interfere with the other tests' shared cache location.
+    const staleWorkspaceRoot = `${tempDir}-stale-format`;
+    const uri = "file:///proj/stale-format.pike";
+
+    const saved = new WorkspaceIndex({ workspaceRoot: staleWorkspaceRoot });
+    await saved.upsertCachedFile(uri, 1, makeTable(uri, ["StaleFormat"]), hashContent("class StaleFormat {}\n"));
+    await saveCache(staleWorkspaceRoot, saved, wasm);
+
+    // Same wasm hash as we'll load with, but an older format version than
+    // this build understands.
+    const indexPath = join(getCachePath(staleWorkspaceRoot), "cacheIndex.json");
+    writeFileSync(indexPath, JSON.stringify({ formatVersion: 1, wasmHash: wasm, entryCount: 1 }));
+
+    const manifest = await loadManifest(staleWorkspaceRoot, wasm);
+    expect(manifest).toBeNull();
   });
 });

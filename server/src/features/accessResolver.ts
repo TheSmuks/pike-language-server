@@ -18,7 +18,6 @@ import { resolveMemberAccess, resolveLhsTypeName } from "./typeResolver";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
-import { utf16ToUtf8, utf8ToUtf16 } from "../util/positionConverter";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -66,7 +65,7 @@ export async function resolveAccessCore(
   const site = await locateAccessSite(ctx, table, uri, line, character, tree);
   if (!site) return null;
 
-  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0, site.lines);
+  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0);
   if (!lhsDecl) {
     // The LHS names no declaration in any symbol table. It may be a module
     // reference (`.Util.member` — Pike's relative-module syntax — or a
@@ -92,7 +91,6 @@ interface AccessSite {
   lhsNode: Node;
   memberName: string;
   typeCtx: TypeResolutionContext;
-  lines: string[];
 }
 
 /**
@@ -122,12 +120,8 @@ async function locateAccessSite(
 
   const parsedTree = tree ?? parse(doc.getText(), uri);
 
-  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const source = doc.getText();
-  const lines = source.split('\n');
-  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
-
-  const node = parsedTree.rootNode.descendantForPosition({ row: line, column: utf8Col });
+  // LSP character and tree-sitter column are both UTF-16 code units.
+  const node = parsedTree.rootNode.descendantForPosition({ row: line, column: character });
   if (!node) return null;
 
   let postfixNode: Node = node;
@@ -140,7 +134,7 @@ async function locateAccessSite(
   if (!lhsNode) return null;
 
   const typeCtx: TypeResolutionContext = { table, uri, index: ctx.index, stdlibIndex: ctx.stdlibIndex, typeInferrer: ctx.typeInferrer };
-  return { lhsNode, memberName: ref.name, typeCtx, lines };
+  return { lhsNode, memberName: ref.name, typeCtx };
 }
 
 /**
@@ -162,7 +156,7 @@ export async function resolveAccessQualifiedType(
   const site = await locateAccessSite(ctx, table, uri, line, character, tree);
   if (!site) return null;
 
-  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0, site.lines);
+  const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0);
   const lhsName = site.lhsNode.type === 'identifier' ? site.lhsNode.text : '';
   const typeName = await resolveLhsTypeName(lhsName, lhsDecl, site.typeCtx);
   if (!typeName) return null;
@@ -328,17 +322,16 @@ async function resolveLhsDeclaration(
   table: SymbolTable,
   typeCtx: TypeResolutionContext,
   depth: number,
-  lines: string[],
 ): Promise<Declaration | null> {
   if (depth >= MAX_CHAIN_DEPTH) return null;
 
   // Chained access: LHS is itself a postfix_expr — resolve recursively
   if (lhsNode.type === 'postfix_expr') {
-    return resolvePostfixChain(lhsNode, table, typeCtx, depth, lines);
+    return resolvePostfixChain(lhsNode, table, typeCtx, depth);
   }
 
   // Simple identifier — look up in symbol table
-  return resolveIdentifierDecl(lhsNode, table, lines);
+  return resolveIdentifierDecl(lhsNode, table);
 }
 
 /**
@@ -353,7 +346,6 @@ async function resolvePostfixChain(
   table: SymbolTable,
   typeCtx: TypeResolutionContext,
   depth: number,
-  lines: string[],
 ): Promise<Declaration | null> {
   if (depth >= MAX_CHAIN_DEPTH) return null;
 
@@ -373,9 +365,9 @@ async function resolvePostfixChain(
     const firstChild = children[0];
     if (!firstChild) return null;
     if (firstChild.type === 'postfix_expr') {
-      return resolvePostfixChain(firstChild, table, typeCtx, depth, lines);
+      return resolvePostfixChain(firstChild, table, typeCtx, depth);
     }
-    return resolveIdentifierDecl(firstChild, table, lines);
+    return resolveIdentifierDecl(firstChild, table);
   }
 
   const innerLhs = children[opIdx - 1];
@@ -383,7 +375,7 @@ async function resolvePostfixChain(
   if (!innerLhs || !innerRhs) return null;
 
   const memberName = innerRhs.text;
-  const innerDecl = await resolveLhsDeclaration(innerLhs, table, typeCtx, depth + 1, lines);
+  const innerDecl = await resolveLhsDeclaration(innerLhs, table, typeCtx, depth + 1);
   if (!innerDecl) return null;
 
   return resolveMemberAccess(
@@ -400,16 +392,14 @@ async function resolvePostfixChain(
 function resolveIdentifierDecl(
   node: Node,
   table: SymbolTable,
-  lines: string[],
 ): Declaration | null {
   const name = node.text;
   const nodeRow = node.startPosition.row;
-  // Convert tree-sitter UTF-8 column to UTF-16 for comparison with r.loc (UTF-16)
-  const nodeColUtf16 = utf8ToUtf16(lines[nodeRow] ?? '', node.startPosition.column);
+  // Tree-sitter columns and LSP characters are both UTF-16 code units.
   const ref = table.references.find(
     r => r.name === name && r.resolvesTo !== null &&
       r.loc.line === nodeRow &&
-      r.loc.character === nodeColUtf16,
+      r.loc.character === node.startPosition.column,
   );
   if (ref && ref.resolvesTo !== null) {
     return table.declById.get(ref.resolvesTo) ?? null;

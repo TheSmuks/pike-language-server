@@ -52,7 +52,7 @@ export function registerAdvancedHandlers(
   registerCodeLensHandler(connection, ctx);
   registerDidOpenHandler(ctx);
   registerDidSaveHandler(ctx);
-  registerDocumentLinkHandler(connection, ctx.documents, ctx.index.resolver);
+  registerDocumentLinkHandler(connection, ctx.documents, () => ctx.index.resolver);
 }
 
 // ---------------------------------------------------------------------------
@@ -112,8 +112,7 @@ async function handleOutgoingCalls(
     workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
   });
   if (token.isCancellationRequested) return [];
-  const lines = source.split('\n');
-  return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
+  return getOutgoingCalls(item, tree, table, uri, ctx.index);
 }
 
 // Type hierarchy handlers

@@ -12,7 +12,7 @@
 import type { Connection } from "vscode-languageserver/node";
 import type { CancellationToken } from "vscode-jsonrpc";
 import { ProgressType } from "vscode-jsonrpc";
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import { join, extname, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { minimatch } from "minimatch";
@@ -20,7 +20,8 @@ import { parse } from "../parser";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import type { IndexingMode } from "./resourceTypes";
 import { resolveAutoMode } from "./resourceConfiguration";
-import { logError, logInfo, logWarn, ErrorCategory } from "../util/errorLog.js";
+import { logError, logInfo, logWarn, ErrorCategory, logUnsupportedCharset } from "../util/errorLog.js";
+import { readSource } from "../util/sourceDecoder.js";
 import { startSpan, stopSpan, bump, measureAsync } from "./profiler";
 
 // ---------------------------------------------------------------------------
@@ -219,7 +220,11 @@ async function parseFile(
   const uri = pathToFileURL(filepath).href;
   try {
     startSpan("readFile");
-    const content = await measureAsync("readFile", () => readFile(filepath, "utf-8"));
+    const content = await measureAsync("readFile", () =>
+      readSource(filepath, (declared) =>
+        logUnsupportedCharset(connection, `readFile(${filepath})`, declared),
+      ),
+    );
     stopSpan("readFile");
     bump("fileReads");
     const tree = parse(content);

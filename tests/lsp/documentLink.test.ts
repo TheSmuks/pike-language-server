@@ -179,6 +179,45 @@ describe("US-030: textDocument/documentLink", () => {
     // but the important thing is no error is thrown.
   });
 
+  test("resolves a non-ASCII-prefixed system include with the exact path-token range (spec source-position-mapping R3)", async () => {
+    // A `#include <...>` resolves via ModuleResolver's system-include search
+    // (`pike --show-paths`), independent of whether the document's own URI
+    // exists on disk — unlike inherit/relative-include resolution, which
+    // needs a real on-disk file, this construct resolves for a synthetic
+    // in-memory buffer, so no on-disk fixture is needed here.
+    //
+    // A `/* café */` block comment precedes the directive on the SAME line:
+    // comments are tree-sitter "extras" and can appear before a preprocessor
+    // directive without disturbing the parse (verified: `hasError` is false
+    // and the directive still parses as `preproc_include`). "é" is 1 UTF-16
+    // code unit but 2 UTF-8 bytes, so a byte-based (rather than UTF-16-based)
+    // position mapping would shift the reported range one column to the
+    // right of where it actually is — exactly the class of bug this branch
+    // fixed. The path token is the full `system_lib_string` node, including
+    // its angle brackets.
+    const src = "/* café */ #include <stdio.h>\nint main() { return 0; }";
+    const uri = server.openDoc("file:///test/nonascii-include.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/documentLink", {
+      textDocument: { uri },
+    }) as LinkResult[] | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBe(1);
+    const link = result![0];
+    expect(link.target).toContain("stdio.h");
+
+    const line0 = src.split("\n")[0]!;
+    const pathStart = line0.indexOf("<stdio.h>");
+    const pathEnd = pathStart + "<stdio.h>".length;
+    // The non-ASCII character sits well before the path token on this line.
+    expect(line0.indexOf("é")).toBeLessThan(pathStart);
+    expect(link.range.start.line).toBe(0);
+    expect(link.range.start.character).toBe(pathStart);
+    expect(link.range.end.line).toBe(0);
+    expect(link.range.end.character).toBe(pathEnd);
+  });
+
   test("handles multiple include directives", async () => {
     const src = [
       '#include "a.pike"',

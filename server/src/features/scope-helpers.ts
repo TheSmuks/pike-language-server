@@ -3,17 +3,15 @@
  *
  * Extracted from scopeBuilder.ts to reduce file size.
  *
- * Performance note: all position conversion functions accept an optional
- * OffsetMap for O(1) byte→UTF-16 lookup. When the map is provided (during
- * buildSymbolTable), conversions are array-index lookups instead of
- * per-character scans. When omitted (feature handlers), falls back to
- * the original utf8ToUtf16 function.
+ * Position conversion is a straight passthrough: web-tree-sitter indexes JS
+ * string input in UTF-16 code units, which is exactly what LSP wants, so
+ * `toLoc`/`toRange` need no byte-to-UTF-16 conversion step. An offset map
+ * used to sit here converting an already-correct value as if it were a UTF-8
+ * byte offset, corrupting ranges on lines with non-ASCII characters
+ * preceding a token; it has been removed (Task 4).
  */
 import type { Node, Point } from 'web-tree-sitter';
 import type { BuildState, Declaration, Range } from './symbolTable';
-import type { OffsetMap } from '../util/offsetMap';
-import { lookupUtf16 } from '../util/offsetMap';
-import { utf8ToUtf16 } from '../util/positionConverter';
 
 // Import from the extracted lookup module
 import { findScopeForNode, rangeSize } from './scope-helpers-lookup';
@@ -34,35 +32,6 @@ export function toRange(node: Node): Range {
 }
 
 /**
- * Convert a tree-sitter Point (UTF-8 byte column) to an LSP Location
- * with UTF-16 character offset, using pre-split source lines.
- */
-export function toLocUtf16(
-  point: Point,
-  lines: string[],
-  offsetMap?: OffsetMap,
-): { line: number; character: number } {
-  if (offsetMap) {
-    return { line: point.row, character: lookupUtf16(offsetMap, point.row, point.column) };
-  }
-  const lineText = lines[point.row];
-  if (lineText === undefined) {
-    return { line: point.row, character: point.column };
-  }
-  return { line: point.row, character: utf8ToUtf16(lineText, point.column) };
-}
-
-/**
- * Convert a tree-sitter Node to an LSP Range with UTF-16 character offsets.
- */
-export function toRangeUtf16(node: Node, lines: string[], offsetMap?: OffsetMap): Range {
-  return {
-    start: toLocUtf16(node.startPosition, lines, offsetMap),
-    end: toLocUtf16(node.endPosition, lines, offsetMap),
-  };
-}
-
-/**
  * Primitive type names that can never have members.
  */
 export const PRIMITIVE_TYPES = new Set([
@@ -70,36 +39,6 @@ export const PRIMITIVE_TYPES = new Set([
   'array', 'mapping', 'multiset', 'object', 'function', 'program',
   'bool', 'auto', 'any',
 ]);
-
-/**
- * Check whether a range contains the position spanned by (start, end).
- */
-export function containsPosition(
-  range: Range,
-  start: Point,
-  end: Point,
-  lines?: string[],
-  offsetMap?: OffsetMap,
-): boolean {
-  let startCol: number;
-  let endCol: number;
-  if (offsetMap) {
-    startCol = lookupUtf16(offsetMap, start.row, start.column);
-    endCol = lookupUtf16(offsetMap, end.row, end.column);
-  } else if (lines) {
-    startCol = utf8ToUtf16(lines[start.row] ?? '', start.column);
-    endCol = utf8ToUtf16(lines[end.row] ?? '', end.column);
-  } else {
-    startCol = start.column;
-    endCol = end.column;
-  }
-  return (
-    (range.start.line < start.row ||
-     (range.start.line === start.row && range.start.character <= startCol)) &&
-    (range.end.line > end.row ||
-     (range.end.line === end.row && range.end.character >= endCol))
-  );
-}
 
 /**
  * Check whether `outer` range fully contains `inner` range.
