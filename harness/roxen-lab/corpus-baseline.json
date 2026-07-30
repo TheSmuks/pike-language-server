@@ -7,14 +7,11 @@
     "server/base_server/prototypes.pike",
     "server/base_server/roxenloader.pike",
     "server/config_interface/actions/cachestatus.pike",
-    "server/config_interface/actions/patcher.pike",
     "server/etc/modules/DBManager.pmod",
     "server/etc/modules/RXML.pmod/module.pmod",
-    "server/etc/modules/RoxenRPC.pmod/Client.pike",
     "server/etc/roxen_master.pike",
     "server/modules/graphics/rimage/plugins/scale.pike",
     "server/modules/proxies/proxy.pike",
-    "server/modules/tags/rxmltags.pike",
     "server/protocols/http.pike"
   ]
 }

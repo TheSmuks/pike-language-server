@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Named class expressions no longer show as syntax errors.** `Write_back wb = class Write_back { … };` and `lock = class lambda17 { … }();` are valid Pike — one class production, reached from expression position — but the grammar put the name in an `ERROR` node. Fixed upstream in tree-sitter-pike and shipped here as a rebuilt WASM; the Roxen 6.1 corpus goes from 14 parse failures to 11, with nothing regressed.
 - **`lsp-probe` decoded every file as UTF-8.** Probing an ISO-8859-1 file replaced each high byte with a replacement character and shifted every position the tool printed, which is exactly the discrepancy it exists to investigate. It now decodes the way the server does.
 
 ## [0.8.49] — 2026-07-16
