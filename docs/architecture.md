@@ -130,10 +130,9 @@ Go-to-definition, references, implementation, document highlights, call hierarch
 
 ### Symbol Table Pipeline
 
-High-performance symbol table construction with O(1) position conversion and O(R log S) scope lookup.
+High-performance symbol table construction with O(R log S) scope lookup.
 
 - `symbolTable.ts` — symbol table builder: declarations, scopes, references
-- `offsetMap.ts` — pre-computed byte-to-UTF-16 offset map per file (O(1) per lookup)
 - `declarationCollector.ts` — tree-sitter node → declaration extraction
 - `declarationBlockCollectors.ts` — block-scoped declaration collectors
 - `referenceCollector.ts` — identifier reference collection

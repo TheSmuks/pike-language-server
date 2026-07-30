@@ -39,7 +39,7 @@ export function collectPreprocDirective(node: Node, state: BuildState): boolean 
   const name = m[2];
   const functionLike = m[3] !== undefined;
 
-  // The `#define <name>` prefix is ASCII, so the name's byte column is the
+  // The `#define <name>` prefix is ASCII, so the name's UTF-16 column is the
   // directive's start column plus the prefix length. The name lives on the
   // directive's first row even when the body uses `\` line continuations.
   const row = node.startPosition.row;
