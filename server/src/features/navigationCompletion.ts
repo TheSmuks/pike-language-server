@@ -132,9 +132,8 @@ async function handleCompletion(
     const tree = parse(source, params.textDocument.uri);
     if (token.isCancellationRequested) return empty;
 
-    const lines = source.split('\n');
     const prefixRange = findIdentifierPrefixRange(
-      tree, params.position.line, params.position.character, lines,
+      tree, params.position.line, params.position.character,
     );
 
     const result = await getCompletions(

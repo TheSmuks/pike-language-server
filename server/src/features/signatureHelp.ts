@@ -11,7 +11,6 @@
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable } from "./symbolTable";
 import { resolveSignature, resolvePredefSignatures, splitParams as _splitParams } from "./signatureHelp-resolve";
-import { utf16ToUtf8, utf8ToUtf16, getLineText } from "../util/positionConverter";
 
 // Re-export for backward compatibility (tests import splitParams directly)
 export { splitParams } from "./signatureHelp-resolve";
@@ -71,18 +70,16 @@ export function produceSignatureHelp(
   character: number,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
   ctx?: SignatureContext,
+  // Unused now that no UTF-8/UTF-16 conversion happens here; kept so existing
+  // callers (and tests) that still pass the source string don't break.
   source = "",
 ): SignatureHelpResult | null {
-  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
-  const lines = source.split('\n');
-  const utf8Col = utf16ToUtf8(lines[line] ?? '', character);
-
-  // Find the node at the cursor
-  const node = tree.rootNode.descendantForPosition({ row: line, column: utf8Col });
+  // LSP characters and tree-sitter columns are both UTF-16 code units.
+  const node = tree.rootNode.descendantForPosition({ row: line, column: character });
   if (!node) return null;
 
   // Walk up to find enclosing call expression
-  const callExpr = findEnclosingCall(node, line, character, lines);
+  const callExpr = findEnclosingCall(node, line, character);
   if (!callExpr) return null;
 
   // Get callee name, object name, and argument list
@@ -92,7 +89,7 @@ export function produceSignatureHelp(
   const { calleeName, objectName, argsNode } = calleeInfo;
 
   // Count active parameter (commas before cursor)
-  const activeParam = countActiveParameter(argsNode, line, character, lines);
+  const activeParam = countActiveParameter(argsNode, line, character);
 
   // Try to resolve to a local/workspace function
   const sig = resolveSignature(calleeName, objectName, table, stdlibIndex, ctx);
@@ -158,17 +155,14 @@ function isCursorInParenRange(
   closeParen: Node | null,
   line: number,
   character: number,
-  lines?: string[],
 ): boolean {
   const openStart = openParen.startPosition;
-  const openUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
-  if (line < openStart.row || (line === openStart.row && character < openUtf16)) {
+  if (line < openStart.row || (line === openStart.row && character < openStart.column)) {
     return false;
   }
   if (closeParen) {
     const closeStart = closeParen.startPosition;
-    const closeUtf16 = lines ? utf8ToUtf16(lines[closeStart.row] ?? '', closeStart.column) : closeStart.column;
-    if (line > closeStart.row || (line === closeStart.row && character >= closeUtf16)) {
+    if (line > closeStart.row || (line === closeStart.row && character >= closeStart.column)) {
       return false;
     }
   }
@@ -181,13 +175,13 @@ function isCursorInParenRange(
  * In tree-sitter-pike, calls are represented as postfix_expr nodes
  * where child 0 is the callee and there are parenthesized arguments.
  */
-function findEnclosingCall(node: Node, line?: number, character?: number, lines?: string[]): Node | null {
+function findEnclosingCall(node: Node, line?: number, character?: number): Node | null {
   let current: Node | null = node;
   while (current) {
     if (current.type === "postfix_expr") {
       const [openParen, closeParen] = findCallParens(current.children);
       if (!openParen) { current = current.parent; continue; }
-      if (line === undefined || character === undefined || isCursorInParenRange(openParen, closeParen, line, character, lines)) {
+      if (line === undefined || character === undefined || isCursorInParenRange(openParen, closeParen, line, character)) {
         return current;
       }
       current = current.parent;
@@ -204,8 +198,7 @@ function findEnclosingCall(node: Node, line?: number, character?: number, lines?
       }
       if (errIdent && errOpen) {
         const openStart = errOpen.startPosition;
-        const openUtf16 = lines ? utf8ToUtf16(lines[openStart.row] ?? '', openStart.column) : openStart.column;
-        if (!(line < openStart.row || (line === openStart.row && character < openUtf16))) {
+        if (!(line < openStart.row || (line === openStart.row && character < openStart.column))) {
           return current;
         }
       }
@@ -305,7 +298,7 @@ function parseCalleeNameAndObject(name: string): { calleeName: string; objectNam
  * Count the number of commas before the cursor position inside the argument list.
  * This determines the active parameter index.
  */
-function countActiveParameter(openParen: Node, line: number, character: number, lines?: string[]): number {
+function countActiveParameter(openParen: Node, line: number, character: number): number {
   const callExpr = openParen.parent;
   if (!callExpr) return 0;
 
@@ -325,11 +318,10 @@ function countActiveParameter(openParen: Node, line: number, character: number, 
     if (insideArgs) {
       // Arguments may be wrapped in an argument_list node
       if (child.type === "argument_list") {
-        commaCount = countCommasInNode(child, line, character, lines);
+        commaCount = countCommasInNode(child, line, character);
       } else if (child.type === ",") {
         const commaPos = child.startPosition;
-        const commaColUtf16 = lines ? utf8ToUtf16(lines[commaPos.row] ?? '', commaPos.column) : commaPos.column;
-        if (commaPos.row < line || (commaPos.row === line && commaColUtf16 < character)) {
+        if (commaPos.row < line || (commaPos.row === line && commaPos.column < character)) {
           commaCount++;
         }
       }
@@ -342,20 +334,19 @@ function countActiveParameter(openParen: Node, line: number, character: number, 
 /**
  * Count commas inside an argument_list node.
  */
-function countCommasInNode(node: Node, line: number, character: number, lines?: string[]): number {
+function countCommasInNode(node: Node, line: number, character: number): number {
   let count = 0;
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
     if (child.type === ",") {
       const pos = child.startPosition;
-      const colUtf16 = lines ? utf8ToUtf16(lines[pos.row] ?? '', pos.column) : pos.column;
-      if (pos.row < line || (pos.row === line && colUtf16 < character)) {
+      if (pos.row < line || (pos.row === line && pos.column < character)) {
         count++;
       }
     }
     if (child.childCount > 0) {
-      count += countCommasInNode(child, line, character, lines);
+      count += countCommasInNode(child, line, character);
     }
   }
   return count;

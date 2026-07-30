@@ -31,7 +31,6 @@ import {
   extractParamsFromStdlibSignature,
   cleanPredefSignature,
 } from "./completion-snippets";
-import { utf8ToUtf16 } from "../util/positionConverter";
 
 // Re-export snippet helpers for backward compatibility
 export {
@@ -275,19 +274,16 @@ export async function resolveTypeMembers(
  *
  * @param tree Parse tree
  * @param line Cursor line (0-based)
- * @param character Cursor character (0-based UTF-16)
- * @param lines Pre-split source lines.
+ * @param character Cursor character (0-based UTF-16, same units as tree-sitter columns)
  */
 export function findIdentifierPrefixRange(
   tree: Tree,
   line: number,
   character: number,
-  lines: string[],
 ): { start: { line: number; character: number }; end: { line: number; character: number } } | null {
   const root = tree.rootNode;
   if (!root) return null;
   const pos = { row: line, column: character };
-  const srcLines = lines;
 
   // Try to find a node at this position. Use namedDescendantForPosition
   // to skip anonymous nodes (punctuation, whitespace).
@@ -300,7 +296,7 @@ export function findIdentifierPrefixRange(
     return {
       start: {
         line: node.startPosition.row,
-        character: utf8ToUtf16(srcLines[node.startPosition.row] ?? '', node.startPosition.column),
+        character: node.startPosition.column,
       },
       end: { line, character },
     };
@@ -316,7 +312,7 @@ export function findIdentifierPrefixRange(
           return {
             start: {
               line: child.startPosition.row,
-              character: utf8ToUtf16(srcLines[child.startPosition.row] ?? '', child.startPosition.column),
+              character: child.startPosition.column,
             },
             end: { line, character },
           };

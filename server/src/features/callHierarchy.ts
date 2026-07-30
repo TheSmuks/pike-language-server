@@ -23,7 +23,6 @@ import type {
 } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration, Reference } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
-import { utf8ToUtf16 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Prepare call hierarchy
@@ -170,8 +169,6 @@ function addIncomingCallToGroup(
 /**
  * Get outgoing calls from a call hierarchy item.
  * Parses the function body and finds all call expressions.
- *
- * @param lines Pre-split source lines.
  */
 export function getOutgoingCalls(
   item: CallHierarchyItem,
@@ -179,7 +176,6 @@ export function getOutgoingCalls(
   table: SymbolTable,
   uri: string,
   workspaceIndex: WorkspaceIndex,
-  lines: string[],
 ): CallHierarchyOutgoingCall[] {
   const startLine = item.range.start.line;
   const endLine = item.range.end.line;
@@ -198,7 +194,6 @@ export function getOutgoingCalls(
     workspaceIndex,
     calls,
     seen,
-    lines,
   );
 
   return calls;
@@ -221,7 +216,6 @@ function collectCallExpressions(
   workspaceIndex: WorkspaceIndex,
   results: CallHierarchyOutgoingCall[],
   seen: Set<string>,
-  lines: string[],
 ): void {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
@@ -230,11 +224,11 @@ function collectCallExpressions(
     if (child.startPosition.row > endLine) break;
 
     if (child.type === "postfix_expr" && isCallPostfixExpr(child)) {
-      tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen, lines);
+      tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen);
     }
 
     collectCallExpressions(
-      child, startLine, endLine, table, uri, workspaceIndex, results, seen, lines,
+      child, startLine, endLine, table, uri, workspaceIndex, results, seen,
     );
   }
 }
@@ -246,7 +240,6 @@ function tryPushOutgoingCall(
   workspaceIndex: WorkspaceIndex,
   results: CallHierarchyOutgoingCall[],
   seen: Set<string>,
-  lines: string[],
 ): void {
   const calleeName = extractCalleeName(node);
   if (!calleeName) return;
@@ -266,8 +259,8 @@ function tryPushOutgoingCall(
   results.push({
     to: calleeDecl.item,
     fromRanges: [{
-      start: { line: fromLine, character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) },
-      end: { line: fromLine, character: utf8ToUtf16(lines[fromLine] ?? '', fromCol) + nameLength },
+      start: { line: fromLine, character: fromCol },
+      end: { line: fromLine, character: fromCol + nameLength },
     }],
   });
 }

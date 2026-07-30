@@ -112,8 +112,7 @@ async function handleOutgoingCalls(
     workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
   });
   if (token.isCancellationRequested) return [];
-  const lines = source.split('\n');
-  return getOutgoingCalls(item, tree, table, uri, ctx.index, lines);
+  return getOutgoingCalls(item, tree, table, uri, ctx.index);
 }
 
 // Type hierarchy handlers
