@@ -14,7 +14,7 @@
 import type { Node } from 'web-tree-sitter';
 import type { BuildState, Declaration } from './symbolTable';
 import { PRIMITIVE_TYPES } from './symbolTable';
-import { toLocUtf16, resolveTypeName } from './scope-helpers';
+import { toLoc, resolveTypeName } from './scope-helpers';
 import {
   findScopeForNode,
   findDeclInScope,
@@ -73,7 +73,7 @@ export function collectPostfixRef(node: Node, state: BuildState): void {
 
     state.references.push({
       name: memberName,
-      loc: toLocUtf16(memberNode.startPosition, state.lines, state.offsetMap),
+      loc: toLoc(memberNode.startPosition),
       kind,
       resolvesTo,
       confidence,

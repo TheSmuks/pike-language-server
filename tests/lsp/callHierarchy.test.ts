@@ -350,7 +350,7 @@ describe("getOutgoingCalls", () => {
 
     // parse() returns Tree | null; assert rather than deref a possible null.
     expect(tree).not.toBeNull();
-    const result = getOutgoingCalls(item, tree!, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree!, table, "file:///test/test.pike", index);
     expect(result).toEqual([]);
     tree!.delete();
   });
@@ -390,7 +390,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "helper", `Expected callee "helper", got "${result[0].to.name}"`);
     tree.delete();
@@ -432,7 +432,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 deduplicated outgoing call, got ${result.length}`);
     tree.delete();
   });
@@ -479,7 +479,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     const names = result.map(r => r.to.name).sort();
     assert(names.length === 2, `Expected 2 outgoing calls, got ${names.length}: ${names}`);
     assert(names[0] === "bar", `Expected "bar", got "${names[0]}"`);
@@ -515,7 +515,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 0, `Expected 0 outgoing calls for unresolved, got ${result.length}`);
     tree.delete();
   });
@@ -559,7 +559,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index, src.split("\n"));
+    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "greet", `Expected callee "greet", got "${result[0].to.name}"`);
     assert(result[0].to.kind === 6, `Expected callee kind 6 (Method), got ${result[0].to.kind}`);

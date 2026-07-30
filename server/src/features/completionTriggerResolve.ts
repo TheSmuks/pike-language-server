@@ -7,7 +7,6 @@
  */
 
 import { Node } from "web-tree-sitter";
-import { utf16ToUtf8 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // LHS resolution (dot/arrow trigger)
@@ -17,9 +16,9 @@ import { utf16ToUtf8 } from "../util/positionConverter";
  * Find the left-hand side identifier/expression before a trigger position.
  * Handles ERROR nodes by walking children to find the last valid identifier.
  */
-export function findLhsBeforePosition(rootNode: Node, line: number, column: number, lineText: string): Node | null {
-  const utf8Col = utf16ToUtf8(lineText, column);
-  const pos = { row: line, column: utf8Col };
+export function findLhsBeforePosition(rootNode: Node, line: number, column: number): Node | null {
+  // LSP characters and tree-sitter columns are both UTF-16 code units.
+  const pos = { row: line, column };
   let node = rootNode.descendantForPosition(pos);
 
   // If the node is an identifier, use it directly
@@ -34,7 +33,7 @@ export function findLhsBeforePosition(rootNode: Node, line: number, column: numb
 
   // If the node is an anonymous operator token, look at the parent for context.
   if (node && isOperatorToken(node.type)) {
-    const resolved = resolveOperatorNode(node, rootNode, line, column, lineText);
+    const resolved = resolveOperatorNode(node, rootNode, line, column);
     if (resolved !== undefined) return resolved;
   }
 
@@ -45,7 +44,7 @@ export function findLhsBeforePosition(rootNode: Node, line: number, column: numb
   }
 
   // Fall back: try position one column before the trigger
-  return fallbackLhsBeforePosition(rootNode, line, column, lineText);
+  return fallbackLhsBeforePosition(rootNode, line, column);
 }
 
 /**
@@ -58,7 +57,6 @@ function resolveOperatorNode(
   rootNode: Node,
   line: number,
   column: number,
-  lineText: string,
 ): Node | null | undefined {
   // If parent is ERROR, use the ERROR handling
   if (node.parent?.type === "ERROR") {
@@ -78,8 +76,7 @@ function resolveOperatorNode(
   }
   // Operator token with unknown parent — try fallback
   if (column > 0) {
-    const fallbackUtf8 = utf16ToUtf8(lineText, column - 1);
-    const fallbackPos = { row: line, column: fallbackUtf8 };
+    const fallbackPos = { row: line, column: column - 1 };
     const fallback = rootNode.descendantForPosition(fallbackPos);
     if (fallback) return findIdentifierInExpr(fallback);
   }
@@ -134,11 +131,9 @@ function fallbackLhsBeforePosition(
   rootNode: Node,
   line: number,
   column: number,
-  lineText: string,
 ): Node | null {
   if (column <= 0) return null;
-  const fallbackUtf8 = utf16ToUtf8(lineText, column - 1);
-  const fallbackPos = { row: line, column: fallbackUtf8 };
+  const fallbackPos = { row: line, column: column - 1 };
   const fallback = rootNode.descendantForPosition(fallbackPos);
   // Prefer postfix_expr (for chained calls) over bare identifiers.
   if (fallback) {
@@ -202,10 +197,9 @@ function findPostfixExprOrIdentifier(node: Node): Node | null {
  * Returns the identifier node for simple calls, or the full postfix_expr
  * for chained access like `obj->method(`.
  */
-export function findCalleeBeforeOpenParen(rootNode: Node, line: number, parenColumn: number, lineText: string): Node | null {
-  // Position just before '(' — convert UTF-16 parenColumn to UTF-8 byte offset
-  const utf8Col = utf16ToUtf8(lineText, parenColumn);
-  const pos = { row: line, column: utf8Col };
+export function findCalleeBeforeOpenParen(rootNode: Node, line: number, parenColumn: number): Node | null {
+  // LSP characters and tree-sitter columns are both UTF-16 code units.
+  const pos = { row: line, column: parenColumn };
   const node = rootNode.descendantForPosition(pos);
   if (!node) return null;
 
@@ -228,7 +222,7 @@ export function findCalleeBeforeOpenParen(rootNode: Node, line: number, parenCol
   }
 
   // Fallback: look at the node right before '(' using position
-  return fallbackCalleeBeforeParen(rootNode, line, parenColumn, lineText);
+  return fallbackCalleeBeforeParen(rootNode, line, parenColumn);
 }
 
 /** Walk backward through siblings to find a callee identifier before a paren/argument_list. */
@@ -276,11 +270,9 @@ function fallbackCalleeBeforeParen(
   rootNode: Node,
   line: number,
   parenColumn: number,
-  lineText: string,
 ): Node | null {
   if (parenColumn <= 0) return null;
-  const beforeUtf8 = utf16ToUtf8(lineText, parenColumn - 1);
-  const beforePos = { row: line, column: beforeUtf8 };
+  const beforePos = { row: line, column: parenColumn - 1 };
   const beforeNode = rootNode.descendantForPosition(beforePos);
   if (beforeNode && (beforeNode.type === "identifier" || beforeNode.type === "identifier_expr")) {
     return beforeNode;

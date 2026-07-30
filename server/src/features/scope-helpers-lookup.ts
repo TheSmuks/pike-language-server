@@ -6,7 +6,6 @@
  */
 import type { Node } from 'web-tree-sitter';
 import type { BuildState, Range, Scope } from './symbolTable';
-import { lookupUtf16 } from '../util/offsetMap';
 
 /** Compute a rough size metric for a range (used to pick innermost scope). */
 export function rangeSize(range: Range): number {
@@ -103,23 +102,18 @@ function findInnermostScope(
  * Find the scope ID that contains a given node.
  *
  * Uses binary search on sortedScopes (sorted by start position) to find
- * candidate scopes in O(log S) instead of O(S). For each candidate, verifies
- * containment using the pre-computed offset map for O(1) position conversion.
+ * candidate scopes in O(log S) instead of O(S).
  *
  * Overall complexity: O(R × log S) for the reference pass instead of O(R × S).
  */
 export function findScopeForNode(node: Node, state: BuildState): number | null {
   const nodeStartRow = node.startPosition.row;
-  const nodeStartCol = node.startPosition.column;
+  const nodeStartChar = node.startPosition.column;
   const nodeEndRow = node.endPosition.row;
-  const nodeEndCol = node.endPosition.column;
+  const nodeEndChar = node.endPosition.column;
 
   const sorted = state.sortedScopes;
   if (sorted.length === 0) return null;
-
-  // Convert node positions to UTF-16 once for all containment checks.
-  const nodeStartChar = lookupUtf16(state.offsetMap, nodeStartRow, nodeStartCol);
-  const nodeEndChar = lookupUtf16(state.offsetMap, nodeEndRow, nodeEndCol);
 
   // Binary search: find the rightmost scope whose start is ≤ the node's start.
   // sorted is sorted by (startLine, startChar) ascending.

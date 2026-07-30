@@ -166,7 +166,7 @@ export class DiagnosticManager {
       const tree = parse(source, uri);
       if (!this.disposed) {
         const lines = source.split('\n');
-        const parseDiags = getParseDiagnostics(tree, lines);
+        const parseDiags = getParseDiagnostics(tree);
         const cached = this.pikeCache.get(uri);
         const pikeDiags = cached ? cached.diagnostics : [];
         const merged = mergeDiagnostics(parseDiags, pikeDiags, tree, [], lines);
@@ -454,7 +454,7 @@ export class DiagnosticManager {
     try {
       const lines = source.split('\n');
       const tree = parse(source, uri);
-      return { tree, diagnostics: getParseDiagnostics(tree, lines), lines };
+      return { tree, diagnostics: getParseDiagnostics(tree), lines };
     } catch (err) {
       logError(this.connection, ErrorCategory.Parse, `safeParse(${uri ?? "unknown"})`, err);
       return { tree: null, diagnostics: [], lines: [] };

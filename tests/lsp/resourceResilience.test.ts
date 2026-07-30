@@ -54,7 +54,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(bloatedDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 200 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 200 }),
     );
 
     const loaded = await loadCache(bloatedDir, wasmHash);
@@ -87,7 +87,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(bloatedDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(bloatedDir, wasmHash);

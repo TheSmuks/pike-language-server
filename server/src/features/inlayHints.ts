@@ -21,7 +21,6 @@ import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
 import type { Position } from "vscode-languageserver-types";
 import { InlayHint, InlayHintKind } from "vscode-languageserver-types";
-import { utf8ToUtf16 } from "../util/positionConverter";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,8 +31,14 @@ export interface InlayHintContext {
   table: SymbolTable;
   /** Range to provide hints for. */
   range: { start: Position; end: Position };
-  /** Pre-split lines of the source text (avoids tree.rootNode.text allocation). */
-  lines: string[];
+  /**
+   * Unused now that tree-sitter columns and LSP characters are both UTF-16
+   * code units. Optional so production callers can stop paying for the
+   * split (inlay hints fire on every viewport change) while
+   * `tests/lsp/inlayHints.test.ts` and `inlayHints-g2.test.ts`, which still
+   * construct this object with `lines` set, keep compiling unchanged.
+   */
+  lines?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -56,7 +61,6 @@ export function produceInlayHints(ctx: InlayHintContext): InlayHint[] {
 
   const rangeStartLine = range.start.line;
   const rangeEndLine = range.end.line;
-  const lines = ctx.lines;
 
   // G1: Type hints for untyped variable declarations
   for (const decl of table.declarations) {
@@ -79,7 +83,7 @@ export function produceInlayHints(ctx: InlayHintContext): InlayHint[] {
   }
 
   // G2: Parameter name hints at call sites
-  collectParameterHints(tree.rootNode, table, rangeStartLine, rangeEndLine, hints, lines);
+  collectParameterHints(tree.rootNode, table, rangeStartLine, rangeEndLine, hints);
 
   return hints;
 }
@@ -113,7 +117,6 @@ function collectParameterHints(
   rangeStartLine: number,
   rangeEndLine: number,
   hints: InlayHint[],
-  lines: string[],
 ): void {
   // Only recurse into nodes within the requested range.
   if (node.endPosition.row < rangeStartLine || node.startPosition.row > rangeEndLine) {
@@ -121,7 +124,7 @@ function collectParameterHints(
   }
 
   if (node.type === "argument_list") {
-    const paramHints = hintsForCallSite(node, table, lines);
+    const paramHints = hintsForCallSite(node, table);
     for (const h of paramHints) {
       if (h.position.line >= rangeStartLine && h.position.line <= rangeEndLine) {
         hints.push(h);
@@ -132,7 +135,7 @@ function collectParameterHints(
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (child) {
-      collectParameterHints(child, table, rangeStartLine, rangeEndLine, hints, lines);
+      collectParameterHints(child, table, rangeStartLine, rangeEndLine, hints);
     }
   }
 }
@@ -141,7 +144,7 @@ function collectParameterHints(
  * Given an argument_list node, find the callee name, resolve its declaration,
  * extract parameter names, and produce inlay hints.
  */
-function hintsForCallSite(argListNode: Node, table: SymbolTable, lines: string[]): InlayHint[] {
+function hintsForCallSite(argListNode: Node, table: SymbolTable): InlayHint[] {
   const hints: InlayHint[] = [];
 
   // Find the callee name by looking at the parent postfix_expr.
@@ -171,7 +174,7 @@ function hintsForCallSite(argListNode: Node, table: SymbolTable, lines: string[]
     const argNode = args[i];
     hints.push(
       InlayHint.create(
-        { line: argNode.startPosition.row, character: utf8ToUtf16(lines[argNode.startPosition.row] ?? '', argNode.startPosition.column) },
+        { line: argNode.startPosition.row, character: argNode.startPosition.column },
         `${paramName}: `,
         InlayHintKind.Parameter,
       ),

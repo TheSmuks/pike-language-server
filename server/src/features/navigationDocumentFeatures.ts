@@ -150,8 +150,7 @@ async function handleDocumentSymbol(
   try {
     const source = doc.getText();
     const tree = parse(source, doc.uri);
-    const lines = source.split('\n');
-    return getDocumentSymbols(tree, lines);
+    return getDocumentSymbols(tree);
   } catch (err) {
     logError(connection, ErrorCategory.Parse, "navigationHandler.handleDocumentSymbol", err);
     return [];
@@ -173,8 +172,7 @@ async function handleSelectionRange(
     if (token.isCancellationRequested) return results;
     const source = doc.getText();
     const tree = parse(source, doc.uri);
-    const lines = source.split('\n');
-    const range = getSelectionRange(tree, pos.line, pos.character, lines);
+    const range = getSelectionRange(tree, pos.line, pos.character);
     results.push(range);
   }
   return results;
@@ -489,5 +487,5 @@ async function handleInlayHint(
   const tree = parse(source, doc.uri);
   if (!tree) return [];
 
-  return produceInlayHints({ tree, table, range: params.range, lines: source.split('\n') });
+  return produceInlayHints({ tree, table, range: params.range });
 }

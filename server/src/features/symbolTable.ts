@@ -1,5 +1,4 @@
 import { Tree } from 'web-tree-sitter';
-import type { OffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Types — mirrors decision 0009
@@ -121,9 +120,6 @@ export interface BuildState {
   scopeMap: Map<number, Scope>; // ID → Scope for O(1) lookup
   declMap: Map<number, Declaration>; // ID → Declaration for O(1) lookup
   scopeStack: number[]; // stack of scope IDs (innermost last)
-  lines: string[]; // pre-split source lines for UTF-16 position conversion
-  /** Pre-computed byte→UTF-16 offset map per line. Built once at init, O(1) per lookup. */
-  offsetMap: OffsetMap;
   /** Scopes sorted by (startLine, startChar) after declaration pass, for binary search. */
   sortedScopes: Scope[];
 }
@@ -148,14 +144,13 @@ export { wireIncludes } from './includeWiring';
 // Internal imports (not re-exported)
 // ---------------------------------------------------------------------------
 
-import { toRangeUtf16, resolveTypeName } from './scope-helpers';
+import { toRange, resolveTypeName } from './scope-helpers';
 import { pushScope, popScope } from './scope-helpers-state';
 import { wireInheritance } from './scopeBuilder';
 import { wireIncludes } from './includeWiring';
 import { collectDeclarations } from './declarationCollector';
 import { collectReferences } from './referenceCollector';
 import { startSpan, stopSpan, bump, measureSync } from './profiler';
-import { buildOffsetMap } from '../util/offsetMap';
 
 // ---------------------------------------------------------------------------
 // Build orchestrator
@@ -186,8 +181,11 @@ export interface BuildOptions {
  *
  * @param options Optional WorkspaceIndex for cross-file inheritance wiring;
  *   pass `undefined` when no index is available.
- * @param sourceText Full source the tree was parsed from. REQUIRED — callers
- *   already hold it, and omitting it corrupts every position (see guard below).
+ * @param sourceText Full source the tree was parsed from. REQUIRED and
+ *   enforced by assertSourceCoversTree below — see that function's docstring
+ *   for what the check protects against today (it is a caller-contract
+ *   check, not the position-correctness guard it used to be: sourceText is
+ *   not read anywhere else in this build pipeline).
  */
 export function buildSymbolTable(tree: Tree, uri: string, version: number, options: BuildOptions | undefined, sourceText: string): SymbolTable {
   return measureSync("buildSymbolTable", () => {
@@ -196,7 +194,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
 
     bump("symbolTablesBuilt");
     assertSourceCoversTree(sourceText, root, uri);
-    const state = initBuildState(sourceText ?? '');
+    const state = initBuildState();
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);
@@ -235,20 +233,34 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
 }
 
 /**
- * Fail fast when a non-empty tree is built without its source text. Callers MUST
- * pass the pre-split source: materializing rootNode.text here is O(N) and the
- * source is already available from the LSP change notification. An empty string
- * for a non-empty tree silently corrupts every position — line 0 collapses to
- * column 0 and the file scope becomes a zero-width range, so getSymbolsInScope
- * and completion return nothing at end-of-line positions. The type makes
- * sourceText required, but bun runs tests without type-checking, so this runtime
- * guard protects the untyped test call sites too. endIndex is an O(1) getter.
+ * Fail fast when a caller passes an empty/undefined sourceText for a tree
+ * that actually has content.
+ *
+ * Historically (pre-PR #148, when BuildState still had a `lines` field and
+ * scope ranges were derived from it) an omitted sourceText silently
+ * collapsed the file scope to a zero-width range, so getSymbolsInScope and
+ * completion returned nothing at end-of-line positions — a real bug (PR
+ * #145: a test called buildSymbolTable without the arg and flaked on
+ * suite order). That specific failure mode is gone now that BuildState.lines
+ * and offsetMap have been removed: positions come straight from tree-sitter
+ * Points, and sourceText is not read anywhere else in this file or its
+ * helpers — grep confirms the only remaining use is this assertion.
+ *
+ * So this guard no longer prevents position corruption. What it still does:
+ * fail loudly, at the API boundary, the moment a caller passes the wrong
+ * variable or an empty string for a document that actually has content —
+ * which is still a real caller bug worth surfacing immediately rather than
+ * letting it manifest as a confusing downstream symptom later. The type
+ * makes sourceText required, but bun runs tests without type-checking, so
+ * this runtime guard protects the untyped test call sites too. endIndex is
+ * an O(1) getter.
  */
 function assertSourceCoversTree(sourceText: string, root: { endIndex: number }, uri: string): void {
   if ((sourceText === undefined || sourceText.length === 0) && root.endIndex > 0) {
     throw new Error(
       `buildSymbolTable(${uri}): sourceText is required for a non-empty tree ` +
-        `(endIndex=${root.endIndex}); omitting it would corrupt every position.`,
+        `(endIndex=${root.endIndex}); an empty/undefined value here means the ` +
+        `caller passed the wrong variable or a stale/empty buffer for a real document.`,
     );
   }
 }
@@ -262,9 +274,8 @@ function emptySymbolTable(uri: string, version: number): SymbolTable {
   };
 }
 
-/** Initialize builder state from the pre-split source text. */
-function initBuildState(sourceText: string): BuildState {
-  const lines = sourceText.split('\n');
+/** Initialize fresh builder state. */
+function initBuildState(): BuildState {
   return {
     nextId: 0,
     declarations: [],
@@ -273,15 +284,13 @@ function initBuildState(sourceText: string): BuildState {
     scopeMap: new Map(),
     declMap: new Map(),
     scopeStack: [],
-    lines,
-    offsetMap: buildOffsetMap(lines),
     sortedScopes: [],
   };
 }
 
 /** Pass 1: collect declarations and build scope tree. */
 function runDeclarationPass(root: any, state: BuildState): void {
-  pushScope(state, 'file', toRangeUtf16(root, state.lines, state.offsetMap));
+  pushScope(state, 'file', toRange(root));
   collectDeclarations(root, state);
   popScope(state);
 

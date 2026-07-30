@@ -7,20 +7,19 @@
  * for every cached file, so startup can rebuild the dependency graph as *stub*
  * entries (no symbol tables resident) and hydrate a file's table on demand.
  *
- * Constants here mirror persistentCache — they must stay in sync (format bump
- * invalidates both).
+ * FORMAT_VERSION is imported from persistentCache, not duplicated — the two
+ * caches must invalidate together on a format bump.
  */
 
 import { writeFile, rename } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { CachedFileEntry } from "./persistentCache";
+import { FORMAT_VERSION, type CachedFileEntry } from "./persistentCache";
 import { getCachePath, migrateLegacyCache } from "./cachePaths";
 
 const MANIFEST_FILENAME = "manifest.json";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
 const CACHE_SUBDIR = "cache";
-const FORMAT_VERSION = 2;
 
 /** A range in a document (line/character, 0-based). */
 interface Range {

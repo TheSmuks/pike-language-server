@@ -42,7 +42,6 @@ import { completeScopeAccess } from "./completion-scopeAccess";
 import { completeCallArgs } from "./completion-callArgs";
 import { collectKeywordSnippets } from "./completion-keywords";
 import { addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
-import { utf16ToUtf8 } from "../util/positionConverter";
 import { buildAutodocCompletion } from "./completion-autodoc";
 
 // Re-export for backward compatibility
@@ -63,7 +62,6 @@ export async function getCompletions(
   ctx: CompletionContext,
 ): Promise<CompletionList> {
   const root = tree.rootNode;
-  // Convert LSP character (UTF-16) to tree-sitter column (UTF-8 byte offset)
   const lines = ctx.source.split("\n");
 
   // Autodoc-skeleton snippet: fires only when the cursor sits on an empty
@@ -71,8 +69,8 @@ export async function getCompletions(
   const autodocItem = buildAutodocCompletion(table, line, character, ctx.source);
   if (autodocItem) return { isIncomplete: false, items: [autodocItem] };
 
-  const utf8Col = utf16ToUtf8(lines[line] ?? "", character);
-  const pos = { row: line, column: utf8Col };
+  // LSP characters and tree-sitter columns are both UTF-16 code units.
+  const pos = { row: line, column: character };
 
   // Get the node at or immediately before the cursor position
   let node = root.descendantForPosition(pos);

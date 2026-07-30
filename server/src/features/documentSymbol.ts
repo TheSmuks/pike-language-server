@@ -11,7 +11,6 @@ import {
   Position,
 } from 'vscode-languageserver/node';
 import { Tree, Node, Point } from 'web-tree-sitter';
-import { utf8ToUtf16 } from '../util/positionConverter';
 
 export { DocumentSymbol, SymbolKind };
 
@@ -19,16 +18,17 @@ export { DocumentSymbol, SymbolKind };
 // Helpers
 // ---------------------------------------------------------------------------
 
-function toPosition(point: Point, lines: string[]): Position {
-  return Position.create(point.row, utf8ToUtf16(lines[point.row] ?? '', point.column));
+// LSP characters and tree-sitter columns are both UTF-16 code units.
+function toPosition(point: Point): Position {
+  return Position.create(point.row, point.column);
 }
 
-function toRange(node: Node, lines: string[]): Range {
-  return Range.create(toPosition(node.startPosition, lines), toPosition(node.endPosition, lines));
+function toRange(node: Node): Range {
+  return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
 }
 
-function nameRange(nameNode: Node | null, fallback: Node, lines: string[]): Range {
-  return nameNode ? toRange(nameNode, lines) : toRange(fallback, lines);
+function nameRange(nameNode: Node | null, fallback: Node): Range {
+  return nameNode ? toRange(nameNode) : toRange(fallback);
 }
 
 // ---------------------------------------------------------------------------
@@ -40,26 +40,26 @@ function collectNames(node: Node): Node[] {
   return node.childrenForFieldName('name');
 }
 
-function symbolsFromClassDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromClassDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous class — skip
   const body = node.childForFieldName('body');
   // Pass parentKind="class" so that nested function/variable declarations
   // are emitted with kind Method/Field instead of Function/Variable.
-  const children = body ? collectSymbols(body, 'class', lines) : [];
+  const children = body ? collectSymbols(body, 'class') : [];
   return [
     DocumentSymbol.create(
       nameNode.text,
       undefined,
       SymbolKind.Class,
-      toRange(node, lines),
-      nameRange(nameNode, node, lines),
+      toRange(node),
+      nameRange(nameNode, node),
       children,
     ),
   ];
 }
 
-function symbolsFromFunctionDecl(node: Node, lines: string[], parentKind?: string): DocumentSymbol[] {
+function symbolsFromFunctionDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous — skip
   return [
@@ -67,13 +67,13 @@ function symbolsFromFunctionDecl(node: Node, lines: string[], parentKind?: strin
       nameNode.text,
       undefined,
       parentKind === 'class' ? SymbolKind.Method : SymbolKind.Function,
-      toRange(node, lines),
-      nameRange(nameNode, node, lines),
+      toRange(node),
+      nameRange(nameNode, node),
     ),
   ];
 }
 
-function symbolsFromVariableDecl(node: Node, lines: string[], parentKind?: string): DocumentSymbol[] {
+function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
   return names.map((nameNode) =>
@@ -81,13 +81,13 @@ function symbolsFromVariableDecl(node: Node, lines: string[], parentKind?: strin
       nameNode.text,
       undefined,
       parentKind === 'class' ? SymbolKind.Field : SymbolKind.Variable,
-      toRange(node, lines),
-      toRange(nameNode, lines),
+      toRange(node),
+      toRange(nameNode),
     ),
   );
 }
 
-function symbolsFromConstantDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromConstantDecl(node: Node): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
   return names.map((nameNode) =>
@@ -95,13 +95,13 @@ function symbolsFromConstantDecl(node: Node, lines: string[]): DocumentSymbol[] 
       nameNode.text,
       undefined,
       SymbolKind.Constant,
-      toRange(node, lines),
-      toRange(nameNode, lines),
+      toRange(node),
+      toRange(nameNode),
     ),
   );
 }
 
-function symbolsFromEnumDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return []; // anonymous enum — skip
   const members: DocumentSymbol[] = [];
@@ -114,8 +114,8 @@ function symbolsFromEnumDecl(node: Node, lines: string[]): DocumentSymbol[] {
             memberName.text,
             undefined,
             SymbolKind.EnumMember,
-            toRange(child, lines),
-            toRange(memberName, lines),
+            toRange(child),
+            toRange(memberName),
           ),
         );
       }
@@ -126,14 +126,14 @@ function symbolsFromEnumDecl(node: Node, lines: string[]): DocumentSymbol[] {
       nameNode.text,
       undefined,
       SymbolKind.Enum,
-      toRange(node, lines),
-      nameRange(nameNode, node, lines),
+      toRange(node),
+      nameRange(nameNode, node),
       members,
     ),
   ];
 }
 
-function symbolsFromImportDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromImportDecl(node: Node): DocumentSymbol[] {
   const pathNode = node.childForFieldName('path');
   if (!pathNode) return [];
   return [
@@ -141,13 +141,13 @@ function symbolsFromImportDecl(node: Node, lines: string[]): DocumentSymbol[] {
       pathNode.text,
       undefined,
       SymbolKind.Module,
-      toRange(node, lines),
-      toRange(pathNode, lines),
+      toRange(node),
+      toRange(pathNode),
     ),
   ];
 }
 
-function symbolsFromInheritDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromInheritDecl(node: Node): DocumentSymbol[] {
   // Prefer alias over path for display
   const aliasNode = node.childForFieldName('alias');
   const pathNode = node.childForFieldName('path');
@@ -158,13 +158,13 @@ function symbolsFromInheritDecl(node: Node, lines: string[]): DocumentSymbol[] {
       displayNode.text,
       undefined,
       SymbolKind.Module,
-      toRange(node, lines),
-      toRange(displayNode, lines),
+      toRange(node),
+      toRange(displayNode),
     ),
   ];
 }
 
-function symbolsFromTypedefDecl(node: Node, lines: string[]): DocumentSymbol[] {
+function symbolsFromTypedefDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return [];
   return [
@@ -172,8 +172,8 @@ function symbolsFromTypedefDecl(node: Node, lines: string[]): DocumentSymbol[] {
       nameNode.text,
       undefined,
       SymbolKind.TypeParameter,
-      toRange(node, lines),
-      toRange(nameNode, lines),
+      toRange(node),
+      toRange(nameNode),
     ),
   ];
 }
@@ -182,7 +182,7 @@ function symbolsFromTypedefDecl(node: Node, lines: string[]): DocumentSymbol[] {
 // Dispatch
 // ---------------------------------------------------------------------------
 
-type DeclHandler = (node: Node, lines: string[], parentKind?: string) => DocumentSymbol[];
+type DeclHandler = (node: Node, parentKind?: string) => DocumentSymbol[];
 
 const DECL_HANDLERS: Record<string, DeclHandler> = {
   class_decl: symbolsFromClassDecl,
@@ -207,7 +207,7 @@ const DECL_HANDLERS: Record<string, DeclHandler> = {
  *                    declarations inside the container are emitted as
  *                    Method/Field rather than Function/Variable.
  */
-function collectSymbols(container: Node, parentKind: string | undefined, lines: string[]): DocumentSymbol[] {
+function collectSymbols(container: Node, parentKind: string | undefined): DocumentSymbol[] {
   const symbols: DocumentSymbol[] = [];
   for (const child of container.children) {
     // Skip ERROR / missing nodes
@@ -219,7 +219,7 @@ function collectSymbols(container: Node, parentKind: string | undefined, lines: 
 
     const handler = DECL_HANDLERS[decl.type];
     if (handler) {
-      symbols.push(...handler(decl, lines, parentKind));
+      symbols.push(...handler(decl, parentKind));
     }
     // Unknown node types are silently ignored — not an error.
   }
@@ -230,6 +230,6 @@ function collectSymbols(container: Node, parentKind: string | undefined, lines: 
 // Public API
 // ---------------------------------------------------------------------------
 
-export function getDocumentSymbols(tree: Tree, lines: string[]): DocumentSymbol[] {
-  return collectSymbols(tree.rootNode, undefined, lines);
+export function getDocumentSymbols(tree: Tree): DocumentSymbol[] {
+  return collectSymbols(tree.rootNode, undefined);
 }
