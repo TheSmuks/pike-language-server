@@ -113,7 +113,22 @@ describe("decodeSource", () => {
     expect(text).not.toContain("ï»¿");
   });
 
-  test("strips a leading UTF-8 BOM before decoding via a high-half table", () => {
+  test("strips a leading UTF-8 BOM before decoding a declared #charset", () => {
+    // Runtime-independent by design: decodeSource's declared-charset branch
+    // takes ONE of two code paths for "iso-8859-2" depending on whether the
+    // runtime's TextDecoder supports that label natively — Node's ICU-backed
+    // TextDecoder does (this exercises `new TextDecoder("iso-8859-2")`
+    // directly), Bun 1.3.14 doesn't (this exercises the HIGH_HALF_TABLES
+    // fallback instead). Both must independently strip the BOM: WHATWG only
+    // has TextDecoder strip a BOM for utf-8/utf-16, never for iso-8859-*, so
+    // this is NOT the same guarantee as the utf-8 case, and asserting only
+    // under whichever path Bun happens to hit would miss the other one — a
+    // real regression here decoded a BOM'd iso-8859-2 file as "ďťż..." under
+    // Node while Bun's table path (not exercising TextDecoder at all) stayed
+    // clean, which is exactly the Bun-only-quirk trap the koi8-r test above
+    // warns about. Checks for both possible phantom forms so this fails
+    // regardless of which runtime executes it.
+    //
     // The #charset directive sits on its own line (after a leading blank
     // line) rather than immediately after the BOM: CHARSET_RE is line-
     // anchored (`^`), and findCharset doesn't strip the BOM before matching
@@ -130,7 +145,8 @@ describe("decodeSource", () => {
     expect(encoding).toBe("iso-8859-2");
     expect(text).toContain("#charset");
     expect(text).toContain("š");
-    expect(text).not.toContain("ï»¿");
+    expect(text).not.toContain("ï»¿"); // phantom form via the latin1/table paths
+    expect(text).not.toContain("ďťż"); // phantom form via TextDecoder("iso-8859-2")
   });
 
   test("ISO-8859-1 fallback is true byte-identity, not windows-1252", () => {
@@ -245,12 +261,28 @@ describe("decodeSource", () => {
   });
 
   describe("backslash-newline splice (proven against real pike v8.0.1116)", () => {
-    // Pike splices a backslash-newline pair away GLOBALLY, not just inside
-    // directives (`int ma\` + newline + `in(){}` compiles as `int main(){}`).
+    // Pike splices a backslash-newline pair away at the token-stream level
+    // GLOBALLY (`int ma\` + newline + `in(){}` compiles as `int main(){}`),
+    // but that does NOT mean every backslash-newline hides a `#charset` on
+    // the next physical line — an EARLIER version of this comment claimed
+    // that and was wrong; do not restate it. The actual rule, oracle-
+    // verified case by case below:
+    //   - An ORDINARY CODE line's trailing splice leaves the NEXT physical
+    //     line fully eligible as its own directive (`int dummy = 1 \` +
+    //     newline + `#charset ...` IS honoured — corroborated by
+    //     `int dummy = 1 \` + newline + `#define BAR 42` successfully
+    //     defining BAR, i.e. the #define is genuinely processed as its own
+    //     directive rather than being swallowed).
+    //   - A line that is ITSELF a directive (`#define ...\`) or a `//`
+    //     comment swallows its OWN continuation as part of the same
+    //     directive/comment instead — NOT honoured.
+    //   - CRLF splices the same way as bare LF in both cases.
     // 0xb9 discriminates: raw/latin1 -> U+00B9 ("¹"), iso-8859-2 -> U+0161
     // ("š"). Each case below was run through real pike (v8.0.1116) via a
-    // `string s = "<0xb9>"; write("%d\n", s[0]);` program to get the
-    // honoured/not-honoured verdict, matching the assertions here.
+    // `string s = "<0xb9>"; write("%d\n", s[0]);` program (code-line splice
+    // cases use a lone `;` on the line right after the directive, so the
+    // spliced statement still closes and the program still compiles) to get
+    // the honoured/not-honoured verdict, matching the assertions here.
 
     test("honours `# charset` with a space after the hash (pike: honoured, 353)", () => {
       const buf = Buffer.from([
@@ -274,6 +306,91 @@ describe("decodeSource", () => {
     test("does NOT honour a #charset spliced onto a #define via backslash-newline (pike: not honoured, 185)", () => {
       const buf = Buffer.from([
         ...Buffer.from("#define FOO 1 \\\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-1");
+      expect(text).toContain("¹");
+      expect(text).not.toContain("š");
+    });
+
+    test("HONOURS a #charset following an ORDINARY code line's splice (pike: honoured, 353)", () => {
+      // The regression this test guards against: an earlier fix made this
+      // splice unconditional (fired regardless of what kind of line it was
+      // in), which caused this exact case to flip to NOT-honoured — the
+      // opposite of what pike does. `int dummy = 1 \` is ordinary code, not
+      // a directive, so its splice must leave `#charset` on the next
+      // physical line fully eligible as its own directive.
+      const buf = Buffer.from([
+        ...Buffer.from("int dummy = 1 \\\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("š");
+    });
+
+    test("does NOT honour a #charset spliced onto a // comment via CRLF backslash-newline (pike: not honoured, 185)", () => {
+      // Pre-existing gap (not introduced by the splice-model regression):
+      // both splice branches only tested `next === "\n"`, so a CRLF line
+      // ending was never recognized as a splice at all, and the comment
+      // just ran out its normal per-character scan to the bare `\n` of the
+      // SAME line — leaving `#charset` on the following line unblanked and
+      // wrongly matchable.
+      const buf = Buffer.from([
+        ...Buffer.from("// comment \\\r\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-1");
+      expect(text).toContain("¹");
+      expect(text).not.toContain("š");
+    });
+
+    test("HONOURS a #charset following an ordinary code line's CRLF splice (pike: honoured, 353)", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("int dummy = 1 \\\r\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("š");
+    });
+
+    test("does NOT honour a #charset spliced onto a #define via CRLF backslash-newline (pike: not honoured, 185)", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("#define FOO 1 \\\r\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-1");
+      expect(text).toContain("¹");
+      expect(text).not.toContain("š");
+    });
+
+    test("HONOURS the exotic case: // comment, then a lone `\\` continuation line, then #charset (pike: honoured, 353)", () => {
+      // A continuation line that is JUST a backslash ends the comment right
+      // there (oracle-verified) — only explained by the comment's splice
+      // handling consuming one MORE character past the spliced newline
+      // before resuming: that extra character IS this line's own lone `\`,
+      // which lands the scan on ITS terminating newline and ends the
+      // comment, leaving #charset on the line after fully exposed.
+      const buf = Buffer.from([
+        ...Buffer.from("// comment \\\n\\\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("š");
+    });
+
+    test.each([
+      "a\\",
+      "ab\\",
+      " \\",
+    ])("does NOT honour the exotic case: // comment, then %j continuation, then #charset (pike: not honoured, 185)", (line2) => {
+      // Contrast with the lone-backslash case above: any continuation line
+      // with content BEFORE its own trailing backslash keeps the comment
+      // going (oracle-verified for all three shapes here) — the "extra
+      // character" consumed past the first splice is inert filler from
+      // that content, leaving the line's OWN backslash to trigger a fresh
+      // splice next, chaining the comment through to swallow #charset too.
+      const buf = Buffer.from([
+        ...Buffer.from(`// comment \\\n${line2}\n#charset iso-8859-2\nstring s = "`), 0xb9, ...Buffer.from(`";\n`),
       ]);
       const { text, encoding } = decodeSource(buf);
       expect(encoding).toBe("iso-8859-1");

@@ -74,7 +74,16 @@ export function decodeSource(buf: Uint8Array): DecodedSource {
   if (declared) {
     const resolved = CHARSET_ALIASES[declared] ?? declared;
     try {
-      return { text: new TextDecoder(resolved).decode(buf), encoding: resolved };
+      // stripBom applies here too: WHATWG only has TextDecoder strip a BOM
+      // for utf-8/utf-16 — never for iso-8859-*, koi8-r, etc. — so a
+      // declared-charset file (e.g. `#charset iso-8859-2`) with a leading
+      // BOM would otherwise decode with the same three phantom leading
+      // characters the latin1/high-half paths were fixed to avoid. This is
+      // the branch production (Node) actually takes for any charset Node's
+      // ICU TextDecoder natively supports — Bun 1.3.14 lacks iso-8859-2 and
+      // falls to the table branch below instead, which is why this gap
+      // didn't show up under the Bun-run test suite.
+      return { text: new TextDecoder(resolved).decode(stripBom(buf)), encoding: resolved };
     } catch {
       const table = HIGH_HALF_TABLES[resolved];
       if (table) {
@@ -129,16 +138,20 @@ function sniff(buf: Uint8Array): DecodedSource {
  * Strip a leading UTF-8 BOM (`EF BB BF`), if present.
  *
  * `TextDecoder("utf-8", { fatal: true })` strips a leading BOM as part of
- * decoding; `Buffer.toString("latin1")` and the high-half-table decoder do
- * not, since a BOM isn't a latin1/iso-8859-* concept. Left unstripped, a
- * BOM'd file with a non-UTF-8 body would decode as three phantom leading
- * characters ("ï»¿"), shifting every position on line 0 and producing a
- * spurious tree-sitter ERROR the editor never shows (VS Code strips BOMs
- * before handing text to extensions). Stripping here makes all three decode
- * paths agree on that. Real pike does not treat a BOM as an encoding signal
- * at all — it rejects the bytes outright as illegal characters — so a BOM'd
- * file never compiles; that caps how much this matters, but doesn't make
- * the phantom characters correct.
+ * decoding — but per WHATWG, `TextDecoder` only does that for utf-8/utf-16;
+ * a `TextDecoder("iso-8859-2")` (or any other label) does NOT strip it, any
+ * more than `Buffer.toString("latin1")` or the high-half-table decoder do.
+ * So this must be applied on every non-utf-8-via-TextDecoder path — the
+ * `sniff()` latin1 fallback, the high-half-table branch, AND the declared-
+ * charset `new TextDecoder(resolved)` branch in decodeSource — or a BOM'd
+ * file decodes with three phantom leading characters ("ï»¿" for the latin1/
+ * table paths; e.g. "ďťż" for iso-8859-2 via TextDecoder), shifting every
+ * position on line 0 and producing a spurious tree-sitter ERROR the editor
+ * never shows (VS Code strips BOMs before handing text to extensions).
+ * Real pike does not treat a BOM as an encoding signal at all — it rejects
+ * the bytes outright as illegal characters — so a BOM'd file never
+ * compiles; that caps how much this matters, but doesn't make the phantom
+ * characters correct.
  */
 function stripBom(buf: Uint8Array): Uint8Array {
   if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
@@ -168,43 +181,96 @@ type ScanState =
   | "raw-string"
   | "char-literal";
 
-/** One scan step: text to emit, the resulting state, and whether the lookahead char was consumed too. */
+/** One scan step: text to emit, the resulting state, and how many extra lookahead chars (beyond `ch`) were consumed. */
 interface ScanStep {
   emit: string;
   next: ScanState;
-  consumeNext: boolean;
+  skip: number;
 }
 
-function scanNormal(ch: string, next: string | undefined): ScanStep {
-  // Pike splices a backslash-newline pair away GLOBALLY — not just inside
-  // directives (`int ma\` + newline + `in(){}` compiles as `int main(){}`) —
-  // so a `#charset` on what looks like the next line is actually still part
-  // of the logical line above it and must not be seen as a fresh directive.
-  // Emitting two spaces keeps the scan length-preserving (offsets derive
-  // from it) and makes `^` stop matching at the real start of the next
-  // logical line, matching pike's own semantics.
-  if (ch === "\\" && next === "\n") return { emit: "  ", next: "normal", consumeNext: true };
-  if (ch === "/" && next === "*") return { emit: "  ", next: "block-comment", consumeNext: true };
-  if (ch === "/" && next === "/") return { emit: "  ", next: "line-comment", consumeNext: true };
-  if (ch === "#" && next === '"') return { emit: "  ", next: "raw-string", consumeNext: true };
-  if (ch === '"') return { emit: " ", next: "string", consumeNext: false };
-  if (ch === "'") return { emit: " ", next: "char-literal", consumeNext: false };
-  return { emit: ch, next: "normal", consumeNext: false };
+/**
+ * Width (in characters after `ch`) of a backslash-newline splice starting at
+ * `ch`, or 0 if this isn't one. Handles both bare `\n` (width 1) and `\r\n`
+ * (width 2) — pike splices either line-ending form.
+ */
+function spliceWidth(ch: string, next: string | undefined, next2: string | undefined): number {
+  if (ch !== "\\") return 0;
+  if (next === "\n") return 1;
+  if (next === "\r" && next2 === "\n") return 2;
+  return 0;
 }
 
-function scanLineComment(ch: string, next: string | undefined): ScanStep {
-  // Same global backslash-newline splice as scanNormal: a `// comment \`
-  // followed by a newline continues the comment onto the next line, so a
-  // `#charset` there is still inside the comment, not a fresh line.
-  if (ch === "\\" && next === "\n") return { emit: "  ", next: "line-comment", consumeNext: true };
+/**
+ * Pike splices a backslash-newline pair away GLOBALLY at the token-stream
+ * level (`int ma\` + newline + `in(){}` compiles as `int main(){}`) — but
+ * that is NOT the same as every backslash-newline hiding a `#charset` on
+ * the next physical line. Oracle-verified (pike v8.0.1116, both proven
+ * false and true against real output — do not restate the false version):
+ *
+ *   - An ORDINARY CODE line's trailing splice joins the token stream but
+ *     leaves the NEXT physical line fully eligible as its own directive:
+ *     `int dummy = 1 \` + newline + `#charset iso-8859-2` IS honoured
+ *     (the `#charset` is recognized and processed as a directive in its
+ *     own right — corroborated by `int dummy = 1 \` + newline +
+ *     `#define BAR 42` successfully defining BAR).
+ *   - A line that is ITSELF a directive swallows its OWN continuation as
+ *     part of the same directive, instead: `#define FOO 1 \` + newline +
+ *     `#charset iso-8859-2` is NOT honoured — the `#charset ...` text
+ *     becomes part of #define's replacement text, not a fresh directive
+ *     (chains the same way across repeated splices).
+ *
+ * So the splice is only special-cased here (blanked, so `^` can't match on
+ * the continuation) when `inDirective` — the current logical line's first
+ * non-blank character was `#` — is true. Otherwise the backslash and its
+ * newline pass through unblanked, so a real `^` boundary still exists for
+ * CHARSET_RE to match against on the following line.
+ */
+function scanNormal(ch: string, next: string | undefined, next2: string | undefined, inDirective: boolean): ScanStep {
+  const width = spliceWidth(ch, next, next2);
+  if (width > 0 && inDirective) {
+    return { emit: " ".repeat(1 + width), next: "normal", skip: width };
+  }
+  if (width > 0) {
+    // Not a directive: let the backslash and its real newline through as-is.
+    return { emit: ch, next: "normal", skip: 0 };
+  }
+  if (ch === "/" && next === "*") return { emit: "  ", next: "block-comment", skip: 1 };
+  if (ch === "/" && next === "/") return { emit: "  ", next: "line-comment", skip: 1 };
+  if (ch === "#" && next === '"') return { emit: "  ", next: "raw-string", skip: 1 };
+  if (ch === '"') return { emit: " ", next: "string", skip: 0 };
+  if (ch === "'") return { emit: " ", next: "char-literal", skip: 0 };
+  return { emit: ch, next: "normal", skip: 0 };
+}
+
+/**
+ * A `//` comment ALWAYS swallows a trailing backslash-newline splice
+ * (unconditionally, unlike an ordinary code line) — but it consumes ONE
+ * MORE character past the spliced newline before resuming normal comment
+ * scanning. That extra character is exactly what pike does: on the line
+ * following a spliced `// ... \`, a continuation consisting of just a lone
+ * `\` ends the comment right there, whereas `a\`, `ab\`, and ` \` all keep
+ * it going (oracle-verified, all four). Only "eat one more character,
+ * unconditionally" explains this: for a single-char `\` line, that eaten
+ * character IS the line's own backslash, landing the scan on ITS terminating
+ * newline and ending the comment; for `a\`/`ab\`/` \`, the eaten character
+ * is inert filler, leaving that line's own trailing backslash to trigger a
+ * FRESH splice on the next iteration, chaining the comment onward. This is
+ * also what makes `// c \` + newline + `\` + newline + `#charset ...`
+ * (which pike DOES honour) come out right.
+ */
+function scanLineComment(ch: string, next: string | undefined, next2: string | undefined): ScanStep {
+  const width = spliceWidth(ch, next, next2);
+  if (width > 0) {
+    return { emit: " ".repeat(1 + width + 1), next: "line-comment", skip: width + 1 };
+  }
   return ch === "\n"
-    ? { emit: "\n", next: "normal", consumeNext: false }
-    : { emit: " ", next: "line-comment", consumeNext: false };
+    ? { emit: "\n", next: "normal", skip: 0 }
+    : { emit: " ", next: "line-comment", skip: 0 };
 }
 
 function scanBlockComment(ch: string, next: string | undefined): ScanStep {
-  if (ch === "*" && next === "/") return { emit: "  ", next: "normal", consumeNext: true };
-  return { emit: ch === "\n" ? "\n" : " ", next: "block-comment", consumeNext: false };
+  if (ch === "*" && next === "/") return { emit: "  ", next: "normal", skip: 1 };
+  return { emit: ch === "\n" ? "\n" : " ", next: "block-comment", skip: 0 };
 }
 
 /**
@@ -217,16 +283,16 @@ function scanBlockComment(ch: string, next: string | undefined): ScanStep {
  * observable.
  */
 function scanSingleLineQuote(ch: string, next: string | undefined, quote: string, state: ScanState): ScanStep {
-  if (ch === "\\" && next !== undefined) return { emit: "  ", next: state, consumeNext: true };
-  if (ch === quote || ch === "\n") return { emit: ch === "\n" ? "\n" : " ", next: "normal", consumeNext: false };
-  return { emit: " ", next: state, consumeNext: false };
+  if (ch === "\\" && next !== undefined) return { emit: "  ", next: state, skip: 1 };
+  if (ch === quote || ch === "\n") return { emit: ch === "\n" ? "\n" : " ", next: "normal", skip: 0 };
+  return { emit: " ", next: state, skip: 0 };
 }
 
 /** `#"raw strings"`: same escaping as `scanSingleLineQuote`, but spans lines freely. */
 function scanRawString(ch: string, next: string | undefined): ScanStep {
-  if (ch === "\\" && next !== undefined) return { emit: "  ", next: "raw-string", consumeNext: true };
-  if (ch === '"') return { emit: " ", next: "normal", consumeNext: false };
-  return { emit: ch === "\n" ? "\n" : " ", next: "raw-string", consumeNext: false };
+  if (ch === "\\" && next !== undefined) return { emit: "  ", next: "raw-string", skip: 1 };
+  if (ch === '"') return { emit: " ", next: "normal", skip: 0 };
+  return { emit: ch === "\n" ? "\n" : " ", next: "raw-string", skip: 0 };
 }
 
 /**
@@ -249,19 +315,39 @@ function scanRawString(ch: string, next: string | undefined): ScanStep {
  * regular string can never itself make `^[ \t]*#charset` match (it can't
  * span a line).
  *
- * Newlines are always preserved unblanked so the line-anchored regex still
- * sees correct line boundaries in the stripped text.
+ * A real (unspliced) newline is always preserved so the line-anchored regex
+ * still sees correct line boundaries in the stripped text. The only
+ * deliberate exception is a backslash-newline splice that pike itself
+ * removes from the token stream — inside a directive line or a `//`
+ * comment, per scanNormal/scanLineComment above — which is blanked instead,
+ * specifically so `^` can no longer match at that position.
+ *
+ * Also tracks, per physical line, whether the line is itself a preprocessor
+ * directive (its first non-blank character is `#`) — `directiveLine` below
+ * — since scanNormal's splice handling depends on it. It resets on every
+ * real newline (never on a spliced one, which is exactly the distinction
+ * that makes an ordinary code line's splice leave the next physical line
+ * free while a directive's own splice does not).
  */
 function stripCommentsAndStrings(head: string): string {
   let out = "";
   let state: ScanState = "normal";
+  let sawNonBlank = false;
+  let directiveLine = false;
 
   for (let i = 0; i < head.length; i++) {
     const ch = head[i]!;
     const next = head[i + 1];
+    const next2 = head[i + 2];
+
+    if (state === "normal" && !sawNonBlank && ch !== " " && ch !== "\t") {
+      sawNonBlank = true;
+      directiveLine = ch === "#";
+    }
+
     const step: ScanStep =
-      state === "normal" ? scanNormal(ch, next)
-      : state === "line-comment" ? scanLineComment(ch, next)
+      state === "normal" ? scanNormal(ch, next, next2, directiveLine)
+      : state === "line-comment" ? scanLineComment(ch, next, next2)
       : state === "block-comment" ? scanBlockComment(ch, next)
       : state === "string" ? scanSingleLineQuote(ch, next, '"', "string")
       : state === "char-literal" ? scanSingleLineQuote(ch, next, "'", "char-literal")
@@ -269,7 +355,12 @@ function stripCommentsAndStrings(head: string): string {
 
     out += step.emit;
     state = step.next;
-    if (step.consumeNext) i++;
+    if (step.skip > 0) i += step.skip;
+
+    if (ch === "\n") {
+      sawNonBlank = false;
+      directiveLine = false;
+    }
   }
 
   return out;
