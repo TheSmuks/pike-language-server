@@ -9,6 +9,7 @@ import { Tree, Node } from "web-tree-sitter";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import type { ResolveResult } from "./pikeWorker";
 import { type StdlibEntry, resetStdlibCache, resetAutoImportCache } from "./completion-stdlib";
+import type { RoxenIndexData } from "./roxenIndex";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -22,6 +23,13 @@ export interface CompletionContext {
   uri: string;
   /** Full document text — used for line extraction in detectTriggerContext. */
   source: string;
+  /** Bundled Roxen vocabulary. Offered only when `roxenActive` says so. */
+  roxenIndex?: RoxenIndexData;
+  /**
+   * Whether this file is a Roxen file. False (or absent) in a plain Pike
+   * program, which is what keeps Roxen names out of its completion list.
+   */
+  roxenActive?: boolean;
   /** Optional runtime type inferrer (PikeWorker.typeof_()). */
   typeInferrer?: (varName: string) => Promise<string | null>;
   /**

@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Roxen support.** Roxen WebServer source is Pike, but `#include <module.h>` and the other twelve Roxen headers never resolved, and the `TYPE_*`, `VAR_*`, `MOD_*` and `MODULE_*` families they define were unknown, so Roxen files arrived red. A local installation is now detected — explicit setting, then `pike.json`, then a workspace ancestor, then `/usr/local/roxen*`, highest version winning — and its module, include, and program paths are folded into Pike's, so resolution needed only one genuinely new concept: the `roxen-module://` inherit scheme. A generated index of Roxen 6.1's constants and its Roxen/RXML/module-prototype API ships with the server, so hover and completion work with no Roxen installed at all; a detected installation takes precedence and additionally gives go-to-definition into real sources. On an index-only symbol, go-to-definition returns nothing rather than a path that does not exist on the user's machine.
+- **Per-file Roxen activation.** Roxen mode is decided per file, from markers measured against the Roxen 6.1 corpus (a Roxen header include, `inherit "module"`, or `constant module_type = MODULE_*`) covering 143 of the 170 files in `server/modules/`, plus directory inheritance for the 27 `graphics/rimage/plugins` helpers that are Roxen files by location rather than content. `pike.roxen.mode` (`auto`/`on`/`off`) overrides it, and `pike.roxen.path` names an installation explicitly. A plain Pike file in a mixed workspace is offered no Roxen symbol.
+- **Roxen lab and corpus tooling.** `harness/roxen-lab/` builds Pike 8.0.1116 and Roxen 6.1 from pinned revisions and exposes a parse oracle that settles whether a construct the grammar rejects is a grammar defect or invalid source. `scripts/roxen-corpus-parse.ts` runs the grammar across the corpus, decoding each file by detected encoding, and tracks the failure count against a committed baseline.
+
+### Fixed
+
+- **`lsp-probe` decoded every file as UTF-8.** Probing an ISO-8859-1 file replaced each high byte with a replacement character and shifted every position the tool printed, which is exactly the discrepancy it exists to investigate. It now decodes the way the server does.
+
 ## [0.8.49] — 2026-07-16
 
 ### Added

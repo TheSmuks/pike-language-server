@@ -102,6 +102,13 @@ export interface FileEntry {
 export interface WorkspaceIndexOptions {
   workspaceRoot: string;
   pikePaths?: PikePaths;
+  /**
+   * A detected Roxen installation, or null when there is none (the common
+   * case). When present its search paths are merged into `pikePaths`, so
+   * resolution needs no Roxen-specific concepts beyond the
+   * `roxen-module://` scheme.
+   */
+  roxenPaths?: import("./roxenDetection").RoxenPaths | null;
 }
 
 /**

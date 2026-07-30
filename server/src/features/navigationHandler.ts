@@ -43,6 +43,10 @@ export interface NavigationContext {
   upsertInFlight: Map<string, Promise<any>>;
   predefBuiltins: Record<string, string>;
   predefAutodoc: Record<string, { signature: string; markdown: string; params?: Array<{ name: string; type: string }>; returnType?: string }>;
+  /** Bundled Roxen vocabulary. */
+  roxenIndex: import("./roxenIndex").RoxenIndexData;
+  /** Which open documents are Roxen files, by URI. */
+  roxenActive: Map<string, boolean>;
   /** Enables verbose internal telemetry logs for race/staleness debugging. */
   debugTelemetry: boolean;
   /** Connection for logging when content is unexpectedly null. */

@@ -148,6 +148,8 @@ function registerFeatureHandlers(
     get stdlibIndex() { return ctx.stdlibIndex; },
     get predefBuiltins() { return ctx.predefBuiltins; },
     get predefAutodoc() { return ctx.predefAutodoc; },
+    get roxenIndex() { return ctx.roxenIndex; },
+    get roxenActive() { return ctx.roxenActive; },
     diagnosticManager: ctx.diagnosticManager,
     upsertInFlight: ctx.upsertInFlight,
     get debugTelemetry() { return ctx.debugTelemetry; },

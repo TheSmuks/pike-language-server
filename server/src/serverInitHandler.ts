@@ -18,6 +18,8 @@ import { getPikePaths } from "./features/pikeDetection.js";
 import type { PikePathOverrides } from "./features/pikeDetection.js";
 import type { ServerContext } from "./serverContext";
 import { parseResourceConfig, type RawResourceSettings } from "./features/resourceConfiguration";
+import { getRoxenPaths } from "./features/roxenDetection.js";
+import { DEFAULT_ROXEN_MODE, isRoxenMode, type RoxenMode } from "./features/roxenActivation.js";
 import type { ResourceConfiguration } from "./features/resourceTypes";
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,9 @@ interface InitOptions {
   modulePaths?: string[];
   includePaths?: string[];
   programPaths?: string[];
+  // Roxen support
+  roxenMode?: string;
+  roxenPath?: string;
   // Resource-resilience settings
   indexingMode?: string;
   indexIgnoreGlobs?: string[];
@@ -136,15 +141,61 @@ async function applyWorkspaceIndex(
     logInfo(ctx.connection, `[init] step 6b: path overrides provided — ${JSON.stringify(overrides)}`);
   }
 
-  const newIndex = await WorkspaceIndex.create(rootPath, pikeBinaryPath, hasOverrides ? overrides : undefined);
+  const roxenMode = isRoxenMode(initOpts?.roxenMode) ? initOpts.roxenMode : DEFAULT_ROXEN_MODE;
+  ctx.roxenMode = roxenMode;
+
+  const newIndex = await WorkspaceIndex.create(
+    rootPath,
+    pikeBinaryPath,
+    hasOverrides ? overrides : undefined,
+    { mode: roxenMode, ...(initOpts?.roxenPath ? { explicitPath: initOpts.roxenPath } : {}) },
+  );
   ctx.index = newIndex;
   ctx.diagnosticManager.setIndex(newIndex);
+  await logRoxenDetection(ctx, rootPath, roxenMode, initOpts?.roxenPath);
 
   newIndex.setOnDemandIndexFn(async (targetUri: string) => {
     return onDemandIndex(ctx, targetUri);
   });
 
   logInfo(ctx.connection, "[init] step 6b: workspace index created");
+}
+
+/**
+ * Report what Roxen detection found.
+ *
+ * A misconfigured path is reported at warning level rather than swallowed:
+ * detection deliberately falls through to the next source so a stale setting
+ * degrades instead of disabling the feature, which means the user would
+ * otherwise get working-but-not-what-they-asked-for with no explanation.
+ * Absence is ordinary and logged at info level.
+ */
+async function logRoxenDetection(
+  ctx: ServerContext,
+  rootPath: string,
+  mode: RoxenMode,
+  explicitPath?: string,
+): Promise<void> {
+  if (mode === "off") {
+    logInfo(ctx.connection, "[init] roxen: disabled by pike.roxen.mode=off");
+    return;
+  }
+
+  const detection = await getRoxenPaths(rootPath, explicitPath ? { explicitPath } : undefined);
+  if (detection.misconfiguredPath) {
+    logWarn(
+      ctx.connection,
+      `[init] roxen: configured path holds no Roxen installation: ${detection.misconfiguredPath}`,
+    );
+  }
+  if (detection.paths) {
+    logInfo(
+      ctx.connection,
+      `[init] roxen: ${detection.paths.roxenHome} (version ${detection.paths.version}, found via ${detection.source})`,
+    );
+  } else {
+    logInfo(ctx.connection, "[init] roxen: no installation detected — using the bundled index");
+  }
 }
 
 async function onDemandIndex(
