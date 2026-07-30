@@ -149,6 +149,43 @@ describe("prepareRename — direct API", () => {
     expect(result!.name).toBe("name");
   });
 
+
+  test("returns the range of the occurrence under the cursor, not the declaration (C3)", () => {
+    // Audit iteration 7, finding C3. LSP requires the prepareRename range to
+    // contain the requested position — clients use it to pre-select the text
+    // being renamed. Returning the declaration's range makes the editor
+    // highlight the wrong span whenever rename is invoked from a reference.
+    const src = `class Holder {
+  int tally;
+  void bump() { tally = tally + 1; }
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    // Cursor on the REFERENCE at line 2, not the declaration at line 1.
+    const result = prepareRename(table, 2, 16);
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe("tally");
+    expect(result!.line).toBe(2);
+    expect(result!.character).toBe(16);
+  });
+
+  test("returns null on the keyword `this` rather than offering the class (C3)", () => {
+    // `this` resolved to the enclosing class, and the keyword guard tested the
+    // RESOLVED declaration's name ("Builder"), not the token typed. Accepting
+    // that rename would have rewritten a class the user never pointed at.
+    const src = `class Builder {
+  int value;
+  object self() { return this; }
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    // Cursor on `this`.
+    const result = prepareRename(table, 2, 26);
+    expect(result).toBeNull();
+  });
+
   test("returns null for position with no symbol", () => {
     const src = `class Animal { }`;
     const tree = parse(src);
