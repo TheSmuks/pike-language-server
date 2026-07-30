@@ -146,4 +146,52 @@ no sooner than 60s after load: the burst is a transient high-water mark that V8
 returns (~340 MB → ~235 MB here).
 
 `PIKE_PROBE_NO_TOKENS=1` skips the semantic-token requests to measure the
-default path.
+default path. `PIKE_PROBE_WORKSPACE` opens a real workspace (Pike's stdlib, a
+Roxen checkout) instead of the in-repo corpus, and `PIKE_PROBE_FILES` sets how
+many files to open.
+
+### Where the multi-gigabyte figure comes from
+
+Measured 2026-07-30 with Pike's stdlib as the workspace and 60 files open:
+
+| | before our extension activates | settled |
+|---|---|---|
+| whole VSCode tree, summed RSS | 1411 MB | 1549 MB |
+| whole VSCode tree, summed PSS | 859 MB | 925 MB |
+
+Two things matter here.
+
+**Most of it is VSCode.** Its floor with `--disable-extensions` and nothing open
+is already ~1.4 GB RSS. At settle the largest processes are the renderer
+(261 MB PSS), our language server (186 MB), the extension host (134 MB, of
+which ~148 MB RSS was VSCode's own floor before we activated), the main process
+(113 MB) and the GPU process (78 MB).
+
+**Summed RSS double-counts.** Electron runs a dozen processes sharing one large
+binary, and RSS charges those pages to every one of them. PSS divides each
+shared page by the number of processes mapping it, and comes out ~40% lower.
+Any figure obtained by adding up per-process RSS — including VSCode's own
+process explorer — overstates the real footprint.
+
+This extension's own share at settle is the language server (~186 MB PSS /
+~248 MB RSS), the Pike worker (~23 MB PSS), and ~40 MB of extension-host growth.
+
+### Comparing two server builds
+
+`bun run scripts/measure-server-memory.ts <server.mjs> [--files N] [--settle S]`
+drives a build directly over stdio, with no VSCode in the way, so two builds can
+be compared with one variable. It uses the same heap cap the VSCode client
+passes, and reports peak and settled separately.
+
+Paired runs, 60 largest stdlib files, v0.8.49 (pre-Roxen) against current:
+
+| run | current settled RSS | v0.8.49 settled RSS |
+|---|---|---|
+| 1 | 247 MB | 275 MB |
+| 2 | 231 MB | 228 MB |
+| 3 | 230 MB | 234 MB |
+
+Within noise of each other — the Roxen work cost nothing measurable. Note the
+first run of each is high: page cache is cold, and peak in particular swings
+320–410 MB on GC timing alone. Always take at least three paired runs before
+calling a difference real.

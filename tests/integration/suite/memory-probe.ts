@@ -25,8 +25,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 
-/** How many stdlib files to open. Enough to be realistic, bounded for runtime. */
-const FILE_COUNT = 40;
+/**
+ * How many stdlib files to open. Enough to be realistic, bounded for runtime.
+ * PIKE_PROBE_FILES overrides — a real session has far more open than 40.
+ */
+const FILE_COUNT = Number(process.env.PIKE_PROBE_FILES ?? "40");
 
 /** Seconds to idle before reading the settled figure. */
 const SETTLE_SECONDS = 65;
@@ -37,6 +40,8 @@ interface Sample {
   hostHeapMb: number;
   hostExternalMb: number;
   serverRssMb: number | null;
+  workerRssMb: number | null;
+  treeTotalMb: number;
 }
 
 const mb = (bytes: number): number => Math.round(bytes / 1024 / 1024);
@@ -87,44 +92,124 @@ function largestSources(dir: string, limit: number): string[] {
   return found.slice(0, limit).map((f) => f.file);
 }
 
+interface ProcInfo { pid: number; ppid: number; rssMb: number; pssMb: number; name: string }
+
+/** Every process on the machine, with pid/ppid/RSS and a short name. */
+function readAllProcs(): ProcInfo[] {
+  const procs: ProcInfo[] = [];
+  let entries: string[];
+  try { entries = readdirSync("/proc"); } catch { return procs; }
+  for (const pid of entries) {
+    if (!/^\d+$/.test(pid)) continue;
+    let status: string;
+    try { status = readFileSync(`/proc/${pid}/status`, "utf-8"); } catch { continue; }
+    const ppid = /^PPid:\s+(\d+)$/m.exec(status);
+    const rss = /^VmRSS:\s+(\d+) kB$/m.exec(status);
+    if (!ppid || !rss) continue;
+    // PSS, not RSS, for the tree total. Electron runs a dozen processes that
+    // share one large binary, and every one of them counts those pages in full
+    // under RSS — summing it overstates the real footprint badly. PSS divides
+    // each shared page by the number of processes mapping it, so the sum is
+    // meaningful. Falls back to RSS where smaps_rollup is unreadable.
+    let pssKb = Number(rss[1]);
+    try {
+      const rollup = readFileSync(`/proc/${pid}/smaps_rollup`, "utf-8");
+      const pss = /^Pss:\s+(\d+) kB$/m.exec(rollup);
+      if (pss) pssKb = Number(pss[1]);
+    } catch { /* keep RSS */ }
+    let cmdline = "";
+    try { cmdline = readFileSync(`/proc/${pid}/cmdline`, "utf-8").replace(/\0/g, " ").trim(); } catch { /* gone */ }
+    procs.push({
+      pid: Number(pid),
+      ppid: Number(ppid[1]),
+      rssMb: Math.round(Number(rss[1]) / 1024),
+      pssMb: Math.round(pssKb / 1024),
+      name: describeProc(cmdline),
+    });
+  }
+  return procs;
+}
+
+/** Collapse a command line to something readable in a table. */
+function describeProc(cmdline: string): string {
+  if (!cmdline) return "(unknown)";
+  if (cmdline.includes("worker.pike")) return "pike worker";
+  if (cmdline.includes("server.mjs")) return "pike language server";
+  if (cmdline.includes("--type=renderer")) return "vscode renderer";
+  if (cmdline.includes("--type=gpu-process")) return "vscode gpu";
+  if (cmdline.includes("--type=utility")) return "vscode utility";
+  if (cmdline.includes("--type=zygote")) return "vscode zygote";
+  if (cmdline.includes("extensionHost")) return "extension host";
+  if (cmdline.includes("ptyHost")) return "vscode pty host";
+  if (cmdline.includes("fileWatcher")) return "vscode file watcher";
+  const first = cmdline.split(" ")[0];
+  return first.split("/").pop() || first;
+}
+
 /**
- * RSS of the language-server child, in MB.
+ * Every process in the VSCode tree this host belongs to, with RSS.
  *
- * Matched by parent pid, not by cmdline. Matching on a name is wrong here: the
- * checkout directory is itself called `pike-language-server`, so every process
- * whose command line mentions the repo path — xvfb, VSCode itself, the probe
- * launcher — matches, and the first hit was a 3MB shell. The server is forked
- * by the extension host, so PPid equals this process's pid, which is exact.
+ * Walks up from this process to the topmost ancestor that is still part of the
+ * tree, then collects all its descendants — so the Pike worker, which is a
+ * grandchild via the language server, is included. An earlier version only
+ * looked at direct children of the host and missed it entirely.
  */
+function treeProcs(): { procs: ProcInfo[]; totalMb: number } {
+  const all = readAllProcs();
+  const byPid = new Map(all.map((p) => [p.pid, p]));
+
+  let root = process.pid;
+  for (let i = 0; i < 12; i++) {
+    const parent = byPid.get(root)?.ppid;
+    if (!parent || parent <= 1) break;
+    const parentInfo = byPid.get(parent);
+    // Stop before escaping into the shell/CI that launched VSCode.
+    if (!parentInfo || /^(bash|sh|node|xvfb-run|Xvfb|npm|bun)$/.test(parentInfo.name)) break;
+    root = parent;
+  }
+
+  const children = new Map<number, ProcInfo[]>();
+  for (const p of all) {
+    const list = children.get(p.ppid) ?? [];
+    list.push(p);
+    children.set(p.ppid, list);
+  }
+
+  const collected: ProcInfo[] = [];
+  const stack = [root];
+  while (stack.length > 0 && collected.length < 200) {
+    const pid = stack.pop()!;
+    const info = byPid.get(pid);
+    if (info) collected.push(info);
+    for (const child of children.get(pid) ?? []) stack.push(child.pid);
+  }
+  collected.sort((a, b) => b.pssMb - a.pssMb);
+  return { procs: collected, totalMb: collected.reduce((sum, p) => sum + p.pssMb, 0) };
+}
+
+/** RSS of the language server, wherever it sits in the tree. */
 function serverRssMb(): number | null {
-  const self = process.pid;
-  let best: number | null = null;
-  try {
-    for (const pid of readdirSync("/proc")) {
-      if (!/^\d+$/.test(pid)) continue;
-      let status: string;
-      try { status = readFileSync(`/proc/${pid}/status`, "utf-8"); } catch { continue; }
-      const ppid = /^PPid:\s+(\d+)$/m.exec(status);
-      if (!ppid || Number(ppid[1]) !== self) continue;
-      const rss = /^VmRSS:\s+(\d+) kB$/m.exec(status);
-      if (!rss) continue;
-      const mbValue = Math.round(Number(rss[1]) / 1024);
-      // The host also forks the Pike worker; report the largest child, which is
-      // the Node server, and note both if they ever converge.
-      if (best === null || mbValue > best) best = mbValue;
-    }
-  } catch { /* not Linux, or /proc unreadable */ }
-  return best;
+  const found = treeProcs().procs.find((p) => p.name === "pike language server");
+  return found ? found.rssMb : null;
+}
+
+/** RSS of the Pike worker subprocess, a grandchild via the server. */
+function workerRssMb(): number | null {
+  const found = treeProcs().procs.find((p) => p.name === "pike worker");
+  return found ? found.rssMb : null;
 }
 
 function sample(label: string): Sample {
   const usage = process.memoryUsage();
+  const tree = treeProcs();
   return {
     label,
     hostRssMb: mb(usage.rss),
     hostHeapMb: mb(usage.heapUsed),
     hostExternalMb: mb(usage.external + usage.arrayBuffers),
-    serverRssMb: serverRssMb(),
+    serverRssMb: tree.procs.find((p) => p.name === "pike language server")?.rssMb ?? null,
+    workerRssMb: tree.procs.find((p) => p.name === "pike worker")?.rssMb ?? null,
+    treeTotalMb: tree.totalMb,
   };
 }
 
@@ -132,14 +217,15 @@ function report(samples: Sample[]): void {
   const pad = (s: string, n: number) => s.padEnd(n);
   console.log("");
   console.log("=== Extension-host memory probe ===");
-  console.log(`${pad("stage", 26)}${pad("host rss", 10)}${pad("host heap", 11)}${pad("host ext", 10)}server rss`);
+  console.log(`${pad("stage", 24)}${pad("host", 9)}${pad("heap", 8)}${pad("server", 9)}${pad("worker", 9)}tree PSS`);
   for (const s of samples) {
     console.log(
-      pad(s.label, 26) +
-      pad(`${s.hostRssMb}MB`, 10) +
-      pad(`${s.hostHeapMb}MB`, 11) +
-      pad(`${s.hostExternalMb}MB`, 10) +
-      (s.serverRssMb === null ? "n/a" : `${s.serverRssMb}MB`),
+      pad(s.label, 24) +
+      pad(`${s.hostRssMb}MB`, 9) +
+      pad(`${s.hostHeapMb}MB`, 8) +
+      pad(s.serverRssMb === null ? "n/a" : `${s.serverRssMb}MB`, 9) +
+      pad(s.workerRssMb === null ? "n/a" : `${s.workerRssMb}MB`, 9) +
+      `${s.treeTotalMb}MB`,
     );
   }
   const first = samples[0];
@@ -148,8 +234,12 @@ function report(samples: Sample[]): void {
   console.log("");
   console.log(`host growth (baseline -> settled): ${last.hostRssMb - first.hostRssMb}MB rss, ${last.hostHeapMb - first.hostHeapMb}MB heap`);
   console.log(`host peak: ${peak.hostRssMb}MB at "${peak.label}"`);
-  if (first.serverRssMb !== null && last.serverRssMb !== null) {
-    console.log(`server growth: ${last.serverRssMb - first.serverRssMb}MB rss`);
+  const treePeak = samples.reduce((a, b) => (b.treeTotalMb > a.treeTotalMb ? b : a));
+  console.log(`whole VSCode tree (PSS): ${last.treeTotalMb}MB settled, peak ${treePeak.treeTotalMb}MB at "${treePeak.label}"`);
+  console.log("");
+  console.log("--- per-process at settle (PSS, descending; RSS in brackets) ---");
+  for (const p of treeProcs().procs.filter((p) => p.pssMb >= 5)) {
+    console.log(`${pad(`${p.pssMb}MB`, 9)}${pad(`[rss ${p.rssMb}MB]`, 14)}${p.name}`);
   }
   console.log("");
 }
