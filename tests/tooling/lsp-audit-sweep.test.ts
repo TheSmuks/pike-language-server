@@ -179,3 +179,65 @@ test("declines on a real rename sweep are recorded as declined, not error", asyn
   expect(renames.length).toBeGreaterThan(0);
   expect(renames.some((r) => r.status === "error")).toBe(false);
 });
+
+test("a decline that contradicts an expectation still reports wrong", async () => {
+  // This is the sole safety net that makes `declined` safe: without it, a
+  // server could decline a request whose correct answer is known and the
+  // wrong answer would vanish into a non-finding. It was previously untested
+  // AND never exercised by any real record.
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-decline-"));
+  const file = join(dir, "guarded.pike");
+  // `main` is rejected by the rename guard, which declines with -32600.
+  writeFileSync(file, "int main() {\n  return 0;\n}\n");
+
+  const ledgerPath = join(dir, "ledger.jsonl");
+  const ledger = new Ledger(ledgerPath);
+  await runSweep({
+    workspaceRoot: dir,
+    workspaceName: "fixture",
+    surface: "server",
+    files: [file],
+    ledger,
+    // Assert rename IS allowed at every position — contradicting the guard.
+    checker: (_file, method) => (method === "textDocument/rename" ? false : null),
+  });
+  ledger.close();
+
+  const renames = readLedger(ledgerPath).filter((r) => r.capability === "textDocument/rename");
+  expect(renames.length).toBeGreaterThan(0);
+  // A decline must not be able to hide a contradicted expectation.
+  expect(renames.some((r) => r.status === "wrong")).toBe(true);
+  // And it must be the DECLINE path being overridden, not the success path:
+  // this same fixture yields status "declined" when no checker contradicts it
+  // (verified directly), so no record may still read "declined" here.
+  expect(renames.some((r) => r.status === "declined")).toBe(false);
+}, 120_000);
+
+test("the ledger truncates, so a retried sweep does not concatenate runs", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-truncate-"));
+  const ledgerPath = join(dir, "ledger.jsonl");
+
+  const record = {
+    surface: "server" as const,
+    workspace: "fixture",
+    capability: "textDocument/hover",
+    file: "a.pike",
+    position: null,
+    status: "ok" as const,
+    durationMs: 1,
+    rssBytes: 0,
+    digest: "null",
+  };
+
+  const first = new Ledger(ledgerPath);
+  first.append(record);
+  first.close();
+
+  const second = new Ledger(ledgerPath);
+  second.append({ ...record, capability: "textDocument/definition" });
+  second.close();
+
+  const records = readLedger(ledgerPath);
+  expect(records).toHaveLength(1);
+  expect(records[0].capability).toBe("textDocument/definition");
+});

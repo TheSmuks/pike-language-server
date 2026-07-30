@@ -47,7 +47,11 @@ export class Ledger {
   private fd: number;
 
   constructor(path: string) {
-    this.fd = openSync(path, "a");
+    // "w", not "a": the Roxen sweep runs for tens of minutes and is exactly
+    // the kind of job that gets interrupted and retried. Appending would
+    // silently concatenate two sweeps into one ledger, mixing stale records
+    // with fresh ones and producing a findings list nobody can act on.
+    this.fd = openSync(path, "w");
   }
 
   append(record: LedgerRecord): void {

@@ -90,7 +90,9 @@ const DECLINE_CODES = new Set([
 export function classifyFailure(error: unknown): "timeout" | "declined" | "error" {
   const message = error instanceof Error ? error.message : String(error);
   if (message === "__audit_timeout__") return "timeout";
-  const code = (error as { code?: unknown }).code;
+  // Guard the property read: a null/undefined rejection would otherwise throw
+  // a TypeError out of the catch block that called us, killing the sweep.
+  const code = error && typeof error === "object" ? (error as { code?: unknown }).code : undefined;
   return typeof code === "number" && DECLINE_CODES.has(code) ? "declined" : "error";
 }
 
@@ -350,7 +352,26 @@ export async function runSweep(options: SweepOptions): Promise<void> {
 
   try {
     for (const file of options.files) {
-      await sweepFile(server, file, options, (record) => options.ledger.append(record));
+      try {
+        await sweepFile(server, file, options, (record) => options.ledger.append(record));
+      } catch (error) {
+        // Anything thrown OUTSIDE attempt()'s own try — readFileSync,
+        // decodeSource, openDoc — would otherwise abort a 448-file run
+        // possibly half an hour in. Record it as the tier-0 finding it is and
+        // keep going; losing one file beats losing the run.
+        options.ledger.append({
+          surface: options.surface,
+          workspace: options.workspaceName,
+          capability: "<sweep>",
+          file: relative(options.workspaceRoot, file),
+          position: null,
+          status: "error",
+          durationMs: 0,
+          rssBytes: process.memoryUsage().rss,
+          digest: "",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   } finally {
     await server.teardown();
