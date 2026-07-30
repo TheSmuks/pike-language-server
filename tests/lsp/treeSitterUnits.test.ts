@@ -7,18 +7,26 @@
  * server emits silently drifts — so assert it here rather than trusting it.
  */
 
-import { test, expect, describe } from "bun:test";
+import { test, expect, describe, beforeAll, afterAll } from "bun:test";
 import { Parser, Language } from "web-tree-sitter";
 import { resolve } from "node:path";
 
 const WASM = resolve(import.meta.dir, "../../server/tree-sitter-pike.wasm");
 
-describe("web-tree-sitter index units", () => {
-  test("columns are UTF-16 code units, not UTF-8 bytes", async () => {
-    await Parser.init();
-    const parser = new Parser();
-    parser.setLanguage(await Language.load(WASM));
+let parser: Parser;
 
+beforeAll(async () => {
+  await Parser.init();
+  parser = new Parser();
+  parser.setLanguage(await Language.load(WASM));
+});
+
+afterAll(() => {
+  parser.delete();
+});
+
+describe("web-tree-sitter index units", () => {
+  test("columns are UTF-16 code units, not UTF-8 bytes", () => {
     // "© © " — two 2-byte UTF-8 characters, one UTF-16 code unit each.
     const line = "int x; // © © marker";
     const utf16Length = line.length;                              // 20
@@ -38,11 +46,7 @@ describe("web-tree-sitter index units", () => {
     tree.delete();
   });
 
-  test("astral-plane characters count as two code units", async () => {
-    await Parser.init();
-    const parser = new Parser();
-    parser.setLanguage(await Language.load(WASM));
-
+  test("astral-plane characters count as two code units", () => {
     // "😀" is 2 UTF-16 code units and 4 UTF-8 bytes.
     const line = "int x; // 😀 tail";
     const tree = parser.parse(line + "\n")!;
