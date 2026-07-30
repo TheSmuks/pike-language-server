@@ -66,6 +66,53 @@ test("findings render as a markdown table with an id column", () => {
   expect(markdown).toContain("A1");
 });
 
+test("the raw-fallback reproduction is a runnable command, not a bare position", () => {
+  // Every other test uses hover, which has a dedicated subcommand. That is why
+  // the raw fallback shipped broken: `raw <method> <file> 2:3` makes lsp-probe
+  // JSON.parse "2:3" and throw before sending anything.
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  // The third argument must be parseable JSON carrying 0-based LSP coordinates.
+  const json = finding.reproduction.match(/'(\{.*\})'$/)?.[1];
+  expect(json).toBeDefined();
+  const params = JSON.parse(json!);
+  expect(params.position).toEqual({ line: 1, character: 2 });
+  expect(params.context).toEqual({ includeDeclaration: true });
+});
+
+test("selectionRange reproduces with positions[], the shape it actually takes", () => {
+  const finding = triage([{ ...base, capability: "textDocument/selectionRange", status: "empty" }])[0];
+  const params = JSON.parse(finding.reproduction.match(/'(\{.*\})'$/)![1]);
+  expect(params.positions).toEqual([{ line: 1, character: 2 }]);
+  expect(params.position).toBeUndefined();
+});
+
+test("ids are assigned after the sort, so A1 is the most severe finding", () => {
+  const findings = triage([
+    { ...base, durationMs: 4000 },                    // Low
+    { ...base, capability: "textDocument/definition", status: "error" }, // Critical
+  ], { slowMs: 1000 });
+  expect(findings[0].id).toBe("A1");
+  expect(findings[0].severity).toBe("Critical");
+  expect(findings[1].id).toBe("A2");
+});
+
+test("a pipe in a server error message cannot break the table row", () => {
+  // Pike type unions contain '|', so this is a realistic detail string.
+  const markdown = renderFindings(
+    triage([{ ...base, status: "error", detail: "Expected string|Stdio.File" }]),
+  );
+  const row = markdown.split("\n").find((l) => l.startsWith("| A1"))!;
+  expect(row.split(/(?<!\\)\|/).length - 1).toBe(6); // 5 columns => 6 delimiters
+  expect(markdown).toContain("string\\|Stdio.File");
+});
+
+test("a slow record that is also empty gets the more severe tier", () => {
+  const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
+  expect(findings[0].severity).toBe("High");
+  expect(findings[0].tier).toBe(1);
+});
+
 test("a wrong answer is tier 2 and Medium", () => {
   const findings = triage([{ ...base, status: "wrong", digest: "array:1" }]);
   expect(findings[0].tier).toBe(2);
