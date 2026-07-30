@@ -167,6 +167,41 @@ describe("decodeSource", () => {
       expect(text).toContain("Š");
       expect(text).not.toContain("é");
     });
+
+    // A char literal containing a `/*` or `#"` sequence must not be mistaken
+    // for the start of a real block comment or raw string — both are
+    // cross-line states, so an untracked one would swallow a real #charset
+    // directive on a later line. Proven against real pike (v8.0.1116): both
+    // `int c = '/*';` and `int c = '#"';` compile fine (confirming the char
+    // literal itself parses correctly — c=12074 and c=8994 respectively,
+    // the combined byte values of the two-character literal) AND still
+    // honor a #charset directive on the following line.
+
+    test("a #charset after a char literal containing '/*' IS still honored", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("int c = '/*';\n#charset iso-8859-2\nint x = "),
+        ...NON_ASCII_BYTES,
+        ...Buffer.from(";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("Ă");
+      expect(text).toContain("Š");
+      expect(text).not.toContain("é");
+    });
+
+    test('a #charset after a char literal containing \'#"\' IS still honored', () => {
+      const buf = Buffer.from([
+        ...Buffer.from('int c = \'#"\';\n#charset iso-8859-2\nint x = '),
+        ...NON_ASCII_BYTES,
+        ...Buffer.from(";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("Ă");
+      expect(text).toContain("Š");
+      expect(text).not.toContain("é");
+    });
   });
 });
 

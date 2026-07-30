@@ -138,23 +138,82 @@ function findCharset(buf: Uint8Array): string | null {
   return m ? m[1]!.toLowerCase() : null;
 }
 
-type ScanState = "normal" | "line-comment" | "block-comment" | "string" | "raw-string";
+type ScanState =
+  | "normal"
+  | "line-comment"
+  | "block-comment"
+  | "string"
+  | "raw-string"
+  | "char-literal";
+
+/** One scan step: text to emit, the resulting state, and whether the lookahead char was consumed too. */
+interface ScanStep {
+  emit: string;
+  next: ScanState;
+  consumeNext: boolean;
+}
+
+function scanNormal(ch: string, next: string | undefined): ScanStep {
+  if (ch === "/" && next === "*") return { emit: "  ", next: "block-comment", consumeNext: true };
+  if (ch === "/" && next === "/") return { emit: "  ", next: "line-comment", consumeNext: true };
+  if (ch === "#" && next === '"') return { emit: "  ", next: "raw-string", consumeNext: true };
+  if (ch === '"') return { emit: " ", next: "string", consumeNext: false };
+  if (ch === "'") return { emit: " ", next: "char-literal", consumeNext: false };
+  return { emit: ch, next: "normal", consumeNext: false };
+}
+
+function scanLineComment(ch: string): ScanStep {
+  return ch === "\n"
+    ? { emit: "\n", next: "normal", consumeNext: false }
+    : { emit: " ", next: "line-comment", consumeNext: false };
+}
+
+function scanBlockComment(ch: string, next: string | undefined): ScanStep {
+  if (ch === "*" && next === "/") return { emit: "  ", next: "normal", consumeNext: true };
+  return { emit: ch === "\n" ? "\n" : " ", next: "block-comment", consumeNext: false };
+}
 
 /**
- * Blank out `// line comments`, `/* block comments *\/`, and `#"raw strings"`
- * before scanning for `#charset` — proven against real pike (v8.0.1116):
- * a directive inside any of those three regions is NOT honored, but our
- * previous plain regex honored all three, silently drifting every position
- * after such a comment/string by the byte-length delta between encodings.
- * A directive appearing after real code, outside those regions, IS honored
- * by pike and must stay matchable here — so this only strips comments and
- * strings, it does not require the directive to precede all code.
+ * Shared by regular `"strings"` and `'char literals'`: a backslash escapes
+ * whatever follows it, and a single unescaped `quote` terminates. Neither
+ * construct legitimately spans a literal newline in real pike (both are
+ * compile errors there), so a literal newline bails back to `normal`
+ * defensively rather than swallowing the rest of the buffer — pike refuses
+ * to compile such a file anyway, so exact behavior past that point is not
+ * observable.
+ */
+function scanSingleLineQuote(ch: string, next: string | undefined, quote: string, state: ScanState): ScanStep {
+  if (ch === "\\" && next !== undefined) return { emit: "  ", next: state, consumeNext: true };
+  if (ch === quote || ch === "\n") return { emit: ch === "\n" ? "\n" : " ", next: "normal", consumeNext: false };
+  return { emit: " ", next: state, consumeNext: false };
+}
+
+/** `#"raw strings"`: same escaping as `scanSingleLineQuote`, but spans lines freely. */
+function scanRawString(ch: string, next: string | undefined): ScanStep {
+  if (ch === "\\" && next !== undefined) return { emit: "  ", next: "raw-string", consumeNext: true };
+  if (ch === '"') return { emit: " ", next: "normal", consumeNext: false };
+  return { emit: ch === "\n" ? "\n" : " ", next: "raw-string", consumeNext: false };
+}
+
+/**
+ * Blank out `// line comments`, `/* block comments *\/`, `#"raw strings"`,
+ * `"regular strings"`, and `'char literals'` before scanning for `#charset`
+ * — proven against real pike (v8.0.1116): a directive inside any of those
+ * is NOT honored, but a plain regex honors all of them, silently drifting
+ * every position after such a region by the byte-length delta between
+ * encodings. A directive appearing after real code, outside all of those
+ * regions, IS honored by pike and must stay matchable here — so this only
+ * strips comments/strings/char-literals, it does not require the directive
+ * to precede all code.
  *
- * Regular `"quoted strings"` are also tracked (a stray `/*`-looking sequence
- * inside one must not be mistaken for a real block comment) even though pike
- * itself cannot honor a directive there anyway — a regular string can't
- * span a line (an embedded literal newline is a compile error), so it can
- * never make `^[ \t]*#charset` match at a line start.
+ * Char literals matter here even though they can't themselves contain
+ * `#charset` (too short): an untracked `'/*'` or `'#"'` would be misread as
+ * opening a real block comment or raw string, which — being a cross-line
+ * state — can swallow a real `#charset` directive on a later line. Regular
+ * strings are tracked for the same reason (a stray `/*`-looking sequence
+ * inside one must not be mistaken for a real block comment), even though a
+ * regular string can never itself make `^[ \t]*#charset` match (it can't
+ * span a line).
  *
  * Newlines are always preserved unblanked so the line-anchored regex still
  * sees correct line boundaries in the stripped text.
@@ -166,32 +225,17 @@ function stripCommentsAndStrings(head: string): string {
   for (let i = 0; i < head.length; i++) {
     const ch = head[i]!;
     const next = head[i + 1];
+    const step: ScanStep =
+      state === "normal" ? scanNormal(ch, next)
+      : state === "line-comment" ? scanLineComment(ch)
+      : state === "block-comment" ? scanBlockComment(ch, next)
+      : state === "string" ? scanSingleLineQuote(ch, next, '"', "string")
+      : state === "char-literal" ? scanSingleLineQuote(ch, next, "'", "char-literal")
+      : scanRawString(ch, next);
 
-    if (state === "normal") {
-      if (ch === "/" && next === "*") { state = "block-comment"; out += "  "; i++; }
-      else if (ch === "/" && next === "/") { state = "line-comment"; out += "  "; i++; }
-      else if (ch === "#" && next === '"') { state = "raw-string"; out += "  "; i++; }
-      else if (ch === '"') { state = "string"; out += " "; }
-      else out += ch;
-    } else if (state === "line-comment") {
-      if (ch === "\n") { state = "normal"; out += "\n"; }
-      else out += " ";
-    } else if (state === "block-comment") {
-      if (ch === "*" && next === "/") { state = "normal"; out += "  "; i++; }
-      else out += ch === "\n" ? "\n" : " ";
-    } else if (state === "string") {
-      // Regular strings can't span a line in real pike; bail out at a
-      // literal newline rather than swallowing the rest of the buffer.
-      if (ch === "\\" && next !== undefined) { out += "  "; i++; }
-      else if (ch === '"' || ch === "\n") { state = "normal"; out += ch === "\n" ? "\n" : " "; }
-      else out += " ";
-    } else {
-      // raw-string: spans lines freely, same backslash-escaping as a
-      // regular string, terminates only at an unescaped quote.
-      if (ch === "\\" && next !== undefined) { out += "  "; i++; }
-      else if (ch === '"') { state = "normal"; out += " "; }
-      else out += ch === "\n" ? "\n" : " ";
-    }
+    out += step.emit;
+    state = step.next;
+    if (step.consumeNext) i++;
   }
 
   return out;
