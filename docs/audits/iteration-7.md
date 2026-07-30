@@ -300,6 +300,51 @@ position, so every position-driven feature returned null. The fix records the
 qualifier as a reference resolved the same way a type reference is — it names a
 class, exactly like one. Six capabilities, one cause.
 
+### N2/N3/C1/C2 (part 2) — members reached through a subscript (`bd36bea`)
+
+`variables[var]->set(...)` — the pattern behind the bulk of the Roxen empties —
+resolved the receiver to the *container* declaration, so the member was looked
+up on a class literally named `mapping(string:Variable.Variable)`. The member
+belongs to the **element** type. Two code paths needed it: `postfixRefs.ts`
+(reference recording, which also could not find the receiver at all, because
+`extractLhsIdentifier` descends to the last child and a subscript ends in `]`)
+and `typeResolver.ts`/`accessResolver.ts` (the query-time path definition and
+hover actually use).
+
+Verified: `mapping(string:Item)` and `array(Item)` now resolve; the direct
+`single->configure` case is unchanged.
+
+### Where the Roxen empties actually are
+
+The Roxen sample barely moved after this fix (−25.2% → −25.8%), so the
+remaining empties were characterised rather than assumed. They are **not** one
+defect. A sample of live positions:
+
+| Pattern | Example | Gap |
+|---|---|---|
+| Module-qualified element type | `mapping(string:Variable.Variable) v; v[k]->set()` | Cross-module type resolution |
+| Member on a call result | `get_sdb()->query(X,Y)` | Return-type inference through a call |
+| `global::` scope access | `global::total_size_limit` | Scope operator not resolved |
+
+Confirmed by isolation: `mapping(string:Item)` (local class) resolves, while
+`mapping(string:Stdio.File)` (module-qualified) returns null — the subscript
+machinery is correct, and the block is now purely cross-module type resolution.
+
+These are feature-level gaps, not one-line defects, and each needs its own
+design. They are the honest remainder of N2/N3/C1/C2.
+
+### New finding: `documentHighlight` does not resolve member accesses
+
+Found while fixing the above, and **not** a regression: `documentHighlight`
+returns null for `obj->member` in every form, including the direct
+`single->configure` case that `definition` resolves fine. The arrow-access
+references carry `resolvesTo: null`, and `documentHighlight` reads the
+reference table rather than the access resolver that `definition` uses. Distinct
+from N1, which was about lone declarations.
+
+Reproduction:
+`bun run scripts/lsp-probe.ts raw textDocument/documentHighlight <file> '{"position":{...on a ->member...}}'`
+
 ### Measured impact
 
 Corpus tier re-swept after all three fixes, same harness, same 87 files:
