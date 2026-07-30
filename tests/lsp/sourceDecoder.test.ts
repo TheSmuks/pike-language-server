@@ -93,6 +93,43 @@ describe("decodeSource", () => {
     expect(text).toContain("int x;");
   });
 
+  test("strips a leading UTF-8 BOM before falling back to ISO-8859-1", () => {
+    // TextDecoder("utf-8", {fatal:true}) strips a leading BOM; Buffer.toString
+    // ("latin1") does not — an asymmetry that, left unfixed, decodes a BOM'd
+    // ISO-8859-1 file as three phantom leading characters ("ï»¿"), shifting
+    // every position on line 0. Real pike rejects a BOM outright (see
+    // "readSource" tests below aren't the place for it — verified separately
+    // via `pike`: `Illegal character '»'`), so this is about editor-facing
+    // consistency, not pike parity.
+    const buf = Buffer.from([
+      0xef, 0xbb, 0xbf, ...Buffer.from("int x; // "), 0xa9, ...Buffer.from("\n"),
+    ]);
+    const { text, encoding } = decodeSource(buf);
+    expect(encoding).toBe("iso-8859-1");
+    expect(text.startsWith("int x;")).toBe(true);
+    expect(text).not.toContain("ï»¿");
+  });
+
+  test("strips a leading UTF-8 BOM before decoding via a high-half table", () => {
+    // The #charset directive sits on its own line (after a leading blank
+    // line) rather than immediately after the BOM: CHARSET_RE is line-
+    // anchored (`^`), and findCharset doesn't strip the BOM before matching
+    // — three latin1-view BOM characters on the same line as `#charset`
+    // would make `^` fail to match there. That's a pre-existing, separate
+    // limitation from the one this test targets (the decode-path asymmetry
+    // once a charset IS found), so this fixture sidesteps it rather than
+    // conflating the two.
+    const buf = Buffer.from([
+      0xef, 0xbb, 0xbf,
+      ...Buffer.from("\n#charset iso-8859-2\nint label = "), 0xb9, ...Buffer.from(";\n"),
+    ]);
+    const { text, encoding } = decodeSource(buf);
+    expect(encoding).toBe("iso-8859-2");
+    expect(text).toContain("#charset");
+    expect(text).toContain("š");
+    expect(text).not.toContain("ï»¿");
+  });
+
   test("ISO-8859-1 fallback is true byte-identity, not windows-1252", () => {
     // TextDecoder("iso-8859-1") is, per WHATWG, actually the windows-1252
     // decoder: it remaps 0x93 to U+201C (a curly quote). True ISO-8859-1 —
@@ -203,6 +240,44 @@ describe("decodeSource", () => {
       expect(text).not.toContain("é");
     });
   });
+
+  describe("backslash-newline splice (proven against real pike v8.0.1116)", () => {
+    // Pike splices a backslash-newline pair away GLOBALLY, not just inside
+    // directives (`int ma\` + newline + `in(){}` compiles as `int main(){}`).
+    // 0xb9 discriminates: raw/latin1 -> U+00B9 ("¹"), iso-8859-2 -> U+0161
+    // ("š"). Each case below was run through real pike (v8.0.1116) via a
+    // `string s = "<0xb9>"; write("%d\n", s[0]);` program to get the
+    // honoured/not-honoured verdict, matching the assertions here.
+
+    test("honours `# charset` with a space after the hash (pike: honoured, 353)", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("# charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-2");
+      expect(text).toContain("š");
+    });
+
+    test("does NOT honour a #charset spliced onto a // comment via backslash-newline (pike: not honoured, 185)", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("// comment \\\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-1");
+      expect(text).toContain("¹");
+      expect(text).not.toContain("š");
+    });
+
+    test("does NOT honour a #charset spliced onto a #define via backslash-newline (pike: not honoured, 185)", () => {
+      const buf = Buffer.from([
+        ...Buffer.from("#define FOO 1 \\\n#charset iso-8859-2\nstring s = \""), 0xb9, ...Buffer.from("\";\n"),
+      ]);
+      const { text, encoding } = decodeSource(buf);
+      expect(encoding).toBe("iso-8859-1");
+      expect(text).toContain("¹");
+      expect(text).not.toContain("š");
+    });
+  });
 });
 
 describe("readSource", () => {
@@ -222,3 +297,4 @@ describe("readSource", () => {
     }
   });
 });
+

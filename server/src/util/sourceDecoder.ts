@@ -17,7 +17,7 @@ import { readFile } from "node:fs/promises";
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 
 /** Matches `#charset <name>` in the leading region of a file. */
-const CHARSET_RE = /^[ \t]*#charset[ \t]+([A-Za-z0-9_-]+)/m;
+const CHARSET_RE = /^[ \t]*#[ \t]*charset[ \t]+([A-Za-z0-9_-]+)/m;
 
 /**
  * Evidence-backed label aliases. Real files in the Roxen 6.1 corpus declare
@@ -78,7 +78,7 @@ export function decodeSource(buf: Uint8Array): DecodedSource {
     } catch {
       const table = HIGH_HALF_TABLES[resolved];
       if (table) {
-        return { text: decodeHighHalfTable(buf, table), encoding: resolved };
+        return { text: decodeHighHalfTable(stripBom(buf), table), encoding: resolved };
       }
     }
     // Declared but neither the runtime nor a built-in table could honor it.
@@ -121,8 +121,30 @@ function sniff(buf: Uint8Array): DecodedSource {
   try {
     return { text: strictUtf8.decode(buf), encoding: "utf-8" };
   } catch {
-    return { text: Buffer.from(buf).toString("latin1"), encoding: "iso-8859-1" };
+    return { text: Buffer.from(stripBom(buf)).toString("latin1"), encoding: "iso-8859-1" };
   }
+}
+
+/**
+ * Strip a leading UTF-8 BOM (`EF BB BF`), if present.
+ *
+ * `TextDecoder("utf-8", { fatal: true })` strips a leading BOM as part of
+ * decoding; `Buffer.toString("latin1")` and the high-half-table decoder do
+ * not, since a BOM isn't a latin1/iso-8859-* concept. Left unstripped, a
+ * BOM'd file with a non-UTF-8 body would decode as three phantom leading
+ * characters ("ï»¿"), shifting every position on line 0 and producing a
+ * spurious tree-sitter ERROR the editor never shows (VS Code strips BOMs
+ * before handing text to extensions). Stripping here makes all three decode
+ * paths agree on that. Real pike does not treat a BOM as an encoding signal
+ * at all — it rejects the bytes outright as illegal characters — so a BOM'd
+ * file never compiles; that caps how much this matters, but doesn't make
+ * the phantom characters correct.
+ */
+function stripBom(buf: Uint8Array): Uint8Array {
+  if (buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf) {
+    return buf.subarray(3);
+  }
+  return buf;
 }
 
 /**
@@ -154,6 +176,14 @@ interface ScanStep {
 }
 
 function scanNormal(ch: string, next: string | undefined): ScanStep {
+  // Pike splices a backslash-newline pair away GLOBALLY — not just inside
+  // directives (`int ma\` + newline + `in(){}` compiles as `int main(){}`) —
+  // so a `#charset` on what looks like the next line is actually still part
+  // of the logical line above it and must not be seen as a fresh directive.
+  // Emitting two spaces keeps the scan length-preserving (offsets derive
+  // from it) and makes `^` stop matching at the real start of the next
+  // logical line, matching pike's own semantics.
+  if (ch === "\\" && next === "\n") return { emit: "  ", next: "normal", consumeNext: true };
   if (ch === "/" && next === "*") return { emit: "  ", next: "block-comment", consumeNext: true };
   if (ch === "/" && next === "/") return { emit: "  ", next: "line-comment", consumeNext: true };
   if (ch === "#" && next === '"') return { emit: "  ", next: "raw-string", consumeNext: true };
@@ -162,7 +192,11 @@ function scanNormal(ch: string, next: string | undefined): ScanStep {
   return { emit: ch, next: "normal", consumeNext: false };
 }
 
-function scanLineComment(ch: string): ScanStep {
+function scanLineComment(ch: string, next: string | undefined): ScanStep {
+  // Same global backslash-newline splice as scanNormal: a `// comment \`
+  // followed by a newline continues the comment onto the next line, so a
+  // `#charset` there is still inside the comment, not a fresh line.
+  if (ch === "\\" && next === "\n") return { emit: "  ", next: "line-comment", consumeNext: true };
   return ch === "\n"
     ? { emit: "\n", next: "normal", consumeNext: false }
     : { emit: " ", next: "line-comment", consumeNext: false };
@@ -227,7 +261,7 @@ function stripCommentsAndStrings(head: string): string {
     const next = head[i + 1];
     const step: ScanStep =
       state === "normal" ? scanNormal(ch, next)
-      : state === "line-comment" ? scanLineComment(ch)
+      : state === "line-comment" ? scanLineComment(ch, next)
       : state === "block-comment" ? scanBlockComment(ch, next)
       : state === "string" ? scanSingleLineQuote(ch, next, '"', "string")
       : state === "char-literal" ? scanSingleLineQuote(ch, next, "'", "char-literal")
