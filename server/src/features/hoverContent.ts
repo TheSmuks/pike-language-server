@@ -17,6 +17,7 @@ import type { LRUCache } from "../util/lruCache";
 import { stripScopeWrapper } from "../util/stripScope";
 import { readFileSync } from "node:fs";
 import { uriToPath } from "../util/uri";
+import { decodeSource } from "../util/sourceDecoder.js";
 import { fileLevelHover } from "./hoverContent-file";
 import { renderAutodocLines } from "./autodocLineRenderer";
 
@@ -248,7 +249,7 @@ export function getSource(uri: string, documents: TextDocuments<TextDocument>): 
   // Cross-file: document not open in editor. Read from disk.
   if (uri.startsWith("file://")) {
     try {
-      return readFileSync(uriToPath(uri), "utf8");
+      return decodeSource(readFileSync(uriToPath(uri))).text;
     } catch {
       // Disk/permission errors — fall through to return null.
       return null;
