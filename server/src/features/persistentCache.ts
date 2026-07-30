@@ -87,7 +87,7 @@ interface CacheIndex {
 
 const CACHE_SUBDIR = "cache";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
-const FORMAT_VERSION = 2; // Per-file entries (was 1: monolithic)
+const FORMAT_VERSION = 3; // Positions UTF-16 pass-through, source decoding encoding-aware (was 2: byte-converted)
 const MAX_ENTRIES = 100_000;
 /** Maximum entries to load in one batch. Prevents memory spike on large caches. */
 const LOAD_BATCH_SIZE = 50;

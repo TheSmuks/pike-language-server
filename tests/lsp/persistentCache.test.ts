@@ -121,6 +121,37 @@ describe("US-022: Persistent cache", () => {
     index.clear();
   });
 
+  // Guards the upgrade path this bump exists for: a cache saved by an older
+  // build (e.g. one that byte-converted positions, or decoded source as raw
+  // UTF-8 regardless of #charset) must never be reused just because the wasm
+  // hash still matches — its formatVersion is what gates that.
+  test("cache invalidation on format version change (stale cache, same wasm hash)", async () => {
+    const wasmHash = "format-version-hash";
+    const cacheDir = join(getCachePath(tempDir), "cache");
+    mkdirSync(cacheDir, { recursive: true });
+
+    writeFileSync(join(cacheDir, "fmt-hash.json"), JSON.stringify({
+      uri: "file:///test/fmt.pike",
+      version: 1,
+      contentHash: "fmt-hash",
+      dependencies: [],
+      symbolTable: makeTestSymbolTable("file:///test/fmt.pike", ["Fmt"]),
+    }));
+
+    // Same wasm hash as what we'll load with, but an older format version
+    // than the running code understands.
+    writeFileSync(
+      join(getCachePath(tempDir), "cacheIndex.json"),
+      JSON.stringify({ formatVersion: 1, wasmHash, entryCount: 1 }),
+    );
+
+    const loaded = await loadCache(tempDir, wasmHash);
+    expect(loaded).toBeNull();
+
+    // Stale cache should be wiped, not left around to be misread later.
+    expect(existsSync(getCachePath(tempDir))).toBe(false);
+  });
+
   test("corrupt cache recovery: deletes and returns null", async () => {
     const wasmHash = "test-hash";
 
@@ -228,7 +259,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     // Write the cacheIndex.json to match.
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -266,7 +297,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 2 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 2 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -300,7 +331,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 2 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 2 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -385,7 +416,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     }));
     writeFileSync(
       join(migrationDir, ".pike-lsp", "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 2, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
