@@ -24,7 +24,13 @@ async function run(): Promise<void> {
   await runTests({
     extensionDevelopmentPath: EXTENSION_ROOT,
     extensionTestsPath: path.resolve(__dirname, "suite", "memory-probe-entry.js"),
-    launchArgs: ["--disable-extensions", path.join(EXTENSION_ROOT, "corpus", "files")],
+    // A real session opens a real workspace, and the server indexes it. The
+    // in-repo corpus is 85 small files, which is not that. PIKE_PROBE_WORKSPACE
+    // points at something representative — Pike's stdlib, or a Roxen checkout.
+    launchArgs: [
+      "--disable-extensions",
+      process.env.PIKE_PROBE_WORKSPACE || path.join(EXTENSION_ROOT, "corpus", "files"),
+    ],
   });
 }
 
