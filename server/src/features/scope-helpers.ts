@@ -3,10 +3,13 @@
  *
  * Extracted from scopeBuilder.ts to reduce file size.
  *
- * Performance note: all position conversion functions accept an optional
- * OffsetMap for O(1) lookup during buildSymbolTable. Tree-sitter columns and
- * LSP characters are both UTF-16 code units, so without a map the column
- * passes through unchanged.
+ * Known-incorrect legacy branch: position conversion functions still accept
+ * an optional OffsetMap, threaded through by buildSymbolTable. Tree-sitter
+ * columns and LSP characters are both UTF-16 code units, so the map's
+ * byte-offset-to-UTF-16 lookup is now converting a value that was never a
+ * byte offset — it corrupts ranges on lines with non-ASCII characters
+ * preceding a token instead of correcting them. This branch is scheduled for
+ * removal (Task 4); without a map, the column passes through unchanged.
  */
 import type { Node, Point } from 'web-tree-sitter';
 import type { BuildState, Declaration, Range } from './symbolTable';

@@ -50,10 +50,7 @@ const COMMENT_TYPES = new Set([
  *
  * Returns diagnostics with severity Warning.
  */
-// `lines` is unused now that tree-sitter columns and LSP characters are both
-// UTF-16 code units — kept on the signature so existing callers don't need
-// to change.
-export function detectUnreachableCode(tree: Tree, lines: string[], uri: string): Diagnostic[] {
+export function detectUnreachableCode(tree: Tree, uri: string): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
   walkBlocks(tree.rootNode, diagnostics, uri);
   return diagnostics;

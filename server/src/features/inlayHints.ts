@@ -32,11 +32,13 @@ export interface InlayHintContext {
   /** Range to provide hints for. */
   range: { start: Position; end: Position };
   /**
-   * Pre-split lines of the source text. No longer used internally now that
-   * tree-sitter columns and LSP characters are both UTF-16 code units — kept
-   * on the interface so existing callers don't need to change.
+   * Unused now that tree-sitter columns and LSP characters are both UTF-16
+   * code units. Optional so production callers can stop paying for the
+   * split (inlay hints fire on every viewport change) while
+   * `tests/lsp/inlayHints.test.ts` and `inlayHints-g2.test.ts`, which still
+   * construct this object with `lines` set, keep compiling unchanged.
    */
-  lines: string[];
+  lines?: string[];
 }
 
 // ---------------------------------------------------------------------------

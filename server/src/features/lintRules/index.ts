@@ -56,14 +56,13 @@ export function runLintRules(
   options?: AllLintOptions,
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = [];
-  const lines = source.split('\n');
 
   if (options?.unusedSymbols !== false) {
     diagnostics.push(...detectUnusedSymbols(table, options));
   }
 
   if (options?.unreachableCode !== false) {
-    diagnostics.push(...detectUnreachableCode(tree, lines, table.uri));
+    diagnostics.push(...detectUnreachableCode(tree, table.uri));
   }
 
   if (options?.missingReturn !== false) {

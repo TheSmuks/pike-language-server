@@ -15,6 +15,10 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createTestServer, type TestServer } from "./helpers";
+import { parse } from "../../server/src/parser";
+import { buildSymbolTable } from "../../server/src/features/symbolTable";
+import { runLintRules } from "../../server/src/features/lintRules";
+import { CODE_MISSING_RETURN } from "../../server/src/features/lintRules/missingReturn";
 
 interface Range {
   start: { line: number; character: number };
@@ -140,5 +144,22 @@ describe("inbound lookups resolve the token actually at the position", () => {
     // "int alpha()" is line 0; "alpha" starts at character 4.
     expect(loc.range.start.line).toBe(0);
     expect(loc.range.start.character).toBe(4);
+  });
+
+  test("missing-return lint fires for a declaration preceded by non-ASCII", () => {
+    // "int helper() { }" declares a non-void return type but never returns —
+    // detectMissingReturn should flag it regardless of what precedes it on
+    // the line. decl.range.start.character comes from buildSymbolTable,
+    // which still populates ranges via the OffsetMap (Task 4's removal
+    // target): true UTF-16 column of "int" is 11, but the OffsetMap-shifted
+    // value fed to descendantForPosition lands on the comment node instead
+    // of the function, so findFunctionDefinition fails and the rule finds
+    // nothing to flag. This is expected to fail until Task 4.
+    const src = "/* ©©©© */ int helper() { }";
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test/nonascii-missingreturn.pike", 1, undefined, src);
+    const diagnostics = runLintRules(tree, table, src);
+
+    expect(diagnostics.some(d => d.code === CODE_MISSING_RETURN)).toBe(true);
   });
 });

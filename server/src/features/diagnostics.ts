@@ -20,10 +20,6 @@ function toPosition(point: Point): Position {
   return Position.create(point.row, point.column);
 }
 
-function toRange(node: Node): Range {
-  return Range.create(toPosition(node.startPosition), toPosition(node.endPosition));
-}
-
 function findErrorNodes(node: Node): Node[] {
   const errors: Node[] = [];
   if (node.type === 'ERROR' || node.isError) {
