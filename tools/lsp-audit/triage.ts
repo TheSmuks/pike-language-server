@@ -99,6 +99,22 @@ const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
   "textDocument/didChange": { contentChanges: [{ text: "" }] },
 };
 
+/**
+ * Methods the server handles as NOTIFICATIONS, which `raw` cannot reproduce.
+ *
+ * `lsp-probe raw` uses sendRequest, and vscode-jsonrpc rejects these with
+ * "Unhandled method" before they ever reach the server's notification handler —
+ * so a `raw` command for them fails identically every time regardless of the
+ * finding. They are routed to lsp-probe's `notify` subcommand instead, which
+ * sends the notification and then proves the server is still answering.
+ * A lifecycle finding IS a crash, so "did the server survive this?" is exactly
+ * the right reproduction.
+ */
+const NOTIFICATION_METHODS = new Set([
+  "workspace/didRenameFiles",
+  "textDocument/didChange",
+]);
+
 /** Methods whose params require a range. A whole-file range stands in. */
 const RANGE_METHODS = new Set([
   "textDocument/rangeFormatting",
@@ -132,7 +148,8 @@ function reproductionFor(record: LedgerRecord): string {
     return `bun run scripts/lsp-probe.ts ${dedicated} ${target} ${line}:${character}`;
   }
 
-  // raw: these params are spread verbatim into the request, so 0-based.
+  // raw/notify: these params are spread verbatim into the message, so 0-based.
+  const form = NOTIFICATION_METHODS.has(record.capability) ? "notify" : "raw";
   const params: Record<string, unknown> = { ...EXTRA_PARAMS[record.capability] };
   if (RANGE_METHODS.has(record.capability)) params.range = WHOLE_FILE_RANGE;
   if (record.position) {
@@ -143,7 +160,7 @@ function reproductionFor(record: LedgerRecord): string {
     }
   }
   const json = JSON.stringify(params);
-  return `bun run scripts/lsp-probe.ts raw ${record.capability} ${target} '${json}'`;
+  return `bun run scripts/lsp-probe.ts ${form} ${record.capability} ${target} '${json}'`;
 }
 
 function tierOf(record: LedgerRecord, slowMs: number): Tier | null {

@@ -138,6 +138,24 @@ test("every raw-fallback reproduction matches the params the matrix actually sen
   }
 });
 
+test("notification capabilities use notify, not raw", () => {
+  // `raw` uses sendRequest, and vscode-jsonrpc rejects a request for a
+  // notification-only handler with "Unhandled method" before the server sees
+  // it — so a raw command for these fails identically every time, whatever the
+  // finding was. Verified by running both forms against a real corpus file.
+  for (const method of ["workspace/didRenameFiles", "textDocument/didChange"]) {
+    const finding = triage([{ ...base, capability: method, status: "error" }])[0];
+    expect(finding.reproduction).toContain(`notify ${method}`);
+    expect(finding.reproduction).not.toContain(`raw ${method}`);
+  }
+});
+
+test("request capabilities still use raw, not notify", () => {
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  expect(finding.reproduction).not.toContain("notify");
+});
+
 test("a slow record that is also empty gets the more severe tier", () => {
   const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
   expect(findings[0].severity).toBe("High");
