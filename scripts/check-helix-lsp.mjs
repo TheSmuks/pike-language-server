@@ -17,6 +17,7 @@ import { writeFileSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createClient } from "../tools/lsp-audit/lsp-stdio.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIR = mkdtempSync(join(tmpdir(), "pike-helix-"));
@@ -101,46 +102,9 @@ const [cmd, cmdArgs] = serverCommand();
 if (process.env.PIKE_LSP_SERVER_CMD) console.log(`  (server: ${cmd} ${cmdArgs.join(" ")})`);
 const proc = spawn(cmd, cmdArgs, { stdio: ["pipe", "pipe", "pipe"], env });
 
-let buf = Buffer.alloc(0);
-let nextId = 1;
-const pending = new Map();
-
-function send(msg) {
-  const s = JSON.stringify(msg);
-  proc.stdin.write(`Content-Length: ${Buffer.byteLength(s)}\r\n\r\n${s}`);
-}
-
-proc.stdout.on("data", (chunk) => {
-  buf = Buffer.concat([buf, chunk]);
-  for (;;) {
-    const sep = buf.indexOf("\r\n\r\n");
-    if (sep < 0) return;
-    const header = /Content-Length: (\d+)/.exec(buf.subarray(0, sep).toString());
-    if (!header) return;
-    const len = Number(header[1]);
-    if (buf.length < sep + 4 + len) return;
-    const msg = JSON.parse(buf.subarray(sep + 4, sep + 4 + len).toString());
-    buf = buf.subarray(sep + 4 + len);
-    if (msg.id !== undefined && pending.has(msg.id)) {
-      pending.get(msg.id)(msg);
-      pending.delete(msg.id);
-    } else if (msg.id !== undefined && msg.method) {
-      send({ jsonrpc: "2.0", id: msg.id, result: null }); // server -> client request
-    }
-  }
-});
-
-function request(method, params) {
-  const id = nextId++;
-  return new Promise((res, rej) => {
-    const timer = setTimeout(() => rej(new Error("timed out")), 20000);
-    pending.set(id, (msg) => {
-      clearTimeout(timer);
-      msg.error ? rej(new Error(msg.error.message)) : res(msg.result);
-    });
-    send({ jsonrpc: "2.0", id, method, params });
-  });
-}
+// Framing and dispatch live in tools/lsp-audit/lsp-stdio.mjs so this guard and
+// the standalone audit sweep cannot drift apart.
+const { send, request } = createClient(proc);
 
 const doc = { textDocument: { uri: URI } };
 const results = [];
