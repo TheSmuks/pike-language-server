@@ -11,7 +11,10 @@ import { test, expect, describe } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { decodeSource, readSource } from "../../server/src/util/sourceDecoder";
+import { initParser, parse } from "../../server/src/parser";
+import { buildSymbolTable } from "../../server/src/features/symbolTable";
 
 describe("decodeSource", () => {
   test("decodes valid UTF-8 as UTF-8", () => {
@@ -298,3 +301,43 @@ describe("readSource", () => {
   });
 });
 
+describe("decoded text drives positions (spec source-encoding S4)", () => {
+  // Pins the behavior end to end: an on-disk ISO-8859-1 file, read through
+  // readSource (which sniffs the encoding), parsed by tree-sitter, and fed
+  // into buildSymbolTable — the declaration's nameRange must land at the
+  // same column a naive `line.indexOf(name)` on the DECODED text would find,
+  // proving positions are derived from the decoded string, not raw bytes.
+  test("a declaration's nameRange.start.character matches line.indexOf(name) on ISO-8859-1 source", async () => {
+    await initParser();
+
+    const dir = mkdtempSync(join(tmpdir(), "pike-lsp-sourceencoding-"));
+    try {
+      const file = join(dir, "copyright-helper.pike");
+      // "/* Copyright © 2009 */ int helper() { return 1; }" with © as the raw
+      // ISO-8859-1 byte 0xA9 (an invalid lone UTF-8 continuation byte, so
+      // readSource's sniff falls back to ISO-8859-1 rather than UTF-8).
+      writeFileSync(file, Buffer.from([
+        ...Buffer.from("/* Copyright "), 0xa9,
+        ...Buffer.from(" 2009 */ int helper() { return 1; }\n"),
+      ]));
+
+      const text = await readSource(file);
+      expect(text).toContain("©"); // confirms the ISO-8859-1 fallback ran
+
+      const uri = pathToFileURL(file).href;
+      const tree = parse(text, uri);
+      expect(tree.rootNode.hasError).toBe(false);
+
+      const table = buildSymbolTable(tree, uri, 1, undefined, text);
+      const helper = table.declarations.find((d) => d.name === "helper");
+      expect(helper).toBeDefined();
+
+      const line0 = text.split("\n")[0]!;
+      expect(helper!.nameRange.start.line).toBe(0);
+      expect(helper!.nameRange.start.character).toBe(line0.indexOf("helper"));
+      expect(line0.indexOf("helper")).toBe(27); // pinned per the design doc
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
