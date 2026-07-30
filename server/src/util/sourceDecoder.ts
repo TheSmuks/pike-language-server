@@ -15,6 +15,21 @@ const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 const CHARSET_RE = /^[ \t]*#charset[ \t]+([A-Za-z0-9_-]+)/m;
 
 /**
+ * Evidence-backed label aliases. Real files in the Roxen 6.1 corpus declare
+ * `#charset iso-2022`, which the WHATWG registry does not recognize as a
+ * label on its own — but `server/languages/japanese.pike` (declared charset
+ * + `constant required_charset = "iso-2022"`) contains 128 JIS X 0208-1983
+ * escape sequences (`ESC $ B`), i.e. it means ISO-2022-JP in practice. Bun's
+ * TextDecoder supports "iso-2022-jp" but not the bare "iso-2022" label.
+ *
+ * Only add entries here backed by a real file in evidence — this is not a
+ * place to pre-emptively guess at label equivalences.
+ */
+const CHARSET_ALIASES: Record<string, string> = {
+  "iso-2022": "iso-2022-jp",
+};
+
+/**
  * Built-in decode tables for WHATWG labels this runtime's TextDecoder does
  * not implement. Observed on Bun 1.3.14: `new TextDecoder("iso-8859-2")`
  * throws `ERR_ENCODING_NOT_SUPPORTED`, even though Node's ICU-backed
@@ -36,22 +51,39 @@ const HIGH_HALF_TABLES: Record<string, readonly number[]> = {
 export interface DecodedSource {
   text: string;
   encoding: string;
+  /**
+   * Set when a `#charset` directive named an encoding that neither the
+   * runtime's TextDecoder nor a built-in table could honor, so `text` was
+   * produced by sniffing instead of the declared label. A silent downgrade
+   * here is worse than a visible one: every position derived from `text`
+   * may be wrong with no signal. Callers with a connection should log this.
+   */
+  declaredButUnsupported?: string;
 }
 
 export function decodeSource(buf: Uint8Array): DecodedSource {
   const declared = findCharset(buf);
   if (declared) {
+    const resolved = CHARSET_ALIASES[declared] ?? declared;
     try {
-      return { text: new TextDecoder(declared).decode(buf), encoding: declared };
+      return { text: new TextDecoder(resolved).decode(buf), encoding: resolved };
     } catch {
-      const table = HIGH_HALF_TABLES[declared];
+      const table = HIGH_HALF_TABLES[resolved];
       if (table) {
-        return { text: decodeHighHalfTable(buf, table), encoding: declared };
+        return { text: decodeHighHalfTable(buf, table), encoding: resolved };
       }
-      // Unknown or unsupported label with no built-in table — fall through to sniffing.
     }
+    // Declared but neither the runtime nor a built-in table could honor it.
+    // Report the sniffed result, but surface the downgrade rather than
+    // silently claiming the sniffed encoding was what the file declared.
+    return { ...sniff(buf), declaredButUnsupported: declared };
   }
 
+  return sniff(buf);
+}
+
+/** UTF-8 if valid, else ISO-8859-1 (which cannot fail). */
+function sniff(buf: Uint8Array): DecodedSource {
   try {
     return { text: strictUtf8.decode(buf), encoding: "utf-8" };
   } catch {
@@ -81,7 +113,21 @@ function decodeHighHalfTable(buf: Uint8Array, table: readonly number[]): string 
   return out;
 }
 
-/** Read a Pike source file from disk, decoding by detected encoding. */
-export async function readSource(path: string): Promise<string> {
-  return decodeSource(await readFile(path)).text;
+/**
+ * Read a Pike source file from disk, decoding by detected encoding.
+ *
+ * `onUnsupportedCharset`, when given, is called when the file declared a
+ * `#charset` that could not be honored — see `DecodedSource.declaredButUnsupported`.
+ * Callers with a connection should use it to log a warning; this keeps the
+ * common one-argument call sites (and the return type) unchanged.
+ */
+export async function readSource(
+  path: string,
+  onUnsupportedCharset?: (declared: string, path: string) => void,
+): Promise<string> {
+  const decoded = decodeSource(await readFile(path));
+  if (decoded.declaredButUnsupported && onUnsupportedCharset) {
+    onUnsupportedCharset(decoded.declaredButUnsupported, path);
+  }
+  return decoded.text;
 }

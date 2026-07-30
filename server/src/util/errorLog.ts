@@ -370,3 +370,23 @@ export function logResourceEvent(
 
   logWarn(connection, message);
 }
+
+// ---------------------------------------------------------------------------
+// Source-decoder charset warnings
+// ---------------------------------------------------------------------------
+
+/**
+ * Log a `#charset` directive that decodeSource/readSource could not honor
+ * (see `DecodedSource.declaredButUnsupported` in util/sourceDecoder.ts).
+ * A silent downgrade to a sniffed encoding would leave every offset derived
+ * from the file wrong with no signal, so every call site with a connection
+ * routes the callback here instead of writing its own log line.
+ */
+export function logUnsupportedCharset(connection: Connection, context: string, declared: string): void {
+  logWarn(
+    connection,
+    ErrorCategory.Index,
+    `declared charset "${declared}" is not supported here — decoded via sniffing instead`,
+    context,
+  );
+}
