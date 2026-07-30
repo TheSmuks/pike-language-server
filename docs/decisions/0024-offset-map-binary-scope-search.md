@@ -2,7 +2,25 @@
 
 ## Status
 
-Accepted
+Superseded — the byte→UTF-16 offset map and its `Utf16`-suffixed conversion
+helpers were deleted (see `docs/sdd/2026-07-29-fix-position-drift/` plan,
+Tasks 3-4). The premise below ("tree-sitter produces UTF-8 byte column
+offsets", restated at the "Q2"/"Q1" decisions and the Negative/Risks
+sections) is false for this codebase: web-tree-sitter 0.26 parses the JS
+`string` passed to it and indexes positions in UTF-16 code units — the same
+unit LSP uses — so no byte→UTF-16 conversion was ever needed. The offset map
+was therefore not a correctness-preserving optimization of `utf8ToUtf16`; it
+re-applied a byte-offset correction to a value that was never a byte offset,
+silently corrupting every range on a line with a non-ASCII character before
+the converted column. `utf8ToUtf16`/`utf16ToUtf8` were removed in Task 3;
+this ADR's map and binary-search-adjacent conversion plumbing were removed in
+Task 4. The M4 binary-search-over-sorted-scopes optimization in
+`findScopeForNode` is unaffected and remains in place — only the position
+*conversion* it depended on was wrong, not the search structure itself.
+
+The rest of this document is kept as the historical record of the (mistaken)
+reasoning at the time; do not use it as current guidance on how tree-sitter
+columns relate to LSP characters.
 
 ## Context
 

@@ -171,8 +171,9 @@ function computeEdit(oldSource: string, newSource: string): Edit | null {
 }
 
 /**
- * Convert a byte offset in a string to a tree-sitter Point (row, column).
- * O(N) but only called once per edit boundary.
+ * Convert a UTF-16 code unit offset in a string to a tree-sitter Point (row,
+ * column). Walks JS string indices (already UTF-16), so no byte conversion
+ * is involved. O(N) but only called once per edit boundary.
  */
 function offsetToPoint(source: string, offset: number): Point {
   let row = 0;
