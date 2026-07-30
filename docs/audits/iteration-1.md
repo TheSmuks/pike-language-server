@@ -183,6 +183,17 @@ bun test tests/lsp/ && bun test harness/__tests__/ && bun run typecheck
 | P1.6 | Zero use of LSP error codes (`ResponseError`, `ContentModified`, `RequestCancelled`) | Medium | All handlers | Add `ContentModified` checks on version mismatches, `RequestCancelled` in PikeWorker timeout |
 | P1.7 | Tree-sitter UTF-8 byte columns used as LSP character offsets | Low (latent) | scope-helpers.ts:19, diagnostics.ts:17, documentSymbol.ts:21 | Add UTF-8→UTF-16 conversion for non-ASCII positions. Safe for pure ASCII Pike. |
 
+> **Retracted.** The premise of P1.7 is false: web-tree-sitter indexes JS-string
+> input in UTF-16 code units, the same unit LSP uses, so tree-sitter columns
+> were never UTF-8 byte offsets and no conversion was ever needed. Implementing
+> this recommendation (`positionConverter.ts`, `toLocUtf16`/`toRangeUtf16` —
+> see the "Fixed" entries for P1.7 further below in this document) is what
+> introduced the actual bug: a byte-offset correction applied to a value that
+> was never a byte offset, silently corrupting every range on a line with a
+> non-ASCII character before the converted column. See ADR 0024's Status
+> section for the full account and the branch that removed the conversion
+> layer (`docs/superpowers/plans/2026-07-29-fix-position-drift.md`).
+
 ### P2: Security
 
 | # | Finding | Severity | File:Line | Recommendation |
