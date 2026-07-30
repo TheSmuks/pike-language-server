@@ -7,6 +7,8 @@
  * suite fail when a capability is advertised but never swept.
  */
 
+import { commentAndLiteralMask } from "./positions";
+
 export type Driver = "position" | "document" | "workspace" | "lifecycle";
 
 export interface RequestContext {
@@ -22,7 +24,14 @@ export interface CapabilitySpec {
   driver: Driver;
   declaredBy: string;
   params(ctx: RequestContext): unknown;
-  validate(result: unknown): "ok" | "empty";
+  /**
+   * `ctx` is optional so a validator can be exercised on its own, but the sweep
+   * always passes it. Some empties are only legal given the document — a file
+   * with no multi-line construct has nothing to fold — and a validator that
+   * cannot see the source has to choose between missing an outage and inventing
+   * a finding.
+   */
+  validate(result: unknown, ctx?: RequestContext): "ok" | "empty";
 }
 
 // --- shared param builders -------------------------------------------------
@@ -76,6 +85,39 @@ function deltaAnswered(result: unknown): "ok" | "empty" {
   if (result === null || result === undefined) return "empty";
   const asDelta = result as { edits?: unknown[]; data?: unknown[] };
   return Array.isArray(asDelta.edits) || Array.isArray(asDelta.data) ? "ok" : "empty";
+}
+
+/**
+ * True when the source contains a construct that spans more than one line.
+ *
+ * Braces inside comments and string literals are masked out first, so a `{` in
+ * prose cannot make an unfoldable file look foldable — that would turn a
+ * correct empty answer into a false finding, which is the exact failure this
+ * whole check exists to avoid.
+ */
+export function hasFoldableRegion(text: string): boolean {
+  const masked = commentAndLiteralMask(text);
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (masked[i]) continue;
+    if (text[i] === "{" || text[i] === "(" || text[i] === "[") depth++;
+    else if (text[i] === "}" || text[i] === ")" || text[i] === "]") depth = Math.max(0, depth - 1);
+    else if (text[i] === "\n" && depth > 0) return true;
+  }
+  return false;
+}
+
+/**
+ * Folding is mandatory only for a file that has something to fold.
+ *
+ * corpus/files/cross_pmod_dir.pmod/helpers.pike is five lines of one-line
+ * function bodies: zero folding ranges is the correct answer, and a blanket
+ * nonEmpty reported it as a defect. Dropping to anyResult instead would hide a
+ * total folding outage, so the source decides.
+ */
+function foldingRangeAnswered(result: unknown, ctx?: RequestContext): "ok" | "empty" {
+  if (ctx && !hasFoldableRegion(ctx.text)) return anyResult(result);
+  return nonEmpty(result);
 }
 
 // --- the matrix ------------------------------------------------------------
@@ -146,7 +188,7 @@ export const MATRIX: CapabilitySpec[] = [
     params: (ctx) => ({ ...doc(ctx), previousResultId: ctx.previousResultId ?? "" }),
     validate: deltaAnswered,
   },
-  { method: "textDocument/foldingRange", driver: "document", declaredBy: "foldingRangeProvider", params: doc, validate: nonEmpty },
+  { method: "textDocument/foldingRange", driver: "document", declaredBy: "foldingRangeProvider", params: doc, validate: foldingRangeAnswered },
   { method: "textDocument/inlayHint", driver: "document", declaredBy: "inlayHintProvider", params: (ctx) => ({ ...doc(ctx), range: fullRange(ctx) }), validate: anyResult },
   { method: "textDocument/documentLink", driver: "document", declaredBy: "documentLinkProvider", params: doc, validate: anyResult },
   { method: "textDocument/codeLens", driver: "document", declaredBy: "codeLensProvider", params: doc, validate: anyResult },

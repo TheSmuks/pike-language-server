@@ -57,6 +57,43 @@ interface Outcome {
   durationMs: number;
 }
 
+/**
+ * JSON-RPC error codes that mean "the server deliberately declined", not "the
+ * server broke".
+ *
+ * The distinction is the difference between a findings list a human can act on
+ * and one nobody reads. `textDocument/rename` on `int main()` is answered with
+ * `new ResponseError(ErrorCodes.InvalidRequest, "No renamable symbol at the
+ * given position")` — see server/src/features/navigationRefactoring.ts. That is
+ * the guard working exactly as designed, and on a corpus sweep it fires on
+ * every position that is not a renameable symbol: hundreds of records.
+ *
+ * An unexpected exception inside a handler cannot land here. vscode-jsonrpc
+ * converts any non-ResponseError throw into ErrorCodes.InternalError (-32603)
+ * before it reaches the client (connection.js: "failed with message"), and
+ * -32603 is deliberately absent from this set, so a real crash still classifies
+ * as "error" → tier 0 → Critical. So does MethodNotFound (-32601): a capability
+ * the server advertises but does not handle is a genuine defect.
+ */
+const DECLINE_CODES = new Set([
+  -32600, // ErrorCodes.InvalidRequest — the server's own guards use this.
+  -32800, // LSPErrorCodes.RequestCancelled
+  -32801, // LSPErrorCodes.ContentModified
+  -32802, // LSPErrorCodes.ServerCancelled
+  -32803, // LSPErrorCodes.RequestFailed — "cannot do this here", by spec.
+]);
+
+/**
+ * Classify a rejected request. Exported so the decline/crash split is testable
+ * without booting a server.
+ */
+export function classifyFailure(error: unknown): "timeout" | "declined" | "error" {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === "__audit_timeout__") return "timeout";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "number" && DECLINE_CODES.has(code) ? "declined" : "error";
+}
+
 /** Send one request, bounded by the timeout, and classify what came back. */
 async function attempt(
   server: TestServer,
@@ -75,15 +112,22 @@ async function attempt(
     // incorrectly" is the more specific claim, so it wins when both apply.
     const correct = checkCorrect?.(result) ?? null;
     return {
-      status: correct === false ? "wrong" : spec.validate(result),
+      status: correct === false ? "wrong" : spec.validate(result, ctx),
       digest: digestOf(result),
       durationMs: performance.now() - started,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const failure = classifyFailure(error);
+    // A decline is only judgeable against ground truth: the harness cannot know
+    // whether this position was renameable. Where an expectation says it should
+    // have been, the decline is the wrong answer and is reported as tier 2 —
+    // so declining is not a way for a real defect to hide.
+    const status: Status =
+      failure === "declined" && checkCorrect?.(undefined) === false ? "wrong" : failure;
     return {
-      status: message === "__audit_timeout__" ? "timeout" : "error",
-      digest: "",
+      status,
+      digest: failure === "declined" ? `declined:${(error as { code?: number }).code}` : "",
       detail: message,
       durationMs: performance.now() - started,
     };

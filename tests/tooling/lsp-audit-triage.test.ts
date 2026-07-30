@@ -198,3 +198,24 @@ test("an unavailable oracle yields a surfaced, unclassified finding", () => {
   expect(findings).toHaveLength(1);
   expect(findings[0].oracleVerdict).toBe("unavailable");
 });
+
+test("a declined request is not a finding", () => {
+  // The counterpart to sweep.ts's classifyFailure: a ResponseError the server
+  // chose to send is the handler working, so it must not reach the findings
+  // table at any severity.
+  const declined: LedgerRecord = {
+    surface: "server",
+    workspace: "corpus",
+    capability: "textDocument/rename",
+    file: "a.pike",
+    position: { line: 0, character: 4 },
+    status: "declined",
+    durationMs: 3,
+    rssBytes: 1,
+    digest: "declined:-32600",
+    detail: "No renamable symbol at the given position",
+  };
+  expect(triage([declined])).toEqual([]);
+  // A crash at the same position still is one.
+  expect(triage([{ ...declined, status: "error", detail: "boom" }])[0].severity).toBe("Critical");
+});
