@@ -375,18 +375,32 @@ export function logResourceEvent(
 // Source-decoder charset warnings
 // ---------------------------------------------------------------------------
 
+/** Labels already warned about this process — see `logUnsupportedCharset`. */
+const warnedUnsupportedCharsets = new Set<string>();
+
 /**
  * Log a `#charset` directive that decodeSource/readSource could not honor
  * (see `DecodedSource.declaredButUnsupported` in util/sourceDecoder.ts).
  * A silent downgrade to a sniffed encoding would leave every offset derived
  * from the file wrong with no signal, so every call site with a connection
  * routes the callback here instead of writing its own log line.
+ *
+ * This is an expected, non-fatal condition, not a bug report — it uses the
+ * same plain 2-arg form as `logResourceEvent`, not the 4-arg category form,
+ * which appends a "file a bug" issue-report block per occurrence. Logged
+ * once per distinct declared label, not once per file, so indexing a whole
+ * tree of files sharing an unsupported charset doesn't spam the output.
  */
 export function logUnsupportedCharset(connection: Connection, context: string, declared: string): void {
+  if (warnedUnsupportedCharsets.has(declared)) return;
+  warnedUnsupportedCharsets.add(declared);
   logWarn(
     connection,
-    ErrorCategory.Index,
-    `declared charset "${declared}" is not supported here — decoded via sniffing instead`,
-    context,
+    `[${context}] declared charset "${declared}" is not supported here — decoded via sniffing instead`,
   );
+}
+
+/** Test-only: reset the per-label dedup state between test cases. */
+export function resetUnsupportedCharsetWarnings(): void {
+  warnedUnsupportedCharsets.clear();
 }
