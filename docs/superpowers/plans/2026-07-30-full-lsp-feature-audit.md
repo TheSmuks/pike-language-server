@@ -893,6 +893,18 @@ export interface SweepOptions {
   maxRefsPerDecl?: number;
   /** Tier-2 checking. Omitted for the Roxen tier, where answers are unknown. */
   checker?: CorrectnessChecker;
+  /**
+   * Positions that must be swept regardless of what documentSymbol names,
+   * keyed by workspace-relative path.
+   *
+   * Without this, tier 2 is decorative: `symbolNames` returns only TOP-LEVEL
+   * documentSymbol names, so expectations targeting fields, locals and class
+   * members are never visited — measured at 1 of 20 reachable. Recursing into
+   * `children` only reaches 8 of 20, because documentSymbol emits no field or
+   * local declarations at all. The expectation coordinates are the right
+   * targets; the position source is too narrow, so they are unioned in here.
+   */
+  extraPositions?: Map<string, Array<{ line: number; character: number }>>;
 }
 
 interface Outcome {
@@ -1033,6 +1045,28 @@ function notifyAndRecord(
   };
 }
 
+/**
+ * Union required positions into the derived set, skipping duplicates.
+ *
+ * Marked `kind: "declaration"` because these are explicitly-chosen targets, not
+ * incidental occurrences; the cap in derivePositions does not apply to them.
+ */
+function withExtraPositions(
+  derived: SweepPosition[],
+  extra: Array<{ line: number; character: number }> | undefined,
+): SweepPosition[] {
+  if (!extra || extra.length === 0) return derived;
+  const seen = new Set(derived.map((p) => `${p.line}:${p.character}`));
+  const merged = [...derived];
+  for (const position of extra) {
+    const key = `${position.line}:${position.character}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ ...position, symbol: "<required>", kind: "declaration" });
+  }
+  return merged;
+}
+
 /** Sweep one file across the whole matrix. */
 async function sweepFile(
   server: TestServer,
@@ -1048,8 +1082,11 @@ async function sweepFile(
   server.openDoc(uri, text, "pike");
 
   const names = await symbolNames(server, uri, timeoutMs);
-  const positions = derivePositions(text, names, options.maxRefsPerDecl ?? 5);
   const relPath = relative(options.workspaceRoot, file) || basename(file);
+  const positions = withExtraPositions(
+    derivePositions(text, names, options.maxRefsPerDecl ?? 5),
+    options.extraPositions?.get(relPath),
+  );
   const previousResultId = await primeDelta(server, uri, text, timeoutMs);
 
   for (const spec of MATRIX) {
@@ -1355,6 +1392,8 @@ For each, note the exact line and column of one unambiguous symbol and what each
 
 Aim for roughly two expectations per file, covering all five methods across the set. Do not attempt all five on every file.
 
+**Make each assertion discriminating.** A `hoverContains` of `"string"` passes even if hover resolved to a completely different symbol, because almost every hover in these files mentions `string` — it spends a tier-2 slot on something that cannot fail. Assert the declaration, not the type keyword: `"string get_prefix"` rather than `"string"`. The same applies to `referenceCount` — only assert a count you have recounted and believe is unambiguous within the queried file.
+
 - [ ] **Step 2: Write the failing test**
 
 Create `tests/tooling/lsp-audit-expectations.test.ts`:
@@ -1363,7 +1402,11 @@ Create `tests/tooling/lsp-audit-expectations.test.ts`:
 import { test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { EXPECTATIONS, checkExpectation } from "../../tools/lsp-audit/expectations";
+import {
+  EXPECTATIONS,
+  checkExpectation,
+  expectationPositions,
+} from "../../tools/lsp-audit/expectations";
 
 test("covers the five tier-2 capabilities", () => {
   const methods = new Set(EXPECTATIONS.map((e) => e.method));
@@ -1392,7 +1435,33 @@ test("checkExpectation matches a definition landing on the right line", () => {
 });
 
 test("checkExpectation treats a missing result as a failure", () => {
-  expect(checkExpectation(EXPECTATIONS[0], null)).toBe(false);
+  const notRename = EXPECTATIONS.find((e) => e.expect.kind !== "renameAllowed")!;
+  expect(checkExpectation(notRename, null)).toBe(false);
+});
+
+test("a null prepareRename is the CORRECT answer when rename is disallowed", () => {
+  // null is precisely what the server returns for a non-renameable position.
+  // If the null guard ran first, `allowed: false` could never pass and would
+  // report "wrong" exactly when the server behaved correctly.
+  const disallowed = EXPECTATIONS.find(
+    (e) => e.expect.kind === "renameAllowed" && e.expect.allowed === false,
+  );
+  if (!disallowed) return; // no such expectation in the set
+  expect(checkExpectation(disallowed, null)).toBe(true);
+  expect(checkExpectation(disallowed, { range: {} })).toBe(false);
+});
+
+test("every expectation position is exported for the sweep to visit", () => {
+  // Without this the sweep only visits TOP-LEVEL documentSymbol names, which
+  // reaches 1 of 20 expectations — fields, locals and class members are never
+  // emitted as top-level symbols, so tier 2 would check almost nothing.
+  const positions = expectationPositions();
+  const total = [...positions.values()].reduce((n, list) => n + list.length, 0);
+  expect(total).toBe(EXPECTATIONS.length);
+  for (const e of EXPECTATIONS) {
+    const forFile = positions.get(e.file) ?? [];
+    expect(forFile.some((p) => p.line === e.line && p.character === e.character)).toBe(true);
+  }
 });
 ```
 
@@ -1453,6 +1522,24 @@ export const EXPECTATIONS: Expectation[] = [
 ];
 
 /**
+ * Every position an expectation targets, keyed by corpus-relative filename.
+ *
+ * Fed to the sweep as `extraPositions`. Without it the sweep only visits
+ * positions named by TOP-LEVEL documentSymbol entries, which reaches 1 of 20
+ * expectations — fields, locals and class members are never emitted as
+ * top-level symbols, so tier 2 would check almost nothing.
+ */
+export function expectationPositions(): Map<string, Array<{ line: number; character: number }>> {
+  const byFile = new Map<string, Array<{ line: number; character: number }>>();
+  for (const e of EXPECTATIONS) {
+    const list = byFile.get(e.file) ?? [];
+    list.push({ line: e.line, character: e.character });
+    byFile.set(e.file, list);
+  }
+  return byFile;
+}
+
+/**
  * Adapt the expectation set to the sweep's CorrectnessChecker interface.
  *
  * Returns null when nothing covers this (file, method, position) — the common
@@ -1476,8 +1563,16 @@ export function expectationChecker() {
 }
 
 export function checkExpectation(expectation: Expectation, result: unknown): boolean {
-  if (result === null || result === undefined) return false;
   const want = expectation.expect;
+
+  // renameAllowed is checked BEFORE the null guard, because null is precisely
+  // the correct prepareRename response for a non-renameable position. Guarding
+  // first would make `allowed: false` unsatisfiable — it would report "wrong"
+  // exactly when the server behaves correctly.
+  if (want.kind === "renameAllowed") {
+    return (result !== null && result !== undefined) === want.allowed;
+  }
+  if (result === null || result === undefined) return false;
 
   switch (want.kind) {
     case "definitionAt": {
@@ -1493,7 +1588,7 @@ export function checkExpectation(expectation: Expectation, result: unknown): boo
     case "referenceCount":
       return Array.isArray(result) && result.length === want.count;
     case "renameAllowed":
-      return (result !== null) === want.allowed;
+      return true; // Handled before the null guard above; unreachable here.
     case "completionIncludes": {
       const items = Array.isArray(result) ? result : (result as { items?: unknown[] }).items ?? [];
       return items.some((item: { label?: string }) => item.label === want.label);
@@ -1810,7 +1905,7 @@ import { join, resolve } from "node:path";
 import { Ledger, readLedger } from "./ledger";
 import { runSweep } from "./sweep";
 import { classify } from "./oracle";
-import { expectationChecker } from "./expectations";
+import { expectationChecker, expectationPositions } from "./expectations";
 import { triage, renderFindings } from "./triage";
 
 const CORPUS_ROOT = resolve("corpus/files");
@@ -1850,8 +1945,10 @@ async function sweepCommand(): Promise<void> {
       files,
       ledger,
       // Tier 2 only on the corpus tier: Roxen's correct answers are unknown,
-      // so there is nothing to check a result against.
+      // so there is nothing to check a result against. The positions must be
+      // forced in too — documentSymbol alone reaches almost none of them.
       checker: which === "roxen" ? undefined : expectationChecker(),
+      extraPositions: which === "roxen" ? undefined : expectationPositions(),
     });
   } finally {
     ledger.close();
