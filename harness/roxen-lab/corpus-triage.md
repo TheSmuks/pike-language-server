@@ -11,15 +11,18 @@ docker run --rm -v /tank/projects/roxen-6.1:/corpus:ro pike-lsp/roxen-lab:6.1 \
 ```
 
 Corpus pinned at Roxen `4f1d04f82b3ea95f680cddab552d4912990c9c2f`; oracle built
-on Pike v8.0.1116. Recorded 2026-07-30 against 442 files, 14 failing.
+on Pike v8.0.1116. Recorded 2026-07-30 against 442 files, 14 failing. Named
+class expressions have since been fixed upstream, taking it to 11.
 
 ## Summary
 
-| Classification | Files |
-|---|---|
-| Grammar gap | 5 |
-| Macro-expansion gap | 8 |
-| Genuinely invalid source | 1 |
+| Classification | Files | Status |
+|---|---|---|
+| Grammar gap — named class expressions | 3 | **fixed** upstream |
+| Grammar gap — iterator `for` | 1 | open |
+| Grammar gap — unclassified MISSING | 1 | open |
+| Macro-expansion gap | 8 | open |
+| Genuinely invalid source | 1 | correct as-is |
 
 **Pike accepts 13 of the 14.** So "Roxen shows syntax errors" is almost never
 Roxen being unusual Pike — it is the grammar meeting constructs it does not
@@ -45,11 +48,14 @@ immediately. The grammar appears to admit only anonymous `class { … }` there.
 
 Oracle: `semantic`, `ok`, `semantic` respectively.
 
-**Attempted 2026-07-30 and reverted** (tree-sitter-pike `ac2edb0`, reverted by
-`b2e6bc7`). The obvious fix — give `anon_class` an `optional(field('name', …))`
-and declare `[$.class_decl, $.anon_class]` as a conflict — does fix all three
-files and keeps the grammar's own 231-test corpus green. It also **regresses**
-`server/modules/scripting/webapp.pike`, which parsed before:
+**Fixed** in tree-sitter-pike `d96749b`. All three parse; the corpus went from
+14 failures to 11 with nothing regressed.
+
+The fix is worth reading before attempting the remaining grammar gaps, because
+the obvious version of it is wrong. Adding `optional(field('name', …))` to
+`anon_class` fixes all three files and keeps the grammar's own suite green —
+and silently breaks `server/modules/scripting/webapp.pike`, which parsed
+before:
 
 ```pike
 #if 1
@@ -60,25 +66,32 @@ constant z = 1;
 ```
 
 Once a named class is a legal expression, `class Foo { … }` with no trailing
-`;` can start an `expression_statement`. It then completes by continuing
+`;` can start an `expression_statement`, which then completes by running
 through `preproc_conditional_expr` into the `#else` branch and consuming the
-semicolon belonging to `constant z = 1;`. Before the change the class had only
-one parse — `class_decl` — so the conditional never formed.
+semicolon belonging to `constant z = 1;`.
 
-Dynamic precedence does **not** arbitrate this. Verified by experiment, not
-assumed: `prec.dynamic(2)` and `prec.dynamic(20)` on `class_decl`,
-`prec.dynamic(-1)` and `prec.dynamic(-10)` on `anon_class` within
-`primary_expr`, and `prec.dynamic(-5)` on `preproc_conditional_expr` all leave
-the parse unchanged, so tree-sitter is resolving the conflict statically rather
-than keeping both parses alive. Declaring
+That ambiguity cannot be resolved by precedence. Verified rather than assumed:
+`prec.dynamic(2)` and `(20)` on `class_decl`, `(-1)` and `(-10)` on
+`anon_class`, and `(-5)` on `preproc_conditional_expr` all leave the parse
+byte-identical, because tree-sitter settles this conflict statically instead of
+keeping both parses alive for GLR. Declaring
 `[$.preproc_conditional_expr, $.declaration]` is reported as an unnecessary
-conflict, so that is not the divergence point either.
+conflict, so that is not the divergence point either. (This is why the same
+`prec.dynamic` trick that fixed `variable_decl` and `function_decl` in 1.3.2
+and 1.3.3 does not transfer — there, both parses do reach the same reduction
+point.)
 
-A working fix therefore needs the named class expression to be unreachable at
-statement start, rather than merely outranked there. Worth trying next: a
-separate `named_class_expr` rule wired only into the positions the corpus
-actually uses — an assignment or initialiser right-hand side, and the callee of
-a call for the immediately-instantiated form — instead of into `primary_expr`.
+The shipped fix removes the ambiguity instead of trying to outrank it: a
+separate `named_class_expr` node, reachable only from the right-hand side of an
+assignment or initialiser, where a statement can never begin. `class Foo { … }`
+standing alone is therefore still only ever a `class_decl`. A sibling
+`class_instantiation` node covers `= class Foo { … }()`, which means something
+different from `= class Foo { … }` — an object rather than a program.
+
+**The lesson for the remaining gaps:** the grammar's own 232-test suite went
+green on a change that broke real code. Always re-run
+`bun run scripts/roxen-corpus-parse.ts --check` with the rebuilt WASM; its
+`REGRESSED:`/`FIXED:` output is why the baseline records paths and not a count.
 
 ### Iterator `for` loop (1 file)
 
@@ -139,7 +152,7 @@ corpus baseline should keep expecting exactly one failure for this file.
 ## Status
 
 Triage is complete: every failing file is classified and carries the oracle's
-verdict. The upstream grammar work has **not** landed — the named-class-
-expression fix was attempted and reverted for the regression documented above,
-and the iterator `for` loop and the `DBManager.pmod` MISSING are untouched. The
-WASM is unchanged, so `corpus-baseline.json` still records 14.
+verdict. Named class expressions are fixed upstream and the WASM here is
+rebuilt, so `corpus-baseline.json` now records 11. The iterator `for` loop and
+the `DBManager.pmod` MISSING are untouched, as are the eight macro-expansion
+gaps. The floor is 1: `scale.pike` is invalid Pike and must keep failing.
