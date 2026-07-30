@@ -11,15 +11,15 @@ docker run --rm -v /tank/projects/roxen-6.1:/corpus:ro pike-lsp/roxen-lab:6.1 \
 ```
 
 Corpus pinned at Roxen `4f1d04f82b3ea95f680cddab552d4912990c9c2f`; oracle built
-on Pike v8.0.1116. Recorded 2026-07-30 against 442 files, 14 failing. Named
-class expressions have since been fixed upstream, taking it to 11.
+on Pike v8.0.1116. Recorded 2026-07-30 against 442 files, 14 failing. Two
+grammar gaps have since been fixed upstream, taking it to 10.
 
 ## Summary
 
 | Classification | Files | Status |
 |---|---|---|
-| Grammar gap — named class expressions | 3 | **fixed** upstream |
-| Grammar gap — iterator `for` | 1 | open |
+| Grammar gap — named class expressions | 3 | **fixed** upstream (v1.4.0) |
+| Grammar gap — declaration in a `for` condition | 1 | **fixed** upstream (v1.5.0) |
 | Grammar gap — unclassified MISSING | 1 | open |
 | Macro-expansion gap | 8 | open |
 | Genuinely invalid source | 1 | correct as-is |
@@ -93,14 +93,39 @@ green on a change that broke real code. Always re-run
 `bun run scripts/roxen-corpus-parse.ts --check` with the rebuilt WASM; its
 `REGRESSED:`/`FIXED:` output is why the baseline records paths and not a count.
 
-### Iterator `for` loop (1 file)
+### Declaration in a `for` condition (1 file)
 
 | File | Line | Source |
 |---|---|---|
 | `server/base_server/prototypes.pike` | 2468 | `for (keys; string key;) {` |
 
-Pike's three-clause `for` also has an iterator form, `for (iterable; type var;)`,
-which the grammar does not model. Oracle: `semantic`.
+**Fixed** in tree-sitter-pike `v1.5.0`. Oracle: `semantic`.
+
+This was first recorded here as an "iterator `for` loop", reading `for (keys;
+…)` as iteration over `keys`. That was wrong, and the correction matters
+because it changes what the grammar had to model. Pike has no iterator `for`.
+This is the ordinary three-clause form: `keys` is the initialiser (evaluated
+and discarded), and `string key` is a *declaration in the condition*, with no
+initialiser.
+
+Declarations are legal there because Pike does not special-case conditions per
+statement — `comma_expr` itself carries `simple_type2 local_name_list`
+(language.yacc), so a declaration is valid in every position taking a comma
+expression. `local_name_list` does not require an initialiser, which is why
+`string key` alone parses. Confirmed against pike v8.0.1116: `if (string x)`,
+`while (string x)` and `for (0; string k;)` all compile.
+
+The grammar had `cond_decl` for `if`/`while`/`switch`/`catch` but required an
+initialiser, and `for`'s condition accepted no declaration at all. Both were
+fixed: the initialiser is now optional, and `for`'s condition takes `cond_decl`.
+
+Worth knowing about the Roxen line itself: **it compiles to a loop that never
+runs.** An uninitialised declaration evaluates to 0, so the condition is false
+on the first test — measured, not inferred (`for (keys; string key;) { n++; }`
+leaves `n == 0`). Pike accepts it with only an unused-variable warning. So
+`find_in_misc_forwarded`'s `case_insensitive` branch is dead code. That is a
+Roxen defect, not a grammar one, and is out of scope here — but it is the kind
+of thing this server should eventually be able to point out.
 
 ### Unclassified structural failure (1 file)
 
@@ -152,7 +177,8 @@ corpus baseline should keep expecting exactly one failure for this file.
 ## Status
 
 Triage is complete: every failing file is classified and carries the oracle's
-verdict. Named class expressions are fixed upstream and the WASM here is
-rebuilt, so `corpus-baseline.json` now records 11. The iterator `for` loop and
-the `DBManager.pmod` MISSING are untouched, as are the eight macro-expansion
-gaps. The floor is 1: `scale.pike` is invalid Pike and must keep failing.
+verdict. Named class expressions and the `for`-condition declaration are fixed
+upstream and the WASM here is rebuilt, so `corpus-baseline.json` now records
+10. The `DBManager.pmod` MISSING is untouched, as are the eight
+macro-expansion gaps. The floor is 1: `scale.pike` is invalid Pike and must
+keep failing.
