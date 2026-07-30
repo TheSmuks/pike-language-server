@@ -180,7 +180,16 @@ async function main(): Promise<void> {
       const method = rest[0];
       if (!method) throw new Error("notify requires a <method> argument");
       const extraParams = rest[2] ? JSON.parse(rest[2]) : {};
-      server.client.sendNotification(method, { textDocument: { uri }, ...extraParams });
+      // The version is REQUIRED. vscode-languageserver's TextDocuments throws
+      // "without valid version identifier" on a versionless didChange, and
+      // vscode-jsonrpc catches that inside its notification dispatcher and
+      // routes it to a log channel nothing here listens to — so the change is
+      // dropped in total silence and the command reports success. The document
+      // is opened at version 1, so 2 is the next one.
+      server.client.sendNotification(method, {
+        textDocument: { uri, version: 2 },
+        ...extraParams,
+      });
       const alive = await server.client.sendRequest("textDocument/documentSymbol", {
         textDocument: { uri },
       });

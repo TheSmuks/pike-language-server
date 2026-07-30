@@ -150,6 +150,30 @@ test("notification capabilities use notify, not raw", () => {
   }
 });
 
+test("a notify reproduction has a live effect, not just a clean exit", async () => {
+  // Three rounds of this task shipped reproduction commands that ran without
+  // error while doing nothing. Asserting on the command STRING cannot catch
+  // that; only observing the server's state can. Replacing the document with
+  // an empty string must drop the symbol count to zero.
+  const { spawnSync } = await import("node:child_process");
+  const run = (args: string[]) =>
+    spawnSync("bun", ["run", "scripts/lsp-probe.ts", ...args], {
+      encoding: "utf8",
+      timeout: 120_000,
+    }).stdout ?? "";
+
+  const output = run([
+    "notify",
+    "textDocument/didChange",
+    "corpus/files/class-create.pike",
+    '{"contentChanges":[{"text":""}]}',
+  ]);
+
+  expect(output).toContain("notification sent: textDocument/didChange");
+  // The whole document was replaced with nothing, so nothing can be left.
+  expect(output).toContain("server still responding: 0 symbols");
+}, 180_000);
+
 test("request capabilities still use raw, not notify", () => {
   const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
   expect(finding.reproduction).toContain("raw textDocument/references");
