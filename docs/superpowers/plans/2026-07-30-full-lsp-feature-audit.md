@@ -1693,6 +1693,53 @@ test("findings render as a markdown table with an id column", () => {
   expect(markdown).toContain("| # |");
   expect(markdown).toContain("A1");
 });
+
+test("the raw-fallback reproduction is a runnable command, not a bare position", () => {
+  // Every other test uses hover, which has a dedicated subcommand. That is why
+  // the raw fallback shipped broken: `raw <method> <file> 2:3` makes lsp-probe
+  // JSON.parse "2:3" and throw before sending anything.
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  // The third argument must be parseable JSON carrying 0-based LSP coordinates.
+  const json = finding.reproduction.match(/'(\{.*\})'$/)?.[1];
+  expect(json).toBeDefined();
+  const params = JSON.parse(json!);
+  expect(params.position).toEqual({ line: 1, character: 2 });
+  expect(params.context).toEqual({ includeDeclaration: true });
+});
+
+test("selectionRange reproduces with positions[], the shape it actually takes", () => {
+  const finding = triage([{ ...base, capability: "textDocument/selectionRange", status: "empty" }])[0];
+  const params = JSON.parse(finding.reproduction.match(/'(\{.*\})'$/)![1]);
+  expect(params.positions).toEqual([{ line: 1, character: 2 }]);
+  expect(params.position).toBeUndefined();
+});
+
+test("ids are assigned after the sort, so A1 is the most severe finding", () => {
+  const findings = triage([
+    { ...base, durationMs: 4000 },                    // Low
+    { ...base, capability: "textDocument/definition", status: "error" }, // Critical
+  ], { slowMs: 1000 });
+  expect(findings[0].id).toBe("A1");
+  expect(findings[0].severity).toBe("Critical");
+  expect(findings[1].id).toBe("A2");
+});
+
+test("a pipe in a server error message cannot break the table row", () => {
+  // Pike type unions contain '|', so this is a realistic detail string.
+  const markdown = renderFindings(
+    triage([{ ...base, status: "error", detail: "Expected string|Stdio.File" }]),
+  );
+  const row = markdown.split("\n").find((l) => l.startsWith("| A1"))!;
+  expect(row.split(/(?<!\\)\|/).length - 1).toBe(6); // 5 columns => 6 delimiters
+  expect(markdown).toContain("string\\|Stdio.File");
+});
+
+test("a slow record that is also empty gets the more severe tier", () => {
+  const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
+  expect(findings[0].severity).toBe("High");
+  expect(findings[0].tier).toBe(1);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1745,28 +1792,84 @@ const SEVERITY_BY_TIER: Record<Tier, Severity> = {
   3: "Low",
 };
 
-/** lsp-probe takes 1-based line:col; the ledger stores 0-based LSP positions. */
-function reproductionFor(record: LedgerRecord): string {
-  const subcommand = probeSubcommand(record.capability);
-  const target = `${record.workspace === "corpus" ? "corpus/files/" : ""}${record.file}`;
-  if (!record.position) {
-    return `bun run scripts/lsp-probe.ts ${subcommand} ${target}`;
-  }
-  const line = record.position.line + 1;
-  const character = record.position.character + 1;
-  return `bun run scripts/lsp-probe.ts ${subcommand} ${target} ${line}:${character}`;
-}
+/**
+ * lsp-probe subcommands that take a 1-BASED `line:col` argument.
+ *
+ * Everything else goes through `raw`, whose third argument is JSON spread
+ * straight into the LSP request — so those params are 0-BASED, unlike these.
+ * Mixing the two conventions up silently produces a command that reproduces a
+ * different position than the finding.
+ */
+const DEDICATED_SUBCOMMAND: Record<string, string> = {
+  "textDocument/hover": "hover",
+  "textDocument/completion": "complete",
+  "textDocument/definition": "define",
+  "textDocument/documentSymbol": "symbols",
+  "textDocument/semanticTokens/full": "tokens",
+};
 
-/** Map an LSP method to the lsp-probe subcommand that reproduces it. */
-function probeSubcommand(method: string): string {
-  switch (method) {
-    case "textDocument/hover": return "hover";
-    case "textDocument/completion": return "complete";
-    case "textDocument/definition": return "define";
-    case "textDocument/documentSymbol": return "symbols";
-    case "textDocument/semanticTokens/full": return "tokens";
-    default: return `raw ${method}`;
+/**
+ * Params the matrix sends beyond textDocument/position, per method.
+ *
+ * Without these the reproduction fires a different request than the one that
+ * produced the finding — `references` without its context, `rename` without a
+ * newName — and may not reproduce it at all.
+ */
+const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
+  "textDocument/references": { context: { includeDeclaration: true } },
+  "textDocument/rename": { newName: "auditRenamedSymbol" },
+  "textDocument/signatureHelp": { context: { triggerKind: 1, isRetrigger: false } },
+  "textDocument/codeAction": { context: { diagnostics: [] } },
+  "textDocument/formatting": { options: { tabSize: 2, insertSpaces: true } },
+  "textDocument/rangeFormatting": { options: { tabSize: 2, insertSpaces: true } },
+  "textDocument/onTypeFormatting": { ch: "}", options: { tabSize: 2, insertSpaces: true } },
+};
+
+/** Methods whose params require a range. A whole-file range stands in. */
+const RANGE_METHODS = new Set([
+  "textDocument/rangeFormatting",
+  "textDocument/inlayHint",
+  "textDocument/codeAction",
+  "textDocument/semanticTokens/range",
+]);
+
+const WHOLE_FILE_RANGE = {
+  start: { line: 0, character: 0 },
+  end: { line: 100000, character: 0 },
+};
+
+/**
+ * Build a command a human can paste into a shell to see the bad result.
+ *
+ * This is the audit's credibility mechanism: a finding that cannot be
+ * reproduced outside the harness is a harness artifact, not a defect. So the
+ * command must actually run — `raw <method> <file> 2:3` does not, because
+ * lsp-probe JSON.parses that third argument.
+ */
+function reproductionFor(record: LedgerRecord): string {
+  const target = `${record.workspace === "corpus" ? "corpus/files/" : ""}${record.file}`;
+  const dedicated = DEDICATED_SUBCOMMAND[record.capability];
+
+  if (dedicated) {
+    if (!record.position) return `bun run scripts/lsp-probe.ts ${dedicated} ${target}`;
+    // 1-based: lsp-probe's parsePosition converts these to LSP coordinates.
+    const line = record.position.line + 1;
+    const character = record.position.character + 1;
+    return `bun run scripts/lsp-probe.ts ${dedicated} ${target} ${line}:${character}`;
   }
+
+  // raw: these params are spread verbatim into the request, so 0-based.
+  const params: Record<string, unknown> = { ...EXTRA_PARAMS[record.capability] };
+  if (RANGE_METHODS.has(record.capability)) params.range = WHOLE_FILE_RANGE;
+  if (record.position) {
+    if (record.capability === "textDocument/selectionRange") {
+      params.positions = [record.position];
+    } else {
+      params.position = record.position;
+    }
+  }
+  const json = JSON.stringify(params);
+  return `bun run scripts/lsp-probe.ts raw ${record.capability} ${target} '${json}'`;
 }
 
 function tierOf(record: LedgerRecord, slowMs: number): Tier | null {
@@ -1808,7 +1911,7 @@ export function triage(records: LedgerRecord[], options: TriageOptions = {}): Fi
     }
 
     findings.push({
-      id: `A${findings.length + 1}`,
+      id: "", // Assigned after the sort, so ids track display order.
       severity: SEVERITY_BY_TIER[tier],
       tier,
       surface: record.surface,
@@ -1822,14 +1925,29 @@ export function triage(records: LedgerRecord[], options: TriageOptions = {}): Fi
   }
 
   const order: Severity[] = ["Critical", "High", "Medium", "Low"];
-  return findings.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  findings.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  // Ids are assigned last so A1 is the most severe finding. A reader treats
+  // "A1" as a locator and works down the table; ids that don't match the
+  // displayed order send them to the wrong row.
+  return findings.map((finding, index) => ({ ...finding, id: `A${index + 1}` }));
+}
+
+/**
+ * Escape a value for a markdown table cell.
+ *
+ * Server error messages land in these cells verbatim, and Pike's type syntax
+ * uses `|` for unions (`string|Stdio.File`), so an unescaped detail string
+ * silently breaks the row's columns. Newlines break the table outright.
+ */
+function cell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 export function renderFindings(findings: Finding[]): string {
   const rows = findings.map((f) => {
     const where = f.position ? `${f.file}:${f.position.line + 1}` : f.file;
     const verdict = f.oracleVerdict ? ` (oracle: ${f.oracleVerdict})` : "";
-    return `| ${f.id} | ${f.severity[0]} | ${f.summary}${verdict} | \`${where}\` | \`${f.reproduction}\` |`;
+    return `| ${f.id} | ${f.severity[0]} | ${cell(f.summary + verdict)} | \`${cell(where)}\` | \`${cell(f.reproduction)}\` |`;
   });
   return [
     "| # | Severity | Finding | Location | Reproduction |",
