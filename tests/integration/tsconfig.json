@@ -13,5 +13,5 @@
     "ignoreDeprecations": "6.0",
     "types": ["node", "vscode", "mocha"]
   },
-  "include": ["suite/**/*.ts", "run-tests.ts"]
+  "include": ["suite/**/*.ts", "run-tests.ts", "run-memory-probe.ts"]
 }

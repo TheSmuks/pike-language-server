@@ -112,3 +112,38 @@ whole class of bug.
 `var import_meta = {}` that is now a **no-op** — esbuild ≥0.28 no longer emits
 that form for CJS. Harmless today, but verify web-tree-sitter WASM resolution in
 the client still works if you touch the client bundle format.
+
+## Extension-host memory
+
+`bun run --cwd tests/integration memory-probe` launches a real VSCode, activates
+the extension, opens Pike's own stdlib largest-first, and reports memory from
+*inside* the extension host, with the language-server child sampled from `/proc`
+at the same instant.
+
+It exists because the two are easy to confuse. VSCode's process explorer nests
+the language server under the extension host, so the server's RSS reads as the
+host's. They are separate processes with separate budgets, and the fixes are
+different.
+
+Measured 2026-07-30 (40 largest stdlib files, Pike 8.0.1116, node 22):
+
+| | before activate | settled | growth |
+|---|---|---|---|
+| extension host RSS | 146–148 MB | 174–182 MB | **+28–34 MB** |
+| extension host heap | 25–27 MB | 47–53 MB | +22–26 MB |
+| language server RSS | — | 233–239 MB (peak ~340 MB) | — |
+
+So roughly **147 MB of the extension host is VSCode's own floor**, before any of
+our code runs. What this extension adds to the host is tens of megabytes, most
+of it VSCode holding document text and symbols for open files. Forcing semantic
+tokens (which are off by default) accounts for about 6 MB RSS of that across 40
+large files — real, but not the story.
+
+The number people actually notice is the server's, and that is the one
+`memory.budgetMb`, the heap cap and the lazy cache exist to bound. See
+`decisions/` and the perf work for that side. Read the server's settled figure
+no sooner than 60s after load: the burst is a transient high-water mark that V8
+returns (~340 MB → ~235 MB here).
+
+`PIKE_PROBE_NO_TOKENS=1` skips the semantic-token requests to measure the
+default path.

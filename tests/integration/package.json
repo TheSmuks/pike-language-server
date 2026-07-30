@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "bun run compile && xvfb-run -a node dist/run-tests.js",
-    "compile": "tsc"
+    "compile": "tsc",
+    "memory-probe": "bun run compile && xvfb-run -a node dist/run-memory-probe.js"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
