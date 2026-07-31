@@ -14,7 +14,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import type { Location as LspLocation } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration } from "./symbolTable";
 import type { TypeResolutionContext } from "./typeResolver";
-import { resolveMemberAccess, resolveLhsTypeName } from "./typeResolver";
+import { resolveMemberAccess, resolveLhsTypeName, elementTypeOf } from "./typeResolver";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
@@ -79,6 +79,8 @@ export async function resolveAccessCore(
     site.memberName,
     lhsDecl,
     site.typeCtx,
+    0,
+    isSubscript(site.lhsNode),
   );
   if (!targetDecl) return null;
 
@@ -158,7 +160,16 @@ export async function resolveAccessQualifiedType(
 
   const lhsDecl = await resolveLhsDeclaration(site.lhsNode, table, site.typeCtx, 0);
   const lhsName = site.lhsNode.type === 'identifier' ? site.lhsNode.text : '';
-  const typeName = await resolveLhsTypeName(lhsName, lhsDecl, site.typeCtx);
+  const declaredTypeName = await resolveLhsTypeName(lhsName, lhsDecl, site.typeCtx);
+  if (!declaredTypeName) return null;
+
+  // `items[k]->m` resolves the receiver to `items`, whose type is the
+  // CONTAINER — but the member belongs to what the container holds. Without
+  // this, every member access through a subscript looked the member up on a
+  // class literally named `mapping(string:Item)` and found nothing.
+  const typeName = isSubscript(site.lhsNode)
+    ? elementTypeOf(declaredTypeName)
+    : declaredTypeName;
   if (!typeName) return null;
 
   return { typeName, memberName: site.memberName };
@@ -317,6 +328,17 @@ async function resolveModuleMemberAccess(
  * For a nested postfix_expr (chained access like a.b.c), recursively
  * resolves the chain and returns the intermediate declaration.
  */
+/**
+ * True when the node is an index expression: `items[k]`, `list[0]`.
+ *
+ * The children are [base, '[', index…, ']'], so the closing bracket is what
+ * distinguishes it from an ordinary member-access postfix_expr.
+ */
+function isSubscript(node: Node): boolean {
+  if (node.type !== 'postfix_expr') return false;
+  return node.child(node.childCount - 1)?.type === ']';
+}
+
 async function resolveLhsDeclaration(
   lhsNode: Node,
   table: SymbolTable,

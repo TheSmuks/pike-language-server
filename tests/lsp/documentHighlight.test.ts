@@ -122,6 +122,72 @@ describe("US-015: textDocument/documentHighlight", () => {
     expect(result).toBeNull();
   });
 
+  test("highlights a declaration that has no other references (N1)", async () => {
+    // Audit iteration 7, finding N1: a symbol occurring exactly once got null.
+    // The declaration IS an occurrence — LSP asks for all highlights at the
+    // position, and rust-analyzer, gopls and tsserver all highlight a lone
+    // declaration. 4,242 instances across the Roxen tree and the corpus.
+    const src = [
+      "int main() {",
+      "  return 0;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/highlight-lonely.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri },
+      position: { line: 0, character: 4 }, // 'main', declared once, never called
+    }) as HighlightResult[] | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBe(1);
+    expect(result![0].kind).toBe(3); // Write — it is the declaration
+    expect(result![0].range.start).toEqual({ line: 0, character: 4 });
+  });
+
+  test("a lone declaration highlight does not duplicate itself", async () => {
+    // The declaration is pushed first and then skipped in the ref loop; with
+    // no refs there is nothing to skip, so guard against an off-by-one that
+    // would emit the same range twice.
+    const src = "int solitary;\n";
+    const uri = server.openDoc("file:///test/highlight-solitary.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri },
+      position: { line: 0, character: 4 },
+    }) as HighlightResult[] | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBe(1);
+  });
+
+  test("resolves the inherit qualifier in A::member() (N2/N3/C1/C2 cluster)", async () => {
+    // Audit iteration 7: definition, declaration, references, hover, completion
+    // and documentHighlight ALL returned null on the `A` in `A::value()`.
+    // collectScopeRef recorded a reference only for the member after `::`,
+    // reading the qualifier solely to resolve that member — so nothing existed
+    // at the qualifier's position for any feature to find.
+    const src = [
+      "class A {",
+      "  int value() { return 1; }",
+      "}",
+      "class C {",
+      "  inherit A;",
+      "  int sum() { return A::value(); }",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/scope-qualifier.pike", src);
+
+    // Cursor on the `A` qualifier at line 5, char 21.
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri },
+      position: { line: 5, character: 21 },
+    }) as HighlightResult[] | null;
+
+    expect(result).not.toBeNull();
+    expect(result!.length).toBeGreaterThanOrEqual(1);
+  });
+
   test("returns null for position with no symbol", async () => {
     const src = "int main() { return 0; }";
     const uri = server.openDoc("file:///test/highlight-empty.pike", src);

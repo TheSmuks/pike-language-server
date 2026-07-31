@@ -22,6 +22,7 @@
  *   bun run scripts/lsp-probe.ts diagnostics <file>
  *   bun run scripts/lsp-probe.ts capabilities
  *   bun run scripts/lsp-probe.ts raw <method> <file> [jsonParams]
+ *   bun run scripts/lsp-probe.ts notify <method> <file> [jsonParams]
  *
  * Positions are 1-based (line and column, as editors display them) and are
  * converted to LSP's 0-based coordinates internally.
@@ -144,7 +145,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const fileArg = command === "raw" ? rest[1] : rest[0];
+  const fileArg = command === "raw" || command === "notify" ? rest[1] : rest[0];
   if (!fileArg) throw new Error(`command "${command}" requires a <file> argument`);
   const { uri, text, sourceLines } = loadFile(fileArg);
 
@@ -172,6 +173,28 @@ async function main(): Promise<void> {
       const position = parsePosition(rest[1] ?? "");
       const result = await server.client.sendRequest(method, { textDocument: { uri }, position });
       console.log(JSON.stringify(result, null, 2));
+    } else if (command === "notify") {
+      // Lifecycle capabilities are notifications: there is no reply to print.
+      // A lifecycle finding is a crash, so the reproduction sends the
+      // notification and then proves the server is still answering.
+      const method = rest[0];
+      if (!method) throw new Error("notify requires a <method> argument");
+      const extraParams = rest[2] ? JSON.parse(rest[2]) : {};
+      // The version is REQUIRED. vscode-languageserver's TextDocuments throws
+      // "without valid version identifier" on a versionless didChange, and
+      // vscode-jsonrpc catches that inside its notification dispatcher and
+      // routes it to a log channel nothing here listens to — so the change is
+      // dropped in total silence and the command reports success. The document
+      // is opened at version 1, so 2 is the next one.
+      server.client.sendNotification(method, {
+        textDocument: { uri, version: 2 },
+        ...extraParams,
+      });
+      const alive = await server.client.sendRequest("textDocument/documentSymbol", {
+        textDocument: { uri },
+      });
+      console.log(`notification sent: ${method}`);
+      console.log(`server still responding: ${Array.isArray(alive) ? `${alive.length} symbols` : "yes"}`);
     } else if (command === "raw") {
       const method = rest[0];
       if (!method) throw new Error("raw requires a <method> argument");
