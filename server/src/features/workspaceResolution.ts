@@ -10,7 +10,7 @@ import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, t
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
-import { receiverNamesNoMember } from "./typeResolver";
+import { receiverNamesNoMember } from "./receiverMembers";
 import { inheritSearchScope, inheritsReachableBy } from "./scopeQualifier";
 
 // ---------------------------------------------------------------------------

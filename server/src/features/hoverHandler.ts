@@ -39,7 +39,7 @@ import {
   type HoverInfo,
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
-import { memberOfMemberlessReceiver } from "./typeResolver";
+import { memberOfMemberlessReceiver } from "./receiverMembers";
 import { type RoxenIndexData } from "./roxenIndex";
 import { roxenHover, roxenPathHover, roxenTypedMemberHover } from "./hoverRoxen";
 import {
@@ -280,9 +280,14 @@ async function hoverFromTree(
   const qualifiedMember = await hoverQualifiedInheritMember(ctx, table, hoverTree, params);
   if (qualifiedMember) return qualifiedMember;
 
-  // The tiers below answer by bare NAME. On `file->error` where `file` is a
-  // mapping, that handed back Pike's builtin `error` — the receiver has no
-  // members at all, so a name that merely matches is not an answer.
+  // Path-aware, so it runs with roxenPathHover rather than after the bare-name
+  // tiers: `ADT.Table.ASCII` is that module, not any `ASCII` in scope.
+  const modulePathHover = await hoverFromModulePath(ctx, doc, params);
+  if (modulePathHover) return modulePathHover;
+
+  // Everything below answers by bare NAME. On `file->error` where `file` is a
+  // mapping that handed back Pike's builtin `error`, and on `Image.PNG.encode`
+  // an unrelated `encode` from an inherit chain the expression never mentions.
   if (memberOfMemberlessReceiver(table, params)) return null;
 
   const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
@@ -295,9 +300,6 @@ async function hoverFromTree(
   // declaration anywhere, so every tier above walks past them.
   const specifierHover = hoverScopeSpecifier(table, hoverTree, params);
   if (specifierHover) return specifierHover;
-
-  const modulePathHover = await hoverFromModulePath(ctx, doc, params);
-  if (modulePathHover) return modulePathHover;
 
   // Last resort: the cursor is on a declaration's own name and nothing above
   // could resolve what it points at — an inherit or import of a target this

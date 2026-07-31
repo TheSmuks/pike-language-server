@@ -121,7 +121,7 @@ a reason for the declaration to become unreachable.
 | `->` on a receiver | 936 | ~~Partly~~ — wrong, see amendment 3 |
 | `Qualifier::` (mostly `predef::`) | 89 | ~~Needs Roxen index coverage~~ — wrong, see correction |
 | Bare `::` | 74 | ~~Partly~~ — wrong, see correction |
-| After `.` | 61 | Partly |
+| After `.` | 61 | ~~Partly~~ — see amendment 4 |
 | Plain identifier | 24 | Yes |
 | `->` on a subscript | 13 | Yes |
 
@@ -331,3 +331,28 @@ Four defects, none of them the "index coverage" the table above blamed:
 Total answered falls 10,396 → 9,803, which is the point: ~1,900 wrong answers
 removed, ~1,300 correct ones added. A sweep that counts only empties records
 that as a regression.
+
+## Amendment 4 — the "after `.`" bucket, 2026-07-31
+
+The healthiest of the four, and the only one where "not reachable from this
+repository" turns out to be the right verdict for most of what is left.
+
+All 9,309 `path.member` positions in Roxen 6.1, not the 61 the sweep recorded:
+8,832 answered, 477 empty.
+
+**238 of the 477 empties are one symbol.** `Roxen.html_encode_string` comes
+from `_Roxen`, a C module that `Roxen.pmod:3862` inherits. The pinned Roxen
+checkout ships no `src/`, so that module's symbols have no source of truth in
+this repository or that tree — not autodoc, not a stub, nothing. Unlike the
+`RequestID` case, there is no file to harvest. Genuinely out of reach.
+
+**The defect was again on the answered side.** 84 positions answered with a
+same-named symbol from somewhere else entirely: 36 into Roxen's
+`Variable.pmod`, 8 into `LazyImage.pmod`, 7 into `RXML.pmod`, the rest into
+Pike's own `module.pmod` files. `ADT.Table.ASCII` resolved correctly while
+`ADT.Table.ASCII.encode` — one segment further — fell through to the bare-name
+search. A `.` whose left side is not a variable names a module, and only the
+module-path tier is entitled to answer it. Hover had the same problem from a
+different direction: its module-path tier ran *after* the bare-name tiers.
+
+Answered 8,832 → 8,751, paths that resolve inconsistently 112 → 98.
