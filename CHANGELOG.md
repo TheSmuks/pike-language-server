@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Roxen's undocumented symbols are now indexed** — 499 → 719, with `RoxenModule.` going 53 → 127 and a new `predef.` family of 146. The generator only ever harvested what Roxen's AutoDoc documents, so ordinary module surface (`cvs_version`, `find_file`, `defvar`, `start`, `stop`, `stat_file`, `query_provides`) and the globals roxenloader injects (`predef::report_fatal` and friends) resolved to nothing. All of it is harvested from Roxen's source rather than hand-listed: undocumented prototype members, names measured across the 127 modules that `inherit "module"`, and every `add_constant(...)` plus the indices of `prototypes.pike` minus the exclusion multiset the loader itself declares. `predef::` completion offers these only in a Roxen file; a plain Pike program still sees only what Pike predefines. Costs +43 KB on the bundle.
+
+### Fixed
+
+- **A rare crash while hovering was a use-after-free.** `parse()` returns a tree the LRU cache owns, and the cache frees it — on re-parse of the same file, on eviction caused by any other document, on close, and on the memory governor's sweep. Handlers held that tree across `await`s, so a free landing mid-request left them dereferencing a null root. Reproduced through the real hover path: a concurrent edit during the filesystem lookup for a dotted access. Trees that outlive an `await` now take a cheap handle of their own, applied at the five sites that need it — including the one every indexing path funnels through. The audit saw this once in 200,936 requests.
+- **`private { … }` no longer shows a syntax error.** Pike's modifier block groups *declarations*; the grammar modelled its body as a statement list, so a nested `protected class` inside one made the parser demand a semicolon that valid Pike does not have. Fixed upstream in tree-sitter-pike and shipped here as a rebuilt WASM; the Roxen 6.1 corpus goes from 10 parse failures to 9, with nothing regressed.
+- **Hibernation acted on the wrong index.** The server builds a placeholder index until the editor tells it the workspace root; the hibernation hooks captured that placeholder and kept it, so the cache they saved on idle was empty and written to the wrong path, and the one they cleared was not the live one. Neither errors, so the only symptom was that waking never found a warm cache — hibernation shed the memory and lost the work.
+
 ### Changed
 
 - **Marketplace and npm listings now say what the extension actually does.** The description led with "Tier-3 LSP implementation", which describes the architecture rather than the benefit, and neither listing mentioned Roxen WebServer support at all. Keywords gained `roxen`, `roxen-webserver`, `autocomplete` and `intellisense`, and `Linters` joins the categories to match the diagnostics the server ships.
