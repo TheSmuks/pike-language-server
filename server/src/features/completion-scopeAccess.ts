@@ -5,10 +5,10 @@
  */
 
 import { Node } from "web-tree-sitter";
-import { CompletionItem } from "vscode-languageserver/node";
+import { CompletionItem, CompletionItemKind } from "vscode-languageserver/node";
 import type { SymbolTable } from "./symbolTable";
 import { getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
-import { declToCompletionItem } from "./completion-items";
+import { declToCompletionItem, cleanPredefSignature, padSortKey } from "./completion-items";
 import { addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import type { CompletionContext } from "./completionTrigger";
 
@@ -49,6 +49,29 @@ function completeFileScope(table: SymbolTable, seenNames: Set<string>): Completi
     if (seenNames.has(decl.name)) continue;
     seenNames.add(decl.name);
     items.push(declToCompletionItem(decl, 0, table));
+  }
+  return items;
+}
+
+/**
+ * Handle predef:: — Pike's predefined namespace.
+ *
+ * A Roxen file also reaches globals through `predef::` that roxenloader injects
+ * at run time (`predef::report_fatal`). Those are not in this index and are not
+ * invented here; the list is what Pike itself predefines.
+ */
+function completePredefScope(ctx: CompletionContext, seenNames: Set<string>): CompletionItem[] {
+  const items: CompletionItem[] = [];
+  for (const name of Object.keys(ctx.predefBuiltins)) {
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
+    items.push({
+      label: name,
+      kind: CompletionItemKind.Function,
+      detail: cleanPredefSignature(ctx.predefBuiltins[name]),
+      sortText: padSortKey(0) + name,
+      filterText: name,
+    });
   }
   return items;
 }
@@ -248,6 +271,13 @@ export async function completeScopeAccess(
   // know the keyword, looked for an inherit named `global`, and found none.
   if (scopeText === "global") {
     return completeFileScope(table, seenNames);
+  }
+
+  // `predef::` names Pike's predefined namespace. Without this the qualifier
+  // fell through to the inherit search, which looked for something the file
+  // inherits called `predef` and of course found none.
+  if (scopeText === "predef") {
+    return completePredefScope(ctx, seenNames);
   }
 
   if (scopeText === "::" || scopeNode.type === "inherit_specifier") {
