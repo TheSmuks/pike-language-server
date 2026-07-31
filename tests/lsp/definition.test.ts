@@ -1419,4 +1419,52 @@ describe("definition: chained access resolution", () => {
     // it. Resolving to line 2 would defeat the point of writing `global::`.
     expect(result!.range.start.line).toBe(0);
   });
+
+  test("A::m and B::m resolve to their own class, not the first inherit (name collision)", async () => {
+    // Audit iteration 7, tier-2 finding. resolveInheritedScopeMember checked
+    // whether the inherited scope's PARENT contained a class of the qualifier's
+    // name — but every class body shares the file scope as its parent, so the
+    // first inherited scope always matched. `B::value()` therefore resolved to
+    // A::value: a wrong answer, which is worse than none.
+    const src = [
+      'class A {',
+      '  int value() { return 1; }',
+      '}',
+      'class B {',
+      '  int value() { return 2; }',
+      '  string label() { return "B"; }',
+      '}',
+      'class C {',
+      '  inherit A;',
+      '  inherit B;',
+      '  int sum() { return A::value() + B::value(); }',
+      '  string describe() { return B::label(); }',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-scope-collision.pike", src);
+
+    // A::value() -> class A's value, line 1.
+    const viaA = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 10, character: 24 },
+    }) as LspLocation | null;
+    expect(viaA).not.toBeNull();
+    expect(viaA!.range.start.line).toBe(1);
+
+    // B::value() -> class B's value, line 4. This is the one that was wrong.
+    const viaB = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 10, character: 39 },
+    }) as LspLocation | null;
+    expect(viaB).not.toBeNull();
+    expect(viaB!.range.start.line).toBe(4);
+
+    // B::label() exists only on B, and previously resolved to nothing.
+    const label = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 11, character: 32 },
+    }) as LspLocation | null;
+    expect(label).not.toBeNull();
+    expect(label!.range.start.line).toBe(5);
+  });
 });
