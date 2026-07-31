@@ -186,6 +186,31 @@ describe("prepareRename — direct API", () => {
     expect(result).toBeNull();
   });
 
+
+  test("refuses to rename an inherit declaration (would leave it dangling)", async () => {
+    // Found by the pre-release whole-branch review. Renaming through an
+    // `inherit` produces edits at the inherit clause but NOT at the class
+    // declaration itself, so accepting it yields source that no longer
+    // compiles. Renaming a class is a legitimate operation — but it must be
+    // driven from the class, not from an inherit that merely names it.
+    const src = `class Zoinker {
+  int value() { return 1; }
+}
+class C {
+  inherit Zoinker;
+  int sum() { return Zoinker::value(); }
+}`;
+    const tree = parse(src);
+    const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+    // Cursor on the name in `inherit Zoinker;`.
+    expect(prepareRename(table, 4, 10)).toBeNull();
+
+    // …and on the qualifier in `Zoinker::value()`, which resolves to the same
+    // inherit declaration. This is the path the scope-qualifier fix opened.
+    expect(prepareRename(table, 5, 21)).toBeNull();
+  });
+
   test("returns null for position with no symbol", () => {
     const src = `class Animal { }`;
     const tree = parse(src);

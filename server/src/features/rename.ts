@@ -246,6 +246,21 @@ export async function getRenameLocations(
   if (!decl) {
     return null;
   }
+  // Also guarded here, not only in prepareRename: a client is free to send
+  // textDocument/rename without ever calling prepareRename, and this request
+  // is the destructive one.
+  if (namesAnotherDeclaration(decl)) {
+    return null;
+  }
+  // The cursor must be ON an occurrence of the symbol being renamed. At
+  // `inherit Zoinker;` getDefinitionAt resolves through to the class, whose
+  // occurrences do not include the inherit clause — so the edits would rewrite
+  // the class and leave the clause dangling. prepareRename already declines
+  // here; without this, the two requests disagree and a client that skips
+  // prepareRename corrupts the file.
+  if (!occurrenceAt(table, decl, line, character)) {
+    return null;
+  }
 
   // Reject stdlib/predef symbols shadowed at file scope
   if (isProtectedFromRename(table, decl, protectedNames)) {
@@ -363,6 +378,18 @@ export function buildWorkspaceEdit(
 // ---------------------------------------------------------------------------
 
 /**
+ * An inherit/import declaration names a class it does not own.
+ *
+ * Renaming through one produces edits at the inherit clause but none at the
+ * class declaration itself, leaving source that no longer compiles. Renaming
+ * the class is legitimate — driven from the class, not from a clause that
+ * merely references it.
+ */
+function namesAnotherDeclaration(decl: Declaration): boolean {
+  return decl.kind === 'inherit' || decl.kind === 'import';
+}
+
+/**
  * Determine if the symbol at the given position can be renamed.
  * Returns the range and placeholder for the rename UI, or null.
  *
@@ -376,6 +403,7 @@ export function prepareRename(
 ): PrepareRenameResult | null {
   const decl = getDefinitionAt(table, line, character);
   if (!decl) return null;
+  if (namesAnotherDeclaration(decl)) return null;
   if (isProtectedFromRename(table, decl, protectedNames)) return null;
   if (PIKE_KEYWORDS.has(decl.name)) return null;
 
