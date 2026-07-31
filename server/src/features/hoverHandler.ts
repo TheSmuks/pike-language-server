@@ -16,7 +16,7 @@ import type {
 } from "vscode-languageserver/node";
 import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
-import { parse } from "../parser";
+import { parse, withBorrowedTree } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
 import { getDefinitionAt, getLocalDeclarationAt, type SymbolTable, type Declaration } from "./symbolTable";
 import {
@@ -219,7 +219,26 @@ async function resolveHoverFallback(
   );
   if (crossFile) return crossFileHover(crossFile, ctx, params.position);
 
-  const hoverTree = parse(doc.getText(), params.textDocument.uri);
+  // Every tier below reads the tree after an `await`, so the hover needs a
+  // handle the parser cache cannot free out from under it.
+  return withBorrowedTree(
+    parse(doc.getText(), params.textDocument.uri),
+    (hoverTree) => hoverFromTree(
+      ctx, baseResolutionCtx, makeTypeInferrer, table, doc, params, hoverTree,
+    ),
+  );
+}
+
+/** Hover tiers that read the parse tree: access, qualified stdlib, builtin, alias. */
+async function hoverFromTree(
+  ctx: HoverContext,
+  baseResolutionCtx: ResolutionContext,
+  makeTypeInferrer: (source: string) => (varName: string) => Promise<string | null>,
+  table: SymbolTable,
+  doc: { getText(): string; uri: string },
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+  hoverTree: Tree,
+): Promise<Hover | null> {
   const hoverResolutionCtx: ResolutionContext = {
     ...baseResolutionCtx, typeInferrer: makeTypeInferrer(doc.getText()),
   };

@@ -251,6 +251,38 @@ export function parse(source: string, uri?: string): Tree {
 }
 
 /**
+ * Run `fn` with a handle on `tree` that the tree cache cannot invalidate.
+ *
+ * `parse()` hands back a tree the cache owns, and the cache frees it — via
+ * `onEvict` — when the same URI is re-parsed, when the LRU ceiling is hit by
+ * any other document, when the document closes, and when the memory governor
+ * sweeps. web-tree-sitter reports `rootNode === null` for a freed tree, so
+ * everything downstream then fails on null. Any of those frees can land while
+ * a handler is suspended on an `await`, so a tree that outlives an `await`
+ * needs an owner of its own.
+ *
+ * `Tree.copy()` is O(1): it takes a reference on the root subtree. That keeps
+ * the nodes alive independently of the cache, and because tree-sitter edits
+ * subtrees copy-on-write it also keeps the borrow's positions stable when the
+ * cached tree is edited for an incremental re-parse.
+ *
+ * Purely synchronous users do not need this — nothing can free a tree without
+ * an intervening `await`. Nodes die with the borrow, so `fn` must not return
+ * them.
+ */
+export async function withBorrowedTree<T>(
+  tree: Tree,
+  fn: (tree: Tree) => Promise<T> | T,
+): Promise<T> {
+  const borrowed = tree.copy();
+  try {
+    return await fn(borrowed);
+  } finally {
+    borrowed.delete();
+  }
+}
+
+/**
  * Remove a cached tree.  Called on didClose to free memory immediately.
  */
 export function deleteTree(uri: string): void {

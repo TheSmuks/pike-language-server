@@ -13,7 +13,7 @@ import {
 import type { NavigationContext } from "./navigationHandler";
 import { getCompletions } from "./completion";
 import { findIdentifierPrefixRange } from "./completion-items";
-import { parse } from "../parser";
+import { parse, withBorrowedTree } from "../parser";
 import { logError, ErrorCategory } from "../util/errorLog.js";
 
 /**
@@ -130,28 +130,31 @@ async function handleCompletion(
 
   try {
     const source = doc.getText();
-    const tree = parse(source, params.textDocument.uri);
     if (token.isCancellationRequested) return empty;
 
-    const prefixRange = findIdentifierPrefixRange(
-      tree, params.position.line, params.position.character,
-    );
+    // getCompletions walks the tree after awaiting the type inferrer, so the
+    // tree must outlive the parser cache's next eviction of this URI.
+    return await withBorrowedTree(parse(source, params.textDocument.uri), async (tree) => {
+      const prefixRange = findIdentifierPrefixRange(
+        tree, params.position.line, params.position.character,
+      );
 
-    const result = await getCompletions(
-      table, tree, params.position.line, params.position.character,
-      {
-        ...completionBase,
-        uri: params.textDocument.uri,
-        source,
-        // Read, not recomputed: activation was decided when the document last
-        // changed, so completion never touches the filesystem.
-        roxenActive: ctx.roxenActive.get(params.textDocument.uri) === true,
-        typeInferrer: makeTypeInferrer(source),
-      },
-    );
+      const result = await getCompletions(
+        table, tree, params.position.line, params.position.character,
+        {
+          ...completionBase,
+          uri: params.textDocument.uri,
+          source,
+          // Read, not recomputed: activation was decided when the document last
+          // changed, so completion never touches the filesystem.
+          roxenActive: ctx.roxenActive.get(params.textDocument.uri) === true,
+          typeInferrer: makeTypeInferrer(source),
+        },
+      );
 
-    if (prefixRange) attachPrefixTextEdits(result.items, prefixRange);
-    return result;
+      if (prefixRange) attachPrefixTextEdits(result.items, prefixRange);
+      return result;
+    });
   } catch (err) {
     logError(connection, ErrorCategory.Diagnostics, "navigationHandler.handleCompletion", err);
     return { isIncomplete: false, items: [] };

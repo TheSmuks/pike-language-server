@@ -11,7 +11,7 @@ import {
 } from "vscode-languageserver/node";
 import type { NavigationContext } from "./navigationHandler";
 import type { ResolutionContext } from "./accessResolver";
-import { parse } from "../parser";
+import { parse, withBorrowedTree } from "../parser";
 import {
   getLocalDeclarationAt,
   declOccurrenceRangeAt,
@@ -291,13 +291,23 @@ async function resolveAccessForDefinition(
   params: { textDocument: { uri: string }; position: { line: number; character: number } },
 ): Promise<LspLocation | null> {
   const doc = ctx.documents.get(params.textDocument.uri);
-  const accessTree = doc ? parse(doc.getText(), params.textDocument.uri) : undefined;
-  const accessResolutionCtx: ResolutionContext = doc
-    ? { ...resolutionCtx, typeInferrer: makeTypeInferrer(doc.getText()) }
-    : resolutionCtx;
-  return resolveAccessDefinition(
-    accessResolutionCtx, table, params.textDocument.uri,
-    params.position.line, params.position.character, accessTree,
+  if (!doc) {
+    return resolveAccessDefinition(
+      resolutionCtx, table, params.textDocument.uri,
+      params.position.line, params.position.character,
+    );
+  }
+  const accessResolutionCtx: ResolutionContext = {
+    ...resolutionCtx, typeInferrer: makeTypeInferrer(doc.getText()),
+  };
+  // The resolver reads nodes from this tree after its own `await`s; a borrow
+  // keeps them alive when a concurrent parse evicts the cached tree.
+  return withBorrowedTree(
+    parse(doc.getText(), params.textDocument.uri),
+    (accessTree) => resolveAccessDefinition(
+      accessResolutionCtx, table, params.textDocument.uri,
+      params.position.line, params.position.character, accessTree,
+    ),
   );
 }
 
