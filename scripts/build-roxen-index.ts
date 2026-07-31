@@ -8,6 +8,12 @@
  * completion with no installation present. A detected installation always
  * takes precedence over this — see roxenIndex.ts.
  *
+ * Pike's AutoDoc extractor supplies the documented API. Everything Roxen leaves
+ * undocumented — bare prototype declarations, members modules supply by
+ * convention, and the globals roxenloader injects — is parsed out of the source
+ * by roxen-harvest.ts, which is why an undocumented `cvs_version` or
+ * `predef::report_fatal` is in here at all.
+ *
  *   bun run scripts/build-roxen-index.ts [--roxen <dir>] [--check]
  *
  * The source tree defaults to $ROXEN_CORPUS, then /tank/projects/roxen-6.1, and
@@ -24,6 +30,13 @@ import { join } from "node:path";
 import { decodeSource } from "../server/src/util/sourceDecoder";
 import { renderAutodoc } from "../server/src/features/autodocRenderer";
 import { parseXml, type XmlNode } from "../server/src/features/xmlParser";
+import { initParser } from "../server/src/parser";
+import {
+  harvestPrototypeMembers,
+  harvestConventionalMembers,
+  harvestInjectedGlobals,
+  type DocLookup,
+} from "./roxen-harvest";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -82,7 +95,14 @@ interface RoxenIndex {
   roxenVersion: string;
   /** Flat preprocessor and constant vocabulary, keyed by bare name. */
   constants: Record<string, ConstantEntry>;
-  /** Dotted API surface, keyed by fully-qualified name. */
+  /**
+   * Dotted API surface, keyed by fully-qualified name.
+   *
+   * `Roxen.`, `RXML.` and `RoxenModule.` are namespaces Roxen itself names.
+   * `predef.` is not: it stands for Pike's predefined namespace, which is where
+   * roxenloader's injected globals land and how a Roxen file writes them
+   * (`predef::report_fatal`) when a local declaration would otherwise shadow.
+   */
   symbols: Record<string, SymbolEntry>;
 }
 
@@ -245,6 +265,22 @@ function sortKeys<T>(obj: Record<string, T>): Record<string, T> {
   return Object.fromEntries(Object.entries(obj).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
+/**
+ * Documentation for a symbol declared in `absPath`, from Pike's extractor.
+ *
+ * Memoised per file: the extractor is a subprocess that re-parses the whole
+ * source, and roxenloader alone is asked about a hundred and eleven times.
+ */
+function makeDocLookup(): DocLookup {
+  const cache = new Map<string, string | null>();
+  return (absPath, symbolName) => {
+    if (!cache.has(absPath)) cache.set(absPath, extractAutodocXml(absPath));
+    const xml = cache.get(absPath);
+    if (!xml) return null;
+    return renderAutodoc(xml, symbolName)?.markdown ?? null;
+  };
+}
+
 function build(root: string): RoxenIndex {
   const constants: Record<string, ConstantEntry> = {};
   for (const header of HEADERS) {
@@ -257,8 +293,14 @@ function build(root: string): RoxenIndex {
   }
   console.log(`Constants: ${Object.keys(constants).length}`);
 
+  // AutoDoc first: a documented entry carries prose, and every harvest below
+  // fills gaps rather than overwriting, so ordering is what keeps prose.
   const symbols: Record<string, SymbolEntry> = {};
-  console.log(`API symbols: ${extractApi(root, symbols)}`);
+  console.log(`API symbols (AutoDoc):      ${extractApi(root, symbols)}`);
+  console.log(`Prototype members (bare):   ${harvestPrototypeMembers(root, symbols)}`);
+  console.log(`Conventional members:       ${harvestConventionalMembers(root, symbols)}`);
+  console.log(`Injected globals (predef::):${harvestInjectedGlobals(root, symbols, makeDocLookup())}`);
+  console.log(`Symbols total:              ${Object.keys(symbols).length}`);
 
   return {
     roxenRevision: PINNED_REVISION,
@@ -272,7 +314,10 @@ function build(root: string): RoxenIndex {
 // Main
 // ---------------------------------------------------------------------------
 
-function main(): void {
+async function main(): Promise<void> {
+  // The harvests read Roxen with the same grammar the server ships.
+  await initParser();
+
   const argv = process.argv.slice(2);
   const check = argv.includes("--check");
   const rootIndex = argv.indexOf("--roxen");
@@ -326,4 +371,4 @@ function readRevision(root: string): string {
   }
 }
 
-main();
+await main();
