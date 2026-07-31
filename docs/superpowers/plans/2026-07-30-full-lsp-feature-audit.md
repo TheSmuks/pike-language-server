@@ -466,21 +466,27 @@ export const MATRIX: CapabilitySpec[] = [
     params: () => ({ query: "create" }),
     validate: nonEmpty,
   },
+  // Lifecycle. These are NOTIFICATIONS, not requests — the server implements
+  // onDidRenameFiles and onDidChange, neither of which returns a response.
+  // Firing them with sendRequest would hang until the timeout and report a
+  // false Critical on every file, so the driver sends them as notifications
+  // and records that the server survived. The entries exist here so the
+  // coverage test still sees their declared keys.
   {
-    method: "workspace/willRenameFiles",
-    driver: "workspace",
+    method: "workspace/didRenameFiles",
+    driver: "lifecycle",
     declaredBy: "workspace",
     params: (ctx) => ({ files: [{ oldUri: ctx.uri, newUri: ctx.uri.replace(/\.pike$/, "-renamed.pike") }] }),
     validate: anyResult,
   },
-
-  // Lifecycle. Swept by the driver's own open/change/save churn rather than a
-  // single request; the entry exists so the coverage test sees the key.
   {
     method: "textDocument/didChange",
     driver: "lifecycle",
     declaredBy: "textDocumentSync",
-    params: doc,
+    params: (ctx) => ({
+      textDocument: { uri: ctx.uri, version: 3 },
+      contentChanges: [{ text: ctx.text }],
+    }),
     validate: anyResult,
   },
 ];
@@ -559,9 +565,11 @@ test("does not match identifiers inside longer words", () => {
 
 test("positions are UTF-16 code units, so astral characters count as two", () => {
   // The emoji is one code point but two UTF-16 units, matching how both LSP
-  // and tree-sitter count. A byte-based scan would report 4.
+  // and tree-sitter count. Verified against the real values: a UTF-16 scan
+  // puts "after" at 21, a byte-based scan would put it at 23. Asserting 21 is
+  // what makes this test catch an accidental byte conversion.
   const positions = derivePositions('string s = "\u{1F600}"; int after;\n', ["after"]);
-  expect(positions[0].character).toBe(24);
+  expect(positions[0].character).toBe(21);
 });
 
 test("lexicalIdentifiers skips Pike keywords", () => {
@@ -703,7 +711,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Ledger, readLedger } from "../../tools/lsp-audit/ledger";
-import { runSweep } from "../../tools/lsp-audit/sweep";
+import { runSweep, withTimeout } from "../../tools/lsp-audit/sweep";
 import { MATRIX } from "../../tools/lsp-audit/matrix";
 
 test("sweeps one file and records a result for every capability", async () => {
@@ -730,10 +738,21 @@ test("sweeps one file and records a result for every capability", async () => {
   }
 }, 120_000);
 
-test("records a timeout rather than hanging", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-timeout-"));
-  const file = join(dir, "tiny.pike");
-  writeFileSync(file, "int x;\n");
+test("the sweep records real answers, not just records", async () => {
+  // The coverage test above proves the matrix is wired into the loop, but it
+  // would pass unchanged if every handler threw — attempt() writes a record on
+  // every outcome, including "error". This test is what fails if the server is
+  // actually broken. The four capabilities below are the ones a Pike class
+  // fixture must always answer; they were verified to return "ok" against this
+  // exact fixture before being asserted here.
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-health-"));
+  const file = join(dir, "greeter.pike");
+  writeFileSync(file, `class Greeter {
+  string label;
+  void create(string initial) { label = initial; }
+  string speak() { return label + "!"; }
+}
+`);
 
   const ledgerPath = join(dir, "ledger.jsonl");
   const ledger = new Ledger(ledgerPath);
@@ -743,16 +762,82 @@ test("records a timeout rather than hanging", async () => {
     surface: "server",
     files: [file],
     ledger,
-    timeoutMs: 1, // Everything times out at 1ms.
+    maxRefsPerDecl: 1,
   });
   ledger.close();
 
-  // Diagnostics arrive as notifications, not request replies, so they are not
-  // subject to the request timeout and are excluded here.
-  const records = readLedger(ledgerPath)
-    .filter((r) => r.capability !== "textDocument/publishDiagnostics");
+  const records = readLedger(ledgerPath);
+  for (const capability of [
+    "textDocument/hover",
+    "textDocument/definition",
+    "textDocument/documentSymbol",
+    "textDocument/semanticTokens/full",
+  ]) {
+    const answered = records.filter((r) => r.capability === capability && r.status === "ok");
+    expect(answered.length).toBeGreaterThan(0);
+  }
+}, 120_000);
+
+test("withTimeout rejects a request that never answers", async () => {
+  // Tested directly rather than through the sweep. A Promise.race against a
+  // timer cannot preempt an ALREADY-RESOLVED promise — the resolved value is a
+  // microtask and the timer is a macrotask, so a fast handler wins even at
+  // timeoutMs 0. Asserting "every capability times out" is therefore
+  // unachievable, and this is the assertion that actually proves the bound.
+  const never = new Promise(() => {});
+  await expect(withTimeout(never, 10)).rejects.toThrow("__audit_timeout__");
+});
+
+test("a punishing timeout still completes the sweep instead of hanging", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-timeout-"));
+  const file = join(dir, "tiny.pike");
+  writeFileSync(file, "int counter;\nint bump() { return counter + 1; }\n");
+
+  const ledgerPath = join(dir, "ledger.jsonl");
+  const ledger = new Ledger(ledgerPath);
+  await runSweep({
+    workspaceRoot: dir,
+    workspaceName: "fixture",
+    surface: "server",
+    files: [file],
+    ledger,
+    timeoutMs: 1,
+  });
+  ledger.close();
+
+  const records = readLedger(ledgerPath);
   expect(records.length).toBeGreaterThan(0);
-  expect(records.every((r) => r.status === "timeout")).toBe(true);
+  // The point is resilience: no record may be left in an unknown state, and
+  // runSweep must return rather than hang. Which capabilities happen to beat a
+  // 1ms bound is a scheduling detail and is deliberately not asserted.
+  const legal = new Set(["ok", "empty", "error", "timeout", "wrong"]);
+  expect(records.every((r) => legal.has(r.status))).toBe(true);
+}, 120_000);
+
+test("lifecycle entries go through the notification path, not sendRequest", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lsp-audit-lifecycle-"));
+  const file = join(dir, "tiny.pike");
+  writeFileSync(file, "int counter;\n");
+
+  const ledgerPath = join(dir, "ledger.jsonl");
+  const ledger = new Ledger(ledgerPath);
+  await runSweep({
+    workspaceRoot: dir,
+    workspaceName: "fixture",
+    surface: "server",
+    files: [file],
+    ledger,
+  });
+  ledger.close();
+
+  // digest "notification" is set only by notifyAndRecord. If these had been
+  // fired with sendRequest they would have hung to the timeout instead.
+  const lifecycle = readLedger(ledgerPath).filter(
+    (r) => r.capability === "workspace/didRenameFiles" || r.capability === "textDocument/didChange",
+  );
+  expect(lifecycle).toHaveLength(2);
+  expect(lifecycle.every((r) => r.digest === "notification")).toBe(true);
+  expect(lifecycle.every((r) => r.status === "ok")).toBe(true);
 }, 120_000);
 ```
 
@@ -808,6 +893,18 @@ export interface SweepOptions {
   maxRefsPerDecl?: number;
   /** Tier-2 checking. Omitted for the Roxen tier, where answers are unknown. */
   checker?: CorrectnessChecker;
+  /**
+   * Positions that must be swept regardless of what documentSymbol names,
+   * keyed by workspace-relative path.
+   *
+   * Without this, tier 2 is decorative: `symbolNames` returns only TOP-LEVEL
+   * documentSymbol names, so expectations targeting fields, locals and class
+   * members are never visited — measured at 1 of 20 reachable. Recursing into
+   * `children` only reaches 8 of 20, because documentSymbol emits no field or
+   * local declarations at all. The expectation coordinates are the right
+   * targets; the position source is too narrow, so they are unioned in here.
+   */
+  extraPositions?: Map<string, Array<{ line: number; character: number }>>;
 }
 
 interface Outcome {
@@ -850,7 +947,8 @@ async function attempt(
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+/** Exported so the timeout bound can be tested directly — see Task 4's tests. */
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return Promise.race([
     promise,
     new Promise<T>((_, reject) =>
@@ -909,6 +1007,66 @@ async function primeDelta(server: TestServer, uri: string, text: string, timeout
   }
 }
 
+/**
+ * Send a lifecycle notification and record that the server survived it.
+ *
+ * A notification has no reply, so there is nothing to validate. What is being
+ * tested is that the server accepts it without throwing — a handler that
+ * crashes on didRenameFiles takes the whole session down, which is exactly the
+ * kind of defect this audit exists to find.
+ */
+function notifyAndRecord(
+  server: TestServer,
+  spec: CapabilitySpec,
+  ctx: RequestContext,
+  options: SweepOptions,
+  relPath: string,
+): LedgerRecord {
+  const started = performance.now();
+  let status: Status = "ok";
+  let detail: string | undefined;
+  try {
+    server.client.sendNotification(spec.method, spec.params(ctx));
+  } catch (error) {
+    status = "error";
+    detail = error instanceof Error ? error.message : String(error);
+  }
+  return {
+    surface: options.surface,
+    workspace: options.workspaceName,
+    capability: spec.method,
+    file: relPath,
+    position: null,
+    status,
+    durationMs: Math.round(performance.now() - started),
+    rssBytes: process.memoryUsage().rss,
+    digest: "notification",
+    detail,
+  };
+}
+
+/**
+ * Union required positions into the derived set, skipping duplicates.
+ *
+ * Marked `kind: "declaration"` because these are explicitly-chosen targets, not
+ * incidental occurrences; the cap in derivePositions does not apply to them.
+ */
+function withExtraPositions(
+  derived: SweepPosition[],
+  extra: Array<{ line: number; character: number }> | undefined,
+): SweepPosition[] {
+  if (!extra || extra.length === 0) return derived;
+  const seen = new Set(derived.map((p) => `${p.line}:${p.character}`));
+  const merged = [...derived];
+  for (const position of extra) {
+    const key = `${position.line}:${position.character}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ ...position, symbol: "<required>", kind: "declaration" });
+  }
+  return merged;
+}
+
 /** Sweep one file across the whole matrix. */
 async function sweepFile(
   server: TestServer,
@@ -917,16 +1075,27 @@ async function sweepFile(
   write: (record: LedgerRecord) => void,
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 10_000;
-  const text = decodeSource(readFileSync(file));
+  // decodeSource returns a DecodedSource record, not a string — the sniffed
+  // encoding rides along with the text. Never substitute a hardcoded utf-8 read.
+  const text = decodeSource(readFileSync(file)).text;
   const uri = pathToFileURL(file).href;
   server.openDoc(uri, text, "pike");
 
   const names = await symbolNames(server, uri, timeoutMs);
-  const positions = derivePositions(text, names, options.maxRefsPerDecl ?? 5);
   const relPath = relative(options.workspaceRoot, file) || basename(file);
+  const positions = withExtraPositions(
+    derivePositions(text, names, options.maxRefsPerDecl ?? 5),
+    options.extraPositions?.get(relPath),
+  );
   const previousResultId = await primeDelta(server, uri, text, timeoutMs);
 
   for (const spec of MATRIX) {
+    // Lifecycle entries are notifications with no response; sendRequest would
+    // hang on them until the timeout. They are driven separately, below.
+    if (spec.driver === "lifecycle") {
+      write(notifyAndRecord(server, spec, { uri, position: null, text }, options, relPath));
+      continue;
+    }
     const targets: (SweepPosition | null)[] =
       spec.driver === "position" ? positions : [null];
     for (const target of targets) {
@@ -1223,6 +1392,8 @@ For each, note the exact line and column of one unambiguous symbol and what each
 
 Aim for roughly two expectations per file, covering all five methods across the set. Do not attempt all five on every file.
 
+**Make each assertion discriminating.** A `hoverContains` of `"string"` passes even if hover resolved to a completely different symbol, because almost every hover in these files mentions `string` — it spends a tier-2 slot on something that cannot fail. Assert the declaration, not the type keyword: `"string get_prefix"` rather than `"string"`. The same applies to `referenceCount` — only assert a count you have recounted and believe is unambiguous within the queried file.
+
 - [ ] **Step 2: Write the failing test**
 
 Create `tests/tooling/lsp-audit-expectations.test.ts`:
@@ -1231,7 +1402,11 @@ Create `tests/tooling/lsp-audit-expectations.test.ts`:
 import { test, expect } from "bun:test";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { EXPECTATIONS, checkExpectation } from "../../tools/lsp-audit/expectations";
+import {
+  EXPECTATIONS,
+  checkExpectation,
+  expectationPositions,
+} from "../../tools/lsp-audit/expectations";
 
 test("covers the five tier-2 capabilities", () => {
   const methods = new Set(EXPECTATIONS.map((e) => e.method));
@@ -1260,7 +1435,33 @@ test("checkExpectation matches a definition landing on the right line", () => {
 });
 
 test("checkExpectation treats a missing result as a failure", () => {
-  expect(checkExpectation(EXPECTATIONS[0], null)).toBe(false);
+  const notRename = EXPECTATIONS.find((e) => e.expect.kind !== "renameAllowed")!;
+  expect(checkExpectation(notRename, null)).toBe(false);
+});
+
+test("a null prepareRename is the CORRECT answer when rename is disallowed", () => {
+  // null is precisely what the server returns for a non-renameable position.
+  // If the null guard ran first, `allowed: false` could never pass and would
+  // report "wrong" exactly when the server behaved correctly.
+  const disallowed = EXPECTATIONS.find(
+    (e) => e.expect.kind === "renameAllowed" && e.expect.allowed === false,
+  );
+  if (!disallowed) return; // no such expectation in the set
+  expect(checkExpectation(disallowed, null)).toBe(true);
+  expect(checkExpectation(disallowed, { range: {} })).toBe(false);
+});
+
+test("every expectation position is exported for the sweep to visit", () => {
+  // Without this the sweep only visits TOP-LEVEL documentSymbol names, which
+  // reaches 1 of 20 expectations — fields, locals and class members are never
+  // emitted as top-level symbols, so tier 2 would check almost nothing.
+  const positions = expectationPositions();
+  const total = [...positions.values()].reduce((n, list) => n + list.length, 0);
+  expect(total).toBe(EXPECTATIONS.length);
+  for (const e of EXPECTATIONS) {
+    const forFile = positions.get(e.file) ?? [];
+    expect(forFile.some((p) => p.line === e.line && p.character === e.character)).toBe(true);
+  }
 });
 ```
 
@@ -1321,6 +1522,24 @@ export const EXPECTATIONS: Expectation[] = [
 ];
 
 /**
+ * Every position an expectation targets, keyed by corpus-relative filename.
+ *
+ * Fed to the sweep as `extraPositions`. Without it the sweep only visits
+ * positions named by TOP-LEVEL documentSymbol entries, which reaches 1 of 20
+ * expectations — fields, locals and class members are never emitted as
+ * top-level symbols, so tier 2 would check almost nothing.
+ */
+export function expectationPositions(): Map<string, Array<{ line: number; character: number }>> {
+  const byFile = new Map<string, Array<{ line: number; character: number }>>();
+  for (const e of EXPECTATIONS) {
+    const list = byFile.get(e.file) ?? [];
+    list.push({ line: e.line, character: e.character });
+    byFile.set(e.file, list);
+  }
+  return byFile;
+}
+
+/**
  * Adapt the expectation set to the sweep's CorrectnessChecker interface.
  *
  * Returns null when nothing covers this (file, method, position) — the common
@@ -1344,8 +1563,16 @@ export function expectationChecker() {
 }
 
 export function checkExpectation(expectation: Expectation, result: unknown): boolean {
-  if (result === null || result === undefined) return false;
   const want = expectation.expect;
+
+  // renameAllowed is checked BEFORE the null guard, because null is precisely
+  // the correct prepareRename response for a non-renameable position. Guarding
+  // first would make `allowed: false` unsatisfiable — it would report "wrong"
+  // exactly when the server behaves correctly.
+  if (want.kind === "renameAllowed") {
+    return (result !== null && result !== undefined) === want.allowed;
+  }
+  if (result === null || result === undefined) return false;
 
   switch (want.kind) {
     case "definitionAt": {
@@ -1361,7 +1588,7 @@ export function checkExpectation(expectation: Expectation, result: unknown): boo
     case "referenceCount":
       return Array.isArray(result) && result.length === want.count;
     case "renameAllowed":
-      return (result !== null) === want.allowed;
+      return true; // Handled before the null guard above; unreachable here.
     case "completionIncludes": {
       const items = Array.isArray(result) ? result : (result as { items?: unknown[] }).items ?? [];
       return items.some((item: { label?: string }) => item.label === want.label);
@@ -1394,6 +1621,57 @@ PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "feat(audit): add tier-2 correctness 
 - Consumes: `LedgerRecord`, `Tier` (Task 1); `OracleResult`, `Verdict`, `isOurDefect` (Task 5).
 - Produces: `type Severity = "Critical" | "High" | "Medium" | "Low"`; `interface Finding { id: string; severity: Severity; tier: Tier; surface: string; capability: string; file: string; position: { line: number; character: number } | null; summary: string; reproduction: string; oracleVerdict?: Verdict }`; `interface TriageOptions { slowMs?: number; verdicts?: Map<string, OracleResult>; roxenWorkspace?: string }`; `function triage(records: LedgerRecord[], options?: TriageOptions): Finding[]`; `function renderFindings(findings: Finding[]): string`.
 
+- [ ] **Step 0: Add a `notify` subcommand to lsp-probe**
+
+Two capabilities the sweep exercises — `workspace/didRenameFiles` and `textDocument/didChange` — are notifications. `lsp-probe raw` sends requests, and vscode-jsonrpc rejects a request for a notification-only handler with "Unhandled method" before the server ever sees it, so `raw` can never reproduce a lifecycle finding.
+
+In `scripts/lsp-probe.ts`, add a branch alongside the existing `raw` one:
+
+```ts
+    } else if (command === "notify") {
+      // Lifecycle capabilities are notifications: there is no reply to print.
+      // A lifecycle finding is a crash, so the reproduction sends the
+      // notification and then proves the server is still answering.
+      const method = rest[0];
+      if (!method) throw new Error("notify requires a <method> argument");
+      const extraParams = rest[2] ? JSON.parse(rest[2]) : {};
+      // The version is REQUIRED. vscode-languageserver's TextDocuments throws
+      // "without valid version identifier" on a versionless didChange, and
+      // vscode-jsonrpc catches that inside its notification dispatcher and
+      // routes it to a log channel nothing here listens to — so the change is
+      // dropped in total silence and the command reports success. The document
+      // is opened at version 1, so 2 is the next one.
+      server.client.sendNotification(method, {
+        textDocument: { uri, version: 2 },
+        ...extraParams,
+      });
+      const alive = await server.client.sendRequest("textDocument/documentSymbol", {
+        textDocument: { uri },
+      });
+      console.log(`notification sent: ${method}`);
+      console.log(`server still responding: ${Array.isArray(alive) ? `${alive.length} symbols` : "yes"}`);
+    } else if (command === "raw") {
+```
+
+Also add the usage line to the header comment block:
+
+```
+ *   bun run scripts/lsp-probe.ts notify <method> <file> [jsonParams]
+```
+
+Verify it has a LIVE EFFECT — not merely that it exits cleanly:
+
+```bash
+# Baseline: how many top-level symbols does the file have?
+bun run scripts/lsp-probe.ts symbols corpus/files/class-create.pike | head -3
+
+# Replace the whole document with nothing. The alive-check must now report 0.
+bun run scripts/lsp-probe.ts notify textDocument/didChange corpus/files/class-create.pike '{"contentChanges":[{"text":""}]}'
+```
+Expected: `notification sent: textDocument/didChange` followed by `server still responding: 0 symbols`.
+
+**If it reports the original symbol count instead of 0, the notification was silently dropped and the reproduction is worthless** — that is the exact defect this step exists to prevent, and "it printed success" does not rule it out.
+
 - [ ] **Step 1: Write the failing test**
 
 Create `tests/tooling/lsp-audit-triage.test.ts`:
@@ -1402,6 +1680,16 @@ Create `tests/tooling/lsp-audit-triage.test.ts`:
 import { test, expect } from "bun:test";
 import { triage, renderFindings } from "../../tools/lsp-audit/triage";
 import type { LedgerRecord } from "../../tools/lsp-audit/ledger";
+import { MATRIX } from "../../tools/lsp-audit/matrix";
+
+/** Methods lsp-probe has a dedicated subcommand for; the rest use `raw`. */
+const DEDICATED_METHODS = new Set([
+  "textDocument/hover",
+  "textDocument/completion",
+  "textDocument/definition",
+  "textDocument/documentSymbol",
+  "textDocument/semanticTokens/full",
+]);
 
 const base: LedgerRecord = {
   surface: "server",
@@ -1466,6 +1754,116 @@ test("findings render as a markdown table with an id column", () => {
   expect(markdown).toContain("| # |");
   expect(markdown).toContain("A1");
 });
+
+test("the raw-fallback reproduction is a runnable command, not a bare position", () => {
+  // Every other test uses hover, which has a dedicated subcommand. That is why
+  // the raw fallback shipped broken: `raw <method> <file> 2:3` makes lsp-probe
+  // JSON.parse "2:3" and throw before sending anything.
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  // The third argument must be parseable JSON carrying 0-based LSP coordinates.
+  const json = finding.reproduction.match(/'(\{.*\})'$/)?.[1];
+  expect(json).toBeDefined();
+  const params = JSON.parse(json!);
+  expect(params.position).toEqual({ line: 1, character: 2 });
+  expect(params.context).toEqual({ includeDeclaration: true });
+});
+
+test("selectionRange reproduces with positions[], the shape it actually takes", () => {
+  const finding = triage([{ ...base, capability: "textDocument/selectionRange", status: "empty" }])[0];
+  const params = JSON.parse(finding.reproduction.match(/'(\{.*\})'$/)![1]);
+  expect(params.positions).toEqual([{ line: 1, character: 2 }]);
+  expect(params.position).toBeUndefined();
+});
+
+test("ids are assigned after the sort, so A1 is the most severe finding", () => {
+  const findings = triage([
+    { ...base, durationMs: 4000 },                    // Low
+    { ...base, capability: "textDocument/definition", status: "error" }, // Critical
+  ], { slowMs: 1000 });
+  expect(findings[0].id).toBe("A1");
+  expect(findings[0].severity).toBe("Critical");
+  expect(findings[1].id).toBe("A2");
+});
+
+test("a pipe in a server error message cannot break the table row", () => {
+  // Pike type unions contain '|', so this is a realistic detail string.
+  const markdown = renderFindings(
+    triage([{ ...base, status: "error", detail: "Expected string|Stdio.File" }]),
+  );
+  const row = markdown.split("\n").find((l) => l.startsWith("| A1"))!;
+  expect(row.split(/(?<!\\)\|/).length - 1).toBe(6); // 5 columns => 6 delimiters
+  expect(markdown).toContain("string\\|Stdio.File");
+});
+
+test("every raw-fallback reproduction matches the params the matrix actually sends", () => {
+  // A reproduction that runs but fires a DIFFERENT request than the sweep did
+  // is worse than one that crashes: it looks fine and reproduces nothing. This
+  // pins each raw-form capability against its matrix entry.
+  for (const spec of MATRIX) {
+    if (DEDICATED_METHODS.has(spec.method)) continue;
+    const record = { ...base, capability: spec.method, status: "empty" as const };
+    const reproduction = triage([record])[0].reproduction;
+    const json = reproduction.match(/'(\{.*\})'$/)?.[1];
+    expect(json).toBeDefined();
+    const params = JSON.parse(json!) as Record<string, unknown>;
+
+    // Whatever the matrix sends beyond textDocument must appear here too.
+    const sent = spec.params({ uri: "file:///x.pike", position: record.position, text: "" });
+    for (const key of Object.keys(sent as object)) {
+      if (key === "textDocument") continue;
+      expect(params[key]).toBeDefined();
+    }
+  }
+});
+
+test("notification capabilities use notify, not raw", () => {
+  // `raw` uses sendRequest, and vscode-jsonrpc rejects a request for a
+  // notification-only handler with "Unhandled method" before the server sees
+  // it — so a raw command for these fails identically every time, whatever the
+  // finding was. Verified by running both forms against a real corpus file.
+  for (const method of ["workspace/didRenameFiles", "textDocument/didChange"]) {
+    const finding = triage([{ ...base, capability: method, status: "error" }])[0];
+    expect(finding.reproduction).toContain(`notify ${method}`);
+    expect(finding.reproduction).not.toContain(`raw ${method}`);
+  }
+});
+
+test("a notify reproduction has a live effect, not just a clean exit", async () => {
+  // Three rounds of this task shipped reproduction commands that ran without
+  // error while doing nothing. Asserting on the command STRING cannot catch
+  // that; only observing the server's state can. Replacing the document with
+  // an empty string must drop the symbol count to zero.
+  const { spawnSync } = await import("node:child_process");
+  const run = (args: string[]) =>
+    spawnSync("bun", ["run", "scripts/lsp-probe.ts", ...args], {
+      encoding: "utf8",
+      timeout: 120_000,
+    }).stdout ?? "";
+
+  const output = run([
+    "notify",
+    "textDocument/didChange",
+    "corpus/files/class-create.pike",
+    '{"contentChanges":[{"text":""}]}',
+  ]);
+
+  expect(output).toContain("notification sent: textDocument/didChange");
+  // The whole document was replaced with nothing, so nothing can be left.
+  expect(output).toContain("server still responding: 0 symbols");
+}, 180_000);
+
+test("request capabilities still use raw, not notify", () => {
+  const finding = triage([{ ...base, capability: "textDocument/references", status: "empty" }])[0];
+  expect(finding.reproduction).toContain("raw textDocument/references");
+  expect(finding.reproduction).not.toContain("notify");
+});
+
+test("a slow record that is also empty gets the more severe tier", () => {
+  const findings = triage([{ ...base, status: "empty", durationMs: 9000 }], { slowMs: 1000 });
+  expect(findings[0].severity).toBe("High");
+  expect(findings[0].tier).toBe(1);
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1518,28 +1916,112 @@ const SEVERITY_BY_TIER: Record<Tier, Severity> = {
   3: "Low",
 };
 
-/** lsp-probe takes 1-based line:col; the ledger stores 0-based LSP positions. */
-function reproductionFor(record: LedgerRecord): string {
-  const subcommand = probeSubcommand(record.capability);
-  const target = `${record.workspace === "corpus" ? "corpus/files/" : ""}${record.file}`;
-  if (!record.position) {
-    return `bun run scripts/lsp-probe.ts ${subcommand} ${target}`;
-  }
-  const line = record.position.line + 1;
-  const character = record.position.character + 1;
-  return `bun run scripts/lsp-probe.ts ${subcommand} ${target} ${line}:${character}`;
-}
+/**
+ * lsp-probe subcommands that take a 1-BASED `line:col` argument.
+ *
+ * Everything else goes through `raw`, whose third argument is JSON spread
+ * straight into the LSP request — so those params are 0-BASED, unlike these.
+ * Mixing the two conventions up silently produces a command that reproduces a
+ * different position than the finding.
+ */
+const DEDICATED_SUBCOMMAND: Record<string, string> = {
+  "textDocument/hover": "hover",
+  "textDocument/completion": "complete",
+  "textDocument/definition": "define",
+  "textDocument/documentSymbol": "symbols",
+  "textDocument/semanticTokens/full": "tokens",
+};
 
-/** Map an LSP method to the lsp-probe subcommand that reproduces it. */
-function probeSubcommand(method: string): string {
-  switch (method) {
-    case "textDocument/hover": return "hover";
-    case "textDocument/completion": return "complete";
-    case "textDocument/definition": return "define";
-    case "textDocument/documentSymbol": return "symbols";
-    case "textDocument/semanticTokens/full": return "tokens";
-    default: return `raw ${method}`;
+/**
+ * Params the matrix sends beyond textDocument/position, per method.
+ *
+ * Without these the reproduction fires a different request than the one that
+ * produced the finding — `references` without its context, `rename` without a
+ * newName — and may not reproduce it at all.
+ */
+const EXTRA_PARAMS: Record<string, Record<string, unknown>> = {
+  "textDocument/references": { context: { includeDeclaration: true } },
+  "textDocument/rename": { newName: "auditRenamedSymbol" },
+  "textDocument/signatureHelp": { context: { triggerKind: 1, isRetrigger: false } },
+  "textDocument/codeAction": { context: { diagnostics: [] } },
+  "textDocument/formatting": { options: { tabSize: 2, insertSpaces: true } },
+  "textDocument/rangeFormatting": { options: { tabSize: 2, insertSpaces: true } },
+  // onTypeFormatting is document-driven, so the ledger stores position null —
+  // but the matrix always sends {0,0}. Without it here the reproduction fires a
+  // request with no position at all, which is not what produced the finding.
+  "textDocument/onTypeFormatting": {
+    ch: "}",
+    position: { line: 0, character: 0 },
+    options: { tabSize: 2, insertSpaces: true },
+  },
+  // The query is what makes this request meaningful; `{}` reproduces nothing.
+  // lsp-probe's raw handler also injects a textDocument the real request has
+  // no need for — harmless, since the server ignores it for workspace/symbol.
+  "workspace/symbol": { query: "create" },
+};
+
+/**
+ * Methods the server handles as NOTIFICATIONS, which `raw` cannot reproduce.
+ *
+ * `lsp-probe raw` uses sendRequest, and vscode-jsonrpc rejects these with
+ * "Unhandled method" before they ever reach the server's notification handler —
+ * so a `raw` command for them fails identically every time regardless of the
+ * finding. They are routed to lsp-probe's `notify` subcommand instead, which
+ * sends the notification and then proves the server is still answering.
+ * A lifecycle finding IS a crash, so "did the server survive this?" is exactly
+ * the right reproduction.
+ */
+const NOTIFICATION_METHODS = new Set([
+  "workspace/didRenameFiles",
+  "textDocument/didChange",
+]);
+
+/** Methods whose params require a range. A whole-file range stands in. */
+const RANGE_METHODS = new Set([
+  "textDocument/rangeFormatting",
+  "textDocument/inlayHint",
+  "textDocument/codeAction",
+  "textDocument/semanticTokens/range",
+]);
+
+const WHOLE_FILE_RANGE = {
+  start: { line: 0, character: 0 },
+  end: { line: 100000, character: 0 },
+};
+
+/**
+ * Build a command a human can paste into a shell to see the bad result.
+ *
+ * This is the audit's credibility mechanism: a finding that cannot be
+ * reproduced outside the harness is a harness artifact, not a defect. So the
+ * command must actually run — `raw <method> <file> 2:3` does not, because
+ * lsp-probe JSON.parses that third argument.
+ */
+function reproductionFor(record: LedgerRecord): string {
+  const target = `${record.workspace === "corpus" ? "corpus/files/" : ""}${record.file}`;
+  const dedicated = DEDICATED_SUBCOMMAND[record.capability];
+
+  if (dedicated) {
+    if (!record.position) return `bun run scripts/lsp-probe.ts ${dedicated} ${target}`;
+    // 1-based: lsp-probe's parsePosition converts these to LSP coordinates.
+    const line = record.position.line + 1;
+    const character = record.position.character + 1;
+    return `bun run scripts/lsp-probe.ts ${dedicated} ${target} ${line}:${character}`;
   }
+
+  // raw/notify: these params are spread verbatim into the message, so 0-based.
+  const form = NOTIFICATION_METHODS.has(record.capability) ? "notify" : "raw";
+  const params: Record<string, unknown> = { ...EXTRA_PARAMS[record.capability] };
+  if (RANGE_METHODS.has(record.capability)) params.range = WHOLE_FILE_RANGE;
+  if (record.position) {
+    if (record.capability === "textDocument/selectionRange") {
+      params.positions = [record.position];
+    } else {
+      params.position = record.position;
+    }
+  }
+  const json = JSON.stringify(params);
+  return `bun run scripts/lsp-probe.ts ${form} ${record.capability} ${target} '${json}'`;
 }
 
 function tierOf(record: LedgerRecord, slowMs: number): Tier | null {
@@ -1581,7 +2063,7 @@ export function triage(records: LedgerRecord[], options: TriageOptions = {}): Fi
     }
 
     findings.push({
-      id: `A${findings.length + 1}`,
+      id: "", // Assigned after the sort, so ids track display order.
       severity: SEVERITY_BY_TIER[tier],
       tier,
       surface: record.surface,
@@ -1595,14 +2077,29 @@ export function triage(records: LedgerRecord[], options: TriageOptions = {}): Fi
   }
 
   const order: Severity[] = ["Critical", "High", "Medium", "Low"];
-  return findings.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  findings.sort((a, b) => order.indexOf(a.severity) - order.indexOf(b.severity));
+  // Ids are assigned last so A1 is the most severe finding. A reader treats
+  // "A1" as a locator and works down the table; ids that don't match the
+  // displayed order send them to the wrong row.
+  return findings.map((finding, index) => ({ ...finding, id: `A${index + 1}` }));
+}
+
+/**
+ * Escape a value for a markdown table cell.
+ *
+ * Server error messages land in these cells verbatim, and Pike's type syntax
+ * uses `|` for unions (`string|Stdio.File`), so an unescaped detail string
+ * silently breaks the row's columns. Newlines break the table outright.
+ */
+function cell(value: string): string {
+  return value.replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
 }
 
 export function renderFindings(findings: Finding[]): string {
   const rows = findings.map((f) => {
     const where = f.position ? `${f.file}:${f.position.line + 1}` : f.file;
     const verdict = f.oracleVerdict ? ` (oracle: ${f.oracleVerdict})` : "";
-    return `| ${f.id} | ${f.severity[0]} | ${f.summary}${verdict} | \`${where}\` | \`${f.reproduction}\` |`;
+    return `| ${f.id} | ${f.severity[0]} | ${cell(f.summary + verdict)} | \`${cell(where)}\` | \`${cell(f.reproduction)}\` |`;
   });
   return [
     "| # | Severity | Finding | Location | Reproduction |",
@@ -1678,7 +2175,7 @@ import { join, resolve } from "node:path";
 import { Ledger, readLedger } from "./ledger";
 import { runSweep } from "./sweep";
 import { classify } from "./oracle";
-import { expectationChecker } from "./expectations";
+import { expectationChecker, expectationPositions } from "./expectations";
 import { triage, renderFindings } from "./triage";
 
 const CORPUS_ROOT = resolve("corpus/files");
@@ -1718,8 +2215,10 @@ async function sweepCommand(): Promise<void> {
       files,
       ledger,
       // Tier 2 only on the corpus tier: Roxen's correct answers are unknown,
-      // so there is nothing to check a result against.
+      // so there is nothing to check a result against. The positions must be
+      // forced in too — documentSymbol alone reaches almost none of them.
       checker: which === "roxen" ? undefined : expectationChecker(),
+      extraPositions: which === "roxen" ? undefined : expectationPositions(),
     });
   } finally {
     ledger.close();
@@ -1881,7 +2380,18 @@ Expected: `standalone/server.js` exists.
 
 - [ ] **Step 3: Write the sweep**
 
-Create `tools/lsp-audit/standalone-sweep.mjs`. Copy the spawn/framing helpers from `scripts/check-helix-lsp.mjs` verbatim — it already solves Content-Length framing and the handshake — then use this driver:
+First extract the shared framing helpers, then write the driver.
+
+**Step 3a — extract `tools/lsp-audit/lsp-stdio.mjs`.** Move `send`, `notify`, and the Content-Length receive loop out of `scripts/check-helix-lsp.mjs` into this new module, exporting them unchanged. Then update `scripts/check-helix-lsp.mjs` to import them instead of defining them. Do not alter their behaviour — this is a move, not a rewrite.
+
+Verify the guard still works before going further:
+
+```bash
+bun run build:standalone && bun run check:helix
+```
+Expected: same result as before the extraction. `check:helix` is part of the repository-guards CI job, so a regression here breaks CI.
+
+**Step 3b — write the driver.** Create `tools/lsp-audit/standalone-sweep.mjs`, importing `send` and `notify` from `./lsp-stdio.mjs`:
 
 ```js
 #!/usr/bin/env node
@@ -1899,6 +2409,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { send, notify } from "./lsp-stdio.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
@@ -1973,7 +2484,6 @@ async function main() {
     stdio: ["pipe", "pipe", "pipe"],
   });
 
-  // send()/receive() come from scripts/check-helix-lsp.mjs — copy them here.
   await send(proc, "initialize", {
     processId: process.pid,
     rootUri: `file://${dir}`,
@@ -2028,7 +2538,7 @@ Expected: a line per capability. Every `error` and every `empty` on a capability
 - [ ] **Step 6: Commit**
 
 ```bash
-PRE_COMMIT_ALLOW_NO_CONFIG=1 git add tools/lsp-audit/standalone-sweep.mjs package.json
+PRE_COMMIT_ALLOW_NO_CONFIG=1 git add tools/lsp-audit/lsp-stdio.mjs tools/lsp-audit/standalone-sweep.mjs scripts/check-helix-lsp.mjs package.json
 PRE_COMMIT_ALLOW_NO_CONFIG=1 git commit -m "feat(audit): sweep all capabilities over real stdio as a non-VSCode client"
 ```
 

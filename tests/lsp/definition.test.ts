@@ -1357,4 +1357,41 @@ describe("definition: chained access resolution", () => {
     // Should resolve to Name.val (variable at line 0)
     expect(result!.range.start.line).toBe(0);
   });
+
+  test("resolves a member reached through a subscript (audit N2/C2, part 2)", async () => {
+    // Audit iteration 7: `variables[var]->set(...)` in Roxen resolved to
+    // nothing. The receiver resolved to the CONTAINER declaration, so the
+    // member was looked up on a class literally named `mapping(string:Item)`.
+    // The member belongs to the ELEMENT type.
+    const src = [
+      'class Item {',
+      '  void configure(int v) { }',
+      '}',
+      'class Holder {',
+      '  mapping(string:Item) items;',
+      '  array(Item) list;',
+      '  void go(string k) {',
+      '    items[k]->configure(1);',
+      '    list[0]->configure(2);',
+      '  }',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-subscript-member.pike", src);
+
+    // `configure` through a mapping subscript — starts at column 14.
+    const viaMapping = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 7, character: 15 },
+    }) as LspLocation | null;
+    expect(viaMapping).not.toBeNull();
+    expect(viaMapping!.range.start.line).toBe(1); // Item.configure
+
+    // …and through an array subscript — starts at column 13.
+    const viaArray = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 8, character: 14 },
+    }) as LspLocation | null;
+    expect(viaArray).not.toBeNull();
+    expect(viaArray!.range.start.line).toBe(1);
+  });
 });

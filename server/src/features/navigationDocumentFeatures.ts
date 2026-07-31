@@ -377,9 +377,11 @@ async function handleDocumentHighlight(
   const table = await ctx.getSymbolTable(params.textDocument.uri);
   if (!table || token.isCancellationRequested) return null;
 
+  // No early return on an empty ref list: a declaration with no other uses is
+  // still one occurrence, and LSP asks for every highlight at the position.
+  // buildDocumentHighlights already yields null when nothing is found, so the
+  // guard that used to sit here only ever suppressed the lone-declaration case.
   const refs = getReferencesTo(table, params.position.line, params.position.character);
-  if (refs.length === 0) return null;
-
   const targetDecl = getDefinitionAt(table, params.position.line, params.position.character);
   return buildDocumentHighlights(targetDecl, refs);
 }
