@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.54] — 2026-07-31
+
 ### Added
 
 - **Roxen's undocumented symbols are now indexed** — 499 → 719, with `RoxenModule.` going 53 → 127 and a new `predef.` family of 146. The generator only ever harvested what Roxen's AutoDoc documents, so ordinary module surface (`cvs_version`, `find_file`, `defvar`, `start`, `stop`, `stat_file`, `query_provides`) and the globals roxenloader injects (`predef::report_fatal` and friends) resolved to nothing. All of it is harvested from Roxen's source rather than hand-listed: undocumented prototype members, names measured across the 127 modules that `inherit "module"`, and every `add_constant(...)` plus the indices of `prototypes.pike` minus the exclusion multiset the loader itself declares. `predef::` completion offers these only in a Roxen file; a plain Pike program still sees only what Pike predefines. Costs +43 KB on the bundle.
