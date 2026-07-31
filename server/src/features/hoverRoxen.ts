@@ -30,24 +30,7 @@ export function roxenHover(
   const entry = lookupRoxenIdentifier(ctx.roxenIndex, identName);
   if (!entry) return null;
 
-  // The provenance line matters: it tells the reader this came from a pinned
-  // copy of Roxen rather than from their installation, which is also why
-  // go-to-definition will decline to jump anywhere.
-  const provenance = entry.header
-    ? `\n\n*Roxen \`${entry.header}\` (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})*`
-    : `\n\n*Roxen (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})*`;
-
-  // Not `isAutodoc`: that flag means the documentation already contains a
-  // rendered signature, and these entries keep the two apart. Setting it would
-  // silently drop the declaration and hover would show only the provenance.
-  return formatHover({
-    name: identName,
-    signature: entry.signature,
-    documentation: entry.markdown ? `${entry.markdown}\n${provenance}` : provenance.trimStart(),
-    line: params.position.line,
-    character: params.position.character,
-    isAutodoc: false,
-  });
+  return renderRoxenEntry(ctx, identName, entry, params.position);
 }
 
 /**
@@ -153,24 +136,52 @@ export function roxenTypedMemberHover(
 }
 
 /**
- * Render a dotted Roxen index entry, with the provenance line the bundled
- * index always carries — it tells the reader the answer came from a pinned
- * copy of Roxen rather than their installation, which is also why
- * go-to-definition declines to jump anywhere.
+ * Render one bundled-index entry.
+ *
+ * Entries arrive in two shapes. The harvested ones carry a bare declaration in
+ * `signature` and prose in `markdown`. The AutoDoc-derived ones — the 499 that
+ * come from Roxen's own documentation, `RXML.Tag` and `RXML.Frame` among
+ * them — have the signature rendered INTO the markdown as well, so rendering
+ * both showed `mixed result` twice, and `RXML.Tag`, whose signature is empty,
+ * opened with a blank code block.
+ *
+ * `isAutodoc` already means "the documentation contains its own signature", so
+ * the shape decides which way to render rather than the call site guessing.
  */
+function renderRoxenEntry(
+  ctx: HoverContext,
+  name: string,
+  entry: { signature: string; markdown?: string; header?: string },
+  position: { line: number; character: number },
+): Hover | null {
+  const source = entry.header
+    ? `Roxen \`${entry.header}\` (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})`
+    : `Roxen (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})`;
+  const provenance = `*${source}*`;
+  const markdown = entry.markdown ?? "";
+  // An entry with no signature has nothing to put in a code block — rendering
+  // one anyway opened `RXML.Tag`'s hover with an empty ```pike fence.
+  const selfDescribing = markdown.trimStart().startsWith("```") ||
+    entry.signature.trim().length === 0;
+
+  return formatHover({
+    name,
+    signature: entry.signature,
+    documentation: selfDescribing
+      ? `${markdown}\n\n${provenance}`
+      : (markdown ? `${markdown}\n\n${provenance}` : provenance),
+    line: position.line,
+    character: position.character,
+    isAutodoc: selfDescribing,
+  });
+}
+
+/** Render a dotted Roxen index entry. */
 function roxenSymbolHover(
   ctx: HoverContext,
   path: string,
   entry: { signature: string; markdown?: string },
   position: { line: number; character: number },
 ): Hover | null {
-  const provenance = `\n\n*Roxen (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})*`;
-  return formatHover({
-    name: path,
-    signature: entry.signature,
-    documentation: entry.markdown ? `${entry.markdown}\n${provenance}` : provenance.trimStart(),
-    line: position.line,
-    character: position.character,
-    isAutodoc: false,
-  });
+  return renderRoxenEntry(ctx, path, entry, position);
 }
