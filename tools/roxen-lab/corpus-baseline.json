@@ -6,7 +6,6 @@
     "server/base_server/hosts.pike",
     "server/base_server/roxenloader.pike",
     "server/config_interface/actions/cachestatus.pike",
-    "server/etc/modules/DBManager.pmod",
     "server/etc/modules/RXML.pmod/module.pmod",
     "server/etc/roxen_master.pike",
     "server/modules/graphics/rimage/plugins/scale.pike",
