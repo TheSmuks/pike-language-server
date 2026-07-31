@@ -74,7 +74,7 @@ export async function resolveCrossFileDefinition(
         // If the index was mutated while we yielded, the result may be stale.
         // Retry once — the mutation already updated the data.
         if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
-          return resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
+          return await retryOrKeep(ctx, uri, line, character, maxRetries, result);
         }
         return result;
       }
@@ -91,13 +91,39 @@ export async function resolveCrossFileDefinition(
         character < ref.loc.character + ref.name.length) {
       const result = await resolveUnresolvedReference(ctx, ref, table, uri);
       if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
-        return resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
+        return await retryOrKeep(ctx, uri, line, character, maxRetries, result);
       }
       return result;
     }
   }
 
   return null;
+}
+
+/**
+ * Re-resolve after the index moved, but never trade a good answer for nothing.
+ *
+ * The generation check exists to catch a result computed against a table that
+ * has since changed. The catch is that the change is usually *ours*: resolving
+ * a cross-file symbol indexes the inherit target on demand, and upserting it
+ * invalidates its dependents — which includes the file we are resolving from.
+ * The retry then finds that file has no symbol table yet and returns null, and
+ * a correct answer already in hand is discarded.
+ *
+ * That is why go-to-definition answered null on a cold index and correctly on
+ * a warm one. It read as flakiness, and it skewed every audit sweep that
+ * measured navigation.
+ */
+async function retryOrKeep(
+  ctx: ResolutionContext,
+  uri: string,
+  line: number,
+  character: number,
+  maxRetries: number,
+  fallback: { uri: string; decl: Declaration },
+): Promise<{ uri: string; decl: Declaration }> {
+  const retried = await resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
+  return retried ?? fallback;
 }
 
 // ---------------------------------------------------------------------------
