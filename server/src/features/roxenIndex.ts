@@ -47,6 +47,9 @@ export interface RoxenIndexData {
    * `predef.` is the fourth, and it is not a Roxen namespace at all: it holds
    * the globals roxenloader injects into Pike's predefined namespace, which a
    * Roxen file reaches bare or writes out as `predef::report_fatal`.
+   * `roxen.` and `roxenloader.` are the members of the two of those globals
+   * that are bound to a whole source file, and they are lower-case because
+   * that is how the reference is written — `roxen.store`.
    */
   symbols: Record<string, RoxenSymbolEntry>;
 }

@@ -196,6 +196,29 @@ export function parsePikeDeclarations(text: string, uri: string): ParsedFile {
   return { fileScope: declarationsIn(root), classes };
 }
 
+/**
+ * The programs a file inherits at its own top level, in source order.
+ *
+ * String form only. `inherit "read_config";` names a sibling source, which is
+ * resolvable to a file; `inherit Foo;` names something already in scope, which
+ * is not. An `inherit` written inside a class is not part of the file's own
+ * program, so it is not returned either.
+ */
+export function parseFileScopeInherits(text: string, uri: string): string[] {
+  const root = parse(text, uri).rootNode;
+  const found: string[] = [];
+  if (!root) return found;
+
+  for (const decl of root.namedChildren) {
+    if (!decl || decl.type !== "declaration") continue;
+    for (const inherit of children(decl, "inherit_decl")) {
+      const target = child(inherit, "string_literal");
+      if (target) found.push(target.text.slice(1, -1));
+    }
+  }
+  return found;
+}
+
 // ---------------------------------------------------------------------------
 // Injected globals
 // ---------------------------------------------------------------------------

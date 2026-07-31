@@ -1,8 +1,8 @@
 /**
- * The three harvests that Roxen's AutoDoc cannot supply.
+ * The four harvests that Roxen's AutoDoc cannot supply.
  *
  * `build-roxen-index.ts` gets the documented API from Pike's own AutoDoc
- * extractor. That leaves three holes, each closed here by reading the Roxen
+ * extractor. That leaves four holes, each closed here by reading the Roxen
  * source rather than by naming symbols:
  *
  *   1. Prototype members with no `//!` comment. prototypes.pike's
@@ -12,15 +12,19 @@
  *      `cvs_version` is read off a `RoxenModule` by Roxen's own code and is
  *      declared by the modules themselves, never by the prototype.
  *   3. Globals roxenloader injects at run time, reachable as `predef::name`.
+ *   4. The MEMBERS of the globals from (3) that are bound to a whole source
+ *      file, which (3) records as one opaque name — `roxen` was in the index
+ *      while `roxen.store` was not.
  *
  * The convention set (2) is measured, not asserted: the module corpus is
  * parsed and a name is kept only when a stated fraction of modules declare it.
  */
 import { readdirSync, readFileSync, existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { decodeSource } from "../server/src/util/sourceDecoder";
 import {
   parsePikeDeclarations,
+  parseFileScopeInherits,
   extractAddConstantCalls,
   parseIgnoreIdentifiers,
   isExported,
@@ -305,6 +309,112 @@ export function harvestInjectedGlobals(
   for (const source of GLOBAL_SOURCES) {
     const abs = join(root, source);
     if (existsSync(abs)) added += harvestAddConstants(abs, into, docFor);
+  }
+  return added;
+}
+
+// ---------------------------------------------------------------------------
+// 4. Members of a global bound to a whole source file
+// ---------------------------------------------------------------------------
+
+/**
+ * The value expression that binds a global to the file it is written in.
+ *
+ * `add_constant("roxen", this_object())` makes the global *be* roxen.pike's
+ * object, so that file's own file-scope declarations are the global's members.
+ * Any other value expression names something this file does not define, whose
+ * members are therefore not derivable from it.
+ */
+const SELF_BINDING_VALUE = "this_object()";
+
+/** A member of a program, with the source that actually declares it. */
+interface ProgramMember {
+  decl: DeclInfo;
+  /** Declaring file, relative to the Roxen root — the entry's origin note. */
+  source: string;
+}
+
+/**
+ * Every member of the program a source compiles to, inherits included.
+ *
+ * `roxen.store` is the reason this follows inherits at all: roxen.pike does
+ * not declare `store`, it inherits global_variables.pike, which inherits
+ * read_config.pike, which does. Four files down the chain and the audit's
+ * named case.
+ *
+ * Resolution is Pike's: a later inherit shadows an earlier one and the file's
+ * own declaration shadows both, which is why this overwrites rather than
+ * keeping the first hit. Visited files are tracked across the whole walk
+ * rather than per branch — Roxen's sources contain inherit cycles, and a file
+ * reached twice through a diamond declares the same members either way.
+ */
+function programMembers(
+  root: string,
+  source: string,
+  seen: Set<string>,
+): Map<string, ProgramMember> {
+  const members = new Map<string, ProgramMember>();
+  const abs = join(root, source);
+  if (seen.has(source) || !existsSync(abs)) return members;
+  seen.add(source);
+
+  const text = read(abs);
+  for (const inherited of parseFileScopeInherits(text, `file://${abs}`)) {
+    const inheritedSource = join(dirname(source), `${inherited}.pike`);
+    for (const entry of programMembers(root, inheritedSource, seen)) {
+      members.set(entry[0], entry[1]);
+    }
+  }
+  for (const decl of parsePikeDeclarations(text, `file://${abs}`).fileScope) {
+    if (isExported(decl)) members.set(decl.name, { decl, source });
+  }
+  return members;
+}
+
+/**
+ * Members of the globals roxenloader binds to an entire source file.
+ *
+ * Harvest 3 records such a global as one opaque name, which is why the index
+ * carried `roxen` and nothing under it: `constant store = roxen.store;` in
+ * configuration.pike — and 61 more requests after a `.` in the behavioural
+ * audit — resolved to nothing at all.
+ *
+ * Which globals qualify is read out of the source rather than listed: a call
+ * whose value expression is literally `this_object()` is one. In Roxen 6.1
+ * exactly two are, `roxen` and `roxenloader`, and both have real dotted
+ * consumers in Roxen's own tree.
+ *
+ * Keyed `roxen.store`, dotted, because that is the form the reference is
+ * written in and the form the dotted lookup is handed.
+ */
+export function harvestGlobalObjectMembers(
+  root: string,
+  into: Record<string, SymbolEntry>,
+  docFor: DocLookup,
+): number {
+  let added = 0;
+  for (const source of GLOBAL_SOURCES) {
+    const abs = join(root, source);
+    if (!existsSync(abs)) continue;
+    const bound = extractAddConstantCalls(read(abs))
+      .filter((call) => call.valueExpr === SELF_BINDING_VALUE)
+      .map((call) => call.name);
+    if (bound.length === 0) continue;
+
+    const members = programMembers(root, source, new Set());
+    for (const global of bound) {
+      for (const [name, member] of members) {
+        const key = `${global}.${name}`;
+        if (key in into) continue;
+        // Names the declaring file: hover cannot offer a location for a
+        // bundled entry, and with a chain this deep the file is the only way
+        // left to go read the source.
+        const note = `Member of \`${global}\` (${member.source}).`;
+        const doc = withoutSignatureBlock(docFor(join(root, member.source), name) ?? "");
+        into[key] = { signature: member.decl.signature, markdown: doc ? `${doc}\n\n${note}` : note };
+        added++;
+      }
+    }
   }
   return added;
 }

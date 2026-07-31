@@ -94,6 +94,44 @@ describe("the shipped index", () => {
     }
   });
 
+  test("carries the members of the globals that are whole source files", () => {
+    // `add_constant("roxen", this_object())` makes the global be roxen.pike's
+    // object. The index had the global and none of its members, so every
+    // `roxen.something` in Roxen's own tree resolved to nothing.
+    const store = lookupRoxenSymbol(index, "roxen.store");
+    expect(store).not.toBeNull();
+    expect(store!.signature).toContain("store(");
+    // roxen.pike does not declare `store` — it inherits global_variables.pike,
+    // which inherits read_config.pike, which does. Four files down the chain.
+    expect(store!.markdown).toContain("read_config.pike");
+
+    expect(lookupRoxenSymbol(index, "roxen.retrieve")).not.toBeNull();
+    expect(lookupRoxenSymbol(index, "roxen.remove")).not.toBeNull();
+    expect(lookupRoxenSymbol(index, "roxen.find_configuration")).not.toBeNull();
+    expect(lookupRoxenSymbol(index, "roxenloader.server_dir")).not.toBeNull();
+  });
+
+  test("keeps a global's member distinct from the bare name that shadows it", () => {
+    // 74 of the new members share a name with a constant, a prototype member or
+    // an injected global, and 16 of those declare something genuinely
+    // different: `roxenloader.query` takes one required argument, the `query` a
+    // module writes bare takes two optional ones. Answering the qualified form
+    // from the bare index is a wrong answer, not a missing one.
+    const qualified = lookupRoxenSymbol(index, "roxenloader.query");
+    const bare = lookupRoxenIdentifier(index, "query");
+    expect(qualified).not.toBeNull();
+    expect(bare).not.toBeNull();
+    expect(qualified!.signature).not.toBe(bare!.signature);
+  });
+
+  test("does not offer a global's members as bare names", () => {
+    // Nothing puts `store` in scope unqualified; only `roxen.store` does.
+    const labels = new Set(roxenCompletionCandidates(index).map((c) => c.name));
+    expect(labels.has("store")).toBe(false);
+    expect(labels.has("find_configuration")).toBe(false);
+    expect(lookupRoxenIdentifier(index, "find_configuration")).toBeNull();
+  });
+
   test("does not claim a name roxenloader does not inject", () => {
     // prototypes.pike lists its own exclusions in `ignore_identifiers`, and the
     // generator reads that list rather than restating it.
