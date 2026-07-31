@@ -16,6 +16,7 @@ import {
 } from './scope-helpers';
 import { collectPostfixRef } from './postfixRefs';
 import { resolveScoped } from './scopeRefs';
+import { PIKE_KEYWORDS } from './pikeKeywords';
 
 // ---------------------------------------------------------------------------
 // Reference collection and resolution
@@ -37,6 +38,7 @@ const DISPATCHED_REF_TYPES = new Set<string>([
   'function_decl',
   'inherit_decl',
   'import_decl',
+  'preproc_define',
 ]);
 
 /**
@@ -81,6 +83,9 @@ export function collectReferences(node: Node, state: BuildState): void {
       // Collect return type references for rename-through-return-types.
       // When renaming class Dog → Cat, `Dog f()` should also be renamed.
       collectFunctionReturnTypeRefs(node, state);
+      break;
+    case 'preproc_define':
+      collectPreprocDefineRefs(node, state);
       break;
     default:
       break;
@@ -225,6 +230,56 @@ function collectReturnTypeIdRecursive(node: Node, state: BuildState): void {
     ) {
       collectReturnTypeIdRecursive(child, state);
     }
+  }
+}
+
+/** The names a function-like macro binds at expansion time. */
+function macroParameterNames(node: Node): Set<string> {
+  const names = new Set<string>();
+  const params = node.childForFieldName('parameters');
+  if (!params) return names;
+  for (const param of params.children) {
+    if (param.type !== 'preproc_param') continue;
+    const name = param.childForFieldName('name');
+    if (name) names.add(name.text);
+  }
+  return names;
+}
+
+/**
+ * References inside a `#define` body.
+ *
+ * A macro body is a token sequence rather than an expression, so its
+ * identifiers are bare `identifier` nodes that no expression rule dispatches.
+ * Collecting them here is what lets hover, go-to-definition and references
+ * answer anywhere inside a macro, and what stops a symbol whose only use is a
+ * macro body from being reported as unused.
+ *
+ * Two kinds of identifier are dropped. A macro's own parameters are bound at
+ * expansion, so resolving them against the enclosing scope would point them at
+ * unrelated declarations that happen to share the name — and rename would then
+ * rewrite the body. Keywords reach here spelled as identifiers, because a body
+ * has no keyword positions for the lexer to recognise them in; they name
+ * nothing.
+ */
+function collectPreprocDefineRefs(node: Node, state: BuildState): void {
+  const body = node.childForFieldName('body');
+  if (!body) return;
+
+  const parameters = macroParameterNames(node);
+  for (const child of body.children) {
+    if (child.type !== 'identifier') continue;
+    const name = child.text;
+    if (parameters.has(name) || PIKE_KEYWORDS.has(name)) continue;
+
+    const declId = resolveName(name, child, state);
+    state.references.push({
+      name,
+      loc: toLoc(child.startPosition),
+      kind: 'identifier',
+      resolvesTo: declId,
+      confidence: declId !== null ? 'high' : 'low',
+    });
   }
 }
 

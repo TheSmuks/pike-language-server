@@ -24,7 +24,7 @@ import {
   collectCatchExpr,
   collectSimpleDecl,
 } from './declarationBlockCollectors';
-import { collectPreprocDirective, collectPreprocInclude } from './preprocMacros';
+import { collectPreprocDefine, collectPreprocInclude } from './preprocMacros';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -60,6 +60,7 @@ export const DECL_KIND_MAP: Record<string, DeclKind> = {
 const DISPATCHED_DECL_TYPES = new Set<string>([
   ...Object.keys(DECL_KIND_MAP),
   'preproc_include',
+  'preproc_define',
   'preprocessor_directive',
   'local_function_decl',
   'lambda_expr',
@@ -165,10 +166,15 @@ function dispatchBlockStatement(node: Node, state: BuildState): boolean {
 function dispatchCollectDeclarations(node: Node, state: BuildState): void {
   // Handle preprocessor directives: `#include` targets and `#define` macros.
   if (node.type === 'preproc_include') { collectPreprocInclude(node, state); return; }
+  if (node.type === 'preproc_define') {
+    // The body is not descended into: its identifiers are uses of names
+    // declared elsewhere, and its parameters are bound only at expansion time,
+    // so neither belongs in the enclosing scope.
+    collectPreprocDefine(node, state);
+    return;
+  }
   if (node.type === 'preprocessor_directive') {
-    // Only `#define` produces a symbol; other directives are ignored. Either
-    // way there is nothing to descend into (the node is a flat text token).
-    collectPreprocDirective(node, state);
+    // Every remaining directive is a flat text token that declares nothing.
     return;
   }
 

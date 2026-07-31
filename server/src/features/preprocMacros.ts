@@ -2,11 +2,10 @@
  * Preprocessor handling for the declaration pass: `#define` macros and
  * `#include` directives.
  *
- * tree-sitter-pike does NOT give `#define` a structured node — it emits a flat
- * `preprocessor_directive` node whose `.text` is the whole line (e.g.
- * `"#define MAX 10"`). We recover the macro name (and whether it is defined
- * function-like, `NAME(args)`) by matching the directive text, then synthesize a
- * name range from the match offset.
+ * `#define` is a `preproc_define` node with a `name` field, an optional
+ * `parameters` field (present exactly when the macro is function-like) and an
+ * optional `body`. Identifiers inside the body are real nodes, so every other
+ * feature can resolve them by position.
  *
  * `#include` IS structured (`preproc_include` with a `string_literal` or
  * `system_lib_string` `path` child); we record it as an `include` declaration
@@ -16,46 +15,28 @@
 import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
 import {
-  toLoc,
   toRange,
   addDeclaration,
   currentScopeId,
 } from './scopeBuilder';
 
-// `#define NAME` or `#define NAME(args)`. Group 1 = everything up to the name,
-// group 2 = the macro name, group 3 = `(` only when function-like (no space
-// between the name and the paren, per C/Pike macro rules).
-const DEFINE_RE = /^(#\s*define\s+)([A-Za-z_]\w*)(\()?/;
-
 /**
- * If `node` is a `#define` directive, add a `macro` declaration to the current
- * scope. Returns true when handled (so the caller can stop descending).
+ * Add a `macro` declaration for a `#define` to the current scope. Returns true
+ * when handled (so the caller can stop descending).
  */
-export function collectPreprocDirective(node: Node, state: BuildState): boolean {
-  const m = DEFINE_RE.exec(node.text);
-  if (!m) return false;
-
-  const prefixLen = m[1].length;
-  const name = m[2];
-  const functionLike = m[3] !== undefined;
-
-  // The `#define <name>` prefix is ASCII, so the name's UTF-16 column is the
-  // directive's start column plus the prefix length. The name lives on the
-  // directive's first row even when the body uses `\` line continuations.
-  const row = node.startPosition.row;
-  const startCol = node.startPosition.column + prefixLen;
-  const nameRange = {
-    start: toLoc({ row, column: startCol }),
-    end: toLoc({ row, column: startCol + name.length }),
-  };
+export function collectPreprocDefine(node: Node, state: BuildState): boolean {
+  const nameNode = node.childForFieldName('name');
+  if (!nameNode) return false;
 
   addDeclaration(state, {
-    name,
+    name: nameNode.text,
     kind: 'macro',
-    nameRange,
+    nameRange: toRange(nameNode),
     range: toRange(node),
     scopeId: currentScopeId(state),
-    functionLike,
+    // A parameter list is only parsed when the paren abuts the name, which is
+    // exactly the rule that makes a macro function-like.
+    functionLike: node.childForFieldName('parameters') !== null,
   });
   return true;
 }

@@ -87,6 +87,13 @@
 ; Preprocessor
 (preprocessor_directive) @keyword.directive
 
+; #define is structured, so it is highlighted part by part rather than as one
+; directive token: the macro name reads as what it is, and its parameters as
+; parameters.
+(preproc_define "define" @keyword.directive)
+(preproc_define name: (identifier) @function.macro)
+(preproc_param name: (identifier) @variable.parameter)
+
 ; Constants
 [
   "this" "this_program"
