@@ -3939,6 +3939,1882 @@
     "predef.werror": {
       "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
       "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "roxen.ACON_DNS_FAIL": {
+      "signature": "constant ACON_DNS_FAIL = -2;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.ACON_LOOP": {
+      "signature": "constant ACON_LOOP = -1;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.ACON_REFUSED": {
+      "signature": "constant ACON_REFUSED = 0;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.AdminUser": {
+      "signature": "class AdminUser",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.ArgCache": {
+      "signature": "class ArgCache",
+      "markdown": "Generic cache for storing away a persistent mapping of data to be\n refetched later by a short string key. This being a cache, your\n data may be thrown away at random when the cache is full.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.BackgroundProcess": {
+      "signature": "class BackgroundProcess",
+      "markdown": "A class to do a task repeatedly in the background, in a way that\n makes as little impact as possible on the incoming requests (using\n background_run).\nThe user must keep a reference to this object, otherwise it will remove\n itself and the callback won't be called anymore.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.BasicModule": {
+      "signature": "class BasicModule",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.Cache": {
+      "signature": "class Cache",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.CacheStream": {
+      "signature": "class CacheStream ( Stdio.File file, string fname, int new )",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.ConfigIFCache": {
+      "signature": "class ConfigIFCache",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.ConfigurationSettings": {
+      "signature": "class ConfigurationSettings",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.FSGarb": {
+      "signature": "class FSGarb",
+      "markdown": "Filesystem garbage collector for a single root directory.\n\nMember of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.FSGarbWrapper": {
+      "signature": "class FSGarbWrapper(string id)",
+      "markdown": "Wrapper keeping a FSGarb alive.\nWhen this object is destructed (eg by refcount), the corresponding\n FSGarb will be killed. This is to make sure stale FSGarbs aren't\n left running after module reloads or reconfigurations.\n\nMember of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.FakeModuleInfo": {
+      "signature": "class FakeModuleInfo( string sname )",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.Fonts": {
+      "signature": "class Fonts",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.ImageCache": {
+      "signature": "class ImageCache",
+      "markdown": "The image cache handles the behind-the-scenes caching and\n regeneration features of graphics generated on the fly. Besides\n being a cache, however, it serves a wide variety of other\n interesting image conversion/manipulation functions as well.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.InternalProtocol": {
+      "signature": "class InternalProtocol",
+      "markdown": "Protocol for internal requests that are not linked to any real request.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.InternalRequestID": {
+      "signature": "class InternalRequestID",
+      "markdown": "ID for internal requests that are not linked to any real request.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.LogFile": {
+      "signature": "class LogFile",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.LogFormat": {
+      "signature": "class LogFormat",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.MailSender": {
+      "signature": "class MailSender",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.ModuleInfo": {
+      "signature": "class ModuleInfo( string sname, string filename )",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.PortOptions": {
+      "signature": "class PortOptions",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.Protocol": {
+      "signature": "class Protocol",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.Queue": {
+      "signature": "class Queue",
+      "markdown": "Thread.Queue lookalike, which uses some archaic and less\n known features of the preempting algorithm in pike to optimize the\n read function.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.SEND_ADDR_FAIL": {
+      "signature": "constant SEND_ADDR_FAIL = -2;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SEND_DNS_UNKNOWN": {
+      "signature": "constant SEND_DNS_UNKNOWN = -3;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SEND_FAIL": {
+      "signature": "constant SEND_FAIL = 0;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SEND_OK": {
+      "signature": "constant SEND_OK = 1;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SEND_OPEN_FAIL": {
+      "signature": "constant SEND_OPEN_FAIL = -1;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SMTP_Reader": {
+      "signature": "class SMTP_Reader",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.SNMPagent": {
+      "signature": "class SNMPagent",
+      "markdown": "Member of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SSLContext": {
+      "signature": "class SSLContext",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.SSLProtocol": {
+      "signature": "class SSLProtocol",
+      "markdown": "Base protocol for SSL ports.\nExactly like Port, but uses SSL.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.StartTLSProtocol": {
+      "signature": "class StartTLSProtocol",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.SubMIBManager": {
+      "signature": "class SubMIBManager",
+      "markdown": "Member of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SubMIBRoxenBoot": {
+      "signature": "class SubMIBRoxenBoot",
+      "markdown": "Manages the enterprises.roxenis.app.webserver.global.boot object\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SubMIBRoxenVS": {
+      "signature": "class SubMIBRoxenVS",
+      "markdown": "roxenis enterprise subtree manager\n Manages the enterprise.roxenis.* submib tree.\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SubMIBRoxenVSTable": {
+      "signature": "class SubMIBRoxenVSTable",
+      "markdown": "roxenis enterprise subtree manager\n Manages the enterprises.roxenis.app.webserver.vsTable submib tree.\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SubMIBSnmp": {
+      "signature": "class SubMIBSnmp",
+      "markdown": "snmp subtree manager\n Manages the basic snmp.snmp* submib tree.\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.SubMIBSystem": {
+      "signature": "class SubMIBSystem",
+      "markdown": "system subtree manager\n Manages the basic system.sys* submib tree.\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.UserDBModule": {
+      "signature": "class UserDBModule",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen._configuration": {
+      "signature": "program _configuration;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.add_permission": {
+      "signature": "void add_permission( string perm, LocaleString text );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.adminrequest_get_context": {
+      "signature": "void adminrequest_get_context( string ident, string host, RequestID id );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.age": {
+      "signature": "string age(int x);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.all_modules": {
+      "signature": "array(ModuleInfo) all_modules();",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.all_modules_cache": {
+      "signature": "array(ModuleInfo) all_modules_cache;",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.all_modules_loaded": {
+      "signature": "int all_modules_loaded;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.all_pike_module_cache": {
+      "signature": "array(string) all_pike_module_cache;",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.all_ports": {
+      "signature": "array all_ports( );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.argcache": {
+      "signature": "ArgCache argcache;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.argv": {
+      "signature": "array argv;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.async_cache_connect": {
+      "signature": "void async_cache_connect(string host, int port, string cl, string entry, function|void callback, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/socket.pike)."
+    },
+    "roxen.async_connect": {
+      "signature": "void async_connect(string host, int port, function|void callback, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/socket.pike)."
+    },
+    "roxen.async_pipe": {
+      "signature": "void async_pipe(Stdio.File to, Stdio.File from, function|void callback, mixed|void id, mixed|void cl, mixed|void file);",
+      "markdown": "Member of `roxen` (server/base_server/socket.pike)."
+    },
+    "roxen.async_sig_start": {
+      "signature": "function async_sig_start( function f, int really );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.backend_block_lock": {
+      "signature": ".MutexKey backend_block_lock;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.backend_thread": {
+      "signature": ".Thread backend_thread;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.background_run": {
+      "signature": "mixed background_run(int|float delay, function func, mixed... args);",
+      "markdown": "Enqueue a task to run in the background in a way that makes as\n little impact as possible on the incoming requests. No matter how\n many tasks are queued to run in the background, only one is run at\n a time. The tasks won't be starved regardless of server load,\n though.\nThe function func will be enqueued after approximately delay\n seconds, to be called with the rest of the arguments as its\n arguments.\nIn a multithreaded server the function will be executed in one of\n the handler threads. The function is executed in the backend\n thread if no thread support is available, although that\n practically never occurs anymore.\nTo avoid starving other background jobs, the function should never\n run for a long time. Instead do another call to background_run\n to queue it up again after some work has been done, or use\n BackgroundProcess.\n**Returns:** If the function is queued for execution right away then zero is\n returned. Otherwise its call out identifier is returned, which can\n be used with find_call_out or remove_call_out.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.background_run_thread": {
+      "signature": ".Thread background_run_thread();",
+      "markdown": "Returns the thread currently executing the background_run queue,\n or 0 if it isn't being processed.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_acc_cpu_time": {
+      "signature": "int bg_acc_cpu_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_acc_time": {
+      "signature": "int bg_acc_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs": {
+      "signature": "int bg_num_runs;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_001s": {
+      "signature": "int bg_num_runs_001s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_005s": {
+      "signature": "int bg_num_runs_005s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_015s": {
+      "signature": "int bg_num_runs_015s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_05s": {
+      "signature": "int bg_num_runs_05s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_15s": {
+      "signature": "int bg_num_runs_15s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_1s": {
+      "signature": "int bg_num_runs_1s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_num_runs_5s": {
+      "signature": "int bg_num_runs_5s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_process_thread": {
+      "signature": ".Thread bg_process_thread;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_queue": {
+      "signature": ".Queue bg_queue;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bg_queue_length": {
+      "signature": "int bg_queue_length();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.blocking_host_to_ip": {
+      "signature": "string blocking_host_to_ip(string host);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.blocking_ip_to_host": {
+      "signature": "string blocking_ip_to_host(string ip);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.boot_time": {
+      "signature": "int boot_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bootstrap_info": {
+      "signature": ".Local bootstrap_info;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.bounce": {
+      "signature": "void bounce(mapping(string:string) msg, string code, array(string) text, string last_command, string|void body);",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.build_protocols_mapping": {
+      "signature": "mapping(string:program/*(Protocol)*/) build_protocols_mapping();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.busy_threads": {
+      "signature": "int busy_threads;",
+      "markdown": "The number of currently busy threads.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cache_file": {
+      "signature": "CacheStream cache_file(string cl, string entry);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.cached_decoders": {
+      "signature": "mapping(string:Charset.Decoder) cached_decoders;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.call_outs_mutex": {
+      "signature": ".Mutex call_outs_mutex;",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.cdt_changed": {
+      "signature": "void cdt_changed(Variable.Variable v);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_directory": {
+      "signature": "string cdt_directory;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_dump_seq_interval": {
+      "signature": "constant cdt_dump_seq_interval = 60;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_filename": {
+      "signature": "string cdt_filename;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_next_seq_dump": {
+      "signature": "int cdt_next_seq_dump;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_poll_file": {
+      "signature": "void cdt_poll_file();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_poll_interval": {
+      "signature": "constant cdt_poll_interval = 5;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cdt_thread": {
+      "signature": ".Thread cdt_thread;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.check_commit_suicide": {
+      "signature": "void check_commit_suicide();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.check_suicide": {
+      "signature": "void check_suicide( );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.check_variable": {
+      "signature": "string check_variable(string name, mixed value);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.clear_all_modules_cache": {
+      "signature": "void clear_all_modules_cache();",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.compat_levels": {
+      "signature": "array(string) compat_levels;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.compile_security_pattern": {
+      "signature": "function(RequestID:mapping|int) compile_security_pattern( string pattern, RoxenModule m );",
+      "markdown": "Parse a security pattern and return a function that when called\n will do the checks required by the format.\nThe syntax is:\nuserdb userdatabase module\n  authmethod authentication module\n  realm realm name\nBelow, CMD is one of 'allow' and 'deny'\nCMD ip=ip/bits[,ip/bits]  [return]\n  CMD ip=ip:mask[,ip:mask]  [return]\n  CMD ip=pattern            [return]\nCMD user=name[,name,...]  [return]\n  CMD group=name[,name,...] [return]\nCMD dns=pattern           [return]\nCMD day=pattern           [return]\nCMD time=<start>-<stop>   [return]\n       times in HH:mm format\nCMD referer=pattern       [return]\n       Check the referer header.\nCMD accept_language=language  [return]\nCMD luck=entry_chance%    [return]\n       Defines the minimum level of luck required. All attempts\n       gets accepted at 0%, and no attempts gets accepted at 100%.\npattern is a glob pattern.\nreturn means that reaching this command results in immediate\n  return, only useful for 'allow'.\n'deny' always implies a return, no futher testing is done if a\n 'deny' match.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.config_is_modified": {
+      "signature": "Stat config_is_modified(string cl);",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.config_settings": {
+      "signature": "ConfigIFCache config_settings;",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.config_settings2": {
+      "signature": "ConfigIFCache config_settings2;",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.config_stat_cache": {
+      "signature": "mapping (string:Stdio.Stat) config_stat_cache;",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.config_userdb_module": {
+      "signature": "UserDBModule config_userdb_module;",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.configuration_authenticate": {
+      "signature": "string configuration_authenticate(RequestID id, string what, void|int silent);",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.configuration_dir": {
+      "signature": "string configuration_dir;",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.configurations": {
+      "signature": "array(Configuration) configurations;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.container": {
+      "signature": "class container",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.create": {
+      "signature": "void create();",
+      "markdown": "The function func will be called with the following arguments\n after approximately period seconds, and then kept being\n called with approximately that amount of time between each call.\nThe repetition will stop if stop is called, or if func\n throws an error.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.create_admin_user": {
+      "signature": "AdminUser create_admin_user( string s );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.create_cache_file": {
+      "signature": "CacheStream create_cache_file(string cl, string entry);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.create_pid_file": {
+      "signature": "void create_pid_file(string where);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.create_unique_id": {
+      "signature": "string create_unique_id();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.current_configuration": {
+      "signature": ".Local current_configuration;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.current_user_id_file": {
+      "signature": ".File current_user_id_file;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.cvs_version": {
+      "signature": "constant cvs_version=\"$Id: d28dbf72dd62ad6d5b26984db64725170393b8b7 $\";",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.dbm_cached_get": {
+      "signature": "function(string:Sql.Sql) dbm_cached_get;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.decode_charset": {
+      "signature": "string decode_charset( string charset, string data );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.decode_config_file": {
+      "signature": "mapping decode_config_file(string s);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.decode_config_region": {
+      "signature": "string decode_config_region(Parser.HTML p, mapping mr, string s, mapping res2);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.decode_layers": {
+      "signature": "constant decode_layers = Image.decode_layers;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.decode_variable": {
+      "signature": "string decode_variable(Parser.HTML p, mapping m, string s, mapping res);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.default_check_cache_file": {
+      "signature": "void default_check_cache_file(CacheStream stream);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.default_locale": {
+      "signature": "string default_locale;",
+      "markdown": "Contains the default locale for the entire roxen server.\n\nMember of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.default_page_locale": {
+      "signature": "string default_page_locale;",
+      "markdown": "Contains the default locale for web pages.\n\nMember of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.define_global_variables": {
+      "signature": "void define_global_variables( );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.definvisvar": {
+      "signature": ".Variable definvisvar(string name, mixed value, int type, array|void misc);",
+      "markdown": "Convenience function, define an invisible variable, this variable\n will be saved, but it won't be visible in the administration interface.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.deflocaledoc": {
+      "signature": "int deflocaledoc( string locale, string variable, string name, string doc, mapping|void translate );",
+      "markdown": "Equivalent to variables[variable]->deflocaledoc( loc,name, doc, translate )\n This is a compatibility function, and as such is deprecated.\n But it will be supported for the forseeable function.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.defvar": {
+      "signature": ".Variable defvar(string var, mixed value, // rest is compat, and thus optional... LocaleString|void name, int|void type, LocaleString|void doc_str, mixed|void misc, int|function|void not_in_config, mapping|void option_translations);",
+      "markdown": "Define 'sname' to be 'variable',\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.delete_admin_user": {
+      "signature": "void delete_admin_user( string s );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.describe_all_threads": {
+      "signature": "void describe_all_threads(void|int ignored, // Might be the signal number. void|int(0..1) inhibit_threads_disabled);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.describe_thread": {
+      "signature": "void describe_thread(Thread.Thread thread);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.disable_configuration": {
+      "signature": "void disable_configuration(string name);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.dns": {
+      "signature": ".DNS.async_client dns;",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.do_thread_create": {
+      "signature": ".Thread do_thread_create(string id, function f, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.do_when_found": {
+      "signature": "public mapping (string:array(mixed)) do_when_found;",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.dump": {
+      "signature": "constant dump = roxenloader.dump;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.enable_configuration": {
+      "signature": "Configuration enable_configuration(string name);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.enable_configurations": {
+      "signature": "void enable_configurations();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.enable_configurations_modules": {
+      "signature": "void enable_configurations_modules();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.encode_config_region": {
+      "signature": "string encode_config_region(mapping m, string reg, Configuration c, int comments);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.encode_mixed": {
+      "signature": "string encode_mixed(mixed from, Configuration c, int|void indent);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.encode_regions": {
+      "signature": "string encode_regions(mapping r, Configuration c);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.error_log": {
+      "signature": "mapping(string:array(int)) error_log;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.exit_when_done": {
+      "signature": "void exit_when_done();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.extension": {
+      "signature": "string extension( string from );",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.fastpipe": {
+      "signature": "program fastpipe;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.file_name": {
+      "signature": "string file_name(string what);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.file_name_r": {
+      "signature": "string file_name_r(string what, int nd, int hv);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.filename": {
+      "signature": "string filename( program|object o );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.filename_2": {
+      "signature": "array(string|int) filename_2(program|object o);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_admin_user": {
+      "signature": "AdminUser find_admin_user( string s );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.find_all_pike_module_directories": {
+      "signature": "array(string) find_all_pike_module_directories();",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.find_client_var": {
+      "signature": "mapping(string:string) find_client_var(string from, void|mapping(string:string) existing_cv);",
+      "markdown": "Member of `roxen` (server/base_server/supports.pike)."
+    },
+    "roxen.find_configuration": {
+      "signature": "Configuration find_configuration( string name );",
+      "markdown": "Searches for a configuration with a name or fullname like the\n given string. See also get_configuration().\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_configuration_for_url": {
+      "signature": "Configuration find_configuration_for_url(Standards.URI url, void|Configuration only_this_conf, void|array(Protocol) return_port);",
+      "markdown": "Given a url and requestid, try to locate a suitable configuration\n (virtual site) for the request. \n This interface is not at all set in stone, and might change at \n any time.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_ips_for": {
+      "signature": "array(string) find_ips_for( string what );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_module": {
+      "signature": "ModuleInfo find_module( string name, int|void noforce );",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.find_port": {
+      "signature": "Protocol find_port( string name );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_port_for_url": {
+      "signature": "array(Protocol|mapping(string:mixed)) find_port_for_url( Standards.URI url, void|Configuration only_this_conf);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.find_supports": {
+      "signature": "multiset(string) find_supports(string from, void|multiset(string) existing_sup);",
+      "markdown": "Member of `roxen` (server/base_server/supports.pike)."
+    },
+    "roxen.find_supports_and_vars": {
+      "signature": "array(multiset(string)| mapping(string:string)) find_supports_and_vars(string from, void|multiset(string) existing_sup, void|mapping(string:string) existing_cv);",
+      "markdown": "Member of `roxen` (server/base_server/supports.pike)."
+    },
+    "roxen.fix_config_lookup": {
+      "signature": "void fix_config_lookup();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.fmt_cipher_suite": {
+      "signature": "string fmt_cipher_suite(int suite);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.fmt_cipher_suites": {
+      "signature": "string fmt_cipher_suites(array(int) s);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.fonts": {
+      "signature": "Fonts fonts;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.format_cycle": {
+      "signature": "string format_cycle(array(mixed) cycle);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.fsgarbs": {
+      "signature": "mapping(string:FSGarb) fsgarbs;",
+      "markdown": "Member of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.get_admin_configuration": {
+      "signature": "Configuration get_admin_configuration();",
+      "markdown": "Returns the admin UI configuration, which is the one containing a\n config_filesystem module instance.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.get_config_users": {
+      "signature": "array(AdminUser) get_config_users( string uname );",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.get_configuration": {
+      "signature": "Configuration get_configuration(string name);",
+      "markdown": "Gets the configuration with the given identifier name.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.get_description": {
+      "signature": "array get_description();",
+      "markdown": "External function for MIB object 'system.sysDescr'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_domain": {
+      "signature": "string get_domain(int|void l);",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.get_garb_info": {
+      "signature": "string get_garb_info();",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.get_locale": {
+      "signature": "mixed get_locale( );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.get_port_options": {
+      "signature": "mapping get_port_options( string key );",
+      "markdown": "Get the options for the key 'key'.\n The interpretation of the options is protocol specific.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.get_syscontact": {
+      "signature": "array get_syscontact();",
+      "markdown": "External function for MIB object 'system.sysContact'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_syslocation": {
+      "signature": "array get_syslocation();",
+      "markdown": "External function for MIB object 'system.sysLocation'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_sysname": {
+      "signature": "array get_sysname();",
+      "markdown": "External function for MIB object 'system.sysName'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_sysoid": {
+      "signature": "array get_sysoid();",
+      "markdown": "External function for MIB object 'system.sysOID'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_sysservices": {
+      "signature": "array get_sysservices();",
+      "markdown": "External function for MIB object 'system.sysServices'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_sysuptime": {
+      "signature": "array get_sysuptime();",
+      "markdown": "External function for MIB object 'system.sysUpTime'\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.get_thread_task_start_times": {
+      "signature": "mapping(Thread.Thread:int) get_thread_task_start_times();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.gethostbyname": {
+      "signature": "array gethostbyname(string name);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.getvar": {
+      "signature": ".Variable getvar( string name );",
+      "markdown": "Return the variable object associated with the specified variable\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.getvars": {
+      "signature": "mapping(string:Variable.Variable) getvars( );",
+      "markdown": "Member of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.got_java": {
+      "signature": "int got_java();",
+      "markdown": "Used to check dynamically whether Java support is available. If it\n is then this function will initialize a JVM.\n\nMember of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.got_one_result": {
+      "signature": "void got_one_result(string from, string to, mapping cache_ctx);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.handle": {
+      "signature": "void handle(function f, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handle_queue_length": {
+      "signature": "int handle_queue_length();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_acc_cpu_time": {
+      "signature": "int handler_acc_cpu_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_acc_time": {
+      "signature": "int handler_acc_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs": {
+      "signature": "int handler_num_runs;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_001s": {
+      "signature": "int handler_num_runs_001s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_005s": {
+      "signature": "int handler_num_runs_005s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_015s": {
+      "signature": "int handler_num_runs_015s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_05s": {
+      "signature": "int handler_num_runs_05s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_15s": {
+      "signature": "int handler_num_runs_15s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_1s": {
+      "signature": "int handler_num_runs_1s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_num_runs_5s": {
+      "signature": "int handler_num_runs_5s;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_ping": {
+      "signature": "void handler_ping();",
+      "markdown": "Called to indicate that the handler threads are alive.\nUsually called automatically via handle() by restart_if_stuck(),\n but may need to be called by hand when handler threads are intentionally\n blocked for a longer time (eg via long-lived global mutex locks).\nDo not call unless you know what you are doing.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.handler_threads_on_hold": {
+      "signature": "int handler_threads_on_hold();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.hold_handler_threads": {
+      "signature": "void hold_handler_threads();",
+      "markdown": "Tries to put all handler threads on hold, but gives up if it takes\n too long.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.hold_wakeup_cond": {
+      "signature": ".Condition hold_wakeup_cond;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.host_is_local": {
+      "signature": "int(0..1) host_is_local(string hostname);",
+      "markdown": "Check if hostname is local to this machine.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.host_to_ip": {
+      "signature": "void host_to_ip(string host, function callback, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.http_check_cache_file": {
+      "signature": "void http_check_cache_file(CacheStream cachef);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.increase_id": {
+      "signature": "int increase_id();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.init_configuserdb": {
+      "signature": "void init_configuserdb();",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.init_garber": {
+      "signature": "public void init_garber();",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.initiate_argcache": {
+      "signature": "void initiate_argcache();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.initiate_languages": {
+      "signature": "void initiate_languages(string def_loc);",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.initiate_supports": {
+      "signature": "public void initiate_supports();",
+      "markdown": "Member of `roxen` (server/base_server/supports.pike)."
+    },
+    "roxen.invalidate": {
+      "signature": "void invalidate(CacheKey key);",
+      "markdown": "Invalidate (mark as stale) a cache key.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.invalidp": {
+      "signature": "int(0..1) invalidp(CacheKey key);",
+      "markdown": "Check if a cache key has been marked invalid (aka stale).\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.ip_to_host": {
+      "signature": "void ip_to_host(string ipnumber, function callback, mixed ... args);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.is_ip": {
+      "signature": "int is_ip(string s);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.is_shutting_down": {
+      "signature": "int is_shutting_down();",
+      "markdown": "Returns true if Roxen is shutting down.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.killvar": {
+      "signature": "int killvar(string var);",
+      "markdown": "Undefine the variable 'var'.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.language": {
+      "signature": "function language(string lang, string func, object|void id);",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.language_low": {
+      "signature": "object language_low(string lang);",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.last_data": {
+      "signature": "mapping last_data;",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.last_read": {
+      "signature": "string last_read;",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.list_admin_users": {
+      "signature": "array(string) list_admin_users();",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.list_all_configurations": {
+      "signature": "array(string) list_all_configurations();",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.list_config_users": {
+      "signature": "array(string|object) list_config_users(string uname, string|void required_auth);",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.list_languages": {
+      "signature": "array(string) list_languages();",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.load_image": {
+      "signature": ".Image load_image(string f, RequestID id, mapping|void err);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.load_layers": {
+      "signature": "array(Image.Layer)|mapping load_layers(string f, RequestID id, mapping|void opt);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.locale": {
+      "signature": "container locale;",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.log": {
+      "signature": "public void log(mapping file, RequestID request_id);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.log_gc_cycles": {
+      "signature": "int log_gc_cycles;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.log_gc_histogram": {
+      "signature": "int log_gc_histogram;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.log_gc_timestamps": {
+      "signature": "int log_gc_timestamps;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.log_gc_verbose": {
+      "signature": "int log_gc_verbose;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.lookup_funs": {
+      "signature": "mapping lookup_funs;",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.low_decode_image": {
+      "signature": "mapping low_decode_image(string data);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.low_load_image": {
+      "signature": "mapping low_load_image(string f, RequestID id, void|mapping err);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.low_set": {
+      "signature": "void low_set(string var, mixed value);",
+      "markdown": "Set the variable 'var' to the specified value without any checking.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.main": {
+      "signature": "int main(int argc, array tmp);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.md5": {
+      "signature": "string md5( string what );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.meta_fsgc": {
+      "signature": "void meta_fsgc();",
+      "markdown": "Member of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.meta_fsgc_thread": {
+      "signature": "Thread.Thread meta_fsgc_thread;",
+      "markdown": "Member of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.module_cache": {
+      "signature": "object module_cache;",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.module_cache_init_mux": {
+      "signature": ".Mutex module_cache_init_mux;",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.modules": {
+      "signature": "mapping(string:ModuleInfo) modules;",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.my_pipe_done": {
+      "signature": "void my_pipe_done(Pipe.pipe which);",
+      "markdown": "Member of `roxen` (server/base_server/socket.pike)."
+    },
+    "roxen.name_of_module": {
+      "signature": "string name_of_module( RoxenModule m, Configuration c );",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.name_thread": {
+      "signature": "void name_thread( object thread, string name );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.new_cache_stream": {
+      "signature": "CacheStream new_cache_stream(Stdio.File fp, string fn);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.new_uuid_string": {
+      "signature": "string new_uuid_string();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.normalize_url": {
+      "signature": "string normalize_url(string url, void|int port_match_form);",
+      "markdown": "Normalizes the given url to a short form.\nIf port_match_form is set, it normalizes to the form that is\n used for port matching, i.e. what\n roxen.Protocol.find_configuration_for_url expects.\n**Note:** Returns `\"\"` for urls that are incomplete.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.number_of_threads": {
+      "signature": "int number_of_threads;",
+      "markdown": "The number of handler threads to run.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.nwrite": {
+      "signature": "void nwrite(string s, int|void perr, int|void errtype, object|void mod, object|void conf);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.oid_sort_func": {
+      "signature": "int oid_sort_func(string a0,string b0);",
+      "markdown": "Member of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.old_module_dirs": {
+      "signature": "array(string) old_module_dirs;",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.open_ports": {
+      "signature": "mapping(string:mapping(string:mapping(int:Protocol))) open_ports;",
+      "markdown": "Lookup from protocol, IP number and port to\n the corresponding open Protocol port.\n**Mapping:**\n  - protocol_name: mapping(string : mapping(int : object(Protocol))) —\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.parse": {
+      "signature": "void parse(string s, mapping mr);",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.permission_translations": {
+      "signature": "mapping permission_translations;",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.pike_cycle_depth": {
+      "signature": "constant pike_cycle_depth = 0;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.plib": {
+      "signature": ".Patcher plib;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.possible_permissions": {
+      "signature": "array possible_permissions;",
+      "markdown": "Member of `roxen` (server/base_server/config_userdb.pike)."
+    },
+    "roxen.protocols": {
+      "signature": "mapping(string:program/*(Protocol)*/) protocols;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.query": {
+      "signature": "mixed query(string|void var, int|void ok);",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.query_configuration_dir": {
+      "signature": "string query_configuration_dir();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.query_var": {
+      "signature": "mixed query_var(string var);",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.quick_host_to_ip": {
+      "signature": "string quick_host_to_ip(string h);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.quick_ip_to_host": {
+      "signature": "string quick_ip_to_host(string ipnumber);",
+      "markdown": "Member of `roxen` (server/base_server/hosts.pike)."
+    },
+    "roxen.read_it": {
+      "signature": "mapping read_it(string cl);",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.register_fsgarb": {
+      "signature": "FSGarbWrapper register_fsgarb(string modid, string path, int max_age, int|void max_size, int|void max_files, string|void quarantine);",
+      "markdown": "Member of `roxen` (server/base_server/fsgc.pike)."
+    },
+    "roxen.register_url": {
+      "signature": "int register_url( string url, Configuration conf );",
+      "markdown": "Register an URL for a configuration.\n**See also:** unregister_url()\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.reinit_garber": {
+      "signature": "public void reinit_garber();",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.reinstall_gc_callbacks": {
+      "signature": "void reinstall_gc_callbacks();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.relay": {
+      "signature": "int relay(string from, string user, string domain, Stdio.BlockFile mail, string csum, object|void smtp);",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.release_handler_threads": {
+      "signature": "void release_handler_threads(int numthreads);",
+      "markdown": "Releases any handler threads put on hold. If necessary new threads\n are started to ensure that at least numthreads threads are\n responding. Threads that haven't arrived to the hold state since\n hold_handler_threads are considered nonresponding.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.reload_all_configurations": {
+      "signature": "void reload_all_configurations();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.remove": {
+      "signature": "void remove( string reg , Configuration current_configuration );",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.remove_configuration": {
+      "signature": "void remove_configuration(string name);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.restart": {
+      "signature": "void restart(float|void i, void|int exit_code, void|int apply_patches);",
+      "markdown": "Restart roxen, if the start script is running\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.restart_if_stuck": {
+      "signature": "void restart_if_stuck(int force);",
+      "markdown": "**Note:** Must be called from the backend thread due to Linux peculiarities.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.restart_roxen_debug_memory_trace": {
+      "signature": "void restart_roxen_debug_memory_trace();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.restart_suicide_checker": {
+      "signature": "void restart_suicide_checker();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.restore_global_variables": {
+      "signature": "void restore_global_variables();",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.retrieve": {
+      "signature": "mapping(string:mixed) retrieve(string reg, Configuration current_configuration);",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.rmold": {
+      "signature": "void rmold(string fname);",
+      "markdown": "Member of `roxen` (server/base_server/disk_cache.pike)."
+    },
+    "roxen.run_log_event_format": {
+      "signature": "void run_log_event_format(string fmt, function cb, string facility, string action, string resource, mapping(string:mixed) info);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.run_log_format": {
+      "signature": "void run_log_format( string fmt, function c, RequestID id, mapping file );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.save": {
+      "signature": "mixed save();",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.save_it": {
+      "signature": "void save_it(string cl, mapping data);",
+      "markdown": "Member of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.security_checks": {
+      "signature": "array(array(string|int|array)) security_checks;",
+      "markdown": "This array contains the compilation information for the different\n security checks for e.g. `htaccess`. The layout of the top array is\n a quadruple of sscanf string that the security command should match,\n the number of arguments that it takes, an array with the actual\n compilation information, and a symbol identifying the class of tests\n the test belongs to.\n**Array:**\n  - `command_sscanf_string`: string — String to be passed as second argument to array_sscanf()\n     to perform the match for the pattern.\n  - `number_of_arguments`: int — Number of elements expected in the array returned by\n     array_sscanf() for a proper match.\n  - `actual_tests`: array(function|string|int|multiset) — In the tests array the following types has the following meaning:\n  - `state_symbol_string`: string — Used to group the results from a class of tests.\n     Currently the following values are used:\n**Note:** It's up to the security checks in this file to ensure that\n   nothing is overcached. All patterns that perform checks using\n   information from the client (such as remote address, referer etc)\n   **have** to use RequestID()->register_vary_callback() (preferred),\n   or NOCACHE() or NO_PROTO_CACHE(). It's not necessary, however,\n   to do this for checks that use the authentication module API, since\n   then it's up to the user database and authentication modules to ensure\n   that nothing is overcached.\n**See also:** RequestID()->register_vary_callback(), NOCACHE(),\n   NO_PROTO_CACHE(), array_sscanf()\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.send_message": {
+      "signature": "int send_message(string from, multiset(string) rcpt, string message);",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.set": {
+      "signature": "void set(string var, mixed value);",
+      "markdown": "Set the variable 'var' to the specified value.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.set_default_locale": {
+      "signature": "void set_default_locale(string def_loc);",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.set_locale": {
+      "signature": "int(0..1) set_locale(void|string lang);",
+      "markdown": "Changes the locale of the current thread. If no\n argument is given, the default locale if used.\n Valid arguments are ISO-639-2 codes, ISO-639-1\n codes and the old symbolic names. No argument or\n zero sets the locale to the default locale.\n\nMember of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.set_port_options": {
+      "signature": "void set_port_options( string key, mapping value );",
+      "markdown": "Set the options for the key 'key'.\n The interpretation of the options is protocol specific.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.set_u_and_gid": {
+      "signature": "int set_u_and_gid(void|int from_handler_thread);",
+      "markdown": "Set the uid and gid to the ones requested by the user. If the\n sete* functions are available, and the define SET_EFFECTIVE is\n enabled, the euid and egid is set. This might be a minor security\n hole, but it will enable roxen to start CGI scripts with the\n correct permissions (the ones the owner of that script have).\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.set_up_ftp_variables": {
+      "signature": "void set_up_ftp_variables( Protocol o );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.set_up_hilfe_variables": {
+      "signature": "void set_up_hilfe_variables( Protocol o );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.set_up_http_variables": {
+      "signature": "void set_up_http_variables( Protocol o );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.set_up_snmp_variables": {
+      "signature": "void set_up_snmp_variables( Protocol o );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.set_up_ssl_variables": {
+      "signature": "void set_up_ssl_variables( Protocol o );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.set_var": {
+      "signature": "mixed set_var(string var, mixed to);",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxen.setvars": {
+      "signature": "void setvars( mapping (string:mixed) vars );",
+      "markdown": "Set the variables from the mapping, which should be on the form\n ([ \"variable name\":value, ... ]). \n Used by roxen internals, not all that useful for the module\n programmer.\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.show_timers": {
+      "signature": "void show_timers();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.shuffle": {
+      "signature": ".pipe shuffle(Stdio.File from, Stdio.File to, Stdio.File|void to2, function(:void)|void callback);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.shutdown": {
+      "signature": "void shutdown(float|void i, void|int apply_patches);",
+      "markdown": "Shut down roxen\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.slow_be_timeout_changed": {
+      "signature": "void slow_be_timeout_changed();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.slow_req_count_changed": {
+      "signature": "void slow_req_count_changed();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.slow_req_monitor": {
+      "signature": ".Backend slow_req_monitor;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.slow_req_timeout_changed": {
+      "signature": "void slow_req_timeout_changed();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.slowpipe": {
+      "signature": "program slowpipe;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.smtp_dns": {
+      "signature": ".DNS.async_client smtp_dns;",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.smtp_relay_start": {
+      "signature": "void smtp_relay_start();",
+      "markdown": "Member of `roxen` (server/base_server/smtprelay.pike)."
+    },
+    "roxen.snmpagent": {
+      "signature": "SNMPagent snmpagent;",
+      "markdown": "Global SNMPagent object\n\nMember of `roxen` (server/base_server/snmpagent.pike)."
+    },
+    "roxen.sort_urls": {
+      "signature": "void sort_urls();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.sorted_urls": {
+      "signature": "array sorted_urls;",
+      "markdown": "Sorted by length, longest first\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.start_handler_threads": {
+      "signature": "void start_handler_threads();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.start_time": {
+      "signature": "int start_time;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.stop_handler_threads": {
+      "signature": "void stop_handler_threads();",
+      "markdown": "Stop all the handler threads and the backend, but give up if it\n takes too long.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.store": {
+      "signature": "void store( string reg, mapping(string:mixed) vars, int q, Configuration current_configuration );",
+      "markdown": "Store the settings for a configuration region.\n- `reg` — Region name.\n- `vars` — Variables. Either\n    - `mapping(string : object(Variable))` — A mapping of configuration variables. This is used\n       when q is `0`.\n    - `mapping(string : mixed)` — A mapping from string to raw values. This is used\n       when q is `1`.\n- `q` — vars mode, see above.\n- `current_configuration` — Configuration that the settings belong to.\n\nMember of `roxen` (server/base_server/read_config.pike)."
+    },
+    "roxen.strip_extention": {
+      "signature": "string strip_extention( string from );",
+      "markdown": "Member of `roxen` (server/base_server/module_support.pike)."
+    },
+    "roxen.test_euid_change": {
+      "signature": "int test_euid_change;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.thread_name": {
+      "signature": "string thread_name( object thread, int|void skip_auto_name );",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.thread_name_from_addr": {
+      "signature": "string thread_name_from_addr(string hex_addr);",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.thread_names": {
+      "signature": "mapping(string:string) thread_names;",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.trim_comments": {
+      "signature": "string trim_comments( string from );",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.trim_tags": {
+      "signature": "string trim_tags( string what );",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.trim_ws": {
+      "signature": "string trim_ws( string indata );",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.unregister_url": {
+      "signature": "void unregister_url(string url, Configuration conf);",
+      "markdown": "Unregister an URL from a configuration.\n**See also:** register_url()\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.urls": {
+      "signature": "mapping(string:mapping(string:Configuration|Protocol|string|array(Protocol)|array(string))) urls;",
+      "markdown": ".. url -> ([ \"conf\":.., ... ])\nIndexed by URL. The following data is stored:\n**Mapping:**\n  - \"conf\": object(Configuration) — The Configuration object for this URL.\n  - \"hostname\": string — The hostname from the URL.\n  - \"path\": string|void — The path (if any) from the URL.\n  - \"port\": object(Protocol) — The protocol handler for this URL.\n  - \"mib_version\": int — (Only SNMP). The version number for the configuration MIB\n     tree when it was last merged.\n\nMember of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.variables": {
+      "signature": "mapping(string:Variable.Variable) variables;",
+      "markdown": "Please do not modify this list directly, instead use \n defvar, killvar, getvar, query and set\n\nMember of `roxen` (server/base_server/basic_defvar.pike)."
+    },
+    "roxen.verify_locale": {
+      "signature": "string verify_locale(string lang);",
+      "markdown": "Member of `roxen` (server/base_server/language.pike)."
+    },
+    "roxen.version": {
+      "signature": "string version();",
+      "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.xml_header": {
+      "signature": "constant xml_header = \"<?xml version=\\\"1.0\\\" encoding=\\\"UTF-8\\\"?>\";",
+      "markdown": "Member of `roxen` (server/base_server/newdecode.pike)."
+    },
+    "roxen.zap_all_module_caches": {
+      "signature": "void zap_all_module_caches( Variable.Variable v );",
+      "markdown": "Member of `roxen` (server/base_server/global_variables.pike)."
+    },
+    "roxenloader.ErrorContainer": {
+      "signature": "class ErrorContainer",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.LowErrorContainer": {
+      "signature": "class LowErrorContainer",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.ParseHtmlCompat": {
+      "signature": "class ParseHtmlCompat",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.ParseHtmlLinesCompat": {
+      "signature": "class ParseHtmlLinesCompat",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.Roxen": {
+      "signature": "class Roxen",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader._disable_threads": {
+      "signature": "object _disable_threads();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader._error_handler": {
+      "signature": "class _error_handler",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.add_cvs_ids": {
+      "signature": "void add_cvs_ids(mixed to);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.add_dump_constant": {
+      "signature": "function add_dump_constant;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.add_package": {
+      "signature": "void add_package(string package_dir);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.all_wrapped_sql_objects": {
+      "signature": "multiset(Sql.Sql) all_wrapped_sql_objects;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.call_out": {
+      "signature": "mixed call_out(function f, float|int delay, mixed ... args);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.clear_connect_to_my_mysql_cache": {
+      "signature": "void clear_connect_to_my_mysql_cache( );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_acc_cpu_time": {
+      "signature": "int co_acc_cpu_time;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_acc_time": {
+      "signature": "int co_acc_time;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_call_out": {
+      "signature": "int co_num_call_out;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_001s": {
+      "signature": "int co_num_runs_001s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_005s": {
+      "signature": "int co_num_runs_005s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_015s": {
+      "signature": "int co_num_runs_015s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_05s": {
+      "signature": "int co_num_runs_05s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_15s": {
+      "signature": "int co_num_runs_15s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_1s": {
+      "signature": "int co_num_runs_1s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.co_num_runs_5s": {
+      "signature": "int co_num_runs_5s;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.compile_error_handlers": {
+      "signature": "array(_error_handler) compile_error_handlers;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.configuration_dir": {
+      "signature": "string configuration_dir;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.connect_to_my_mysql": {
+      "signature": "Sql.Sql connect_to_my_mysql( string|int ro, void|string db, void|int reuse_in_thread, void|string charset);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.crypt_password": {
+      "signature": "string crypt_password(string password, string|void scheme, int|void rounds);",
+      "markdown": "Generate a hash of password suitable for verify_password().\n- `password` — Password to hash.\n- `scheme` — Password hashing scheme. If not specified the strongest available\n   will be used.\n\nIf an unsupported scheme is specified an error will be thrown.\n- `rounds` — The number of rounds to use in parameterized schemes. If not\n   specified the scheme specific default will be used.\n**Returns:** Returns a string suitable for verify_password().\n**See also:** verify_password, predef::crypt(), Nettle.crypt_md5(),\n   Nettle.HashInfo()->crypt_hash()\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.cvs_version": {
+      "signature": "constant cvs_version=\"$Id: 3994a968e65a9961fd33653685fecb1b24293d6a $\";",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.da_Stat_type": {
+      "signature": "object(Stdio.Stat)|array(int) da_Stat_type;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.da_String_type": {
+      "signature": "LocaleString da_String_type;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.default_roxen_font_path": {
+      "signature": "array(string) default_roxen_font_path;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.describe_backtrace": {
+      "signature": "string describe_backtrace(mixed err, void|int linewidth);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.do_main": {
+      "signature": "void do_main( int argc, array(string) argv );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.do_main_wrapper": {
+      "signature": "void do_main_wrapper(int argc, array(string) argv);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.dump": {
+      "signature": "int dump( string file, program|void p );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.early_nwrite": {
+      "signature": "void early_nwrite(string s, int|void perr, int|void errtype, object|void mod, object|void conf);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.euid_egid_lock": {
+      "signature": ".Mutex euid_egid_lock;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.file_stat": {
+      "signature": "Stdio.Stat file_stat( string filename, int|void slinks );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.find_module_and_conf_for_log": {
+      "signature": "array(object) find_module_and_conf_for_log( array(array) q );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.fix_connection_charset": {
+      "signature": "Sql.Sql fix_connection_charset(Sql.Sql db, string charset);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.get_cvs_id": {
+      "signature": "string get_cvs_id(string from);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.get_sql_free_list_status": {
+      "signature": "mapping(string:int) get_sql_free_list_status();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.getgid": {
+      "signature": "int getgid();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.getppid": {
+      "signature": "int getppid();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.getuid": {
+      "signature": "int getuid();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.init_logger": {
+      "signature": "void init_logger();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.isodate": {
+      "signature": "string isodate( int t );",
+      "markdown": "Returns a string with the given posix time t formated as\n YYYY-MM-DD.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.lfile_path": {
+      "signature": "string lfile_path(string filename);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.lfile_stat": {
+      "signature": "object(Stdio.Stat) lfile_stat(string filename);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.load_roxen": {
+      "signature": "void load_roxen();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.loggingfield": {
+      "signature": "int loggingfield;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.lopen": {
+      "signature": "object|void lopen(string filename, string mode, int|void perm);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.low_dump": {
+      "signature": "int low_dump( string file, program|void p );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.low_start_mysql": {
+      "signature": "void low_start_mysql( string datadir, string uid, void|int log_queries_to_stdout);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.main": {
+      "signature": "int main(int argc, array(string) argv);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.make_path": {
+      "signature": "string make_path(string ... from);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mark_fd": {
+      "signature": "mixed mark_fd( int fd, string|void with );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mf": {
+      "signature": "constant mf = Stdio.File;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mkdirhier": {
+      "signature": "int mkdirhier(string from, int|void mode);",
+      "markdown": "Make a directory hierachy\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mt": {
+      "signature": ".Mutex mt;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mv": {
+      "signature": "int mv( string f1, string f2 );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.my_mysql_last_user": {
+      "signature": "mapping(int:string) my_mysql_last_user;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.my_mysql_path": {
+      "signature": "string my_mysql_path;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mysql_location": {
+      "signature": "mapping(string:string) mysql_location();",
+      "markdown": "Returns a mapping with the following MySQL-related paths:\n```pike\n([\n       \"basedir\"       : <absolute path to MySQL server directory>\n       \"mysqld\"        : <absolute path to mysqld[-nt.exe]>\n       \"myisamchk\"     : <absolute path to myisamchk[.exe]>\n       \"mysqldump\"     : <absolute path to mysqldump[.exe]>\n       \"mysql_upgrade\" : <absolute path to mysql_upgrade[.exe]>\n    ])\n```\nIf a path cannot be resolved it will be set to 0.\nThe paths are read from \"mysql-location.txt\" in the server-x.y.z\n  directory. If that file doesn't exist then default values based\n  on the server-x.y.z/mysql/ subdirectory will be substituted.\n**Note:** Don't be destructive on the returned mapping.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.mysql_path_is_remote": {
+      "signature": "int mysql_path_is_remote;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.new_master": {
+      "signature": ".__master new_master;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.nm_resolv": {
+      "signature": "mixed nm_resolv(string x );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.num_describe_backtrace": {
+      "signature": "int num_describe_backtrace;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.nwrite": {
+      "signature": "function(string, int|void, int|void, void|mixed ...:void) nwrite;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.once_mode": {
+      "signature": "int once_mode;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.open": {
+      "signature": "object|void open(string filename, string mode, int|void perm);",
+      "markdown": "Like Stdio.File.open on a new file object, but processes the\n path with roxen_path. Returns zero on open error.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.package_directories": {
+      "signature": "array(string) package_directories;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.package_module_path": {
+      "signature": "array(string) package_module_path;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.paranoia_throw": {
+      "signature": "void paranoia_throw(mixed err);",
+      "markdown": "Overloads Pikes throw function.\nExists for detection of code that throws non-errors.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.parse_html": {
+      "signature": "string parse_html(string data, mapping(string:function|string) tags, mapping(string:function|string) containers, mixed... args);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.parse_html_lines": {
+      "signature": "string parse_html_lines(string data, mapping tags, mapping containers, mixed... args);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.parse_mysql_location": {
+      "signature": "mapping(string:string) parse_mysql_location();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.pid": {
+      "signature": "int pid;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.pop_compile_error_handler": {
+      "signature": "void pop_compile_error_handler();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.popen": {
+      "signature": "string popen(string|array(string) cmd, void|mapping env, int|void uid, int|void gid);",
+      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.privs_level": {
+      "signature": "int privs_level;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.push_compile_error_handler": {
+      "signature": "void push_compile_error_handler( _error_handler q );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.pw_name": {
+      "signature": "string pw_name(int uid);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.pwn": {
+      "signature": "mapping(int:string) pwn;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.query": {
+      "signature": "mixed query(string arg);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.query_configuration_dir": {
+      "signature": "string query_configuration_dir();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.query_mysql_config_file": {
+      "signature": "string query_mysql_config_file(string|void datadir);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.query_mysql_data_dir": {
+      "signature": "string query_mysql_data_dir();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.query_mysql_socket": {
+      "signature": "string query_mysql_socket();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_cp": {
+      "signature": "int r_cp( string f1, string f2 );",
+      "markdown": "Like Stdio.cp, but processes the paths with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_exist": {
+      "signature": "int r_exist(string path);",
+      "markdown": "Like Stdio.exist, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_get_dir": {
+      "signature": "array(string) r_get_dir( string path );",
+      "markdown": "Like predef::get_dir, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_is_dir": {
+      "signature": "int r_is_dir(string path);",
+      "markdown": "Like Stdio.is_dir, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_is_file": {
+      "signature": "int r_is_file(string path);",
+      "markdown": "Like Stdio.is_file, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_is_link": {
+      "signature": "int r_is_link(string path);",
+      "markdown": "Like Stdio.is_link, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.r_read_bytes": {
+      "signature": "string r_read_bytes(string filename, mixed... args);",
+      "markdown": "Like Stdio.read_bytes, but processes the path with roxen_path.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.real_exit": {
+      "signature": "constant real_exit = exit;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.really_load_roxen": {
+      "signature": "Roxen really_load_roxen();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.remove_dumped": {
+      "signature": "int remove_dumped;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_debug": {
+      "signature": "void report_debug(sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Print a debug message in the server's debug log.\n Shares argument prototype with sprintf().\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_error": {
+      "signature": "void report_error(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report an error message, that will show up in the server's debug log and\n in the event logs, along with the red exclamation mark sign. Shares\n argument prototype with sprintf().\n**See also:** report_error_sparsely, report_error_for\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_error_for": {
+      "signature": "void report_error_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_error, but logs the message for the given\n configuration or Roxen module where, or globally if where is\n zero. report_error searches the call stack to find that out,\n but this function is useful to specify it explicitly.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_error_sparsely": {
+      "signature": "void report_error_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_error, but doesn't repeat the same message if it's\n been logged in the last ten minutes. Useful in situations where an\n error can cause an error message to be logged rapidly.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_fatal": {
+      "signature": "void report_fatal(sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Print a fatal error message.\n**See also:** report_fatal_for\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_fatal_for": {
+      "signature": "void report_fatal_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_notice": {
+      "signature": "void report_notice(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report a status message of some sort for the server's debug log and event\n logs, along with the blue informational notification sign. Shares argument\n prototype with sprintf().\n**See also:** report_notice_for\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_notice_for": {
+      "signature": "void report_notice_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_warning": {
+      "signature": "void report_warning(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report a warning message, that will show up in the server's debug log and\n in the event logs, along with the yellow exclamation mark warning sign.\n Shares argument prototype with sprintf().\n**See also:** report_warning_sparsely, report_warning_for\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_warning_for": {
+      "signature": "void report_warning_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.report_warning_sparsely": {
+      "signature": "void report_warning_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_warning, but doesn't repeat the same message if\n it's been logged in the last ten minutes. Useful in situations\n where an error can cause a warning message to be logged rapidly.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.restricted_cd": {
+      "signature": "class restricted_cd",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.rm": {
+      "signature": "int rm( string filename );",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.roxen": {
+      "signature": "Roxen roxen;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.roxen_path": {
+      "signature": "string roxen_path( string filename );",
+      "markdown": "Expands the following paths in the given string and returns the\n result. If on Windows, also strips off trailing slashes.\n  - `\"$LOCALDIR\"` — The local directory of the web server, Normally \"../local\",\n     but it can be changed in by setting the environment\n     variable LOCALDIR.\n  - `\"$LOGDIR\"` — The log directory of the web server. Normally \"../logs\",\n     but it can be changed in the configuration interface under\n     global settings.\n  - `\"$LOGFILE\"` — The debug log of the web server. Normally\n     \"../logs/debug/default.1\", but it can be the name of the\n     configuration directory if multiple instances are used.\n  - `\"$VARDIR\"` — The web server's var directory. Normally \"../var\", but it can\n     be changed by setting the environment variable VARDIR.\n  - `\"$VVARDIR\"` — Same as $VARDIR, but with a server version specific subdirectory.\n  - `\"$SERVERDIR\"` — Base path for the version-specific installation directory.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.roxen_perror": {
+      "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.roxen_version": {
+      "signature": "string roxen_version();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.s": {
+      "signature": "constant s = spider;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.server_dir": {
+      "signature": "string server_dir;",
+      "markdown": "The path to the server directory, without trailing slash. If\n available, this is the logical path without following symlinks (as\n opposed to what getcwd returns).\n**Note:** getcwd should be used when the server directory is combined\n with a path that may contain \"..\". The main reason is to keep\n compatibility, and in extension for the sake of consistency.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.short_time": {
+      "signature": "string short_time();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.spawn_pike": {
+      "signature": ".Process spawn_pike(array(string) args, void|string wd, Stdio.File|void stdin, Stdio.File|void stdout, Stdio.File|void stderr);",
+      "markdown": "Start a new Pike process with the same configuration as the current one\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.spawne": {
+      "signature": ".Process spawne(string s, array(string) args, mapping|array env, Stdio.File stdin, Stdio.File stdout, Stdio.File stderr, void|string wd, void|array(int) uid);",
+      "markdown": "Create a process\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.sq_cache_get": {
+      "signature": "Sql.Sql sq_cache_get( string db_name, void|int reuse_in_thread);",
+      "markdown": "Get a cached connection to an SQL database.\n- `db_name` — SQL-URL for the connection.\n- `reuse_in_thread` — Use a thread-dedicated cache.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.sq_cache_lock": {
+      "signature": "Thread.MutexKey sq_cache_lock();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.sq_cache_set": {
+      "signature": "Sql.Sql sq_cache_set( string db_name, Sql.Sql res, void|int reuse_in_thread, void|string charset);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.sql_active_list": {
+      "signature": "mapping(string:int) sql_active_list;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.sql_reuse_in_thread": {
+      "signature": ".Local sql_reuse_in_thread;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.start_mysql": {
+      "signature": "void start_mysql(void|int log_queries_to_stdout);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.stderr": {
+      "signature": ".File stderr;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.trace_destruct": {
+      "signature": "void trace_destruct(mixed x);",
+      "markdown": "Overloads the Pike destruct function. If the webserver is\n started with the TRACE_DESTRUCT define set, all destruct\n calls will be logged in the debug log.\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.trace_exit": {
+      "signature": "void trace_exit(int exitcode);",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.uname": {
+      "signature": "mapping uname();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.use_syslog": {
+      "signature": "int use_syslog;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.verify_password": {
+      "signature": "int verify_password(string password, string hash);",
+      "markdown": "Verify a password against a hash.\nThis function attempts to support most\n password hashing schemes.\n**Returns:** Returns `1` on success, and `0` (zero) otherwise.\n**See also:** hash_password(), predef::crypt()\n\nMember of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.write_current_time": {
+      "signature": "void write_current_time();",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
+    },
+    "roxenloader.x": {
+      "signature": "mixed x;",
+      "markdown": "Member of `roxenloader` (server/base_server/roxenloader.pike)."
     }
   }
 }

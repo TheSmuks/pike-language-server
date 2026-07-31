@@ -6,7 +6,8 @@
 
 import type { Hover } from "vscode-languageserver/node";
 import { formatHover } from "./hoverContent";
-import { lookupRoxenIdentifier } from "./roxenIndex";
+import { modulePathAtPosition } from "./accessResolver";
+import { lookupRoxenIdentifier, lookupRoxenSymbol } from "./roxenIndex";
 import type { HoverContext } from "./hoverHandler";
 
 /**
@@ -49,12 +50,40 @@ export function roxenHover(
 }
 
 /**
+ * A dotted Roxen path — `RXML.Tag`, `Roxen.True`, `roxen.store`.
+ *
+ * Runs ahead of the bare-name tiers, not after them, because a qualified name
+ * and a bare one are different symbols: `roxen.query` is the server object's
+ * `query`, while the bare `query` a module writes is the module prototype's.
+ * Answering the qualified form from `RoxenModule.query` is a wrong answer, and
+ * 74 members of the two Roxen globals share a name with some bare tier.
+ *
+ * Only paths that contain a dot can match, since every index key is prefixed,
+ * so a bare identifier still falls through to the tiers below. Gated on the
+ * file being a Roxen file, like every other Roxen tier.
+ */
+export function roxenPathHover(
+  ctx: HoverContext,
+  doc: { getText(): string },
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Hover | null {
+  if (!ctx.roxenActive.get(params.textDocument.uri)) return null;
+
+  const lines = doc.getText().split("\n");
+  const path = modulePathAtPosition(lines, params.position.line, params.position.character);
+  if (!path) return null;
+
+  const entry = lookupRoxenSymbol(ctx.roxenIndex, path);
+  return entry ? roxenSymbolHover(ctx, path, entry, params.position) : null;
+}
+
+/**
  * Render a dotted Roxen index entry, with the provenance line the bundled
  * index always carries — it tells the reader the answer came from a pinned
  * copy of Roxen rather than their installation, which is also why
  * go-to-definition declines to jump anywhere.
  */
-export function roxenSymbolHover(
+function roxenSymbolHover(
   ctx: HoverContext,
   path: string,
   entry: { signature: string; markdown?: string },

@@ -39,8 +39,8 @@ import {
   type HoverInfo,
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
-import { lookupRoxenSymbol, type RoxenIndexData } from "./roxenIndex";
-import { roxenHover, roxenSymbolHover } from "./hoverRoxen";
+import { type RoxenIndexData } from "./roxenIndex";
+import { roxenHover, roxenPathHover } from "./hoverRoxen";
 
 // Re-export for any external consumers
 export type { HoverInfo } from "./hoverContent";
@@ -263,6 +263,12 @@ async function hoverFromTree(
   );
   if (qualifiedHover) return qualifiedHover;
 
+  // Ahead of the bare-name tiers: `roxen.query` and a module's bare `query`
+  // are different symbols, and answering the qualified form from the bare
+  // index was a wrong answer rather than a missing one.
+  const roxenPath = roxenPathHover(ctx, doc, params);
+  if (roxenPath) return roxenPath;
+
   const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
   if (builtinHover) return builtinHover;
 
@@ -326,16 +332,8 @@ async function hoverFromModulePath(
   const path = modulePathAtPosition(lines, params.position.line, params.position.character);
   if (!path) return null;
 
-  // Bundled Roxen API, which is written dotted and only ever dotted:
-  // `RXML.Tag`, `Roxen.True`. Those two prefixes are 446 of the index's 719
-  // symbols, and bare-name lookup cannot reach any of them — the cursor rests
-  // on `Tag`, which means nothing on its own, while the entry is keyed
-  // `RXML.Tag`. Gated on the file being a Roxen file, like every other Roxen
-  // tier, so a plain Pike program is never told about them.
-  if (ctx.roxenActive.get(params.textDocument.uri)) {
-    const entry = lookupRoxenSymbol(ctx.roxenIndex, path);
-    if (entry) return roxenSymbolHover(ctx, path, entry, params.position);
-  }
+  // The bundled Roxen API is dotted too, but it is consulted before the
+  // bare-name tiers rather than here — see roxenPathHover.
 
   // Static stdlib entry: class/module docs. Signatures are empty for class
   // entries (`predef.Stdio.File`), so synthesize a readable header.

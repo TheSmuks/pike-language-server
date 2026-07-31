@@ -134,12 +134,91 @@ mixed truth() { return Roxen.True; }
     expect(hover!.contents.value).toContain("bundled index");
   });
 
+  /**
+   * The audit's own case: `constant store = roxen.store;` in Roxen's
+   * configuration.pike, which returned null. `roxen` is the object roxenloader
+   * binds to roxen.pike; the index carried the global and none of its members.
+   */
+  test("resolves a member of the roxen global object", async () => {
+    const src = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_LOCATION;
+constant store = roxen.store;
+`;
+    const uri = server.openDoc("file:///test/roxen-global-member.pike", src);
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      // The second `store` on the line — the one after the dot.
+      position: { line: 4, character: src.split("\n")[4]!.lastIndexOf("store") + 1 },
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("store(");
+    // roxen.pike does not declare `store`; it is four inherits down the chain,
+    // and the entry says which file so the reader can go and read it.
+    expect(hover!.contents.value).toContain("read_config.pike");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  test("resolves a member of the roxenloader global object", async () => {
+    const src = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_LOCATION;
+string where() { return roxenloader.server_dir; }
+`;
+    const uri = server.openDoc("file:///test/roxenloader-member.pike", src);
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: positionOf(src, "server_dir"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("server_dir");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  /**
+   * `roxen.query` is the server object's `query`; the bare `query` a module
+   * writes is the module prototype's. The dotted tier has to beat the bare one
+   * or this answers with the wrong declaration rather than with none.
+   */
+  test("prefers the qualified member over a bare name of the same spelling", async () => {
+    const src = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_LOCATION;
+mixed salt() { return roxen.query("server_salt"); }
+`;
+    const uri = server.openDoc("file:///test/roxen-shadowed-member.pike", src);
+    const qualified = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: positionOf(src, "query"),
+    }) as HoverResult | null;
+
+    expect(qualified).not.toBeNull();
+    expect(qualified!.contents.value).toContain("Member of `roxen`");
+  });
+
   test("offers nothing dotted in a plain Pike file", async () => {
     const src = "mixed truth() { return Roxen.True; }\n";
     const uri = server.openDoc("file:///test/plain-dotted.pike", src);
     const hover = await server.client.sendRequest("textDocument/hover", {
       textDocument: { uri },
       position: positionOf(src, "True"),
+    }) as HoverResult | null;
+
+    expect(hover === null || !hover.contents.value.includes("bundled index")).toBe(true);
+  });
+
+  test("offers no member of a Roxen global in a plain Pike file", async () => {
+    // `roxen` is a perfectly ordinary variable name outside Roxen.
+    const src = "mixed f(mapping roxen) { return roxen.store; }\n";
+    const uri = server.openDoc("file:///test/plain-global-member.pike", src);
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: { line: 0, character: src.lastIndexOf("store") + 1 },
     }) as HoverResult | null;
 
     expect(hover === null || !hover.contents.value.includes("bundled index")).toBe(true);

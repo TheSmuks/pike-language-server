@@ -10,9 +10,10 @@
  *
  * Pike's AutoDoc extractor supplies the documented API. Everything Roxen leaves
  * undocumented — bare prototype declarations, members modules supply by
- * convention, and the globals roxenloader injects — is parsed out of the source
- * by roxen-harvest.ts, which is why an undocumented `cvs_version` or
- * `predef::report_fatal` is in here at all.
+ * convention, the globals roxenloader injects, and the members of the globals
+ * that are whole source files — is parsed out of the source by
+ * roxen-harvest.ts, which is why an undocumented `cvs_version`,
+ * `predef::report_fatal` or `roxen.store` is in here at all.
  *
  *   bun run scripts/build-roxen-index.ts [--roxen <dir>] [--check]
  *
@@ -35,6 +36,7 @@ import {
   harvestPrototypeMembers,
   harvestConventionalMembers,
   harvestInjectedGlobals,
+  harvestGlobalObjectMembers,
   type DocLookup,
 } from "./roxen-harvest";
 
@@ -102,6 +104,9 @@ interface RoxenIndex {
    * `predef.` is not: it stands for Pike's predefined namespace, which is where
    * roxenloader's injected globals land and how a Roxen file writes them
    * (`predef::report_fatal`) when a local declaration would otherwise shadow.
+   * `roxen.` and `roxenloader.` hold the members of the two injected globals
+   * that are bound to a whole source file, written exactly as the code writes
+   * them: `roxen.store`.
    */
   symbols: Record<string, SymbolEntry>;
 }
@@ -299,7 +304,9 @@ function build(root: string): RoxenIndex {
   console.log(`API symbols (AutoDoc):      ${extractApi(root, symbols)}`);
   console.log(`Prototype members (bare):   ${harvestPrototypeMembers(root, symbols)}`);
   console.log(`Conventional members:       ${harvestConventionalMembers(root, symbols)}`);
-  console.log(`Injected globals (predef::):${harvestInjectedGlobals(root, symbols, makeDocLookup())}`);
+  const docFor = makeDocLookup();
+  console.log(`Injected globals (predef::):${harvestInjectedGlobals(root, symbols, docFor)}`);
+  console.log(`Members of file globals:    ${harvestGlobalObjectMembers(root, symbols, docFor)}`);
   console.log(`Symbols total:              ${Object.keys(symbols).length}`);
 
   return {
