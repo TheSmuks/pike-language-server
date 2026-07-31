@@ -4,8 +4,8 @@ set -euo pipefail
 # Verify every release artifact actually serves LSP, the way a user gets it.
 #
 # Usage:
-#   bash scripts/check-distributions.sh            # all three
-#   bash scripts/check-distributions.sh tarball    # one of: tarball npm binary
+#   bash scripts/check-distributions.sh            # all four
+#   bash scripts/check-distributions.sh tarball    # one of: tarball npm binary vsix
 #
 # Each artifact is exercised OUTSIDE the repository, so a bundle that only works
 # because it can reach the checkout's node_modules fails here. That is not
@@ -14,7 +14,7 @@ set -euo pipefail
 # the moment it was copied anywhere else.
 #
 # The feature sweep is scripts/check-helix-lsp.mjs, pointed at each artifact via
-# PIKE_LSP_SERVER_CMD, so all three are held to the same 13-feature bar.
+# PIKE_LSP_SERVER_CMD, so all four are held to the same 13-feature bar.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
@@ -42,6 +42,19 @@ check_tarball() {
   mkdir -p "$WORK/tar"
   tar xzf "$tgz" -C "$WORK/tar"
   sweep "[\"node\",\"$WORK/tar/pike-language-server/server.js\",\"--stdio\"]"
+}
+
+check_vsix() {
+  banner "vsix (extension package, node runtime)"
+  bash "$SCRIPT_DIR/build-vsix.sh" >/dev/null
+  local vsix
+  vsix="$(cat "$ROOT/out/.latest-vsix")"
+  mkdir -p "$WORK/vsix"
+  unzip -q -o "$vsix" -d "$WORK/vsix"
+  # The extension's own server, run the way the client spawns it. This is the
+  # distribution the audit sweep never covered, and the one users actually get:
+  # the Pike worker went missing from three artifacts once already.
+  sweep "[\"node\",\"$WORK/vsix/extension/server/dist/server.mjs\",\"--stdio\"]"
 }
 
 check_npm() {
@@ -93,8 +106,9 @@ case "${1:-all}" in
   tarball) check_tarball ;;
   npm)     check_npm ;;
   binary)  check_binary ;;
-  all)     check_tarball; check_npm; check_binary ;;
-  *) echo "unknown target: $1 (want: tarball|npm|binary|all)" >&2; exit 2 ;;
+  vsix)    check_vsix ;;
+  all)     check_tarball; check_npm; check_binary; check_vsix ;;
+  *) echo "unknown target: $1 (want: tarball|npm|binary|vsix|all)" >&2; exit 2 ;;
 esac
 
 if [ "$FAILED" -ne 0 ]; then
