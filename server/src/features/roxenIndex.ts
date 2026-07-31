@@ -40,9 +40,27 @@ export interface RoxenIndexData {
   roxenVersion: string;
   /** Flat preprocessor/constant vocabulary, keyed by bare name. */
   constants: Record<string, RoxenConstantEntry>;
-  /** Dotted API surface (Roxen.*, RXML.*, RoxenModule.*), keyed by FQN. */
+  /**
+   * Dotted API surface, keyed by FQN.
+   *
+   * `Roxen.`, `RXML.` and `RoxenModule.` are namespaces Roxen names itself.
+   * `predef.` is the fourth, and it is not a Roxen namespace at all: it holds
+   * the globals roxenloader injects into Pike's predefined namespace, which a
+   * Roxen file reaches bare or writes out as `predef::report_fatal`.
+   */
   symbols: Record<string, RoxenSymbolEntry>;
 }
+
+/**
+ * Prefix under which roxenloader's injected globals are indexed.
+ *
+ * They are not members of anything — `report_fatal` is written bare — so this
+ * prefix exists only to keep one flat namespace per origin inside `symbols`.
+ */
+export const ROXEN_GLOBAL_PREFIX = "predef.";
+
+/** Prefix for the module prototype's members, which a module writes bare. */
+export const ROXEN_MODULE_PREFIX = "RoxenModule.";
 
 /** An index with nothing in it, for when the data file is unreadable. */
 export const EMPTY_ROXEN_INDEX: RoxenIndexData = {
@@ -99,8 +117,12 @@ export function lookupRoxenSymbol(
  *
  * Roxen module code refers to prototype members (`find_file`, `defvar`,
  * `query_location`) by bare name, because it inherits the prototype. The index
- * stores those under `RoxenModule.`, so a bare lookup tries that prefix before
- * giving up.
+ * stores those under `RoxenModule.`, so a bare lookup tries that prefix.
+ *
+ * `report_fatal` and its neighbours are written bare for a different reason:
+ * roxenloader has added them to Pike's own namespace, so they resolve like a
+ * builtin. Those are under `predef.`, and are tried second — a module's
+ * prototype member shadows a global of the same name, exactly as in Pike.
  */
 export function lookupRoxenIdentifier(
   index: RoxenIndexData,
@@ -109,10 +131,10 @@ export function lookupRoxenIdentifier(
   const constant = lookupRoxenConstant(index, name);
   if (constant) return constant;
 
-  const member = lookupRoxenSymbol(index, `RoxenModule.${name}`);
+  const member = lookupRoxenSymbol(index, `${ROXEN_MODULE_PREFIX}${name}`);
   if (member) return member;
 
-  return null;
+  return lookupRoxenSymbol(index, `${ROXEN_GLOBAL_PREFIX}${name}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -134,7 +156,8 @@ export interface RoxenCompletionCandidate {
  * Only bare names: the dotted API surface is offered through member completion
  * on `Roxen.`/`RXML.`, not as thousands of top-level entries. `RoxenModule.`
  * members are offered bare because inheriting the prototype is what makes them
- * available without a prefix.
+ * available without a prefix, and `predef.` globals because roxenloader has
+ * put them in Pike's own namespace, where nothing needs a prefix either.
  */
 export function roxenCompletionCandidates(index: RoxenIndexData): RoxenCompletionCandidate[] {
   const candidates: RoxenCompletionCandidate[] = [];
@@ -148,21 +171,35 @@ export function roxenCompletionCandidates(index: RoxenIndexData): RoxenCompletio
     });
   }
 
-  const prefix = "RoxenModule.";
-  for (const [fqn, entry] of Object.entries(index.symbols)) {
-    if (!fqn.startsWith(prefix)) continue;
-    const name = fqn.slice(prefix.length);
-    // Nested members (RoxenModule.Foo.bar) are not in bare scope.
-    if (name.includes(".")) continue;
-    candidates.push({
-      name,
-      detail: entry.signature,
-      documentation: entry.markdown,
-      isConstant: false,
-    });
+  const seen = new Set<string>();
+  for (const prefix of [ROXEN_MODULE_PREFIX, ROXEN_GLOBAL_PREFIX]) {
+    for (const [fqn, entry] of Object.entries(index.symbols)) {
+      if (!fqn.startsWith(prefix)) continue;
+      const name = fqn.slice(prefix.length);
+      // Nested members (RoxenModule.Foo.bar) are not in bare scope.
+      if (name.includes(".") || seen.has(name)) continue;
+      seen.add(name);
+      candidates.push({
+        name,
+        detail: entry.signature,
+        documentation: entry.markdown,
+        isConstant: false,
+      });
+    }
   }
 
   return candidates;
+}
+
+/**
+ * The globals roxenloader injects, for `predef::` scope completion.
+ *
+ * Pike's own predefined names come from the builtin index; these are what a
+ * Roxen file additionally finds there, and asking for them separately keeps
+ * the caller from having to know the prefix.
+ */
+export function roxenInjectedGlobals(index: RoxenIndexData): RoxenCompletionCandidate[] {
+  return roxenMembersOf(index, ROXEN_GLOBAL_PREFIX.slice(0, -1));
 }
 
 /**

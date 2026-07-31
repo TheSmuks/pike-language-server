@@ -2852,6 +2852,30 @@
       "signature": "inherit \"basic_defvar\"",
       "markdown": "```pike\ninherit \"basic_defvar\"\n```"
     },
+    "RoxenModule.DefaultPropertySet": {
+      "signature": "class DefaultPropertySet",
+      "markdown": ""
+    },
+    "RoxenModule.ModuleJSONLogger": {
+      "signature": "class ModuleJSONLogger",
+      "markdown": ""
+    },
+    "RoxenModule.__pragma_save_parent__": {
+      "signature": "constant __pragma_save_parent__ = 1;",
+      "markdown": ""
+    },
+    "RoxenModule._sprintf": {
+      "signature": "string _sprintf();",
+      "markdown": ""
+    },
+    "RoxenModule.add_api_function": {
+      "signature": "void add_api_function( string name, function f, void|array(string) types);",
+      "markdown": ""
+    },
+    "RoxenModule.api_functions": {
+      "signature": "mapping api_functions();",
+      "markdown": ""
+    },
     "RoxenModule.authenticated_user_id": {
       "signature": "string|int authenticated_user_id(string path, object(RequestID) id)",
       "markdown": "```pike\nstring|int authenticated_user_id(string path, object(RequestID) id)\n```\n\nReturn a value that uniquely identifies the user that the given\n request is authenticated as.\nThis function is e.g. used by the default lock implementation to\n tell different users holding locks apart. WARNING: Due to some\n design issues in the lock system, it's likely that it will change\n to not use this function in the future.\n- `path` — The requested path below the filesystem location. It has been\n normalized with VFS.normalize_path."
@@ -2863,6 +2887,10 @@
     "RoxenModule.check_locks": {
       "signature": "object(DAVLock)|object(LockFlag) check_locks(string path, int(0..1) recursive, object(RequestID) id)",
       "markdown": "```pike\nobject(DAVLock)|object(LockFlag) check_locks(string path, int(0..1) recursive, object(RequestID) id)\n```\n\nCheck if there are one or more locks that apply to path for the\n user the request is authenticated as.\nWARNING: This function has some design issues and will very likely\n get a different interface. Compatibility is NOT guaranteed.\n- `path` — Normalized path below the filesystem location.\n- `recursive` — If `1` also check recursively under path for locks.\n**Returns:** The valid return values are:\n**Note:** DAVLock objects may be created if the filesystem has some\n persistent storage of them. The default implementation does not\n store locks persistently.\n**Note:** The default implementation only handles the `\"DAV:write\"`\n lock type."
+    },
+    "RoxenModule.comment": {
+      "signature": "string comment();",
+      "markdown": ""
     },
     "RoxenModule.copy_collection": {
       "signature": "mapping(string : mixed) copy_collection(string source, string destination, object(PropertyBehavior) behavior, object(Overwrite) overwrite, object(MultiStatus.Prefixed) result, object(RequestID) id)",
@@ -2876,17 +2904,69 @@
       "signature": "mapping(string : mixed) copy_properties(string source, string destination, object(PropertyBehavior) behavior, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed) copy_properties(string source, string destination, object(PropertyBehavior) behavior, object(RequestID) id)\n```\n\nUsed by the default copy_collection implementation to copy all\n properties at source to destination.\n- `source` — Source path below the filesystem location.\n- `destination` — Destination path below the filesystem location.\n- `behavior` — Specifies how to copy properties. See the PropertyBehavior\n   type for details.\n**Returns:** `0` (zero) on success or an appropriate status mapping for\n   any error."
     },
+    "RoxenModule.create": {
+      "signature": "void create();",
+      "markdown": "Declared at file scope by 87 of the 127 modules shipped with this Roxen. Not part of the module prototype: each module supplies it, so the exact type and value are the module's own."
+    },
     "RoxenModule.create_sql_tables": {
       "signature": "int create_sql_tables(mapping(string : array(string)) definitions, string|void comment, int|void no_unique_names)",
       "markdown": "```pike\nint create_sql_tables(mapping(string : array(string)) definitions, string|void comment, int|void no_unique_names)\n```\n\nCreate multiple tables in one go. See get_my_table\n Returns the number of tables that were actually created."
+    },
+    "RoxenModule.cvs_version": {
+      "signature": "constant cvs_version;",
+      "markdown": "Declared at file scope by 109 of the 127 modules shipped with this Roxen. Not part of the module prototype: each module supplies it, so the exact type and value are the module's own."
+    },
+    "RoxenModule.definvisvar": {
+      "signature": ".Variable definvisvar(string name, mixed value, int type, array|void misc);",
+      "markdown": ""
+    },
+    "RoxenModule.deflocaledoc": {
+      "signature": "int deflocaledoc( string locale, string variable, string name, string doc, mapping|void translate );",
+      "markdown": ""
+    },
+    "RoxenModule.defvar": {
+      "signature": ".Variable defvar(string var, mixed value, // rest is compat, and thus optional... LocaleString|void name, int|void type, LocaleString|void doc_str, mixed|void misc, int|function|void not_in_config, mapping|void option_translations);",
+      "markdown": ""
     },
     "RoxenModule.delete_file": {
       "signature": "mapping(string : mixed) delete_file(string path, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed) delete_file(string path, object(RequestID) id)\n```\n\nUsed by the default recurse_delete_files implementation to\n delete a file or an empty directory.\n**Returns:** Returns a 2xx series status mapping on success (typically 204 No\n   Content). Returns 0 if the file doesn't exist. Returns an\n   appropriate status mapping for any other error.\n**Note:** The default implementation falls back to find_file()."
     },
+    "RoxenModule.error_log": {
+      "signature": "mapping(string:array(int)) error_log;",
+      "markdown": ""
+    },
+    "RoxenModule.file_name_and_stuff": {
+      "signature": "string file_name_and_stuff();",
+      "markdown": ""
+    },
+    "RoxenModule.find_dir": {
+      "signature": "array(string) find_dir(string f, RequestID id);",
+      "markdown": ""
+    },
+    "RoxenModule.find_dir_stat": {
+      "signature": "mapping(string:Stat) find_dir_stat(string f, RequestID id);",
+      "markdown": ""
+    },
+    "RoxenModule.find_file": {
+      "signature": "mapping(string:mixed)|int(-1..0)|Stdio.File find_file(string path, RequestID id);",
+      "markdown": ""
+    },
     "RoxenModule.find_locks": {
       "signature": "multiset(object(DAVLock)) find_locks(string path, int(-1..1) recursive, int(0..1) exclude_shared, object(RequestID) id)",
       "markdown": "```pike\nmultiset(object(DAVLock)) find_locks(string path, int(-1..1) recursive, int(0..1) exclude_shared, object(RequestID) id)\n```\n\nFind some or all locks that apply to path.\n- `path` — Normalized path below the filesystem location.\n- `recursive` — If `1` also return locks anywhere below path.\n   If `-1} return locks anywhere below path, but not\n   any above path. (This is appropriate to use to get the\n   list of locks that need to be unlocked on DELETE.)\n\n`\n- `exclude_shared` — If `1` do not return shared locks that are held by users\n   other than the one the request is authenticated as. (This is\n   appropriate to get the list of locks that would conflict if the\n   current user were to make a shared lock.)\n**Returns:** Returns a multiset containing all applicable locks in\n   this location module, or `0` (zero) if there are none.\n**Note:** DAVLock objects may be created if the filesystem has some\n persistent storage of them. The default implementation does not\n store locks persistently.\n**Note:** The default implementation only handles the `\"DAV:write\"`\n lock type."
+    },
+    "RoxenModule.fix_cvs": {
+      "signature": "string fix_cvs(string from);",
+      "markdown": ""
+    },
+    "RoxenModule.format_db_browser_value": {
+      "signature": "int|string format_db_browser_value(string db_name, string table_name, string column_name, array(string) col_names, array(string) col_types, array(string) row, RequestID id);",
+      "markdown": ""
+    },
+    "RoxenModule.free_some_sockets_please": {
+      "signature": "void free_some_sockets_please();",
+      "markdown": ""
     },
     "RoxenModule.get_my_sql": {
       "signature": "object(Sql.Sql) get_my_sql(int|void read_only, void|string charset)",
@@ -2895,6 +2975,62 @@
     "RoxenModule.get_my_table": {
       "signature": "string get_my_table(string name, array(string) types)",
       "markdown": "```pike\nstring get_my_table(string name, array(string) types)\nstring get_my_table(string name, string definition)\nstring get_my_table(string definition)\nstring get_my_table(array(string) definition)\n```\n\nReturns the name of a table in the 'shared' database that is\n unique for this module. It is possible to select another database\n by using set_my_db before calling this function.\nYou can use create_sql_tables instead of this function if you want\n to create more than one table in one go.\nIf flag is true, return 1 if a table was created, and 0 otherwise.\nIn the first form, name is the (postfix of) the name of the\n table, and types is an array of definitions, as an example:\n```pike\ncache_table = get_my_table( \"cache\", ({\n               \"id INT UNSIGNED AUTO_INCREMENT\",\n               \"data BLOB\",\n               }) );\n```\nIn the second form, the whole table definition is instead sent as\n a string. The cases where the name is not included (the third and\n fourth form) is equivalent to the first two cases with the name \"\"\nIf the table does not exist in the datbase, it is created.\n**Note:** This function may not be called from create"
+    },
+    "RoxenModule.get_value_from_file": {
+      "signature": "mixed get_value_from_file(string path, string index, void|string pre);",
+      "markdown": ""
+    },
+    "RoxenModule.getvar": {
+      "signature": ".Variable getvar( string name );",
+      "markdown": ""
+    },
+    "RoxenModule.getvars": {
+      "signature": "mapping(string:Variable.Variable) getvars( );",
+      "markdown": ""
+    },
+    "RoxenModule.info": {
+      "signature": "string info(Configuration conf);",
+      "markdown": ""
+    },
+    "RoxenModule.is_module": {
+      "signature": "constant is_module = 1;",
+      "markdown": ""
+    },
+    "RoxenModule.json_log": {
+      "signature": "void json_log(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_debug": {
+      "signature": "void json_log_debug(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_error": {
+      "signature": "void json_log_error(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_fatal": {
+      "signature": "void json_log_fatal(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_info": {
+      "signature": "void json_log_info(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_trace": {
+      "signature": "void json_log_trace(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_warn": {
+      "signature": "void json_log_warn(string|mapping log_msg);",
+      "markdown": ""
+    },
+    "RoxenModule.json_log_with_level": {
+      "signature": "void json_log_with_level(string|mapping log_msg, int level);",
+      "markdown": ""
+    },
+    "RoxenModule.killvar": {
+      "signature": "int killvar(string var);",
+      "markdown": ""
     },
     "RoxenModule.location_url": {
       "signature": "string location_url()",
@@ -2912,13 +3048,25 @@
       "signature": "void log_event(string facility, string action, string resource, void|mapping(string : mixed) info)",
       "markdown": "```pike\nvoid log_event(string facility, string action, string resource, void|mapping(string : mixed) info)\n```\n\nLog an event. See Configuration.log_event for details.\nfacility may be zero. The local module identifier as returned\n by module_local_id is used as facility in that case."
     },
+    "RoxenModule.low_set": {
+      "signature": "void low_set(string var, mixed value);",
+      "markdown": ""
+    },
     "RoxenModule.make_collection": {
       "signature": "mapping(string : mixed) make_collection(string path, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed) make_collection(string path, object(RequestID) id)\n```\n\nMake a new collection (aka directory) at path.\n**Returns:** Returns a 2xx series status on success (typically 201 Created).\n   Returns `0` (zero) if there's no directory to create the\n   new one in. Returns other result mappings on failure."
     },
+    "RoxenModule.module_creator": {
+      "signature": "string|array(string) module_creator;",
+      "markdown": ""
+    },
     "RoxenModule.module_dependencies": {
       "signature": "int module_dependencies(object(Configuration) configuration, array(string) modules, int|void now)",
       "markdown": "```pike\nint module_dependencies(object(Configuration) configuration, array(string) modules, int|void now)\n```\n\nIf your module depends on other modules, call this function to\n ensure that those modules get loaded.\n- `configuration` — The configuration for the modules. Use zero for the same as this\n   module.\n- `modules` — An array of module identifiers. A module identifier is either\n   the name of the pike file minus extension, or a string on the\n   form that Roxen.get_modname returns. In the latter case, the\n   `<config name>` and `<copy>` parts are ignored.\n- `now` — If this flag is nonzero then any modules that aren't already\n   loaded get loaded (and started) right away, so that the code\n   following the module_dependencies call can start using them.\n\nOtherwise the function only ensures that the modules exist in\n   the configuration and they will be loaded sometime during the\n   startup of it.\n**Note:** This function is only intended to be called from start.\n**Note:** The now flag does not affect calls to\n ready_to_receive_requests in the listed modules. I.e. even if\n you have declared a dependency on a module and have now set,\n you cannot assume its ready_to_receive_requests function has\n run (in fact, you can almost safely assume it hasn't). You can\n however assume that its start function has been called."
+    },
+    "RoxenModule.module_doc": {
+      "signature": "LocaleString module_doc;",
+      "markdown": ""
     },
     "RoxenModule.module_identifier": {
       "signature": "string module_identifier()",
@@ -2927,6 +3075,26 @@
     "RoxenModule.module_local_id": {
       "signature": "string module_local_id()",
       "markdown": "```pike\nstring module_local_id()\n```\n\nReturns a string that uniquely identifies this module instance\n within the configuration. The returned string is the same as the\n part after the first '/' in the one returned from\n module_identifier."
+    },
+    "RoxenModule.module_name": {
+      "signature": "LocaleString module_name;",
+      "markdown": ""
+    },
+    "RoxenModule.module_tag_set": {
+      "signature": ".TagSet module_tag_set;",
+      "markdown": ""
+    },
+    "RoxenModule.module_type": {
+      "signature": "constant module_type = 0;",
+      "markdown": ""
+    },
+    "RoxenModule.module_unique": {
+      "signature": "constant module_unique = 1;",
+      "markdown": ""
+    },
+    "RoxenModule.module_url": {
+      "signature": "string module_url;",
+      "markdown": ""
     },
     "RoxenModule.move_collection": {
       "signature": "mapping(string : mixed) move_collection(string source, string destination, object(PropertyBehavior) behavior, object(Overwrite) overwrite, object(RequestID) id)",
@@ -2943,6 +3111,18 @@
     "RoxenModule.my_moduleinfo": {
       "signature": "object(ModuleInfo) my_moduleinfo()",
       "markdown": "```pike\nobject(ModuleInfo) my_moduleinfo()\n```\n\nReturns the associated ModuleInfo object"
+    },
+    "RoxenModule.patch_properties": {
+      "signature": "mapping(string:mixed) patch_properties(string path, array(PatchPropertyCommand) instructions, RequestID id);",
+      "markdown": ""
+    },
+    "RoxenModule.pike_cycle_depth": {
+      "signature": "constant pike_cycle_depth = 0;",
+      "markdown": ""
+    },
+    "RoxenModule.query": {
+      "signature": "mixed query(string|void var, int|void ok);",
+      "markdown": ""
     },
     "RoxenModule.query_absolute_internal_location": {
       "signature": "string query_absolute_internal_location(object(RequestID) id)",
@@ -2968,9 +3148,37 @@
       "signature": "object(PropertySet)|mapping(string : mixed) query_property_set(string path, object(RequestID) id)",
       "markdown": "```pike\nobject(PropertySet)|mapping(string : mixed) query_property_set(string path, object(RequestID) id)\n```\n\nReturn the set of properties for path.\n**Returns:** Returns `0` (zero) if path does not exist.\n\nReturns an error mapping if there's some other error accessing\n   the properties.\n\nOtherwise returns a PropertySet object.\n**See also:** query_property()"
     },
+    "RoxenModule.query_provides": {
+      "signature": "multiset(string) query_provides();",
+      "markdown": ""
+    },
+    "RoxenModule.query_seclevels": {
+      "signature": "function(RequestID:int|mapping) query_seclevels();",
+      "markdown": ""
+    },
+    "RoxenModule.query_simple_pi_tag_callers": {
+      "signature": "mapping(string:array(int|function)) query_simple_pi_tag_callers();",
+      "markdown": ""
+    },
+    "RoxenModule.query_simpletag_callers": {
+      "signature": "mapping(string:array(int|function)) query_simpletag_callers();",
+      "markdown": ""
+    },
     "RoxenModule.query_tag_callers": {
       "signature": "mapping(string : function) query_tag_callers()",
       "markdown": "```pike\nmapping(string : function) query_tag_callers()\n```\n\nCompat"
+    },
+    "RoxenModule.query_tag_set": {
+      "signature": ".TagSet query_tag_set();",
+      "markdown": ""
+    },
+    "RoxenModule.ready_to_receive_requests": {
+      "signature": "void ready_to_receive_requests(Configuration conf);",
+      "markdown": ""
+    },
+    "RoxenModule.real_file": {
+      "signature": "string real_file(string f, RequestID id);",
+      "markdown": ""
     },
     "RoxenModule.recurse_copy_files": {
       "signature": "mapping(string : mixed) recurse_copy_files(string source, string destination, object(PropertyBehavior) behavior, object(Overwrite) overwrite, object(RequestID) id)",
@@ -2996,13 +3204,61 @@
       "signature": "void register_lock(string path, object(DAVLock) lock, object(RequestID) id)",
       "markdown": "```pike\nvoid register_lock(string path, object(DAVLock) lock, object(RequestID) id)\n```\n\nRegister lock on the path path under the assumption that\n there is no other lock already that conflicts with this one, i.e.\n that `check_locks(path,lock->recursive,id)` would return\n `LOCK_NONE` if `lock->lockscope` is\n `\"DAV:exclusive\"`, or `< LOCK_OWN_BELOW` if\n `lock->lockscope` is `\"DAV:shared\"`.\nThis function is only provided as a helper to call from\n lock_file if the default lock implementation is to be used.\n- `path` — Normalized path (below the filesystem location) that the lock\n   applies to.\n- `lock` — The lock to register.\n**Note:** The default implementation only handles the `\"DAV:write\"`\n lock type. It uses resource_id to map paths to unique resources\n and authenticated_user_id to tell users apart."
     },
+    "RoxenModule.register_module": {
+      "signature": "array register_module();",
+      "markdown": ""
+    },
     "RoxenModule.remove_property": {
       "signature": "mapping(string : mixed) remove_property(string path, string prop_name, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed) remove_property(string path, string prop_name, object(RequestID) id)\n```\n\nConvenience variant of patch_properties() that removes a single\n property.\n**Returns:** Returns a mapping on any error, zero otherwise."
     },
+    "RoxenModule.report_debug": {
+      "signature": "void report_debug(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_error": {
+      "signature": "void report_error(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_error_sparsely": {
+      "signature": "void report_error_sparsely(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_fatal": {
+      "signature": "void report_fatal(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_notice": {
+      "signature": "void report_notice(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_warning": {
+      "signature": "void report_warning(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
+    "RoxenModule.report_warning_sparsely": {
+      "signature": "void report_warning_sparsely(sprintf_format fmt, sprintf_args ... args);",
+      "markdown": ""
+    },
     "RoxenModule.resource_id": {
       "signature": "string resource_id(string path, object(RequestID)|int(0..0) id)",
       "markdown": "```pike\nstring resource_id(string path, object(RequestID)|int(0..0) id)\n```\n\nReturn a string that within the filesystem uniquely identifies the\n resource on path in the given request. This is commonly path\n itself but can be extended with e.g. language, user or some form\n variable if the path is mapped to different files according to\n those fields.\nThe important criteria here is that every unique returned string\n corresponds to a resource that can be changed independently of\n every other. Thus e.g. dynamic pages that evaluate to different\n results depending on variables or cookies etc should _not_ be\n mapped to more than one string by this function. It also means\n that if files are stored in a filesystem which is case insensitive\n then this function should normalize case differences.\nThis function is used e.g by the default lock implementation to\n convert paths to resources that can be locked independently of\n each other. There's also a notion of recursive locks there, which\n means that a recursive lock on a certain resource identifier also\n locks every resource whose identifier it is a prefix of. Therefore\n it's typically necessary to ensure that every identifier ends with\n \"/\" so that a recursive lock on e.g. \"doc/foo\" doesn't lock\n \"doc/foobar\".\n- `path` — The requested path below the filesystem location. It has been\n normalized with VFS.normalize_path.\n- `id` — The request id may have the value `0` (zero) if called\n   by Configuration()->expire_locks()."
+    },
+    "RoxenModule.save": {
+      "signature": "void save();",
+      "markdown": ""
+    },
+    "RoxenModule.save_me": {
+      "signature": "void save_me();",
+      "markdown": ""
+    },
+    "RoxenModule.set": {
+      "signature": "void set(string var, mixed value);",
+      "markdown": ""
+    },
+    "RoxenModule.set_configuration": {
+      "signature": "final void set_configuration(Configuration c);",
+      "markdown": ""
     },
     "RoxenModule.set_module_creator": {
       "signature": "void set_module_creator(string|array(string) c)",
@@ -3024,6 +3280,14 @@
       "signature": "void set_status_for_path(string path, object(RequestID) id, int status_code, string|void message, mixed ... args)",
       "markdown": "```pike\nvoid set_status_for_path(string path, object(RequestID) id, int status_code, string|void message, mixed ... args)\n```\n\nRegister a status to be included in the response that applies only\n for the given path. This is used for recursive operations that can\n yield different results for different encountered files or\n directories.\nThe status is stored in the MultiStatus object returned by\n id->get_multi_status. The server will use it to make a 207\n Multi-Status response iff the module returns an empty mapping as\n response.\n- `path` — Path (below the filesystem location) to which the status applies.\n- `status_code` — The HTTP status code.\n- `message` — If given, it's a message to include in the response. The\n   message may contain line feeds ('\\n') and ISO-8859-1\n   characters in the ranges 32..126 and 128..255. Line feeds are\n   converted to spaces if the response format doesn't allow them.\n- `args` — If there are more arguments after message then message\n   is taken as an sprintf style format string which is used to\n   format args.\n**Note:** This function is just a wrapper for id->set_status_for_path\n that corrects for the filesystem location.\n**See also:** RequestID.set_status_for_path, Roxen.http_status"
     },
+    "RoxenModule.setvars": {
+      "signature": "void setvars( mapping (string:mixed) vars );",
+      "markdown": ""
+    },
+    "RoxenModule.sname": {
+      "signature": "string sname( );",
+      "markdown": ""
+    },
     "RoxenModule.sql_big_query": {
       "signature": "object sql_big_query(string query, mixed ... args)",
       "markdown": "```pike\nobject sql_big_query(string query, mixed ... args)\n```\n\nIdentical to sql_query, but the Sql.Sql()->big_query method\n will be used instead of the Sql.Sql()->query method."
@@ -3044,6 +3308,34 @@
       "signature": "string sql_table_exists(string name)",
       "markdown": "```pike\nstring sql_table_exists(string name)\n```\n\nReturn the real name of the table 'name' if it exists."
     },
+    "RoxenModule.start": {
+      "signature": "void start(int variable_save, Configuration conf, void|int newly_added);",
+      "markdown": ""
+    },
+    "RoxenModule.stat_file": {
+      "signature": "Stat stat_file(string f, RequestID id);",
+      "markdown": ""
+    },
+    "RoxenModule.status": {
+      "signature": "string status();",
+      "markdown": ""
+    },
+    "RoxenModule.stop": {
+      "signature": "void stop();",
+      "markdown": ""
+    },
+    "RoxenModule.tagdoc": {
+      "signature": "constant tagdoc;",
+      "markdown": "Declared at file scope by 49 of the 127 modules shipped with this Roxen. Not part of the module prototype: each module supplies it, so the exact type and value are the module's own."
+    },
+    "RoxenModule.this_module": {
+      "signature": "RoxenModule this_module();",
+      "markdown": ""
+    },
+    "RoxenModule.thread_safe": {
+      "signature": "constant thread_safe;",
+      "markdown": "Declared at file scope by 93 of the 127 modules shipped with this Roxen. Not part of the module prototype: each module supplies it, so the exact type and value are the module's own."
+    },
     "RoxenModule.unlock_file": {
       "signature": "mapping(string : mixed) unlock_file(string path, object(DAVLock) lock, object(RequestID)|int(0..0) id)",
       "markdown": "```pike\nmapping(string : mixed) unlock_file(string path, object(DAVLock) lock, object(RequestID)|int(0..0) id)\n```\n\nRemove lock that currently is locking the resource at path.\n It's assumed that the lock is registered for exactly that path.\n- `path` — Normalized path (below the filesystem location) that the lock\n   applies to.\n- `lock` — The lock to unregister. (It must not be changed or destructed.)\n- `id` — (no description)\n    - `object(RequestID)` — The request that attempted to unlock the lock. The function\n\t  should do the normal access checks before unlocking the lock\n\t  in this case.\n    - `int(0..0)` — The lock is unlocked internally by the server (typically due\n\t  to a timeout) and should be carried out without any access\n\t  checks. The function must succeed and return zero in this\n\t  case.\n**Returns:** Returns a status mapping on any error, zero otherwise.\n**Note:** To use the default lock implementation, call unregister_lock\n   from this function."
@@ -3052,6 +3344,10 @@
       "signature": "void unregister_lock(string path, object(DAVLock) lock, object(RequestID)|int(0..0) id)",
       "markdown": "```pike\nvoid unregister_lock(string path, object(DAVLock) lock, object(RequestID)|int(0..0) id)\n```\n\nUnregister lock that currently is locking the resource at\n path. It's assumed that the lock is registered for exactly that\n path.\nThis function is only provided as a helper to call from\n unlock_file if the default lock implementation is to be used.\n- `path` — Normalized path (below the filesystem location) that the lock\n   applies to.\n- `lock` — The lock to unregister. (It must not be changed or destructed.)\n- `id` — The request id may have the value `0` (zero) if called\n   by Configuration()->expire_locks()."
     },
+    "RoxenModule.variables": {
+      "signature": "mapping(string:Variable.Variable) variables;",
+      "markdown": ""
+    },
     "RoxenModule.webdav_opaque": {
       "signature": "constant webdav_opaque",
       "markdown": "```pike\nconstant webdav_opaque\n```\n\nSpecifies that the module is opaque when it comes WebDAV\n requests. Normally, recursive WebDAV requests will iterate through\n all matching location modules even after a successful result has\n been returned by some module. With this flag set, iteration will\n stop after the call to this module. Useful if the module wants to\n handle all requests for the specified location itself with no\n fallback to other modules."
@@ -3059,6 +3355,590 @@
     "RoxenModule.write_access": {
       "signature": "mapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)\n```\n\nUsed by some default implementations to check if we may perform a\n write access to path. It should at least call\n check_if_header to check DAV locks. It takes the same arguments\n and has the same return value as that function.\nWARNING: This function has some design issues and will very likely\n get a different interface. Compatibility is NOT guaranteed.\nA filesystem module should typically put all needed write access\n checks here and then use this from find_file(),\n delete_file() etc."
+    },
+    "predef.ArgCache": {
+      "signature": "class ArgCache",
+      "markdown": "Generic cache for storing away a persistent mapping of data to be\n refetched later by a short string key. This being a cache, your\n data may be thrown away at random when the cache is full.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.AuthModule": {
+      "signature": "class AuthModule",
+      "markdown": "The interface an authentication module must implement\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.BasicDefvar": {
+      "signature": "class BasicDefvar",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.CFUserDBModule": {
+      "signature": "constant CFUserDBModule = config_userdb_module;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.CacheActivationCB": {
+      "signature": "typedef function(object,mixed...:void) CacheActivationCB;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.CacheDestructionCB": {
+      "signature": "typedef function(object,mixed...:void) CacheDestructionCB;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.CacheEntry": {
+      "signature": "constant CacheEntry = cache->CacheEntry;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.CacheKey": {
+      "signature": "class CacheKey",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Configuration": {
+      "signature": "class Configuration",
+      "markdown": "Configuration information for a site.\n**See also:** configuration\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.DAVLock": {
+      "signature": "class DAVLock",
+      "markdown": "Container for information about an outstanding DAV lock. No field\n except owner may change after the object has been created since\n filesystem modules might store this info persistently.\n**Note:** DAVLock objects might be shared between filesystems but not\n between configurations.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.DBManager": {
+      "signature": "constant DBManager = ((object)\"base_server/dbs.pike\");",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ErrorContainer": {
+      "signature": "class ErrorContainer",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.FakedVariables": {
+      "signature": "class FakedVariables( mapping real_variables )",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Group": {
+      "signature": "class Group( UserDB database )",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.HAVE_OLD__Roxen_make_http_headers": {
+      "signature": "constant HAVE_OLD__Roxen_make_http_headers = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.LocaleString": {
+      "signature": "constant LocaleString = typeof(da_String_type);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.LockFlag": {
+      "signature": "enum LockFlag { LOCK_NONE = 0, LOCK_SHARED_BELOW = 2, LOCK_SHARED_AT = 3, LOCK_OWN_BELOW = 4, LOCK_EXCL_BELOW = 6, LOCK_EXCL_AT = 7 }",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ModuleCopies": {
+      "signature": "class ModuleCopies",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ModuleInfo": {
+      "signature": "class ModuleInfo",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.MultiStatus": {
+      "signature": "class MultiStatus",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.MultiStatusNode": {
+      "signature": "typedef MultiStatusStatus|MultiStatusPropStat MultiStatusNode;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.MultiStatusPropStat": {
+      "signature": "class MultiStatusPropStat",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.MultiStatusStatus": {
+      "signature": "class MultiStatusStatus (int http_code, void|string message)",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.NewLDAP": {
+      "signature": "constant NewLDAP = Protocols.LDAP;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Overwrite": {
+      "signature": "enum Overwrite { NEVER_OVERWRITE = -1, MAYBE_OVERWRITE = 0, DO_OVERWRITE = 1, }",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.PIKE_MODULE_RELOC": {
+      "signature": "constant PIKE_MODULE_RELOC = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.PatchPropertyCommand": {
+      "signature": "class PatchPropertyCommand",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.PrefLanguages": {
+      "signature": "class PrefLanguages",
+      "markdown": "Support for language preferences. This object is typically\n accessed through `id->misc->pref_languages`.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Privs": {
+      "signature": "protected class Privs",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.PropertyBehavior": {
+      "signature": "typedef int(0..1)|multiset(string) PropertyBehavior;",
+      "markdown": "State of the DAV:propertybehavior.\n  - `int(0..0)` — DAV:omit.\n     Failure to copy a property does not cause the entire copy\n     to fail.\n  - `int(1..1)` — DAV:keepalive \"*\".\n     All live properties must be kept alive.\n  - `multiset(string)` — Set of properties to keep alive. Properties not in the set\n     should be copied according to best effort. The properties are\n     listed with complete namespaces.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Protocol": {
+      "signature": "class Protocol",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ProtocolCacheKey": {
+      "signature": "class ProtocolCacheKey",
+      "markdown": "The cache key used by the protocol cache.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ROXEN_MYSQL_SUPPORTS_UNICODE": {
+      "signature": "constant ROXEN_MYSQL_SUPPORTS_UNICODE = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.RequestID": {
+      "signature": "class RequestID",
+      "markdown": "The request information object contains all request-local information and\n server as the vessel for most forms of intercommunication between modules,\n scripts, RXML and so on. It gets passed round to almost all API callbacks\n worth mentioning. A RequestID object is born when an incoming request is\n encountered, and its life expectancy is short, as it dies again when the\n request has passed through all levels of the module type calling sequence.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.RequestJSONLogger": {
+      "signature": "class RequestJSONLogger",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.RoxenModule": {
+      "signature": "class RoxenModule",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.SSLProtocol": {
+      "signature": "class SSLProtocol",
+      "markdown": "Base protocol for SSL ports.\nExactly like Port, but uses SSL.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ST_CTIME": {
+      "signature": "constant ST_CTIME = ST_CTIME;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ST_MTIME": {
+      "signature": "constant ST_MTIME = ST_MTIME;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.ST_SIZE": {
+      "signature": "constant ST_SIZE = ST_SIZE;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.StartTLSProtocol": {
+      "signature": "class StartTLSProtocol",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.Stat": {
+      "signature": "constant Stat = typeof(da_Stat_type);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.StringFile": {
+      "signature": "class StringFile( string data, mixed|void _st )",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.TristateCacheKey": {
+      "signature": "class TristateCacheKey",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.User": {
+      "signature": "class User( UserDB database )",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.UserDB": {
+      "signature": "class UserDB",
+      "markdown": "The interface a UserDB module must implement.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.WS_REPLICATE": {
+      "signature": "constant WS_REPLICATE = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.__ROXEN_SUPPORTS_IPV6__": {
+      "signature": "constant __ROXEN_SUPPORTS_IPV6__ = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.___LogFormat": {
+      "signature": "class LogFormat",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.__pragma_save_parent__": {
+      "signature": "constant __pragma_save_parent__ = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.__rbf": {
+      "signature": "constant __rbf = \"font_handlers/rbf\";",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef._cur_rxml_context": {
+      "signature": "constant _cur_rxml_context = Thread.Local();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef._disable_threads": {
+      "signature": "object _disable_threads();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef._roxen": {
+      "signature": "class _roxen",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.add_cvs_ids": {
+      "signature": "void add_cvs_ids(mixed to);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_clear": {
+      "signature": "constant cache_clear = cache->cache_expire;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_clear_deltas": {
+      "signature": "constant cache_clear_deltas = cache->cache_clear_deltas;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_entries": {
+      "signature": "constant cache_entries = cache->cache_entries;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_expire": {
+      "signature": "constant cache_expire = cache->cache_expire;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_expire_by_prefix": {
+      "signature": "constant cache_expire_by_prefix = cache->cache_expire_by_prefix;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_indices": {
+      "signature": "constant cache_indices = cache->cache_indices;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_lookup": {
+      "signature": "constant cache_lookup = cache->cache_lookup;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_peek": {
+      "signature": "constant cache_peek = cache->cache_peek;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_remove": {
+      "signature": "constant cache_remove = cache->cache_remove;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache_set": {
+      "signature": "constant cache_set = cache->cache_set;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.call_out": {
+      "signature": "mixed call_out(function f, float|int delay, mixed ... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.callablep": {
+      "signature": "constant callablep = lambda(mixed f){return functionp(f)||programp(f);};",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.capitalize": {
+      "signature": "constant capitalize = String.capitalize;",
+      "markdown": "Alias for String.capitalize.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cd": {
+      "signature": "constant cd = restricted_cd();",
+      "markdown": "Overloads the Pike cd function.\n Doesn't allow cd() unless we are in a forked child.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.clear_connect_to_my_mysql_cache": {
+      "signature": "void clear_connect_to_my_mysql_cache( );",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.color_name": {
+      "signature": "constant color_name = nm_resolv(\"Colors.color_name\");",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.colors": {
+      "signature": "constant colors = nm_resolv(\"Colors\");",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.connect_to_my_mysql": {
+      "signature": "Sql.Sql connect_to_my_mysql( string|int ro, void|string db, void|int reuse_in_thread, void|string charset);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.crypt_password": {
+      "signature": "constant crypt_password = Crypto.Password.hash;",
+      "markdown": "Generate a hash of password suitable for verify_password().\n- `password` — Password to hash.\n- `scheme` — Password hashing scheme. If not specified the strongest available\n   will be used.\n\nIf an unsupported scheme is specified an error will be thrown.\n- `rounds` — The number of rounds to use in parameterized schemes. If not\n   specified the scheme specific default will be used.\n**Returns:** Returns a string suitable for verify_password().\n**See also:** verify_password, predef::crypt(), Nettle.crypt_md5(),\n   Nettle.HashInfo()->crypt_hash()\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.describe_backtrace": {
+      "signature": "string describe_backtrace(mixed err, void|int linewidth);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.destruct": {
+      "signature": "void trace_destruct(mixed x);",
+      "markdown": "Overloads the Pike destruct function. If the webserver is\n started with the TRACE_DESTRUCT define set, all destruct\n calls will be logged in the debug log.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.euid_egid_lock": {
+      "signature": ".Mutex euid_egid_lock;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.exit": {
+      "signature": "void trace_exit(int exitcode);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.get_cvs_id": {
+      "signature": "string get_cvs_id(string from);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.getegid": {
+      "signature": "constant getegid = lambda(){ return 0; };",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.geteuid": {
+      "signature": "constant geteuid = lambda(){ return 0; };",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.getgid": {
+      "signature": "int getgid();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.gethostname": {
+      "signature": "constant gethostname = lambda() { return \"localhost\"; };",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.getppid": {
+      "signature": "int getppid();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.getuid": {
+      "signature": "int getuid();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.grbz": {
+      "signature": "constant grbz = lambda(string d){return Gz.inflate()->inflate(d);};",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.has_Image_TTF": {
+      "signature": "constant has_Image_TTF = 1;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.hsv_to_rgb": {
+      "signature": "constant hsv_to_rgb = nm_resolv(\"Colors.hsv_to_rgb\");",
+      "markdown": "Alias for Colors.hsv_to_rgb.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.http_decode_string": {
+      "signature": "constant http_decode_string = _Roxen.http_decode_string;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.init_logger": {
+      "signature": "void init_logger();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.isodate": {
+      "signature": "string isodate( int t );",
+      "markdown": "Returns a string with the given posix time t formated as\n YYYY-MM-DD.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.lfile_path": {
+      "signature": "string lfile_path(string filename);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.lfile_stat": {
+      "signature": "object(Stdio.Stat) lfile_stat(string filename);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.load": {
+      "signature": "constant load = load;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.lopen": {
+      "signature": "object|void lopen(string filename, string mode, int|void perm);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.mark_fd": {
+      "signature": "mixed mark_fd( int fd, string|void with );",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.mkdirhier": {
+      "signature": "int mkdirhier(string from, int|void mode);",
+      "markdown": "Make a directory hierachy\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.mutex": {
+      "signature": ".Mutex mutex;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.open": {
+      "signature": "object|void open(string filename, string mode, int|void perm);",
+      "markdown": "Like Stdio.File.open on a new file object, but processes the\n path with roxen_path. Returns zero on open error.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.parse_color": {
+      "signature": "constant parse_color = nm_resolv(\"Colors.parse_color\");",
+      "markdown": "Alias for Colors.parse_color\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.parse_html": {
+      "signature": "string parse_html(string data, mapping(string:function|string) tags, mapping(string:function|string) containers, mixed... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.parse_html_lines": {
+      "signature": "string parse_html_lines(string data, mapping tags, mapping containers, mixed... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.perror": {
+      "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.popen": {
+      "signature": "string popen(string|array(string) cmd, void|mapping env, int|void uid, int|void gid);",
+      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_cp": {
+      "signature": "int r_cp( string f1, string f2 );",
+      "markdown": "Like Stdio.cp, but processes the paths with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_exist": {
+      "signature": "int r_exist(string path);",
+      "markdown": "Like Stdio.exist, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_file_stat": {
+      "signature": "Stdio.Stat file_stat( string filename, int|void slinks );",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_get_dir": {
+      "signature": "array(string) r_get_dir( string path );",
+      "markdown": "Like predef::get_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_is_dir": {
+      "signature": "int r_is_dir(string path);",
+      "markdown": "Like Stdio.is_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_is_file": {
+      "signature": "int r_is_file(string path);",
+      "markdown": "Like Stdio.is_file, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_is_link": {
+      "signature": "int r_is_link(string path);",
+      "markdown": "Like Stdio.is_link, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_mv": {
+      "signature": "int mv( string f1, string f2 );",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_read_bytes": {
+      "signature": "string r_read_bytes(string filename, mixed... args);",
+      "markdown": "Like Stdio.read_bytes, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.r_rm": {
+      "signature": "int rm( string filename );",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_debug": {
+      "signature": "void report_debug(sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Print a debug message in the server's debug log.\n Shares argument prototype with sprintf().\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_error": {
+      "signature": "void report_error(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report an error message, that will show up in the server's debug log and\n in the event logs, along with the red exclamation mark sign. Shares\n argument prototype with sprintf().\n**See also:** report_error_sparsely, report_error_for\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_error_for": {
+      "signature": "void report_error_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_error, but logs the message for the given\n configuration or Roxen module where, or globally if where is\n zero. report_error searches the call stack to find that out,\n but this function is useful to specify it explicitly.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_error_sparsely": {
+      "signature": "void report_error_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_error, but doesn't repeat the same message if it's\n been logged in the last ten minutes. Useful in situations where an\n error can cause an error message to be logged rapidly.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_fatal": {
+      "signature": "void report_fatal(sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Print a fatal error message.\n**See also:** report_fatal_for\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_fatal_for": {
+      "signature": "void report_fatal_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_notice": {
+      "signature": "void report_notice(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report a status message of some sort for the server's debug log and event\n logs, along with the blue informational notification sign. Shares argument\n prototype with sprintf().\n**See also:** report_notice_for\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_notice_for": {
+      "signature": "void report_notice_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_warning": {
+      "signature": "void report_warning(LocaleString|sprintf_format message, sprintf_args ... foo);",
+      "markdown": "Report a warning message, that will show up in the server's debug log and\n in the event logs, along with the yellow exclamation mark warning sign.\n Shares argument prototype with sprintf().\n**See also:** report_warning_sparsely, report_warning_for\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_warning_for": {
+      "signature": "void report_warning_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.report_warning_sparsely": {
+      "signature": "void report_warning_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
+      "markdown": "Like report_warning, but doesn't repeat the same message if\n it's been logged in the last ten minutes. Useful in situations\n where an error can cause a warning message to be logged rapidly.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.rgb_to_hsv": {
+      "signature": "constant rgb_to_hsv = nm_resolv(\"Colors.rgb_to_hsv\");",
+      "markdown": "Alias for Colors.rgb_to_hsv\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen": {
+      "signature": "constant roxen = this_object();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_dist_os": {
+      "signature": "protected string dist_os;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_dist_version": {
+      "signature": "protected string dist_version;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_is_cms": {
+      "signature": "protected int roxen_is_cms;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_path": {
+      "signature": "string roxen_path( string filename );",
+      "markdown": "Expands the following paths in the given string and returns the\n result. If on Windows, also strips off trailing slashes.\n  - `\"$LOCALDIR\"` — The local directory of the web server, Normally \"../local\",\n     but it can be changed in by setting the environment\n     variable LOCALDIR.\n  - `\"$LOGDIR\"` — The log directory of the web server. Normally \"../logs\",\n     but it can be changed in the configuration interface under\n     global settings.\n  - `\"$LOGFILE\"` — The debug log of the web server. Normally\n     \"../logs/debug/default.1\", but it can be the name of the\n     configuration directory if multiple instances are used.\n  - `\"$VARDIR\"` — The web server's var directory. Normally \"../var\", but it can\n     be changed by setting the environment variable VARDIR.\n  - `\"$VVARDIR\"` — Same as $VARDIR, but with a server version specific subdirectory.\n  - `\"$SERVERDIR\"` — Base path for the version-specific installation directory.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_perror": {
+      "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_popen": {
+      "signature": "string popen(string|array(string) cmd, void|mapping env, int|void uid, int|void gid);",
+      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_product_code": {
+      "signature": "protected string roxen_product_code;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_product_name": {
+      "signature": "protected string roxen_product_name;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_release": {
+      "signature": "constant roxen_release = release || roxen_release;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxen_version": {
+      "signature": "string roxen_version();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxenloader": {
+      "signature": "constant roxenloader = this_object();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.roxenp": {
+      "signature": "constant roxenp = lambda() { return roxen; };",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.spawn_pike": {
+      "signature": ".Process spawn_pike(array(string) args, void|string wd, Stdio.File|void stdin, Stdio.File|void stdout, Stdio.File|void stderr);",
+      "markdown": "Start a new Pike process with the same configuration as the current one\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.spawne": {
+      "signature": ".Process spawne(string s, array(string) args, mapping|array env, Stdio.File stdin, Stdio.File stdout, Stdio.File stderr, void|string wd, void|array(int) uid);",
+      "markdown": "Create a process\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.throw": {
+      "signature": "void paranoia_throw(mixed err);",
+      "markdown": "Overloads Pikes throw function.\nExists for detection of code that throws non-errors.\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.uname": {
+      "signature": "mapping uname();",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.user_mysql": {
+      "signature": ".Sql user_mysql;",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.verify_password": {
+      "signature": "constant verify_password = Crypto.Password.verify;",
+      "markdown": "Verify a password against a hash.\nThis function attempts to support most\n password hashing schemes.\n**Returns:** Returns `1` on success, and `0` (zero) otherwise.\n**See also:** hash_password(), predef::crypt()\n\nInjected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.werror": {
+      "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
     }
   }
 }

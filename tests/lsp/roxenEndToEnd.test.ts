@@ -35,6 +35,32 @@ constant module_name = "Test filesystem";
 int flags = TYPE_STRING;
 `;
 
+/**
+ * The surface Roxen never documents.
+ *
+ * `cvs_version` is declared by each module rather than by the prototype;
+ * `defvar` is on the prototype but carries no `//!`; `report_fatal` is a global
+ * roxenloader injects at run time. All three are things Roxen code writes
+ * constantly and none of them came out of Pike's AutoDoc extractor.
+ */
+const ROXEN_UNDOCUMENTED = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_LOCATION;
+
+void create()
+{
+  defvar("mountpoint", "/", "Mount point", TYPE_STRING);
+}
+
+void probe(RoxenModule other)
+{
+  string version = other->cvs_version;
+  string dir = roxen_path("$VARDIR/state");
+  predef::report_fatal("boom %O %O\\n", version, dir);
+}
+`;
+
 const PLAIN_PIKE = `int main()
 {
   int flags = 1;
@@ -47,19 +73,23 @@ let workspace: string;
 let server: TestServer;
 let roxenUri: string;
 let plainUri: string;
+let undocumentedUri: string;
 
 beforeAll(async () => {
   workspace = mkdtempSync(join(tmpdir(), "roxen-e2e-"));
   mkdirSync(join(workspace, "roxen"), { recursive: true });
   mkdirSync(join(workspace, "app"), { recursive: true });
   writeFileSync(join(workspace, "roxen", "mymodule.pike"), ROXEN_MODULE);
+  writeFileSync(join(workspace, "roxen", "undocumented.pike"), ROXEN_UNDOCUMENTED);
   writeFileSync(join(workspace, "app", "main.pike"), PLAIN_PIKE);
 
   roxenUri = pathToFileURL(join(workspace, "roxen", "mymodule.pike")).href;
+  undocumentedUri = pathToFileURL(join(workspace, "roxen", "undocumented.pike")).href;
   plainUri = pathToFileURL(join(workspace, "app", "main.pike")).href;
 
   server = await createTestServer({ rootUri: pathToFileURL(workspace).href });
   server.openDoc(roxenUri, ROXEN_MODULE);
+  server.openDoc(undocumentedUri, ROXEN_UNDOCUMENTED);
   server.openDoc(plainUri, PLAIN_PIKE);
   // didOpen is a notification; give the server a turn to index both documents.
   await new Promise((resolve) => setTimeout(resolve, 500));
@@ -105,6 +135,104 @@ describe("hover in a Roxen file without an installation", () => {
     expect(hover).not.toBeNull();
     expect(hover!.contents.value).toContain("TYPE_STRING");
     expect(hover!.contents.value).toContain("module.h");
+  });
+});
+
+describe("hover on the surface Roxen leaves undocumented", () => {
+  test("resolves a member modules supply by convention", async () => {
+    // `RoxenModule me; … me->cvs_version` is what Roxen's own configuration.pike
+    // writes. No prototype declares cvs_version, so nothing but the corpus
+    // measurement in the generator puts it within reach.
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: undocumentedUri },
+      position: positionOf(ROXEN_UNDOCUMENTED, "cvs_version"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("cvs_version");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  test("resolves a global roxenloader injects and nothing else declares", async () => {
+    // roxen_path exists only because roxenloader add_constant()s it; no header
+    // defines it and no prototype declares it, so before it was harvested this
+    // request had nothing to answer with.
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: undocumentedUri },
+      position: positionOf(ROXEN_UNDOCUMENTED, "roxen_path"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("roxen_path");
+    expect(hover!.contents.value).toContain("roxenloader");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  test("answers predef::report_fatal, which used to return nothing", async () => {
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: undocumentedUri },
+      position: positionOf(ROXEN_UNDOCUMENTED, "report_fatal"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    // The module prototype wraps the injected global under the same name and
+    // shadows it, which is what Pike resolution does too — either declaration
+    // is a truthful answer, and both were absent from the index before.
+    expect(hover!.contents.value).toContain("report_fatal");
+    expect(hover!.contents.value).toContain("sprintf_format");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  test("resolves an undocumented prototype member", async () => {
+    // Every module calls defvar in create(); the prototype declares it with no
+    // `//!` at all, so AutoDoc never saw it.
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri: undocumentedUri },
+      position: positionOf(ROXEN_UNDOCUMENTED, "defvar"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("defvar");
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+});
+
+describe("completion of roxenloader's injected globals", () => {
+  test("offers them after predef::, which is how a Roxen file writes them", async () => {
+    const line = ROXEN_UNDOCUMENTED.split("\n")
+      .findIndex((l) => l.includes("predef::report_fatal"));
+    const character = ROXEN_UNDOCUMENTED.split("\n")[line]!.indexOf("predef::") + "predef::".length;
+
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri: undocumentedUri },
+      position: { line, character },
+    }) as CompletionResult;
+
+    const labels = new Set(result.items.map((i) => i.label));
+    expect(labels.has("report_fatal")).toBe(true);
+    // Pike's own predefined names must still be there: the Roxen globals are
+    // added to that namespace, not substituted for it.
+    expect(labels.has("sprintf")).toBe(true);
+  });
+
+  test("offers them bare, because roxenloader put them in predef", async () => {
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri: undocumentedUri },
+      position: positionOf(ROXEN_UNDOCUMENTED, "report_fatal"),
+    }) as CompletionResult;
+
+    expect(new Set(result.items.map((i) => i.label)).has("report_fatal")).toBe(true);
+  });
+
+  test("offers none of them in a plain Pike file", async () => {
+    const result = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri: plainUri },
+      position: positionOf(PLAIN_PIKE, "flags"),
+    }) as CompletionResult;
+
+    const labels = new Set(result.items.map((i) => i.label));
+    expect(labels.has("report_fatal")).toBe(false);
+    expect(labels.has("cvs_version")).toBe(false);
   });
 });
 

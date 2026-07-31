@@ -10,6 +10,7 @@ import type { SymbolTable } from "./symbolTable";
 import { getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
 import { declToCompletionItem, cleanPredefSignature, padSortKey } from "./completion-items";
 import { addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
+import { roxenInjectedGlobals } from "./roxenIndex";
 import type { CompletionContext } from "./completionTrigger";
 
 // ---------------------------------------------------------------------------
@@ -56,9 +57,10 @@ function completeFileScope(table: SymbolTable, seenNames: Set<string>): Completi
 /**
  * Handle predef:: — Pike's predefined namespace.
  *
- * A Roxen file also reaches globals through `predef::` that roxenloader injects
- * at run time (`predef::report_fatal`). Those are not in this index and are not
- * invented here; the list is what Pike itself predefines.
+ * A Roxen file reaches more through `predef::` than a plain Pike file does:
+ * roxenloader adds `report_fatal` and its neighbours to that same namespace at
+ * run time. Those come from the bundled Roxen index and only in a Roxen file,
+ * so a plain Pike program still sees exactly what Pike predefines.
  */
 function completePredefScope(ctx: CompletionContext, seenNames: Set<string>): CompletionItem[] {
   const items: CompletionItem[] = [];
@@ -71,6 +73,19 @@ function completePredefScope(ctx: CompletionContext, seenNames: Set<string>): Co
       detail: cleanPredefSignature(ctx.predefBuiltins[name]),
       sortText: padSortKey(0) + name,
       filterText: name,
+    });
+  }
+
+  if (!ctx.roxenActive || !ctx.roxenIndex) return items;
+  for (const global of roxenInjectedGlobals(ctx.roxenIndex)) {
+    if (seenNames.has(global.name)) continue;
+    seenNames.add(global.name);
+    items.push({
+      label: global.name,
+      kind: CompletionItemKind.Function,
+      detail: global.detail,
+      sortText: padSortKey(0) + global.name,
+      filterText: global.name,
     });
   }
   return items;
