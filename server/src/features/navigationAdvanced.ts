@@ -23,6 +23,7 @@ import type {
 } from "vscode-languageserver-protocol";
 import type { NavigationContext } from "./navigationHandler";
 import { parse } from "../parser";
+import { isPikeUnavailable } from "./pikeWorkerTypes";
 import {
   prepareCallHierarchy,
   getIncomingCalls,
@@ -243,6 +244,9 @@ function extractAutodocIfStale(
       }
     })
     .catch((err: unknown) => {
+      // A missing Pike binary is expected and already reported once at
+      // startup; re-warning on every save is noise, not information.
+      if (isPikeUnavailable(err)) return;
       logWarn(ctx.connection, `AutoDoc extraction failed for ${uri}: ${err instanceof Error ? err.message : String(err)}`);
     });
 }
