@@ -162,6 +162,14 @@ async function handleDefinition(
   const decl = getDefinitionAt(table, params.position.line, params.position.character);
   if (decl) return resolveDeclLocation(decl, table, params);
 
+  // The type-driven resolver runs FIRST. `resolveCrossFileDefinition` searches
+  // the inherit chain by bare NAME with no knowledge of the receiver, so with
+  // it ahead of this, `array(Obj) as; as->shared()` answered an unrelated
+  // `shared` from an inherited file instead of `Obj`'s. A typed answer beats a
+  // name that merely matches; the name search stays as the last resort it is.
+  const accessResult = await resolveAccessForDefinition(ctx, resolutionCtx, makeTypeInferrer, table, params);
+  if (accessResult) return accessResult;
+
   const crossFile = await ctx.index.resolveCrossFileDefinition(
     params.textDocument.uri, params.position.line, params.position.character,
   );
@@ -169,9 +177,6 @@ async function handleDefinition(
     if (token.isCancellationRequested) return null;
     return declToLspLocation(crossFile.uri, crossFile.decl);
   }
-
-  const accessResult = await resolveAccessForDefinition(ctx, resolutionCtx, makeTypeInferrer, table, params);
-  if (accessResult) return accessResult;
 
   const modulePathResult = await resolveModulePathTarget(ctx, table, includeDoc, params);
   if (modulePathResult) return modulePathResult;

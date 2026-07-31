@@ -118,7 +118,7 @@ a reason for the declaration to become unreachable.
 | | Records | Reachable from this repo? |
 |---|---|---|
 | Inside a `#define` body | 647 | ~~No~~ — wrong, see amendment 2 |
-| `->` on a receiver | 936 | Partly |
+| `->` on a receiver | 936 | ~~Partly~~ — wrong, see amendment 3 |
 | `Qualifier::` (mostly `predef::`) | 89 | ~~Needs Roxen index coverage~~ — wrong, see correction |
 | Bare `::` | 74 | ~~Partly~~ — wrong, see correction |
 | After `.` | 61 | Partly |
@@ -136,7 +136,10 @@ gives `preproc_define` → `identifier`, `preproc_params` → `preproc_param` �
 sweep ran and stopped being true two commits later (`e9e262e`, `cc9f9a1`),
 before this document was written. No tree-sitter work was needed.
 
-**Most of the `->` bucket has no static answer.** Sampling the receivers:
+**~~Most of the `->` bucket has no static answer.~~ Wrong — see amendment 3.**
+The sampling below is accurate as far as it goes, but it characterises only the
+empty results; the bucket's larger problem was ~1,900 wrong answers sitting in
+the answered column. Sampling the receivers:
 
 - ~140 have a real class type (`RoxenModule me`) — tractable, but the bundled
   Roxen index is built from Roxen's autodoc and does not carry the members in
@@ -292,3 +295,39 @@ and Pike does not have one either without expanding at each call site.
 
 So the "third of the remaining findings that needs grammar work" was, in the
 end, a scope the symbol table was declining to build.
+
+## Amendment 3 — the `->` bucket, 2026-07-31
+
+Wrong in the same way as the other two, and for the same reason: the sweep sees
+only empty results, and this bucket's real problem was on the answered side.
+
+Probing all 24,646 `->` positions in Roxen 6.1 — the sweep visited 936 of them —
+and classifying by the receiver's declared type:
+
+| Receiver | Answered before | Answered after | |
+|---|---|---|---|
+| declared class | 5,149 | **6,445** | Roxen's own classes now indexed |
+| mapping / multiset | 1,761 | **141** | had no member to point at |
+| string / int / float | 508 | **294** | same |
+| array | 67 | **83** | automap now modelled |
+
+Four defects, none of them the "index coverage" the table above blamed:
+
+1. **Go-to-definition asked the name-based resolver first.** The cross-file
+   fallback searches the inherit chain by bare name with no knowledge of the
+   receiver, and it ran *ahead* of the type-driven resolver. Any same-named
+   symbol reachable from the file pre-empted the receiver's own class.
+2. **`findDeclUri` compared declarations by `id`.** That is a per-file counter,
+   so a cross-file member came back with the target file's line and column
+   under the *calling* file's URI. Reordering (1) is what exposed it — the
+   answer had always been reachable, just never reached.
+3. **Containers and primitives answered.** `m->foo` is `m["foo"]`; `s->size`
+   does not compile. 1,620 positions pointed at unrelated declarations.
+   `array` is the exception: `->` on one automaps to the element's member.
+4. **`RequestID` had no members.** Roxen's request object — the receiver at 847
+   `->` positions, more than any other type — is declared in `prototypes.pike`
+   and injected as a global, so nothing led the resolver to it.
+
+Total answered falls 10,396 → 9,803, which is the point: ~1,900 wrong answers
+removed, ~1,300 correct ones added. A sweep that counts only empties records
+that as a regression.

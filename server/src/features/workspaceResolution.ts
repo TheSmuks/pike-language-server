@@ -10,6 +10,7 @@ import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, t
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
+import { receiverNamesNoMember } from "./typeResolver";
 import { inheritSearchScope, inheritsReachableBy } from "./scopeQualifier";
 
 // ---------------------------------------------------------------------------
@@ -33,6 +34,7 @@ export interface ResolutionContext {
 function getFile(ctx: ResolutionContext, uri: string): FileEntry | undefined {
   return ctx.files.get(normalizeUri(uri));
 }
+
 
 // Global query preparation lives in globalQueryPrep.ts; re-exported here so
 // existing import sites (and the resource-resilience tests) stay unchanged.
@@ -90,6 +92,7 @@ export async function resolveCrossFileDefinition(
     if (ref.resolvesTo === null && ref.loc.line === line &&
         character >= ref.loc.character &&
         character < ref.loc.character + ref.name.length) {
+      if (receiverNamesNoMember(ref, table)) return null;
       const result = await resolveUnresolvedReference(ctx, ref, table, uri);
       if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
         return await retryOrKeep(ctx, uri, line, character, maxRetries, result);

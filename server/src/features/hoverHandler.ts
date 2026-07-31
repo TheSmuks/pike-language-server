@@ -39,8 +39,9 @@ import {
   type HoverInfo,
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
+import { memberOfMemberlessReceiver } from "./typeResolver";
 import { type RoxenIndexData } from "./roxenIndex";
-import { roxenHover, roxenPathHover } from "./hoverRoxen";
+import { roxenHover, roxenPathHover, roxenTypedMemberHover } from "./hoverRoxen";
 import {
   hoverScopeSpecifier, hoverQualifiedInheritMember, hoverFromInheritAlias,
 } from "./hoverScopeAccess";
@@ -279,6 +280,11 @@ async function hoverFromTree(
   const qualifiedMember = await hoverQualifiedInheritMember(ctx, table, hoverTree, params);
   if (qualifiedMember) return qualifiedMember;
 
+  // The tiers below answer by bare NAME. On `file->error` where `file` is a
+  // mapping, that handed back Pike's builtin `error` — the receiver has no
+  // members at all, so a name that merely matches is not an answer.
+  if (memberOfMemberlessReceiver(table, params)) return null;
+
   const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
   if (builtinHover) return builtinHover;
 
@@ -432,6 +438,14 @@ async function hoverFromQualifiedStdlib(
     params.position.line, params.position.character, tree,
   );
   if (!qualified) return null;
+
+  // Roxen's own classes first: `RequestID` and `Configuration` are declared
+  // in prototypes.pike and injected as globals, so neither the workspace
+  // resolver nor the stdlib index can reach their members.
+  const roxenTyped = roxenTypedMemberHover(
+    ctx, qualified.typeName, qualified.memberName, params,
+  );
+  if (roxenTyped) return roxenTyped;
 
   const fqn = `predef.${qualified.typeName}.${qualified.memberName}`;
   const entry = ctx.stdlibIndex[fqn];

@@ -1064,6 +1064,958 @@
     }
   },
   "symbols": {
+    "AuthModule.authenticate": {
+      "signature": "User authenticate( RequestID id, UserDB db );",
+      "markdown": "Try to authenticate the request with users from the specified user\n database. If no db is specified, all datbases in the current\n configuration are searched in order, then the configuration user\n database."
+    },
+    "AuthModule.authenticate_throw": {
+      "signature": "mapping authenticate_throw( RequestID id, string realm, UserDB db );",
+      "markdown": "Returns a reply mapping, similar to Roxen.http_rxml_reply with\n friends. If no db is specified,  all datbases in the current\n configuration are searched in order, then the configuration user\n database."
+    },
+    "AuthModule.module_type": {
+      "signature": "constant module_type = MODULE_AUTH;",
+      "markdown": ""
+    },
+    "AuthModule.name": {
+      "signature": "constant name = \"method name\";",
+      "markdown": "Name used for internal identification."
+    },
+    "AuthModule.thread_safe": {
+      "signature": "constant thread_safe=1;",
+      "markdown": ""
+    },
+    "BasicDefvar.definvisvar": {
+      "signature": "void definvisvar(string name, mixed value, int type, array|void misc);",
+      "markdown": ""
+    },
+    "BasicDefvar.deflocaledoc": {
+      "signature": "int deflocaledoc( string locale, string variable, string name, string doc, mapping|void translate );",
+      "markdown": ""
+    },
+    "BasicDefvar.defvar": {
+      "signature": "Variable defvar(string var, mixed value, mapping|string|void|object name, int|void type, mapping|string|void|object doc_str, mixed|void misc, int|function|void not_in_config, mapping|void option_translations);",
+      "markdown": ""
+    },
+    "BasicDefvar.getvar": {
+      "signature": "Variable getvar( string name );",
+      "markdown": ""
+    },
+    "BasicDefvar.killvar": {
+      "signature": "int killvar(string var);",
+      "markdown": ""
+    },
+    "BasicDefvar.query": {
+      "signature": "mixed query(string|void var, int|void ok);",
+      "markdown": "The query part (i.e. all characters after the first question\n mark) of the requested URL.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "BasicDefvar.set": {
+      "signature": "void set(string var, mixed value);",
+      "markdown": ""
+    },
+    "BasicDefvar.setvars": {
+      "signature": "void setvars( mapping (string:mixed) vars );",
+      "markdown": ""
+    },
+    "BasicDefvar.variables": {
+      "signature": "mapping(string:Variable) variables;",
+      "markdown": "The variables mapping is more or less identical to the\n real_variables maping, but each variable can only have one\n value, if the form variable was sent multiple times from the\n client (this happens, as an example, if you have checkbox\n variables with the same name but different values), the values\n will be separated with \\0 (the null character) in this mapping."
+    },
+    "CacheKey.__marker": {
+      "signature": "RoxenDebug.ObjectMarker __marker;",
+      "markdown": ""
+    },
+    "CacheKey.activate": {
+      "signature": "int activate();",
+      "markdown": "Activate the cache key. This must be called when the key is\n stored in a cache. Return nonzero if any callbacks got called."
+    },
+    "CacheKey.activate_if_necessary": {
+      "signature": "int activate_if_necessary();",
+      "markdown": ""
+    },
+    "CacheKey.activated": {
+      "signature": "int activated();",
+      "markdown": "Returns nonzero iff the key is activated."
+    },
+    "CacheKey.add_activation_cb": {
+      "signature": "void add_activation_cb(CacheActivationCB cb, mixed... args);",
+      "markdown": "Register a callback that will be called if and when this cache\n key is used in a cache, i.e. is activated. The callback gets\n this object followed by args as arguments and should do\n whatever bookkeeping necessary to keep track of the cache key so\n that it can be destructed.\nIf this cache key already is active then cb is called right\n away.\nThe registered callbacks will be called in the same order they\n are added.\n**Note:** Cache keys can be destructed at any time, and cb might get\n called with an already destructed object.\n**Note:** cb should also be prepared to get a destruct key that isn't a\n CacheKey as first argument - see merge_activation_list.\n**Note:** Take care to avoid cyclic refs when the activation callback is\n registered. This object should e.g. not be among args, and\n cb should not be a lambda that contains references to this\n object."
+    },
+    "CacheKey.add_activation_list": {
+      "signature": "void add_activation_list(array(array(CacheActivationCB|array)) cbs);",
+      "markdown": ""
+    },
+    "CacheKey.add_destruction_cb": {
+      "signature": "void add_destruction_cb(CacheDestructionCB cb, int remove_at_activation, mixed... args);",
+      "markdown": "Register a callback that will be called when this cache key is\n destructed. If remove_at_activation is set, the callback will\n be removed when this key is activated. Also, attempts to add\n callbacks with the remove_at_activation flag set when the key\n is already active will be silently ignored. See also\n add_activation_cb."
+    },
+    "CacheKey.merge_activation_list": {
+      "signature": "int merge_activation_list(object merge_target);",
+      "markdown": "Merges the activation list in this key into merge_target.\nIf merge_target already is active or if it isn't capable of\n delayed activation then our activation list is executed for it\n right away. If this key already is active then zero is returned\n and nothing is done."
+    },
+    "Configuration.ConfigurationLogger": {
+      "signature": "class ConfigurationLogger",
+      "markdown": ""
+    },
+    "Configuration.DataCache": {
+      "signature": "class DataCache",
+      "markdown": ""
+    },
+    "Configuration.access": {
+      "signature": "array access(string file, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.add_module_post_callback": {
+      "signature": "void add_module_post_callback(string mod_name, string func, function(RoxenModule,mixed...:void) cb);",
+      "markdown": "These functions add or delete callbacks which are called before\n or after specific functions in RoxenModule instances. In\n particular this can be used to add callbacks to call before or\n after RoxenModule.start in specific modules.\nA callback is never added multiple times on the same callback\n list. Callbacks in destructed objects are automatically pruned\n from the callback lists.\n- `mod_name` — The base identifier (i.e. without the `\"#n\"` part) of the\n module that the callback should be registered for. If it is zero\n then the callback is called for any module in the configuration.\n This is a string to be able to register callbacks for modules\n that are not yet loaded.\n- `func` — The function in the module to register the callback for. The\n only supported functions are currently `\"start\"` and\n `\"stop\"`.\n- `cb` — The callback to add or delete from the callback list. If a\n callback is deleted then mod_name and func must be the\n same as when it was registered.\n\nThe callback get the RoxenModule instance as the first\n argument. The remaining arguments are the same as the\n corresponding function in RoxenModule gets called with.\n\nNote that post callbacks won't get called if the real\n RoxenModule function failed with an exception."
+    },
+    "Configuration.add_module_pre_callback": {
+      "signature": "void add_module_pre_callback(string mod_name, string func, function(RoxenModule,mixed...:void) cb);",
+      "markdown": "These functions add or delete callbacks which are called before\n or after specific functions in RoxenModule instances. In\n particular this can be used to add callbacks to call before or\n after RoxenModule.start in specific modules.\nA callback is never added multiple times on the same callback\n list. Callbacks in destructed objects are automatically pruned\n from the callback lists.\n- `mod_name` — The base identifier (i.e. without the `\"#n\"` part) of the\n module that the callback should be registered for. If it is zero\n then the callback is called for any module in the configuration.\n This is a string to be able to register callbacks for modules\n that are not yet loaded.\n- `func` — The function in the module to register the callback for. The\n only supported functions are currently `\"start\"` and\n `\"stop\"`.\n- `cb` — The callback to add or delete from the callback list. If a\n callback is deleted then mod_name and func must be the\n same as when it was registered.\n\nThe callback get the RoxenModule instance as the first\n argument. The remaining arguments are the same as the\n corresponding function in RoxenModule gets called with.\n\nNote that post callbacks won't get called if the real\n RoxenModule function failed with an exception."
+    },
+    "Configuration.add_modules": {
+      "signature": "int add_modules( array(string) mods, int|void now );",
+      "markdown": ""
+    },
+    "Configuration.add_parse_module": {
+      "signature": "void add_parse_module(RoxenModule mod);",
+      "markdown": ""
+    },
+    "Configuration.api_functions": {
+      "signature": "mapping api_functions(void|RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.auth_modules": {
+      "signature": "array(AuthModule) auth_modules();",
+      "markdown": ""
+    },
+    "Configuration.authenticate": {
+      "signature": "User authenticate( RequestID id, UserDB|void database, AuthModule|void method );",
+      "markdown": "Try to authenticate the request with users from the specified user\n database. If no db is specified, all datbases in the current\n configuration are searched in order, then the configuration user\n database."
+    },
+    "Configuration.authenticate_throw": {
+      "signature": "mapping authenticate_throw( RequestID id, string realm, UserDB|void database, AuthModule|void method);",
+      "markdown": "Returns a reply mapping, similar to Roxen.http_rxml_reply with\n friends. If no db is specified,  all datbases in the current\n configuration are searched in order, then the configuration user\n database."
+    },
+    "Configuration.call_low_start_callbacks": {
+      "signature": "void call_low_start_callbacks( RoxenModule me, ModuleInfo moduleinfo, ModuleCopies module );",
+      "markdown": ""
+    },
+    "Configuration.call_provider": {
+      "signature": "mixed call_provider(string provides, string fun, mixed ... args);",
+      "markdown": ""
+    },
+    "Configuration.call_start_callbacks": {
+      "signature": "void call_start_callbacks( RoxenModule me, ModuleInfo moduleinfo, ModuleCopies module, void|int newly_added);",
+      "markdown": ""
+    },
+    "Configuration.check_locks": {
+      "signature": "DAVLock|LockFlag check_locks(string path, int(0..1) recursive, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.check_security": {
+      "signature": "int|mapping check_security(function|object a, RequestID id, void|int slevel);",
+      "markdown": ""
+    },
+    "Configuration.clear_memory_caches": {
+      "signature": "void clear_memory_caches();",
+      "markdown": ""
+    },
+    "Configuration.comment": {
+      "signature": "string comment();",
+      "markdown": ""
+    },
+    "Configuration.datacache": {
+      "signature": "DataCache datacache;",
+      "markdown": ""
+    },
+    "Configuration.delete_module_post_callback": {
+      "signature": "void delete_module_post_callback(string mod_name, string func, function(RoxenModule,mixed...:void) cb);",
+      "markdown": "These functions add or delete callbacks which are called before\n or after specific functions in RoxenModule instances. In\n particular this can be used to add callbacks to call before or\n after RoxenModule.start in specific modules.\nA callback is never added multiple times on the same callback\n list. Callbacks in destructed objects are automatically pruned\n from the callback lists.\n- `mod_name` — The base identifier (i.e. without the `\"#n\"` part) of the\n module that the callback should be registered for. If it is zero\n then the callback is called for any module in the configuration.\n This is a string to be able to register callbacks for modules\n that are not yet loaded.\n- `func` — The function in the module to register the callback for. The\n only supported functions are currently `\"start\"` and\n `\"stop\"`.\n- `cb` — The callback to add or delete from the callback list. If a\n callback is deleted then mod_name and func must be the\n same as when it was registered.\n\nThe callback get the RoxenModule instance as the first\n argument. The remaining arguments are the same as the\n corresponding function in RoxenModule gets called with.\n\nNote that post callbacks won't get called if the real\n RoxenModule function failed with an exception."
+    },
+    "Configuration.delete_module_pre_callback": {
+      "signature": "void delete_module_pre_callback(string mod_name, string func, function(RoxenModule,mixed...:void) cb);",
+      "markdown": "These functions add or delete callbacks which are called before\n or after specific functions in RoxenModule instances. In\n particular this can be used to add callbacks to call before or\n after RoxenModule.start in specific modules.\nA callback is never added multiple times on the same callback\n list. Callbacks in destructed objects are automatically pruned\n from the callback lists.\n- `mod_name` — The base identifier (i.e. without the `\"#n\"` part) of the\n module that the callback should be registered for. If it is zero\n then the callback is called for any module in the configuration.\n This is a string to be able to register callbacks for modules\n that are not yet loaded.\n- `func` — The function in the module to register the callback for. The\n only supported functions are currently `\"start\"` and\n `\"stop\"`.\n- `cb` — The callback to add or delete from the callback list. If a\n callback is deleted then mod_name and func must be the\n same as when it was registered.\n\nThe callback get the RoxenModule instance as the first\n argument. The remaining arguments are the same as the\n corresponding function in RoxenModule gets called with.\n\nNote that post callbacks won't get called if the real\n RoxenModule function failed with an exception."
+    },
+    "Configuration.dir_module": {
+      "signature": "RoxenModule dir_module;",
+      "markdown": ""
+    },
+    "Configuration.disable_module": {
+      "signature": "int disable_module( string modname, void|RoxenModule new_instance );",
+      "markdown": ""
+    },
+    "Configuration.enable_all_modules": {
+      "signature": "void enable_all_modules();",
+      "markdown": ""
+    },
+    "Configuration.enable_module": {
+      "signature": "RoxenModule enable_module( string modname, RoxenModule|void me, ModuleInfo|void moduleinfo, int|void nostart, int|void nosave );",
+      "markdown": ""
+    },
+    "Configuration.enabled_modules": {
+      "signature": "mapping(string:int(1..1)) enabled_modules;",
+      "markdown": ""
+    },
+    "Configuration.error_log": {
+      "signature": "mapping(string:array(int)) error_log;",
+      "markdown": ""
+    },
+    "Configuration.examine_return_mapping": {
+      "signature": "string examine_return_mapping(mapping m);",
+      "markdown": ""
+    },
+    "Configuration.expire_locks": {
+      "signature": "int expire_locks(RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.file_extension_modules": {
+      "signature": "array(function) file_extension_modules(string ext);",
+      "markdown": ""
+    },
+    "Configuration.filter_modules": {
+      "signature": "array(function) filter_modules();",
+      "markdown": ""
+    },
+    "Configuration.find_auth_module": {
+      "signature": "AuthModule find_auth_module( string name );",
+      "markdown": ""
+    },
+    "Configuration.find_dir": {
+      "signature": "array(string) find_dir(string file, RequestID id, void|int(0..1) verbose);",
+      "markdown": ""
+    },
+    "Configuration.find_dir_stat": {
+      "signature": "mapping(string:array(mixed)) find_dir_stat(string file, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.find_locks": {
+      "signature": "multiset(DAVLock) find_locks(string path, int(-1..1) recursive, int(0..1) exclude_shared, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.find_module": {
+      "signature": "RoxenModule find_module(string name);",
+      "markdown": ""
+    },
+    "Configuration.find_user_database": {
+      "signature": "UserDB find_user_database( string name );",
+      "markdown": ""
+    },
+    "Configuration.first_modules": {
+      "signature": "array(function) first_modules();",
+      "markdown": ""
+    },
+    "Configuration.get_config_id": {
+      "signature": "int get_config_id();",
+      "markdown": ""
+    },
+    "Configuration.get_doc_for": {
+      "signature": "string get_doc_for( string region, string variable );",
+      "markdown": ""
+    },
+    "Configuration.get_file": {
+      "signature": "mapping get_file(RequestID id, int|void no_magic, int|void internal_get);",
+      "markdown": ""
+    },
+    "Configuration.get_host": {
+      "signature": "string get_host();",
+      "markdown": ""
+    },
+    "Configuration.get_provider": {
+      "signature": "RoxenModule get_provider(string provides);",
+      "markdown": ""
+    },
+    "Configuration.get_providers": {
+      "signature": "array (RoxenModule) get_providers(string provides);",
+      "markdown": ""
+    },
+    "Configuration.get_url": {
+      "signature": "string get_url();",
+      "markdown": ""
+    },
+    "Configuration.handle_acc_time": {
+      "signature": "int handle_acc_time;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_001s": {
+      "signature": "int handle_num_runs_001s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_005s": {
+      "signature": "int handle_num_runs_005s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_015s": {
+      "signature": "int handle_num_runs_015s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_05s": {
+      "signature": "int handle_num_runs_05s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_15s": {
+      "signature": "int handle_num_runs_15s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_1s": {
+      "signature": "int handle_num_runs_1s;",
+      "markdown": ""
+    },
+    "Configuration.handle_num_runs_5s": {
+      "signature": "int handle_num_runs_5s;",
+      "markdown": ""
+    },
+    "Configuration.hsent": {
+      "signature": "int hsent;",
+      "markdown": ""
+    },
+    "Configuration.init_log_file": {
+      "signature": "void init_log_file();",
+      "markdown": ""
+    },
+    "Configuration.inited": {
+      "signature": "int inited;",
+      "markdown": ""
+    },
+    "Configuration.invalidate_cache": {
+      "signature": "void invalidate_cache();",
+      "markdown": ""
+    },
+    "Configuration.is_configuration": {
+      "signature": "constant is_configuration = 1;",
+      "markdown": ""
+    },
+    "Configuration.is_file": {
+      "signature": "int(0..1) is_file(string virt_path, RequestID id, int(0..1)|void internal);",
+      "markdown": ""
+    },
+    "Configuration.json_logger": {
+      "signature": "object json_logger;",
+      "markdown": ""
+    },
+    "Configuration.last_modules": {
+      "signature": "array(function) last_modules();",
+      "markdown": ""
+    },
+    "Configuration.location_modules": {
+      "signature": "array location_modules();",
+      "markdown": ""
+    },
+    "Configuration.lock_file": {
+      "signature": "mapping(string:mixed)|DAVLock lock_file(string path, int(0..1) recursive, string lockscope, string locktype, int(0..) expiry_delta, array(Parser.XML.Tree.Node) owner, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.log_function": {
+      "signature": "function(string:int) log_function;",
+      "markdown": ""
+    },
+    "Configuration.logger_modules": {
+      "signature": "array(function) logger_modules();",
+      "markdown": ""
+    },
+    "Configuration.low_get_file": {
+      "signature": "mapping|int(-1..0) low_get_file(RequestID id, int|void no_magic);",
+      "markdown": ""
+    },
+    "Configuration.low_init": {
+      "signature": "void low_init(void|int modules_already_enabled);",
+      "markdown": ""
+    },
+    "Configuration.map_providers": {
+      "signature": "array(mixed) map_providers(string provides, string fun, mixed ... args);",
+      "markdown": ""
+    },
+    "Configuration.name": {
+      "signature": "string name;",
+      "markdown": "Name used for internal identification."
+    },
+    "Configuration.open_file": {
+      "signature": "array open_file(string fname, string mode, RequestID id, void|int ig, void|int rc);",
+      "markdown": ""
+    },
+    "Configuration.parse_rxml": {
+      "signature": "string parse_rxml(string what, RequestID id, void|Stdio.File file, void|mapping defines );",
+      "markdown": ""
+    },
+    "Configuration.profile_map": {
+      "signature": "mapping(string:array(int)) profile_map;",
+      "markdown": ""
+    },
+    "Configuration.query_internal_location": {
+      "signature": "string query_internal_location(RoxenModule|void mod);",
+      "markdown": ""
+    },
+    "Configuration.query_name": {
+      "signature": "string query_name();",
+      "markdown": ""
+    },
+    "Configuration.queue_acc_time": {
+      "signature": "int queue_acc_time;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_001s": {
+      "signature": "int queue_num_runs_001s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_005s": {
+      "signature": "int queue_num_runs_005s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_015s": {
+      "signature": "int queue_num_runs_015s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_05s": {
+      "signature": "int queue_num_runs_05s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_15s": {
+      "signature": "int queue_num_runs_15s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_1s": {
+      "signature": "int queue_num_runs_1s;",
+      "markdown": ""
+    },
+    "Configuration.queue_num_runs_5s": {
+      "signature": "int queue_num_runs_5s;",
+      "markdown": ""
+    },
+    "Configuration.real_file": {
+      "signature": "string real_file(string file, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.received": {
+      "signature": "int received;",
+      "markdown": ""
+    },
+    "Configuration.refresh_lock": {
+      "signature": "void refresh_lock(DAVLock lock);",
+      "markdown": ""
+    },
+    "Configuration.reload_module": {
+      "signature": "RoxenModule reload_module( string modname );",
+      "markdown": ""
+    },
+    "Configuration.remove_parse_module": {
+      "signature": "void remove_parse_module(RoxenModule mod);",
+      "markdown": ""
+    },
+    "Configuration.request_acc_time": {
+      "signature": "int request_acc_time;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_001s": {
+      "signature": "int request_num_runs_001s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_005s": {
+      "signature": "int request_num_runs_005s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_015s": {
+      "signature": "int request_num_runs_015s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_05s": {
+      "signature": "int request_num_runs_05s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_15s": {
+      "signature": "int request_num_runs_15s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_1s": {
+      "signature": "int request_num_runs_1s;",
+      "markdown": ""
+    },
+    "Configuration.request_num_runs_5s": {
+      "signature": "int request_num_runs_5s;",
+      "markdown": ""
+    },
+    "Configuration.requests": {
+      "signature": "int requests;",
+      "markdown": ""
+    },
+    "Configuration.save_me": {
+      "signature": "void save_me();",
+      "markdown": ""
+    },
+    "Configuration.save_one": {
+      "signature": "int save_one( RoxenModule o );",
+      "markdown": ""
+    },
+    "Configuration.sent": {
+      "signature": "int sent;",
+      "markdown": ""
+    },
+    "Configuration.sql_cache_get": {
+      "signature": ".Sql sql_cache_get(string what);",
+      "markdown": ""
+    },
+    "Configuration.sql_connect": {
+      "signature": ".Sql sql_connect(string db, void|string charset);",
+      "markdown": ""
+    },
+    "Configuration.start": {
+      "signature": "int start(int num);",
+      "markdown": "This function is called both when a module is loaded\n (variable_save is 0) and when its variables are saved after a\n change (variable_save is 2).\nnewly_added is 1 if the module is being added by the\n administrator through the admin interface (implies that\n variable_save is 0). It's zero if the module is loaded\n normally, i.e. as a result of an entry in the server\n configuration file.\nconf is the configuration that the module instance belongs\n to, i.e. the same as the return value from my_configuration.\n**Note:** A module can't assume that it has been loaded before in this\n server configuration just because newly_added is zero. The\n administrator might for instance have edited the configuration\n file directly."
+    },
+    "Configuration.stat_file": {
+      "signature": "array(int)|object(Stdio.Stat) stat_file(string file, RequestID id);",
+      "markdown": ""
+    },
+    "Configuration.stop": {
+      "signature": "void stop(void|int asynch);",
+      "markdown": "This function is called when a running module is stopped either\n because it's being dropped or reloaded in the admin interface,\n or the server is being shut down orderly.\nIf the module is being stopped because of a reload then\n new_instance is the new module instance that is replacing\n this one. Note that new_instance is not properly initialized\n at this stage; among other things its start function has not\n yet been run."
+    },
+    "Configuration.throttler": {
+      "signature": "object throttler;",
+      "markdown": ""
+    },
+    "Configuration.try_get_file": {
+      "signature": "int|string try_get_file(string s, RequestID id, int|void status, int|void nocache, int|void not_internal, mapping|void result_mapping);",
+      "markdown": ""
+    },
+    "Configuration.type_from_filename": {
+      "signature": "string|array(string) type_from_filename( string file, int|void to, string|void myext );",
+      "markdown": ""
+    },
+    "Configuration.types_fun": {
+      "signature": "function types_fun;",
+      "markdown": ""
+    },
+    "Configuration.types_module": {
+      "signature": "RoxenModule types_module;",
+      "markdown": ""
+    },
+    "Configuration.unlock_file": {
+      "signature": "mapping(string:mixed) unlock_file(string path, DAVLock lock, RequestID|int(0..0) id);",
+      "markdown": ""
+    },
+    "Configuration.unregister_urls": {
+      "signature": "void unregister_urls();",
+      "markdown": ""
+    },
+    "Configuration.url_modules": {
+      "signature": "array(function) url_modules();",
+      "markdown": ""
+    },
+    "Configuration.user_databases": {
+      "signature": "array(UserDB) user_databases();",
+      "markdown": ""
+    },
+    "DAVLock.expiry_delta": {
+      "signature": "int(0..) expiry_delta;",
+      "markdown": "Idle time before this lock expires.\nAs a special case, if the value is `0` (zero), the lock\n has infinite duration."
+    },
+    "DAVLock.expiry_time": {
+      "signature": "int(0..) expiry_time;",
+      "markdown": "Absolute time when this lock expires.\nAs a special case, if the value is `0` (zero), the lock\n has infinite duration."
+    },
+    "DAVLock.get_xml": {
+      "signature": "SimpleNode get_xml();",
+      "markdown": "Returns a DAV:activelock Parser.XML.Tree.SimpleNode structure\n describing the lock."
+    },
+    "DAVLock.lockscope": {
+      "signature": "string|SimpleNode lockscope;",
+      "markdown": "The lock scope (RFC 2518 12.7). As a special case, if it only is\n an empty element without attributes then the element name is\n stored as a string.\n**Note:** RFC 2518 specifies the lock scopes `\"DAV:exclusive\"` and\n `\"DAV:shared\"`."
+    },
+    "DAVLock.locktoken": {
+      "signature": "string locktoken;",
+      "markdown": "The lock token given to the client. It may be zero in case there\n only is knowledge that a lock exists but the lock instance has\n been forgotten. This can happen in a filesystem that has some\n way of recording locks but doesn't store the DAV lock tokens."
+    },
+    "DAVLock.locktype": {
+      "signature": "string|SimpleNode locktype;",
+      "markdown": "The lock type (RFC 2518 12.8). As a special case, if it only is\n an empty element without attributes then the element name is\n stored as a string.\n**Note:** RFC 2518 only specifies the lock type `\"DAV:write\"`."
+    },
+    "DAVLock.owner": {
+      "signature": "array(SimpleNode) owner;",
+      "markdown": "The owner identification (RFC 2518 12.10), or zero if unknown.\n More precisely, it's the children of the `\"DAV:owner\"`\n element.\nRoxenModule.lock_file may set this if it's zero, otherwise\n it shouldn't change."
+    },
+    "DAVLock.path": {
+      "signature": "string path;",
+      "markdown": "Canonical absolute path to the locked resource. Always ends with\n a `\"/\"`."
+    },
+    "DAVLock.recursive": {
+      "signature": "int(0..1) recursive;",
+      "markdown": "`1` if the lock applies to all resources under path,\n `0` if it applies to path only."
+    },
+    "Group.gid": {
+      "signature": "int gid();",
+      "markdown": "A numerical GID, or -1 if not applicable"
+    },
+    "Group.members": {
+      "signature": "array(string) members();",
+      "markdown": "All users that are members of this group. The default\n implementation loops over all users handled by the user database\n and looks for users with the same gid as this group, or who is a\n member of it when the groups() method are called."
+    },
+    "Group.name": {
+      "signature": "string name();",
+      "markdown": "Name used for internal identification."
+    },
+    "Group.set_gid": {
+      "signature": "int set_gid( int new_gid );",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "Group.set_members": {
+      "signature": "int set_members( array(string) members );",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "Group.set_name": {
+      "signature": "int set_name( string new_name );",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "ModuleCopies._indices": {
+      "signature": "array _indices();",
+      "markdown": ""
+    },
+    "ModuleCopies._sprintf": {
+      "signature": "string _sprintf(int flag);",
+      "markdown": ""
+    },
+    "ModuleCopies._values": {
+      "signature": "array _values();",
+      "markdown": ""
+    },
+    "ModuleCopies.copies": {
+      "signature": "mapping copies;",
+      "markdown": ""
+    },
+    "ModuleInfo.check": {
+      "signature": "int check(void|int force);",
+      "markdown": ""
+    },
+    "ModuleInfo.config_locked": {
+      "signature": "mapping(Configuration:int) config_locked;",
+      "markdown": ""
+    },
+    "ModuleInfo.filename": {
+      "signature": "string filename;",
+      "markdown": ""
+    },
+    "ModuleInfo.find_module": {
+      "signature": "int find_module( string sn );",
+      "markdown": ""
+    },
+    "ModuleInfo.get_description": {
+      "signature": "string get_description();",
+      "markdown": ""
+    },
+    "ModuleInfo.get_name": {
+      "signature": "string get_name();",
+      "markdown": ""
+    },
+    "ModuleInfo.init_module": {
+      "signature": "int init_module( string what );",
+      "markdown": ""
+    },
+    "ModuleInfo.instance": {
+      "signature": "RoxenModule instance( object conf, void|int silent );",
+      "markdown": ""
+    },
+    "ModuleInfo.last_checked": {
+      "signature": "int last_checked;",
+      "markdown": ""
+    },
+    "ModuleInfo.locked": {
+      "signature": "array(string) locked;",
+      "markdown": ""
+    },
+    "ModuleInfo.multiple_copies": {
+      "signature": "int multiple_copies;",
+      "markdown": ""
+    },
+    "ModuleInfo.save": {
+      "signature": "void save();",
+      "markdown": ""
+    },
+    "ModuleInfo.sname": {
+      "signature": "string sname;",
+      "markdown": ""
+    },
+    "ModuleInfo.type": {
+      "signature": "int type;",
+      "markdown": ""
+    },
+    "ModuleInfo.update_with": {
+      "signature": "void update_with( RoxenModule mod, string what );",
+      "markdown": ""
+    },
+    "MultiStatus.Prefixed": {
+      "signature": "class Prefixed (protected string href_prefix)",
+      "markdown": "MultiStatus with a fix prefix.\nThis object acts as a proxy for its parent."
+    },
+    "MultiStatus.add_namespace": {
+      "signature": "void add_namespace(string namespace);",
+      "markdown": ""
+    },
+    "MultiStatus.add_property": {
+      "signature": "void add_property(string href, string prop_name, void|int(0..0)|string|array(SimpleNode)|SimpleNode| MultiStatusStatus|mapping(string:mixed) prop_value);",
+      "markdown": "Add a property for a path.\n**Note:** Note that the segments of the path will be\n   encoded with Roxen.http_encode_url()."
+    },
+    "MultiStatus.add_status": {
+      "signature": "void add_status(string href, int status_code, void|string message, mixed... args);",
+      "markdown": "Add a status for a path.\n**Note:** Note that the segments of the path will be\n   encoded with Roxen.http_encode_url()."
+    },
+    "MultiStatus.get_response": {
+      "signature": "MultiStatusNode get_response(string href);",
+      "markdown": "Returns the response stored for href if there is any.\n**Returns:**"
+    },
+    "MultiStatus.get_responses_by_prefix": {
+      "signature": "mapping(string:MultiStatusNode) get_responses_by_prefix(string href_prefix);",
+      "markdown": "Returns the stored responses for all URI:s that got\n href_prefix as prefix. See get_response for details about\n the response value.\nPrefixes are only matched at `\"/\"` boundaries, so\n `\"http://x.se/foo\"` is considered a prefix of\n `\"http://x.se/foo/bar\"` but not\n `\"http://x.se/foobar\"`. As a special case, the empty\n string as href_prefix returns all stored responses."
+    },
+    "MultiStatus.get_xml_node": {
+      "signature": "SimpleNode get_xml_node();",
+      "markdown": ""
+    },
+    "MultiStatus.http_answer": {
+      "signature": "mapping(string:mixed) http_answer();",
+      "markdown": ""
+    },
+    "MultiStatus.num_responses": {
+      "signature": "int num_responses();",
+      "markdown": "Returns the number of responses that have been added to this\n object."
+    },
+    "MultiStatus.prefix": {
+      "signature": ".Prefixed prefix(string href_prefix);",
+      "markdown": ""
+    },
+    "MultiStatusPropStat._sprintf": {
+      "signature": "string _sprintf(int flag);",
+      "markdown": ""
+    },
+    "MultiStatusPropStat.build_response": {
+      "signature": "void build_response(SimpleElementNode response_node);",
+      "markdown": ""
+    },
+    "MultiStatusPropStat.is_prop_stat": {
+      "signature": "constant is_prop_stat = 1;",
+      "markdown": ""
+    },
+    "MultiStatusPropStat.properties": {
+      "signature": "mapping(string:string|SimpleNode|array(SimpleNode)|MultiStatusStatus) properties;",
+      "markdown": "The property settings. Indexed on property name (with complete\n XML namespace). Values are:\n  - `array(object(SimpleNode))` — The property value as a sequence of XML nodes. These nodes\n     are used as children to the property nodes in the DAV\n     protocol.\n  - `object(SimpleNode)` — Same as an array containing only this node.\n  - `string` — Same as a single Parser.XML.Tree.SimpleTextNode with this value.\n  - `int(0..0)` — The property exists but has no value.\n  - `object(MultiStatusStatus)` — There was an error querying the property and this is the\n     status it generated instead of a value."
+    },
+    "MultiStatusStatus.__hash": {
+      "signature": "int __hash();",
+      "markdown": ""
+    },
+    "MultiStatusStatus._sprintf": {
+      "signature": "string _sprintf(int flag);",
+      "markdown": ""
+    },
+    "MultiStatusStatus.build_response": {
+      "signature": "void build_response(SimpleElementNode response_node);",
+      "markdown": ""
+    },
+    "MultiStatusStatus.is_status": {
+      "signature": "constant is_status = 1;",
+      "markdown": ""
+    },
+    "PatchPropertyCommand.command": {
+      "signature": "constant command = \"\";",
+      "markdown": ""
+    },
+    "PatchPropertyCommand.execute": {
+      "signature": "mapping(string:mixed) execute(PropertySet context);",
+      "markdown": ""
+    },
+    "PatchPropertyCommand.property_name": {
+      "signature": "string property_name;",
+      "markdown": ""
+    },
+    "PrefLanguages.decoded": {
+      "signature": "int decoded;",
+      "markdown": ""
+    },
+    "PrefLanguages.delayed_vary_actions": {
+      "signature": "array(array(string|array)) delayed_vary_actions;",
+      "markdown": ""
+    },
+    "PrefLanguages.finalize_delayed_vary": {
+      "signature": "void finalize_delayed_vary(RequestID id);",
+      "markdown": ""
+    },
+    "PrefLanguages.get_known_language_forks": {
+      "signature": "multiset(string) get_known_language_forks();",
+      "markdown": ""
+    },
+    "PrefLanguages.get_language": {
+      "signature": "string get_language();",
+      "markdown": ""
+    },
+    "PrefLanguages.get_languages": {
+      "signature": "array(string) get_languages();",
+      "markdown": ""
+    },
+    "PrefLanguages.get_qualities": {
+      "signature": "array(float) get_qualities();",
+      "markdown": ""
+    },
+    "PrefLanguages.get_quality": {
+      "signature": "float get_quality();",
+      "markdown": ""
+    },
+    "PrefLanguages.known_langs": {
+      "signature": "multiset(string) known_langs;",
+      "markdown": ""
+    },
+    "PrefLanguages.languages": {
+      "signature": "array(string) languages;",
+      "markdown": ""
+    },
+    "PrefLanguages.qualities": {
+      "signature": "array(float) qualities;",
+      "markdown": ""
+    },
+    "PrefLanguages.register_known_language_forks": {
+      "signature": "void register_known_language_forks(multiset(string) langs, void|RequestID id);",
+      "markdown": ""
+    },
+    "PrefLanguages.set_sorted": {
+      "signature": "void set_sorted(array(string) lang, void|array(float) q);",
+      "markdown": ""
+    },
+    "PrefLanguages.sort_lang": {
+      "signature": "void sort_lang();",
+      "markdown": ""
+    },
+    "PrefLanguages.sorted": {
+      "signature": "int sorted;",
+      "markdown": ""
+    },
+    "PropertySet.commit": {
+      "signature": "void commit();",
+      "markdown": ""
+    },
+    "PropertySet.find_properties": {
+      "signature": "mapping(string:mixed) find_properties(string mode, MultiStatus.Prefixed result, multiset(string)|void filt);",
+      "markdown": ""
+    },
+    "PropertySet.get_response_headers": {
+      "signature": "mapping(string:string) get_response_headers();",
+      "markdown": "Returns the values of all headers with the given name in the\n set of headers that are to be sent in the response.\nIf value_prefix is given then it must match a prefix of the\n header value up to a token boundary for the value to be\n returned.\n**Returns:** Returns an array containing the matching values (zero or more).\n**Note:** This function only searches through headers in\n `misc->defines[\" _extra_heads\"]` and `misc->moreheads`,\n i.e. headers that have been set using add_response_header or\n set_response_header."
+    },
+    "PropertySet.get_stat": {
+      "signature": "Stat get_stat();",
+      "markdown": ""
+    },
+    "PropertySet.id": {
+      "signature": "RequestID id;",
+      "markdown": ""
+    },
+    "PropertySet.path": {
+      "signature": "string path;",
+      "markdown": "Canonical absolute path to the locked resource. Always ends with\n a `\"/\"`."
+    },
+    "PropertySet.query_all_properties": {
+      "signature": "multiset(string) query_all_properties();",
+      "markdown": ""
+    },
+    "PropertySet.query_property": {
+      "signature": "string|array(SimpleNode)|mapping(string:mixed) query_property(string prop_name);",
+      "markdown": ""
+    },
+    "PropertySet.remove_property": {
+      "signature": "mapping(string:mixed) remove_property(string prop_name);",
+      "markdown": ""
+    },
+    "PropertySet.set_dead_property": {
+      "signature": "mapping(string:mixed) set_dead_property(string prop_name, array(SimpleNode) value);",
+      "markdown": ""
+    },
+    "PropertySet.set_property": {
+      "signature": "mapping(string:mixed) set_property(string prop_name, string|array(SimpleNode) value);",
+      "markdown": ""
+    },
+    "PropertySet.start": {
+      "signature": "mapping(string:mixed) start();",
+      "markdown": "This function is called both when a module is loaded\n (variable_save is 0) and when its variables are saved after a\n change (variable_save is 2).\nnewly_added is 1 if the module is being added by the\n administrator through the admin interface (implies that\n variable_save is 0). It's zero if the module is loaded\n normally, i.e. as a result of an entry in the server\n configuration file.\nconf is the configuration that the module instance belongs\n to, i.e. the same as the return value from my_configuration.\n**Note:** A module can't assume that it has been loaded before in this\n server configuration just because newly_added is zero. The\n administrator might for instance have edited the configuration\n file directly."
+    },
+    "PropertySet.unroll": {
+      "signature": "void unroll();",
+      "markdown": ""
+    },
+    "Protocol.bound": {
+      "signature": "int bound;",
+      "markdown": ""
+    },
+    "Protocol.conf_data": {
+      "signature": "mapping(Configuration:mapping) conf_data;",
+      "markdown": ""
+    },
+    "Protocol.default_port": {
+      "signature": "constant default_port = 4711;",
+      "markdown": ""
+    },
+    "Protocol.find_configuration_for_url": {
+      "signature": "Configuration find_configuration_for_url( string url, RequestID id, int|void no_default );",
+      "markdown": ""
+    },
+    "Protocol.get_key": {
+      "signature": "string get_key();",
+      "markdown": ""
+    },
+    "Protocol.ip": {
+      "signature": "string ip;",
+      "markdown": ""
+    },
+    "Protocol.name": {
+      "signature": "constant name = \"unknown\";",
+      "markdown": "Name used for internal identification."
+    },
+    "Protocol.path": {
+      "signature": "string path;",
+      "markdown": "Canonical absolute path to the locked resource. Always ends with\n a `\"/\"`."
+    },
+    "Protocol.port": {
+      "signature": "int port;",
+      "markdown": ""
+    },
+    "Protocol.prot_name": {
+      "signature": "constant prot_name = \"unknown\";",
+      "markdown": "Name of the protocol as seen in the protocol part of a url."
+    },
+    "Protocol.ref": {
+      "signature": "void ref(string url, mapping data);",
+      "markdown": ""
+    },
+    "Protocol.refs": {
+      "signature": "int refs;",
+      "markdown": ""
+    },
+    "Protocol.requesthandler": {
+      "signature": "program requesthandler;",
+      "markdown": ""
+    },
+    "Protocol.requesthandlerfile": {
+      "signature": "constant requesthandlerfile = \"\";",
+      "markdown": ""
+    },
+    "Protocol.restore": {
+      "signature": "void restore();",
+      "markdown": ""
+    },
+    "Protocol.save": {
+      "signature": "void save();",
+      "markdown": ""
+    },
+    "Protocol.sorted_urls": {
+      "signature": "array(string) sorted_urls;",
+      "markdown": ""
+    },
+    "Protocol.supports_ipless": {
+      "signature": "constant supports_ipless = 0;",
+      "markdown": ""
+    },
+    "Protocol.unref": {
+      "signature": "void unref(string url);",
+      "markdown": ""
+    },
+    "Protocol.urls": {
+      "signature": "mapping(string:mapping) urls;",
+      "markdown": ""
+    },
     "RXML.Backtrace": {
       "signature": "",
       "markdown": "\nThe object used to throw RXML errors."
@@ -2452,6 +3404,402 @@
       "signature": "object(RXML.Type) type_for_value(mixed val)",
       "markdown": "```pike\nobject(RXML.Type) type_for_value(mixed val)\n```\n\nReturns the type that fits the given value, or zero if none is\n found.\nThe most basic type that fits the value is returned. In particular\n that means RXML.t_string is returned for strings, not\n RXML.t_any_text or some other text type."
     },
+    "RequestID.CookieJar": {
+      "signature": "class CookieJar",
+      "markdown": "Wrapper that calls register_vary_callback() as appropriate when\n cookies are accessed.\n**Note:** Uses the parent pointer to access register_vary_callback() and\n   will thus update the original RequestID object even if copied\n   to a cloned RequestID. This is a feature.\n**See also:** cookies, register_vary_callback(), Roxen.get_cookie_callback()"
+    },
+    "RequestID.__marker": {
+      "signature": "RoxenDebug.ObjectMarker __marker;",
+      "markdown": ""
+    },
+    "RequestID._sprintf": {
+      "signature": "string _sprintf(int flag);",
+      "markdown": ""
+    },
+    "RequestID.add_or_set_response_header": {
+      "signature": "void add_or_set_response_header(string name, string value);",
+      "markdown": "Calls either add_response_header or set_response_header as\n appropriate for the specific header: If a header is known to\n allow multiple values (from RFC 2616) then\n add_response_header is called to add another value to it,\n otherwise set_response_header is called to override the old\n value if there is any."
+    },
+    "RequestID.add_response_header": {
+      "signature": "void add_response_header(string name, string value);",
+      "markdown": "Adds a header name with the value value to be sent in the\n http response. An existing header with the same name will not be\n overridden, instead another (duplicate) header line with\n value will be sent in the response, after the old one(s).\n However, if a header with the same name and value already exists\n then another one isn't added.\n**Note:** If used from within an RXML parse session, this function will\n ensure that the new header is registered properly in the RXML\n p-code cache. That's the primary reason to used it instead of\n adding the header directly to\n `misc->defines[\"�_extra_heads\"]` and/or `misc->moreheads`.\n**Note:** Although case is insignificant in http header names, it is\n significant here. name should always follow the\n capitalization used in RFC 2616. Use\n Roxen.canonicalize_http_header if necessary.\n**See also:** set_response_header, add_or_set_response_header,\n get_response_headers, remove_response_headers"
+    },
+    "RequestID.add_threadbound_session_object": {
+      "signature": "void add_threadbound_session_object(object obj);",
+      "markdown": "This can be used to register some kind of session object (e.g. a\n mutex lock) which will have the same lifetime as this request in\n the current thread. I.e. obj will be destructed when a\n handler thread is done with this request, or when this object is\n destructed, whichever comes first.\nobj is destructed even if a handler thread is aborted due to\n an exception. It is not an error if obj already is destructed\n when the lifetime ends.\n**Note:** If you want to be able to retrieve obj later, put it into\n misc too."
+    },
+    "RequestID.adjust_for_config_path": {
+      "signature": "void adjust_for_config_path( string p );",
+      "markdown": ""
+    },
+    "RequestID.cache_status": {
+      "signature": "multiset(string) cache_status;",
+      "markdown": "Contains the caches that were hit when the request was served.\n See the docstring for `$cache-status` in the `LogFormat`\n global variable for known values, but note that the multiset\n never actually contains the value `\"nocache\"`; it's only written\n when the multiset is empty."
+    },
+    "RequestID.client": {
+      "signature": "array(string) client;",
+      "markdown": ""
+    },
+    "RequestID.client_scheme": {
+      "signature": "string client_scheme();",
+      "markdown": "The scheme used by the client. Typically http or https. If the client\n talks https with a proxy and the proxy talkes http with the server, this\n function returns the string \"https\".\n Returns 0 if client scheme cannot be found."
+    },
+    "RequestID.client_var": {
+      "signature": "mapping (string:mixed) client_var;",
+      "markdown": "The client scope; a mapping of various client-related variables, indices\n being the entity names and the values being their values respectively."
+    },
+    "RequestID.clientprot": {
+      "signature": "string clientprot;",
+      "markdown": "The protocol the client wanted to use in the request. This may\n not be the same as <ref>prot</ref>, if the client wanted to talk\n a higher protocol version than the server supports to date."
+    },
+    "RequestID.clone_me": {
+      "signature": "RequestID clone_me();",
+      "markdown": ""
+    },
+    "RequestID.config": {
+      "signature": "multiset(string) config;",
+      "markdown": "Much like prestates, the id->config multiset is typically used for\n boolean information of state supplied by the client. The config state,\n however, is hidden in a client-side cookie treated specially by roxen,\n namely the <tt>RoxenConfig</tt> cookie.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "RequestID.configuration": {
+      "signature": "Configuration configuration();",
+      "markdown": "Returns the <ref>Configuration</ref> object of the virtual server that\n is handling the request."
+    },
+    "RequestID.connection": {
+      "signature": ".File connection( );",
+      "markdown": "Returns the file descriptor used for the connection to the client."
+    },
+    "RequestID.connection_misc": {
+      "signature": "mapping connection_misc;",
+      "markdown": "This mapping contains miscellaneous non-standardized information, and\n is the typical location to store away your own connection-local data\n for passing between requests on the same connection et cetera. Be sure\n to use a key unique to your own application."
+    },
+    "RequestID.cookies": {
+      "signature": "CookieJar|mapping(string:string) cookies;",
+      "markdown": "The indices and values map to the names and values of the cookies sent\n by the client for the requested page. All data (names and values) are\n decoded from their possible transport encoding.\n**Note:** Used to be a plain mapping in Roxen 4.0 and earlier. It now\n   has a wrapper that registers dependencies on the various cookies.\n**Note:** The wrapper is removed, and the contents partially restored at\n   request send time."
+    },
+    "RequestID.data": {
+      "signature": "string data;",
+      "markdown": "The raw request body, containing non-decoded post variables et cetera.\n**Note:** In versions of Roxen prior to 5.0.505 this variable could sometimes\n   contain `0`, which should be regarded as equvivalent to\n   `\"\"`.\n**Note:** If the amount of request data is unknown (ie `misc->len`\n   is `0x7fffffff`), then additional data can be retrieved\n   from connection(). This is typically the case with eg STOR\n   (aka PUT) and the ftp protocol."
+    },
+    "RequestID.decode_query_charset": {
+      "signature": "string decode_query_charset(string path, mapping(string:array(string)) vars, string decode_charset);",
+      "markdown": "Decodes the charset encoding of a query.\npath is the path part of the query. It is returned after\n decoding. vars contains the query variables, and they are\n assigned to real_variables after decoding. Both path and\n vars are assumed to be transport decoded already.\nIf decode_charset is a string, it defines a charset to decode\n with after the transport encoding has been removed. The string\n can be on the combined form understood by\n Roxen.get_decoder_for_client_charset.\nIf decode_charset has the special value `\"magic\"` then\n the function will look for a variable tuple with\n `magic_roxen_automatic_charset_variable` and use\n heuristics on that to figure out the character set that\n query_string has been encoded with. See the RXML tag\n `<roxen-automatic-charset-variable>` and\n Roxen.get_client_charset.\nIf decode_charset has the special value\n `\"roxen-http-default\"` then the function will first try\n the `\"magic\"` method above, and if the special variable is\n not found it tries to UTF-8 decode. If there is a decode failure\n then it is ignored and no charset decoding is done (meaning that\n the original charset is effectively assumed to be ISO-8859-1).\n As the name suggests, this is the default method used on\n incoming requests by the http protocol module.\nThe variable input_charset is set to the charset successfully\n used if decode_charset was given. The charset decoding uses\n an all-or-nothing approach - if there is an error decoding any\n string then no string is decoded. If the function throws an\n error due to a decode failure then real_variables remain\n unchanged.\n**Note:** Using `\"utf-8\"` as decode_charset reverses the URI\n encoding produced by Roxen.http_encode_url for eight bit and\n wider chars. That is compliant with the IRI standard (RFC 3987)\n and HTML 4.01 (appendix B.2.1)."
+    },
+    "RequestID.destruct_threadbound_session_objects": {
+      "signature": "void destruct_threadbound_session_objects();",
+      "markdown": "Explicitly destructs all objects registered with\n add_threadbound_session_object. Should normally only be used\n internally."
+    },
+    "RequestID.do_not_disconnect": {
+      "signature": "int do_not_disconnect;",
+      "markdown": "Typically 0, meaning the channel to the client will be disconnected upon\n finishing the request and the RequestID object destroyed with it."
+    },
+    "RequestID.end": {
+      "signature": "void end(string|void s, int|void keepit);",
+      "markdown": ""
+    },
+    "RequestID.eval_status": {
+      "signature": "multiset(string) eval_status;",
+      "markdown": "Contains the content evaluators that were hit when the request\n was served. See the docstring for `$eval-status` in the\n `LogFormat` global variable for known values."
+    },
+    "RequestID.extra_extension": {
+      "signature": "string extra_extension;",
+      "markdown": ""
+    },
+    "RequestID.find_in_misc_forwarded": {
+      "signature": "variant string find_in_misc_forwarded(string key, bool|void case_insensitive);",
+      "markdown": "Convenence variant for\n `find_in_misc_forwarded((< key >), case_insensitive)[key]`."
+    },
+    "RequestID.get_if_data": {
+      "signature": "mapping(string:array(array(array(string)))) get_if_data();",
+      "markdown": "Parse an RFC 2518 9.4 \"If Header\".\n**Note:** For speed reasons the parsing is rather forgiving.\n**Returns:** Returns `0` (zero) if there was no if header, or\n   if parsing of the if header failed.\n   Returns a mapping from resource name to condition on success.\n\nA condition is represented as an array of sub-conditions\n   (`List` in RFC 2518), where each sub-condition is an array\n   of tokens, and each token is an array of two elements, where\n   the first is one of the strings `\"not\"`, `\"etag\"`,\n   or `\"key\"`, and the second is the value.\n\nThe resource `0` (zero) represents the default resource."
+    },
+    "RequestID.get_max_cache": {
+      "signature": "int get_max_cache();",
+      "markdown": "Returns the maximum cacheable time in seconds. See\n `misc->cacheable`."
+    },
+    "RequestID.get_multi_status": {
+      "signature": "MultiStatus get_multi_status();",
+      "markdown": "Returns a MultiStatus object that will be used to produce a\n 207 Multi-Status response (RFC 2518 10.2). It's only consulted\n if the result returned from RoxenModule.find_file et al is an\n empty mapping.\n**Note:** It's not necessarily safe to assume that there aren't any\n multi-status responses stored here already on entry to\n find_file et al. C.f. multi_status_size.\n**See also:** set_status_for_path"
+    },
+    "RequestID.get_output_charset": {
+      "signature": "string|function(string:string) get_output_charset();",
+      "markdown": ""
+    },
+    "RequestID.get_response_content_type": {
+      "signature": "string get_response_content_type(mapping file, void|int(1..1) destructive);",
+      "markdown": ""
+    },
+    "RequestID.get_response_headers": {
+      "signature": "array(string) get_response_headers(string name, void|string value_prefix);",
+      "markdown": "Returns the values of all headers with the given name in the\n set of headers that are to be sent in the response.\nIf value_prefix is given then it must match a prefix of the\n header value up to a token boundary for the value to be\n returned.\n**Returns:** Returns an array containing the matching values (zero or more).\n**Note:** This function only searches through headers in\n `misc->defines[\" _extra_heads\"]` and `misc->moreheads`,\n i.e. headers that have been set using add_response_header or\n set_response_header."
+    },
+    "RequestID.get_xml_data": {
+      "signature": "SimpleNode get_xml_data();",
+      "markdown": ""
+    },
+    "RequestID.handle_time": {
+      "signature": "int handle_time;",
+      "markdown": ""
+    },
+    "RequestID.handle_vtime": {
+      "signature": "int handle_vtime;",
+      "markdown": ""
+    },
+    "RequestID.host": {
+      "signature": "string host;",
+      "markdown": "The client's hostname, if resolved."
+    },
+    "RequestID.hrtime": {
+      "signature": "int hrtime;",
+      "markdown": "Time of the start of the request, as returned by gethrtime."
+    },
+    "RequestID.init_cookies": {
+      "signature": "void init_cookies(int|void no_cookie_jar);",
+      "markdown": "Call to initialize the cookies.\nTypically called from callbacks installed with\n register_vary_callback() to ensure cookies is initialized."
+    },
+    "RequestID.init_pref_languages": {
+      "signature": "void init_pref_languages();",
+      "markdown": "Call to initialize `misc->pref_languages`.\nTypically called from callbacks installed with\n register_vary_callback() to ensure\n `misc->pref_languages` is initialized."
+    },
+    "RequestID.input_charset": {
+      "signature": "string input_charset;",
+      "markdown": "The charset that was used to decode prestate, config,\n query, not_query, rest_query, and the variable bindings\n in real_variables.\nIt is zero if they were not successfully charset decoded. That\n is effectively the same as if the charset was ISO-8859-1.\n**See also:** decode_query_charset"
+    },
+    "RequestID.json_logger": {
+      "signature": "RequestJSONLogger json_logger;",
+      "markdown": ""
+    },
+    "RequestID.leftovers": {
+      "signature": "string leftovers;",
+      "markdown": "Raw data belonging to the next request.\n**Note:** In versions of Roxen prior to 5.0.505 this variable could sometimes\n   contain `0`, which should be regarded as equvivalent to\n   `\"\"`."
+    },
+    "RequestID.lower_max_cache": {
+      "signature": "int lower_max_cache(int seconds);",
+      "markdown": "Lowers the maximum cacheable time to seconds if it currently\n has a higher value. Returns the old value. See\n `misc->cacheable`."
+    },
+    "RequestID.make_response_headers": {
+      "signature": "mapping(string:string|array(string)) make_response_headers( mapping(string:mixed) file);",
+      "markdown": "Make the response headers from a response mapping for this\n request. The headers associated with transfer modifications of\n the response, e.g. 206 Partial Content and 304 Not Modified, are\n not calculated here.\n**Note:** Is destructive on file and on various data in the request;\n should only be called once for a RequestID instance."
+    },
+    "RequestID.method": {
+      "signature": "string method;",
+      "markdown": "The method used by the client in this request, e g \"GET\", \"POST\"."
+    },
+    "RequestID.misc": {
+      "signature": "mapping misc;",
+      "markdown": "This mapping contains miscellaneous non-standardized information, and\n is the typical location to store away your own request-local data for\n passing between modules et cetera. Be sure to use a key unique to your\n own application.\nIf a subrequest (a.k.a. \"fake\" request) is generated within\n another request then the subrequest receives a copy (created\n with copy_value) of this mapping. I.e. the subrequest sees\n any data put here by the parent request, but changes made in the\n subrequest won't affect the parent.\nThese are some of the defined entries:\n**Mapping:**\n  - \"cacheable\": int — Time in seconds that the request is cacheable. Use\n     get_max_cache(), lower_max_cache(),\n     raise_max_cache(), set_max_cache() or one of the cache\n     macros to access. This setting both controls the maximum\n     cache time in the protocol cache and the timestamp returned\n     in the `Expires` header (an `\"expires\"` entry in\n     the result mapping will override it, though).\n  - \"local_cacheable\": mapping(mixed : int) — If this mapping exists, each value in it will be modified by\n     set_max_cache, lower_max_cache and raise_max_cache\n     in the same way they modify `misc->cacheable`. It's\n     used to track cache time changes during specific parts of\n     the request.\n  - \"_cachecallbacks\": array(function) — Callbacks to verify that the cache entry is valid.\n  - \"cachekey\": object(CacheKey) — CacheKey for the request.\n  - \"client_connection\": multiset(string) — Parsed request header \"Connection\".\n  - \"content-type\": string — Alias for `request_header[\"content-type\"]`, the\n     content type of the request. (Note the dash instead of\n     underscore in the field name.)\n  - \"content_type_type\": string — The content type itself from the `Content-Type` header\n     of the request, i.e. without any parameters. It has been\n     lowercased and whitespace stripped, so it's on a canonical\n     form like e.g. `\"image/jpeg\"`.\n  - \"content_type_params\": string — The parameters from the `Content-Type` header of the\n     request, if any. Whitespace preceding the first parameter\n     have been removed, but otherwise it remains unchanged.\n  - \"cookies\": array — Empty array. Obsolete entry.\n  - \"connection\": string — Protocol connection mode. Typically `\"keep-alive\"` or\n     `\"close\"`.\n  - \"defaulted_conf\": int — If set, then the url-to-configuration resolution failed to\n     find a good configuration based on the interface, port, host\n     header, and port path prefix. The value is an integer\n     showing the \"badness\" of the fallback configuration chosen:\n  - \"defines\": mapping(string : mixed) — RXML macros.\n  - \"error_code\": int — Result error code unless specified elsewhere.\n  - \"etag\": string — Entity tag for the request. If the request is cacheable in\n     the protocol cache one will be generated if not already present.\n  - \"files\": array(string) — Multipart/form-data variables that have an associated filename.\n  - \"host\": string — The host header, exactly as read from the request. Since it\n     isn't normalized, it's useful in e.g. redirects so that the\n     client doesn't falsely conclude that the redirect has\n     switched server (c.f. url_base).\n  - \"hostname\": string — Normalized hostname from the host header. The normalization\n     means it's lowercased, and if it's an IPv6 address then it's\n     converted to the basic `x:x:x:x:x:x:x:x` form (using\n     Protocols.IPv6.normalize_addr_basic).\n  - \"last_modified\": int — Time stamp for when the request was last modified.\n  - \"len\": int — Length in bytes of the data section of the request.\n  - \"_log_cheat_addition\": int — Value to add to `file->len` to get the length\n     to report in the access log.\n  - \"moreheads\": mapping(string : string|array(string)) — If this exists, it contains headers to send in the response.\n     It overrides automatically calculated headers and headers\n     given in a response mapping (as returned by e.g.\n     RoxenModule.find_file). Although http headers are case\n     insensitive, the header names in this mapping are not. All\n     names should follow the capitalization forms used in RFC\n     2616 (c.f. Roxen.canonicalize_http_header). See\n     add_response_header() for more details.\n  - \"no_proto_cache\": int(1..1) — Flag indicating that the result should not be cached in\n     the protocol cache.\n  - \"orig\": object(RequestID) — Originating RequestID for recursive requests.\n  - \"port\": int — Port number from the canonicalized host header. Note that this may differ from the actual port number\n     (available in port_obj->port) if eg the server is\n     found behind a load balancing proxy. cf [bug 7385].\n  - forwarded: array(array(string|int)) — Parsed `\"Forwarded\"` header (RFC 7239).\n     If the client sent no forwarded headers, any `\"x-forwarded-*\"`\n     headers that it sent are used instead. Each entry is on the format returned by MIME.tokenize(), and\n     corresponds to one **Forwarded** field.\n  - \"pref_languages\": object(PrefLanguages) — Language preferences for the request.\n  - \"post_variables\": mapping(string : array(string)) — For POST requests, these are the variables parsed from the\n     request body. It is undefined otherwise.\n  - \"post_parts\": mapping(string : array(object(MIME.Message))) — For multipart/form-data POST requests, this holds the MIME\n     message object for each part. It is undefined otherwise.\n  - \"proxyauth\": array — Decoded proxy authentication information.\n  - \"range\": string — Byte range information.\n  - \"site_prefix_path\": string — Site path prefix.\n  - \"stat\": object(Stat) — File status information for the request.\n  - \"vary\": multiset(string) — Contains the active set of vary headers. Please use\n     register_vary_callback() to alter. All header names here\n     should be lowercase to avoid problems with duplicates.\n  - \"vary_cb_order\": array(string|function(string, object(RequestID) : string)) — Contains the cache lookup callback functions relevant to the\n     request so far in order. See register_vary_callback() for\n     details.\n  - \"vary_cb_set\": mapping(string : multiset(function(string, object(RequestID) : string))|int(1..1)) — Same content as `\"vary_cb_order\"` above, but only used to\n     speed up some lookups. For internal use only."
+    },
+    "RequestID.multi_status_size": {
+      "signature": "int multi_status_size();",
+      "markdown": "Returns the number responses that have been added to the\n MultiStatus object returned by get_multi_status. Useful to\n see whether a (part of a) recursive operation added any errors\n or other results."
+    },
+    "RequestID.my_fd": {
+      "signature": ".File my_fd;",
+      "markdown": ""
+    },
+    "RequestID.not_query": {
+      "signature": "string not_query;",
+      "markdown": "The path to the requested resource that is below the virtual\n server's mountpoint. I.e. for a typical server registering a URL\n with no ending path component, not_query will contain the\n full path.\nnot_query usually begins with `\"/\"` but that is not\n guaranteed since it's taken from the request line. It has\n however been simplified so it is guaranteed to not contain any\n `\".\"` or `\"..\"` segments.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "RequestID.output_charset": {
+      "signature": "array(string) output_charset;",
+      "markdown": ""
+    },
+    "RequestID.output_encode": {
+      "signature": "array(string) output_encode(string what, int|void allow_entities, string|void force_charset);",
+      "markdown": ""
+    },
+    "RequestID.port_obj": {
+      "signature": "Protocol port_obj;",
+      "markdown": "The port object this request came from."
+    },
+    "RequestID.pragma": {
+      "signature": "multiset(string) pragma;",
+      "markdown": "All pragmas (lower-cased for canonization) sent with the request. For\n real-world applications typically only <pi>pragma[\"no-cache\"]</pi> is of\n any particular interest, this being sent when the user does a forced\n reload of the page."
+    },
+    "RequestID.prestate": {
+      "signature": "multiset(string) prestate;",
+      "markdown": "A multiset of all prestates harvested from the URL. Prestates are boolean\n flags, who are introduced in an extra leading path segment of the URL\n path put within parentheses, as in <a\n href=\"http://docs.roxen.com/(tables)/\">docs://www.roxen.com/(tables)/</a>,\n this rendering a prestate multiset <pi>(&lt; \"tables\" &gt;)</pi>.\nPrestates are mostly useful for debugging purposes, since prestates\n generally lead to multiple URLs for identical documents resulting in\n poor usage of browser/proxy caches and the like. See <ref>config</ref>.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "RequestID.propagate_vary_callbacks": {
+      "signature": "void propagate_vary_callbacks(RequestID id);",
+      "markdown": "Propagate vary callbacks from another RequestID object.\nThis function is typically used when a subrequest has\n been performed to propagate vary callbacks from the\n subrequest to the present request.\n**See also:** register_vary_callback()"
+    },
+    "RequestID.prot": {
+      "signature": "string prot;",
+      "markdown": "The protocol used for the request, e g \"FTP\", \"HTTP/1.0\", \"HTTP/1.1\".\n (Se also <ref>clientprot</ref>.)"
+    },
+    "RequestID.query": {
+      "signature": "string query;",
+      "markdown": "The query part (i.e. all characters after the first question\n mark) of the requested URL.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "RequestID.query_cipher_suite": {
+      "signature": "string query_cipher_suite();",
+      "markdown": "Get a string describing the TLS cipher suite used for the request.\n**Returns:** Returns either\n**Note:** This is the value logged by the log-format `$cipher-suite`.\n**See also:** query_link_layer()"
+    },
+    "RequestID.query_link_layer": {
+      "signature": "string query_link_layer();",
+      "markdown": "Get a string describing the link layer protocol for the request.\n**Returns:** Currently returns one of\n**Note:** This is the value logged by the log-format `$link-layer`.\n**Note:** More versions of TLS may become supported, in which case they\n   will get corresponding results from this function.\n**See also:** query_cipher_suite()"
+    },
+    "RequestID.queue_length": {
+      "signature": "int queue_length;",
+      "markdown": ""
+    },
+    "RequestID.queue_time": {
+      "signature": "int queue_time;",
+      "markdown": ""
+    },
+    "RequestID.raise_max_cache": {
+      "signature": "int raise_max_cache(int seconds);",
+      "markdown": "Raises the maximum cacheable time to seconds if it currently\n has a lower value. Returns the old value. See\n `misc->cacheable`."
+    },
+    "RequestID.raw": {
+      "signature": "string raw;",
+      "markdown": "The raw, untouched request in its entirety.\n**See also:** raw_url"
+    },
+    "RequestID.raw_url": {
+      "signature": "string raw_url;",
+      "markdown": "The nonparsed, nontouched, non-* URL requested by the client.\n Hence, this path is unlike not_query and virtfile not\n relative to the server URL and must be used in conjunction with\n the former to generate absolute paths within the server. Be\n aware that this string will contain any URL variables present in\n the request as well as the file path, and it is not decoded from\n the transport encoding."
+    },
+    "RequestID.rawauth": {
+      "signature": "string rawauth;",
+      "markdown": ""
+    },
+    "RequestID.ready_to_receive": {
+      "signature": "void ready_to_receive();",
+      "markdown": ""
+    },
+    "RequestID.real_cookies": {
+      "signature": "mapping(string:string) real_cookies;",
+      "markdown": "Contains the current set of cookies.\n**Note:** DON'T touch!\n**See also:** cookies"
+    },
+    "RequestID.real_variables": {
+      "signature": "mapping (string:array) real_variables;",
+      "markdown": "Form variables submitted by the client browser, as found in the\n `form` scope in RXML.\nBoth query (as found in the query part of the URL) and POST\n (submitted in the request body from a form response) variables\n share this scope. If the same variable occurs in both then the\n value(s) from the query part are appended to those from the POST\n response.\nThe indices are the variable names. The values contain the\n variable value(s) for each variable. The variable values are\n stored in arrays to make it possible to hold more than one value\n for a variable. These arrays are never empty.\nAll data (names and values) have been decoded from the transport\n encoding (i.e. `%XX` style escapes and the charset\n according to input_charset have been decoded). See\n decode_query_charset for details.\n**Note:** This mapping is often changed internally to produce an updated\n set of variables that is passed back to the client.\n**See also:** rest_query, `misc->post_variables`"
+    },
+    "RequestID.realauth": {
+      "signature": "string realauth;",
+      "markdown": ""
+    },
+    "RequestID.realfile": {
+      "signature": "string realfile;",
+      "markdown": "When the the requested resource is an actual file in the real\n filesystem, this is its path."
+    },
+    "RequestID.referer": {
+      "signature": "array(string) referer;",
+      "markdown": ""
+    },
+    "RequestID.register_vary_callback": {
+      "signature": "void register_vary_callback(string|void vary, function(string, RequestID: string|int)|void cb);",
+      "markdown": "Register that the result was dependant on the request header\n specified by vary, and/or a callback cb that generates\n a key that can be used as a decision variable.\nThe headers registred in vary during the requests parsing\n will be used to generate the vary header (RFC 2068 14.43) for\n the result.\n- `vary` — Either a (lower-case) string that specifies the name of\n   a request header, or `0` (zero) which specifies that\n   it doesn't depend on a header, but something else (eg\n   the IP-number of the client (and thus will generate a\n   `\"*\"` vary header.\n- `cb` — This function will be called at request time with the\n   path of the request, and the RequestID. It should\n   return a key fragment (either a string or an integer). If\n   cb is not specified, it will default to a function that\n   returns the value of the request header specified by vary.\n**Note:** The order of calls to register_vary_callback() is significant\n   since it will be used to create a decision tree.\n\nNote also that the function cb should be fast, and avoid\n   excessive lengths in the returned key, to keep down on\n   perfomance issues.\n\nCaveat! The callback function gets called very early in\n   the request processing, so not all fields in the RequestID\n   object may be valid yet.\n**See also:** NOCACHE(), propagate_vary_callbacks()"
+    },
+    "RequestID.remoteaddr": {
+      "signature": "string remoteaddr;",
+      "markdown": "The client's IP address."
+    },
+    "RequestID.remove_response_headers": {
+      "signature": "int remove_response_headers(string name, void|string value_prefix);",
+      "markdown": "Removes a header with the given name from the set of headers\n that are to be sent in the response.\nIf value_prefix is given then it must match a prefix of the\n header value up to a token boundary for the header to be\n removed, otherwise all headers with the given name are removed.\n**Returns:** Returns nonzero if at least one header was removed.\n**Note:** This function only removes headers in\n `misc->defines[\" _extra_heads\"]` and/or `misc->moreheads`,\n i.e. headers that have been set using add_response_header or\n set_response_header. It's possible that a matching header\n gets sent anyway if it gets added later or through other means\n (e.g. through `\"extra_heads\"` in a response mapping)."
+    },
+    "RequestID.remove_threadbound_session_object": {
+      "signature": "int remove_threadbound_session_object(object obj);",
+      "markdown": "Removes an object which has earlier been passed to\n add_threadbound_session_object.\n**Returns:** 1 if obj was among the threadbound session objects, zero\n otherwise."
+    },
+    "RequestID.replace_charset_placeholder": {
+      "signature": "array replace_charset_placeholder(string charset, string what, int allow_entities);",
+      "markdown": ""
+    },
+    "RequestID.request_headers": {
+      "signature": "mapping (string:array(string)|string) request_headers;",
+      "markdown": "Indices and values map to the names and values of all HTTP\n headers sent with the request, with lowercased header names.\n Here is where you look for the \"user-agent\" header, the\n \"referer\" [sic!] header and similar interesting data provided by\n the client."
+    },
+    "RequestID.rest_query": {
+      "signature": "string rest_query;",
+      "markdown": "The scraps and leftovers of the requested URL's query part after\n removing all variables (that is, all key=value pairs) from it.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset). The\n pieces have then been concatenated together again in the same\n order, separated by `\"&\"`."
+    },
+    "RequestID.root_id": {
+      "signature": "object root_id;",
+      "markdown": "The root id object directly associated with the request - remains\n   the same for all id objects generated by <insert href> tags and\n   similar conditions that invoke clone_me(). Points to itself\n   in the root id object."
+    },
+    "RequestID.scan_for_query": {
+      "signature": "string scan_for_query( string f );",
+      "markdown": ""
+    },
+    "RequestID.send": {
+      "signature": "void send(string|object what, int|void len);",
+      "markdown": ""
+    },
+    "RequestID.send_result": {
+      "signature": "void send_result(mapping|void result);",
+      "markdown": ""
+    },
+    "RequestID.set_max_cache": {
+      "signature": "int set_max_cache( int seconds );",
+      "markdown": "Sets the maximum cacheable time to seconds. Returns the old\n value. See `misc->cacheable`."
+    },
+    "RequestID.set_output_charset": {
+      "signature": "void set_output_charset( string|function to, int|void mode );",
+      "markdown": ""
+    },
+    "RequestID.set_response_header": {
+      "signature": "void set_response_header(string name, string value);",
+      "markdown": "Sets the header name to the value value to be sent in the\n http response. If an existing header with the same name exists,\n its value(s) will be overridden. This is useful for headers like\n `\"Expire-Time\"`, otherwise add_response_header is\n typically a better choice.\n**Note:** If used from within an RXML parse session, this function will\n ensure that the new header is registered properly in the RXML\n p-code cache. That's the primary reason to used it instead of\n adding the header directly to\n `misc->defines[\"�_extra_heads\"]` or `misc->moreheads`.\n**Note:** Although case is insignificant in http header names, it is\n significant here. name should always follow the\n capitalization used in RFC 2616. Use\n Roxen.canonicalize_http_header if necessary.\n**See also:** add_or_set_response_header, get_response_headers,\n remove_response_headers"
+    },
+    "RequestID.set_status_for_path": {
+      "signature": "void set_status_for_path(string path, int status_code, string|void message, mixed... args);",
+      "markdown": "Register a status to be included in the response that applies\n only for the given path. This is used for recursive operations\n that can yield different results for different encountered files\n or directories.\nThe status is stored in the MultiStatus object returned by\n get_multi_status.\n- `path` — Absolute path in the configuration to which the status\n   applies. Note that filesystem modules need to prepend their\n   location to their internal paths.\n- `status_code` — The HTTP status code.\n- `message` — If given, it's a message to include in the response. The\n   message may contain line feeds ('\\n') and ISO-8859-1\n   characters in the ranges 32..126 and 128..255. Line feeds are\n   converted to spaces if the response format doesn't allow them.\n- `args` — If there are more arguments after message then message\n   is taken as an sprintf style format string which is used to\n   format args.\n**See also:** Roxen.http_status"
+    },
+    "RequestID.set_status_for_url": {
+      "signature": "void set_status_for_url(string url, int status_code, string|void message, mixed... args);",
+      "markdown": "Register a status to be included in the response that applies\n only for the given URL. Similar to set_status_for_path, but\n takes a complete URL instead of an absolute path within the\n configuration."
+    },
+    "RequestID.since": {
+      "signature": "string since;",
+      "markdown": ""
+    },
+    "RequestID.split_query_vars": {
+      "signature": "void split_query_vars(string query_vars, mapping(string:array(string)) vars);",
+      "markdown": ""
+    },
+    "RequestID.supports": {
+      "signature": "multiset(string) supports;",
+      "markdown": "All flags set by the supports system."
+    },
+    "RequestID.throttle": {
+      "signature": "mapping (string:mixed) throttle;",
+      "markdown": ""
+    },
+    "RequestID.time": {
+      "signature": "int time;",
+      "markdown": "Time of the request, standard unix time (seconds since the epoch; 1970)."
+    },
+    "RequestID.unregister_vary_callback": {
+      "signature": "void unregister_vary_callback(string vary, void|function(string,RequestID:string|int) cb);",
+      "markdown": "Unregisters a dependency on a request header or a specific vary\n callback. vary and cb should be the same arguments that\n were previously passed to register_vary_callback. If cb is\n zero then all callbacks registered for the vary header are\n unregistered.\n**Note:** Try to avoid this function. It's ugly practice.\n**See also:** register_vary_callback()"
+    },
+    "RequestID.url_base": {
+      "signature": "string url_base();",
+      "markdown": "Returns the base part of the URL, i.e. what should be added in\n front of a path in the virtual filesystem to get the absolute\n URL to the page. The returned string ends with a \"/\", or is \"\"\n if no server base could be found.\nThis function gets the correct host for protocols that handles\n IP-less hosts."
+    },
+    "RequestID.variables": {
+      "signature": "mapping(string:mixed)|FakedVariables variables;",
+      "markdown": "The variables mapping is more or less identical to the\n real_variables maping, but each variable can only have one\n value, if the form variable was sent multiple times from the\n client (this happens, as an example, if you have checkbox\n variables with the same name but different values), the values\n will be separated with \\0 (the null character) in this mapping."
+    },
+    "RequestID.virtfile": {
+      "signature": "string virtfile;",
+      "markdown": "The mountpoint of the location module that provided the requested file.\n Note that this is not accessable from location modules; you need to keep\n track of your mountpoint on your own using <ref>defvar()</ref> and\n <ref>query()</ref>. This mountpoint is relative to the server URL."
+    },
+    "RequestJSONLogger.create": {
+      "signature": "void create(void|string logger_name, void|mapping|function defaults, void|object parent_logger, void|string request_uuid);",
+      "markdown": "Default parameter mapping and a parent logger object.\nThe parent_logger object is used to pass any log messages\n injected into this logger up the chain. By default, this logger\n does not log at it's own level if a parent logger is given. Instead,\n it will simply add its defaults and pass the complete log entry up\n to the parent which is then responsible for handling the actual logging."
+    },
+    "RequestJSONLogger.merge_defaults": {
+      "signature": "mapping merge_defaults(mapping msg);",
+      "markdown": ""
+    },
+    "RequestJSONLogger.request_uuid": {
+      "signature": "string request_uuid;",
+      "markdown": ""
+    },
     "Roxen.False": {
       "signature": "inherit False",
       "markdown": "```pike\ninherit False\n```"
@@ -3355,6 +4703,342 @@
     "RoxenModule.write_access": {
       "signature": "mapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)\n```\n\nUsed by some default implementations to check if we may perform a\n write access to path. It should at least call\n check_if_header to check DAV locks. It takes the same arguments\n and has the same return value as that function.\nWARNING: This function has some design issues and will very likely\n get a different interface. Compatibility is NOT guaranteed.\nA filesystem module should typically put all needed write access\n checks here and then use this from find_file(),\n delete_file() etc."
+    },
+    "StringFile._sprintf": {
+      "signature": "string _sprintf();",
+      "markdown": ""
+    },
+    "StringFile.offset": {
+      "signature": "int offset;",
+      "markdown": ""
+    },
+    "StringFile.read": {
+      "signature": "string read(int nbytes);",
+      "markdown": ""
+    },
+    "StringFile.seek": {
+      "signature": "void seek(int to);",
+      "markdown": ""
+    },
+    "StringFile.set_blocking": {
+      "signature": "void set_blocking();",
+      "markdown": ""
+    },
+    "StringFile.stat": {
+      "signature": "array stat();",
+      "markdown": ""
+    },
+    "StringFile.write": {
+      "signature": "void write(mixed ... args);",
+      "markdown": ""
+    },
+    "TristateCacheKey.invalidate": {
+      "signature": "void invalidate();",
+      "markdown": "Mark this cache key as invalid/stale.\n**Note:** If this function does not exist, invalidation is done\n   by destructing the cache key.\n**See also:** roxen.invalidate(), invalidp()"
+    },
+    "TristateCacheKey.invalidp": {
+      "signature": "int invalidp();",
+      "markdown": "Return nonzero if this cache key has been invalidated.\nDon't call directly - use roxen.invalidp instead. That one\n deals properly with destruct races.\n**Note:** If this function does not exist, the key is assumed\n   to be valid for as long as it hasn't been destructed.\n**See also:** roxen.invalidp(), invalidate()"
+    },
+    "User.compat_userinfo": {
+      "signature": "array compat_userinfo( );",
+      "markdown": "Return a unix passwd compatible array with user information. The\n defualt implementation uses the other methods to assemble this\n information.\nBasically:\n  return ({ name(), crypted_password(),\n            uid(), gid(), gecos(), homedir(),\n\t         shell() });"
+    },
+    "User.crypted_password": {
+      "signature": "string crypted_password();",
+      "markdown": "Used by compat_userinfo(). The default implementation returns \"x\""
+    },
+    "User.delete_var": {
+      "signature": "void delete_var( RoxenModule module, string index );",
+      "markdown": "Delete a variable previously created with set_var"
+    },
+    "User.gecos": {
+      "signature": "string gecos();",
+      "markdown": "The gecos field, defaults to return the real name"
+    },
+    "User.get_var": {
+      "signature": "mixed get_var( RoxenModule module, string index );",
+      "markdown": "Return the value of a variable previously set with set_var"
+    },
+    "User.gid": {
+      "signature": "int gid();",
+      "markdown": "A numerical GID, or -1 if not applicable"
+    },
+    "User.groups": {
+      "signature": "array(string) groups();",
+      "markdown": "Return all groups this user is a member in. The default\n implementation returns ({})"
+    },
+    "User.homedir": {
+      "signature": "string homedir();",
+      "markdown": "Used by compat_userinfo(). The default implementation returns \"x\""
+    },
+    "User.name": {
+      "signature": "string name();",
+      "markdown": "Name used for internal identification."
+    },
+    "User.password_authenticate": {
+      "signature": "int password_authenticate(string password);",
+      "markdown": "Return 1 if the password is correct, 0 otherwise. The default\n implementation uses the crypted_password() method."
+    },
+    "User.real_name": {
+      "signature": "string real_name();",
+      "markdown": "The real name of the user"
+    },
+    "User.set_crypted_password": {
+      "signature": "int set_crypted_password(string passwd);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_gecos": {
+      "signature": "int set_gecos(string gecos);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_gid": {
+      "signature": "int set_gid(int gid);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_homedir": {
+      "signature": "int set_homedir(string hodir);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_name": {
+      "signature": "int set_name(string name);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_password": {
+      "signature": "int set_password(string passwd);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_real_name": {
+      "signature": "int set_real_name(string rname);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_shell": {
+      "signature": "int set_shell(string shell);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_uid": {
+      "signature": "int set_uid(int uid);",
+      "markdown": "Returns 1 if it was possible to set the variable."
+    },
+    "User.set_var": {
+      "signature": "mixed set_var( RoxenModule module, string index, mixed value );",
+      "markdown": "Set a specified variable in the user. If value is a string,\n it's stored as is in the database, otherwise it's encoded using\n encode_value before it's stored. Returns the value.\nYou can use 0 for the module argument.\nThe default implementation stores the value in a mysql table\n '*_user_data' in the 'shared' database.\nUse get_var to retrieve the value, and delete_var to\n delete it."
+    },
+    "User.shell": {
+      "signature": "string shell();",
+      "markdown": "The shell, or 0 if not applicable"
+    },
+    "User.uid": {
+      "signature": "int uid();",
+      "markdown": "A numerical UID, or -1 if not applicable"
+    },
+    "UserDB.create_group": {
+      "signature": "Group create_group( string s );",
+      "markdown": "Not necessarily implemented, as an example, it's not possible to\n create groups in the system user database from Roxen WebServer.\n The default implementation returns 0."
+    },
+    "UserDB.create_user": {
+      "signature": "User create_user( string s );",
+      "markdown": "Not necessarily implemented, as an example, it's not possible to\n create users in the system user database from Roxen WebServer.\n The default implementation returns 0."
+    },
+    "UserDB.find_group": {
+      "signature": "Group find_group( string group, RequestID|void id );",
+      "markdown": "Find a group object given a group name.\n The default implementation returns 0."
+    },
+    "UserDB.find_group_from_gid": {
+      "signature": "Group find_group_from_gid( int gid, RequestID|void id );",
+      "markdown": "Find a group given a GID. The default implementation loops over\n list_groups() and checks the gid() of each one."
+    },
+    "UserDB.find_user": {
+      "signature": "User find_user( string s, RequestID|void id );",
+      "markdown": "Find a user"
+    },
+    "UserDB.find_user_from_uid": {
+      "signature": "User find_user_from_uid( int uid, RequestID|void id );",
+      "markdown": "Find a user given a UID. The default implementation loops over\n list_users() and checks the uid() of each one."
+    },
+    "UserDB.list_groups": {
+      "signature": "array(string) list_groups( RequestID|void id );",
+      "markdown": "Return a list of all groups handled by this database module.\n The default implementation returns the empty array."
+    },
+    "UserDB.list_users": {
+      "signature": "array(string) list_users( RequestID|void id );",
+      "markdown": "Return a list of all users handled by this database module."
+    },
+    "UserDB.module_type": {
+      "signature": "constant module_type = MODULE_USERDB;",
+      "markdown": ""
+    },
+    "UserDB.name": {
+      "signature": "constant name = \"db name\";",
+      "markdown": "Name used for internal identification."
+    },
+    "UserDB.thread_safe": {
+      "signature": "constant thread_safe=1;",
+      "markdown": ""
+    },
+    "Variable.add_changed_callback": {
+      "signature": "void add_changed_callback( function(Variable:void) cb );",
+      "markdown": ""
+    },
+    "Variable.check_visibility": {
+      "signature": "int check_visibility( RequestID id, int more_mode, int expert_mode, int devel_mode, int initial, int|void variable_in_cfif );",
+      "markdown": ""
+    },
+    "Variable.default_value": {
+      "signature": "mixed default_value();",
+      "markdown": ""
+    },
+    "Variable.doc": {
+      "signature": "string doc( );",
+      "markdown": ""
+    },
+    "Variable.get_changed_callback": {
+      "signature": "function(Variable:void) get_changed_callback( );",
+      "markdown": ""
+    },
+    "Variable.get_flags": {
+      "signature": "int get_flags();",
+      "markdown": ""
+    },
+    "Variable.get_form_vars": {
+      "signature": "mapping(string:string) get_form_vars( RequestID id );",
+      "markdown": ""
+    },
+    "Variable.get_invisibility_check_callback": {
+      "signature": "function(RequestID,Variable:int) get_invisibility_check_callback();",
+      "markdown": ""
+    },
+    "Variable.get_warnings": {
+      "signature": "string get_warnings();",
+      "markdown": ""
+    },
+    "Variable.is_defaulted": {
+      "signature": "int is_defaulted();",
+      "markdown": ""
+    },
+    "Variable.is_variable": {
+      "signature": "constant is_variable = 1;",
+      "markdown": ""
+    },
+    "Variable.low_set": {
+      "signature": "int low_set( mixed to );",
+      "markdown": ""
+    },
+    "Variable.name": {
+      "signature": "string name( );",
+      "markdown": "Name used for internal identification."
+    },
+    "Variable.path": {
+      "signature": "string path();",
+      "markdown": "Canonical absolute path to the locked resource. Always ends with\n a `\"/\"`."
+    },
+    "Variable.query": {
+      "signature": "mixed query();",
+      "markdown": "The query part (i.e. all characters after the first question\n mark) of the requested URL.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "Variable.render_form": {
+      "signature": "string render_form( RequestID id, void|mapping additional_args );",
+      "markdown": ""
+    },
+    "Variable.render_view": {
+      "signature": "string render_view( RequestID id );",
+      "markdown": ""
+    },
+    "Variable.set": {
+      "signature": "int set( mixed to );",
+      "markdown": ""
+    },
+    "Variable.set_changed_callback": {
+      "signature": "void set_changed_callback( function(Variable:void) cb );",
+      "markdown": ""
+    },
+    "Variable.set_flags": {
+      "signature": "void set_flags( int flags );",
+      "markdown": ""
+    },
+    "Variable.set_from_form": {
+      "signature": "void set_from_form( RequestID id );",
+      "markdown": ""
+    },
+    "Variable.set_invisibility_check_callback": {
+      "signature": "void set_invisibility_check_callback( function(RequestID,Variable:int) cb );",
+      "markdown": ""
+    },
+    "Variable.set_path": {
+      "signature": "void set_path( string to );",
+      "markdown": ""
+    },
+    "Variable.set_warning": {
+      "signature": "void set_warning( string to );",
+      "markdown": ""
+    },
+    "Variable.transform_from_form": {
+      "signature": "mixed transform_from_form( string what );",
+      "markdown": ""
+    },
+    "Variable.type": {
+      "signature": "constant type = \"Basic\";",
+      "markdown": ""
+    },
+    "Variable.type_hint": {
+      "signature": "string type_hint( );",
+      "markdown": ""
+    },
+    "Variable.verify_set": {
+      "signature": "array(string|mixed) verify_set( mixed new_value );",
+      "markdown": ""
+    },
+    "_roxen.configurations": {
+      "signature": "array(Configuration) configurations;",
+      "markdown": ""
+    },
+    "_roxen.dump": {
+      "signature": "void dump(string a);",
+      "markdown": ""
+    },
+    "_roxen.locale": {
+      "signature": "object locale;",
+      "markdown": ""
+    },
+    "_roxen.main": {
+      "signature": "int main(int a, array(string) b);",
+      "markdown": ""
+    },
+    "_roxen.nwrite": {
+      "signature": "void nwrite(string a, int|void b, int|void c, void|mixed ... d);",
+      "markdown": ""
+    },
+    "_roxen.query": {
+      "signature": "mixed query(string a);",
+      "markdown": "The query part (i.e. all characters after the first question\n mark) of the requested URL.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
+    },
+    "_roxen.real_version": {
+      "signature": "constant real_version = \"\";",
+      "markdown": ""
+    },
+    "_roxen.remove": {
+      "signature": "void remove(string a, object b);",
+      "markdown": ""
+    },
+    "_roxen.retrieve": {
+      "signature": "mapping(string:mixed) retrieve(string a, object b);",
+      "markdown": ""
+    },
+    "_roxen.start_time": {
+      "signature": "int start_time;",
+      "markdown": ""
+    },
+    "_roxen.store": {
+      "signature": "void store(string a, mapping b, int c, object d);",
+      "markdown": ""
+    },
+    "_roxen.variables": {
+      "signature": "mapping(string:object) variables;",
+      "markdown": "The variables mapping is more or less identical to the\n real_variables maping, but each variable can only have one\n value, if the form variable was sent multiple times from the\n client (this happens, as an example, if you have checkbox\n variables with the same name but different values), the values\n will be separated with \\0 (the null character) in this mapping."
+    },
+    "_roxen.version": {
+      "signature": "string version();",
+      "markdown": ""
     },
     "cache.CM_GDS_1": {
       "signature": "class CM_GDS_1",
