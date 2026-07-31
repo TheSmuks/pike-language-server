@@ -85,13 +85,39 @@ describe("the shipped index", () => {
     expect(entry!.markdown).toContain("Not part of the module prototype");
   });
 
-  test("carries the globals roxenloader injects into predef", () => {
+  test("carries the globals Roxen's startup injects into predef", () => {
     for (const global of ["report_fatal", "report_error", "report_warning",
       "report_notice", "report_debug", "roxen_path", "RequestID"]) {
       const entry = lookupRoxenSymbol(index, `predef.${global}`);
       expect(entry, global).not.toBeNull();
-      expect(entry!.markdown, global).toContain("roxenloader");
+      expect(entry!.markdown, global).toContain("Injected into Pike's namespace");
     }
+  });
+
+  test("carries the globals injected from outside roxenloader and roxen.pike", () => {
+    // Four more files inject at startup, each reached from a call that was
+    // traced before the file was harvested: `cache.pike` and `fonts.pike` are
+    // instantiated (roxenloader:833, roxen.pike:6671), `init_configuserdb()`
+    // is called from roxen.pike:6686, and `etc/roxen_master.pike` becomes the
+    // master at roxenloader:3972, its `create()` calling `init_security()`.
+    // Indexing only the first two left `predef::cache` — which `VFS.pmod:119`
+    // writes — absent while its forwarded `cache_lookup` was present.
+    for (const global of [
+      "cache",                                    // cache.pike
+      "Font", "FontHandler", "get_font", "available_fonts",  // fonts.pike
+      "AdminUser",                                // config_userdb.pike
+      "chroot", "add_dump_constant", "Master",    // etc/roxen_master.pike
+    ]) {
+      const entry = lookupRoxenSymbol(index, `predef.${global}`);
+      expect(entry, global).not.toBeNull();
+    }
+  });
+
+  test("a signature comes from the declaration, not from the add_constant call", () => {
+    // `constant get_font = get_font;` would be useless. The harvest looks the
+    // name up in the file's own declarations first.
+    const entry = lookupRoxenSymbol(index, "predef.get_font");
+    expect(entry!.signature).toContain("Font get_font(string f");
   });
 
   test("carries the members of the globals that are whole source files", () => {

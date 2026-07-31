@@ -55,17 +55,33 @@ const PROTOTYPE_SOURCES = [join(BASE, "module.pike"), join(BASE, "basic_defvar.p
 /**
  * Sources that call `add_constant`, in the order roxenloader runs them.
  *
- * `cache.pike` is one of them at arm's length: roxenloader instantiates it
- * (`cache=((program)"base_server/cache")();`, roxenloader.pike:833) and the
- * file injects itself with `add_constant("cache", this_object())` at its own
- * line 2393. Leaving it out indexed the forwarded members `cache_lookup` and
- * `cache_set` while the object they hang off — the one `VFS.pmod:119` writes
- * as `predef::cache` — was absent.
+ * Only the first two run their `add_constant`s at file scope. The rest do it
+ * from a function, and each was traced to the call that reaches it before
+ * being listed here — an injection nothing invokes is not part of the
+ * namespace, and indexing it would invent vocabulary:
+ *
+ * - `cache.pike` — roxenloader instantiates it
+ *   (`cache=((program)"base_server/cache")();`, roxenloader.pike:833) and the
+ *   file injects itself with `add_constant("cache", this_object())` at 2393.
+ * - `fonts.pike` — same shape, from `roxen.pike:6671`; `create()` injects
+ *   `Font`, `FontHandler`, `get_font` and four more.
+ * - `config_userdb.pike` — `roxen.pike:6686` calls `init_configuserdb()`,
+ *   which injects `AdminUser`.
+ * - `etc/roxen_master.pike` — installed as the master by roxenloader:3972;
+ *   its `create()` injects `Master` and `add_dump_constant` and calls
+ *   `init_security()`, which injects `chroot`.
+ *
+ * Leaving them out indexed forwarded members like `cache_lookup` while the
+ * object they hang off — the one `VFS.pmod:119` writes as `predef::cache` —
+ * was absent.
  */
 const GLOBAL_SOURCES = [
   join(BASE, "roxenloader.pike"),
   join(BASE, "roxen.pike"),
   join(BASE, "cache.pike"),
+  join(BASE, "fonts.pike"),
+  join(BASE, "config_userdb.pike"),
+  join("server", "etc", "roxen_master.pike"),
 ];
 
 const PROTOTYPES = join(BASE, "prototypes.pike");
@@ -217,7 +233,13 @@ export function harvestConventionalMembers(
 // 3. Globals injected into the Pike namespace
 // ---------------------------------------------------------------------------
 
-const INJECTED_NOTE = "Injected into Pike's namespace at run time by roxenloader.";
+/**
+ * Named the loader for as long as roxenloader was the only source. It is not:
+ * `chroot` comes from the master, `get_font` from `fonts.pike`, `AdminUser`
+ * from `config_userdb.pike`. Say what is true of all of them instead of
+ * crediting a file that did not do it.
+ */
+const INJECTED_NOTE = "Injected into Pike's namespace at run time by Roxen's startup.";
 
 /**
  * Drop the signature block Pike's extractor prepends to a doc body.

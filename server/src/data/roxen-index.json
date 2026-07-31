@@ -3588,593 +3588,637 @@
       "signature": "int total_size_limit;",
       "markdown": "Maximum allowed size including the cache manager overhead.\n\nMember of `cache` (server/base_server/cache.pike)."
     },
+    "predef.AdminUser": {
+      "signature": "class AdminUser",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
     "predef.ArgCache": {
       "signature": "class ArgCache",
-      "markdown": "Generic cache for storing away a persistent mapping of data to be\n refetched later by a short string key. This being a cache, your\n data may be thrown away at random when the cache is full.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Generic cache for storing away a persistent mapping of data to be\n refetched later by a short string key. This being a cache, your\n data may be thrown away at random when the cache is full.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.AuthModule": {
       "signature": "class AuthModule",
-      "markdown": "The interface an authentication module must implement\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "The interface an authentication module must implement\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.BasicDefvar": {
       "signature": "class BasicDefvar",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.CFUserDBModule": {
       "signature": "constant CFUserDBModule = config_userdb_module;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.CacheActivationCB": {
       "signature": "typedef function(object,mixed...:void) CacheActivationCB;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.CacheDestructionCB": {
       "signature": "typedef function(object,mixed...:void) CacheDestructionCB;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.CacheEntry": {
       "signature": "constant CacheEntry = cache->CacheEntry;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.CacheKey": {
       "signature": "class CacheKey",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Configuration": {
       "signature": "class Configuration",
-      "markdown": "Configuration information for a site.\n**See also:** configuration\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Configuration information for a site.\n**See also:** configuration\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.DAVLock": {
       "signature": "class DAVLock",
-      "markdown": "Container for information about an outstanding DAV lock. No field\n except owner may change after the object has been created since\n filesystem modules might store this info persistently.\n**Note:** DAVLock objects might be shared between filesystems but not\n between configurations.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Container for information about an outstanding DAV lock. No field\n except owner may change after the object has been created since\n filesystem modules might store this info persistently.\n**Note:** DAVLock objects might be shared between filesystems but not\n between configurations.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.DBManager": {
       "signature": "constant DBManager = ((object)\"base_server/dbs.pike\");",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ErrorContainer": {
       "signature": "class ErrorContainer",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.FakedVariables": {
       "signature": "class FakedVariables( mapping real_variables )",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.Font": {
+      "signature": "class Font",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.FontHandler": {
+      "signature": "class FontHandler",
+      "markdown": "A fontname -> font object resolver.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Group": {
       "signature": "class Group( UserDB database )",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.HAVE_OLD__Roxen_make_http_headers": {
       "signature": "constant HAVE_OLD__Roxen_make_http_headers = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.LocaleString": {
       "signature": "constant LocaleString = typeof(da_String_type);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.LockFlag": {
       "signature": "enum LockFlag { LOCK_NONE = 0, LOCK_SHARED_BELOW = 2, LOCK_SHARED_AT = 3, LOCK_OWN_BELOW = 4, LOCK_EXCL_BELOW = 6, LOCK_EXCL_AT = 7 }",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.Master": {
+      "signature": "constant Master = this;",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ModuleCopies": {
       "signature": "class ModuleCopies",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ModuleInfo": {
       "signature": "class ModuleInfo",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.MultiStatus": {
       "signature": "class MultiStatus",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.MultiStatusNode": {
       "signature": "typedef MultiStatusStatus|MultiStatusPropStat MultiStatusNode;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.MultiStatusPropStat": {
       "signature": "class MultiStatusPropStat",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.MultiStatusStatus": {
       "signature": "class MultiStatusStatus (int http_code, void|string message)",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.NewLDAP": {
       "signature": "constant NewLDAP = Protocols.LDAP;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Overwrite": {
       "signature": "enum Overwrite { NEVER_OVERWRITE = -1, MAYBE_OVERWRITE = 0, DO_OVERWRITE = 1, }",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.PIKE_MODULE_RELOC": {
       "signature": "constant PIKE_MODULE_RELOC = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.PatchPropertyCommand": {
       "signature": "class PatchPropertyCommand",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.PrefLanguages": {
       "signature": "class PrefLanguages",
-      "markdown": "Support for language preferences. This object is typically\n accessed through `id->misc->pref_languages`.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Support for language preferences. This object is typically\n accessed through `id->misc->pref_languages`.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Privs": {
       "signature": "protected class Privs",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.PropertyBehavior": {
       "signature": "typedef int(0..1)|multiset(string) PropertyBehavior;",
-      "markdown": "State of the DAV:propertybehavior.\n  - `int(0..0)` — DAV:omit.\n     Failure to copy a property does not cause the entire copy\n     to fail.\n  - `int(1..1)` — DAV:keepalive \"*\".\n     All live properties must be kept alive.\n  - `multiset(string)` — Set of properties to keep alive. Properties not in the set\n     should be copied according to best effort. The properties are\n     listed with complete namespaces.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "State of the DAV:propertybehavior.\n  - `int(0..0)` — DAV:omit.\n     Failure to copy a property does not cause the entire copy\n     to fail.\n  - `int(1..1)` — DAV:keepalive \"*\".\n     All live properties must be kept alive.\n  - `multiset(string)` — Set of properties to keep alive. Properties not in the set\n     should be copied according to best effort. The properties are\n     listed with complete namespaces.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Protocol": {
       "signature": "class Protocol",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ProtocolCacheKey": {
       "signature": "class ProtocolCacheKey",
-      "markdown": "The cache key used by the protocol cache.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "The cache key used by the protocol cache.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ROXEN_MYSQL_SUPPORTS_UNICODE": {
       "signature": "constant ROXEN_MYSQL_SUPPORTS_UNICODE = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.RequestID": {
       "signature": "class RequestID",
-      "markdown": "The request information object contains all request-local information and\n server as the vessel for most forms of intercommunication between modules,\n scripts, RXML and so on. It gets passed round to almost all API callbacks\n worth mentioning. A RequestID object is born when an incoming request is\n encountered, and its life expectancy is short, as it dies again when the\n request has passed through all levels of the module type calling sequence.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "The request information object contains all request-local information and\n server as the vessel for most forms of intercommunication between modules,\n scripts, RXML and so on. It gets passed round to almost all API callbacks\n worth mentioning. A RequestID object is born when an incoming request is\n encountered, and its life expectancy is short, as it dies again when the\n request has passed through all levels of the module type calling sequence.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.RequestJSONLogger": {
       "signature": "class RequestJSONLogger",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.RoxenModule": {
       "signature": "class RoxenModule",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.SSLProtocol": {
       "signature": "class SSLProtocol",
-      "markdown": "Base protocol for SSL ports.\nExactly like Port, but uses SSL.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Base protocol for SSL ports.\nExactly like Port, but uses SSL.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ST_CTIME": {
       "signature": "constant ST_CTIME = ST_CTIME;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ST_MTIME": {
       "signature": "constant ST_MTIME = ST_MTIME;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.ST_SIZE": {
       "signature": "constant ST_SIZE = ST_SIZE;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.StartTLSProtocol": {
       "signature": "class StartTLSProtocol",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.Stat": {
       "signature": "constant Stat = typeof(da_Stat_type);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.StringFile": {
       "signature": "class StringFile( string data, mixed|void _st )",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.TristateCacheKey": {
       "signature": "class TristateCacheKey",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.User": {
       "signature": "class User( UserDB database )",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.UserDB": {
       "signature": "class UserDB",
-      "markdown": "The interface a UserDB module must implement.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "The interface a UserDB module must implement.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.WS_REPLICATE": {
       "signature": "constant WS_REPLICATE = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.__ROXEN_SUPPORTS_IPV6__": {
       "signature": "constant __ROXEN_SUPPORTS_IPV6__ = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.___LogFormat": {
       "signature": "class LogFormat",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.__pragma_save_parent__": {
       "signature": "constant __pragma_save_parent__ = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.__rbf": {
       "signature": "constant __rbf = \"font_handlers/rbf\";",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef._cur_rxml_context": {
       "signature": "constant _cur_rxml_context = Thread.Local();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef._disable_threads": {
       "signature": "object _disable_threads();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef._roxen": {
       "signature": "class _roxen",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.add_cvs_ids": {
       "signature": "void add_cvs_ids(mixed to);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.add_dump_constant": {
+      "signature": "mixed add_dump_constant( string f, mixed what );",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.available_font_versions": {
+      "signature": "array available_font_versions(string name, int size);",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.available_fonts": {
+      "signature": "array(string) available_fonts(int(0..1)|void force_reload );",
+      "markdown": "return a list of all valid font names\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache": {
       "signature": "constant cache = this_object();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_clear": {
       "signature": "constant cache_clear = cache->cache_expire;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_clear_deltas": {
       "signature": "constant cache_clear_deltas = cache->cache_clear_deltas;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_entries": {
       "signature": "constant cache_entries = cache->cache_entries;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_expire": {
       "signature": "constant cache_expire = cache->cache_expire;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_expire_by_prefix": {
       "signature": "constant cache_expire_by_prefix = cache->cache_expire_by_prefix;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_indices": {
       "signature": "constant cache_indices = cache->cache_indices;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_lookup": {
       "signature": "constant cache_lookup = cache->cache_lookup;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_peek": {
       "signature": "constant cache_peek = cache->cache_peek;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_remove": {
       "signature": "constant cache_remove = cache->cache_remove;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cache_set": {
       "signature": "constant cache_set = cache->cache_set;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.call_out": {
       "signature": "mixed call_out(function f, float|int delay, mixed ... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.callablep": {
       "signature": "constant callablep = lambda(mixed f){return functionp(f)||programp(f);};",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.capitalize": {
       "signature": "constant capitalize = String.capitalize;",
-      "markdown": "Alias for String.capitalize.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Alias for String.capitalize.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.cd": {
       "signature": "constant cd = restricted_cd();",
-      "markdown": "Overloads the Pike cd function.\n Doesn't allow cd() unless we are in a forked child.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Overloads the Pike cd function.\n Doesn't allow cd() unless we are in a forked child.\n\nInjected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.chroot": {
+      "signature": "ChrootKey chroot( string to );",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.clear_connect_to_my_mysql_cache": {
       "signature": "void clear_connect_to_my_mysql_cache( );",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.color_name": {
       "signature": "constant color_name = nm_resolv(\"Colors.color_name\");",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.colors": {
       "signature": "constant colors = nm_resolv(\"Colors\");",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.connect_to_my_mysql": {
       "signature": "Sql.Sql connect_to_my_mysql( string|int ro, void|string db, void|int reuse_in_thread, void|string charset);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.crypt_password": {
       "signature": "constant crypt_password = Crypto.Password.hash;",
-      "markdown": "Generate a hash of password suitable for verify_password().\n- `password` — Password to hash.\n- `scheme` — Password hashing scheme. If not specified the strongest available\n   will be used.\n\nIf an unsupported scheme is specified an error will be thrown.\n- `rounds` — The number of rounds to use in parameterized schemes. If not\n   specified the scheme specific default will be used.\n**Returns:** Returns a string suitable for verify_password().\n**See also:** verify_password, predef::crypt(), Nettle.crypt_md5(),\n   Nettle.HashInfo()->crypt_hash()\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Generate a hash of password suitable for verify_password().\n- `password` — Password to hash.\n- `scheme` — Password hashing scheme. If not specified the strongest available\n   will be used.\n\nIf an unsupported scheme is specified an error will be thrown.\n- `rounds` — The number of rounds to use in parameterized schemes. If not\n   specified the scheme specific default will be used.\n**Returns:** Returns a string suitable for verify_password().\n**See also:** verify_password, predef::crypt(), Nettle.crypt_md5(),\n   Nettle.HashInfo()->crypt_hash()\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.describe_backtrace": {
       "signature": "string describe_backtrace(mixed err, void|int linewidth);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.describe_font_type": {
+      "signature": "string describe_font_type(string n);",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.destruct": {
       "signature": "void trace_destruct(mixed x);",
-      "markdown": "Overloads the Pike destruct function. If the webserver is\n started with the TRACE_DESTRUCT define set, all destruct\n calls will be logged in the debug log.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Overloads the Pike destruct function. If the webserver is\n started with the TRACE_DESTRUCT define set, all destruct\n calls will be logged in the debug log.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.euid_egid_lock": {
       "signature": ".Mutex euid_egid_lock;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.exit": {
       "signature": "void trace_exit(int exitcode);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.get_cvs_id": {
       "signature": "string get_cvs_id(string from);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.get_font": {
+      "signature": "Font get_font(string f, int size, int bold, int italic, string justification, float|int xspace, float|int yspace);",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.getegid": {
       "signature": "constant getegid = lambda(){ return 0; };",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.geteuid": {
       "signature": "constant geteuid = lambda(){ return 0; };",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.getgid": {
       "signature": "int getgid();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.gethostname": {
       "signature": "constant gethostname = lambda() { return \"localhost\"; };",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.getppid": {
       "signature": "int getppid();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.getuid": {
       "signature": "int getuid();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.grbz": {
       "signature": "constant grbz = lambda(string d){return Gz.inflate()->inflate(d);};",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.has_Image_TTF": {
       "signature": "constant has_Image_TTF = 1;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.hsv_to_rgb": {
       "signature": "constant hsv_to_rgb = nm_resolv(\"Colors.hsv_to_rgb\");",
-      "markdown": "Alias for Colors.hsv_to_rgb.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Alias for Colors.hsv_to_rgb.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.http_decode_string": {
       "signature": "constant http_decode_string = _Roxen.http_decode_string;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.init_logger": {
       "signature": "void init_logger();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.isodate": {
       "signature": "string isodate( int t );",
-      "markdown": "Returns a string with the given posix time t formated as\n YYYY-MM-DD.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Returns a string with the given posix time t formated as\n YYYY-MM-DD.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.lfile_path": {
       "signature": "string lfile_path(string filename);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.lfile_stat": {
       "signature": "object(Stdio.Stat) lfile_stat(string filename);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.load": {
       "signature": "constant load = load;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.lopen": {
       "signature": "object|void lopen(string filename, string mode, int|void perm);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.mark_fd": {
       "signature": "mixed mark_fd( int fd, string|void with );",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.mkdirhier": {
       "signature": "int mkdirhier(string from, int|void mode);",
-      "markdown": "Make a directory hierachy\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Make a directory hierachy\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.mutex": {
       "signature": ".Mutex mutex;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.open": {
       "signature": "object|void open(string filename, string mode, int|void perm);",
-      "markdown": "Like Stdio.File.open on a new file object, but processes the\n path with roxen_path. Returns zero on open error.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.File.open on a new file object, but processes the\n path with roxen_path. Returns zero on open error.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.parse_color": {
       "signature": "constant parse_color = nm_resolv(\"Colors.parse_color\");",
-      "markdown": "Alias for Colors.parse_color\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Alias for Colors.parse_color\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.parse_html": {
       "signature": "string parse_html(string data, mapping(string:function|string) tags, mapping(string:function|string) containers, mixed... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.parse_html_lines": {
       "signature": "string parse_html_lines(string data, mapping tags, mapping containers, mixed... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.perror": {
       "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.popen": {
       "signature": "string popen(string|array(string) cmd, void|mapping env, int|void uid, int|void gid);",
-      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_cp": {
       "signature": "int r_cp( string f1, string f2 );",
-      "markdown": "Like Stdio.cp, but processes the paths with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.cp, but processes the paths with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_exist": {
       "signature": "int r_exist(string path);",
-      "markdown": "Like Stdio.exist, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.exist, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_file_stat": {
       "signature": "Stdio.Stat file_stat( string filename, int|void slinks );",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_get_dir": {
       "signature": "array(string) r_get_dir( string path );",
-      "markdown": "Like predef::get_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like predef::get_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_is_dir": {
       "signature": "int r_is_dir(string path);",
-      "markdown": "Like Stdio.is_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.is_dir, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_is_file": {
       "signature": "int r_is_file(string path);",
-      "markdown": "Like Stdio.is_file, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.is_file, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_is_link": {
       "signature": "int r_is_link(string path);",
-      "markdown": "Like Stdio.is_link, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.is_link, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_mv": {
       "signature": "int mv( string f1, string f2 );",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_read_bytes": {
       "signature": "string r_read_bytes(string filename, mixed... args);",
-      "markdown": "Like Stdio.read_bytes, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like Stdio.read_bytes, but processes the path with roxen_path.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.r_rm": {
       "signature": "int rm( string filename );",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_debug": {
       "signature": "void report_debug(sprintf_format message, sprintf_args ... foo);",
-      "markdown": "Print a debug message in the server's debug log.\n Shares argument prototype with sprintf().\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Print a debug message in the server's debug log.\n Shares argument prototype with sprintf().\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_error": {
       "signature": "void report_error(LocaleString|sprintf_format message, sprintf_args ... foo);",
-      "markdown": "Report an error message, that will show up in the server's debug log and\n in the event logs, along with the red exclamation mark sign. Shares\n argument prototype with sprintf().\n**See also:** report_error_sparsely, report_error_for\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Report an error message, that will show up in the server's debug log and\n in the event logs, along with the red exclamation mark sign. Shares\n argument prototype with sprintf().\n**See also:** report_error_sparsely, report_error_for\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_error_for": {
       "signature": "void report_error_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "Like report_error, but logs the message for the given\n configuration or Roxen module where, or globally if where is\n zero. report_error searches the call stack to find that out,\n but this function is useful to specify it explicitly.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like report_error, but logs the message for the given\n configuration or Roxen module where, or globally if where is\n zero. report_error searches the call stack to find that out,\n but this function is useful to specify it explicitly.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_error_sparsely": {
       "signature": "void report_error_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "Like report_error, but doesn't repeat the same message if it's\n been logged in the last ten minutes. Useful in situations where an\n error can cause an error message to be logged rapidly.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like report_error, but doesn't repeat the same message if it's\n been logged in the last ten minutes. Useful in situations where an\n error can cause an error message to be logged rapidly.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_fatal": {
       "signature": "void report_fatal(sprintf_format message, sprintf_args ... foo);",
-      "markdown": "Print a fatal error message.\n**See also:** report_fatal_for\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Print a fatal error message.\n**See also:** report_fatal_for\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_fatal_for": {
       "signature": "void report_fatal_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_notice": {
       "signature": "void report_notice(LocaleString|sprintf_format message, sprintf_args ... foo);",
-      "markdown": "Report a status message of some sort for the server's debug log and event\n logs, along with the blue informational notification sign. Shares argument\n prototype with sprintf().\n**See also:** report_notice_for\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Report a status message of some sort for the server's debug log and event\n logs, along with the blue informational notification sign. Shares argument\n prototype with sprintf().\n**See also:** report_notice_for\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_notice_for": {
       "signature": "void report_notice_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_warning": {
       "signature": "void report_warning(LocaleString|sprintf_format message, sprintf_args ... foo);",
-      "markdown": "Report a warning message, that will show up in the server's debug log and\n in the event logs, along with the yellow exclamation mark warning sign.\n Shares argument prototype with sprintf().\n**See also:** report_warning_sparsely, report_warning_for\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Report a warning message, that will show up in the server's debug log and\n in the event logs, along with the yellow exclamation mark warning sign.\n Shares argument prototype with sprintf().\n**See also:** report_warning_sparsely, report_warning_for\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_warning_for": {
       "signature": "void report_warning_for(object/*(Configuration|RoxenModule)*/ where, LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "See report_error_for.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.report_warning_sparsely": {
       "signature": "void report_warning_sparsely(LocaleString|sprintf_format message, sprintf_args ... args);",
-      "markdown": "Like report_warning, but doesn't repeat the same message if\n it's been logged in the last ten minutes. Useful in situations\n where an error can cause a warning message to be logged rapidly.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Like report_warning, but doesn't repeat the same message if\n it's been logged in the last ten minutes. Useful in situations\n where an error can cause a warning message to be logged rapidly.\n\nInjected into Pike's namespace at run time by Roxen's startup."
+    },
+    "predef.resolve_font": {
+      "signature": "Font resolve_font(string f, string|void justification);",
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.rgb_to_hsv": {
       "signature": "constant rgb_to_hsv = nm_resolv(\"Colors.rgb_to_hsv\");",
-      "markdown": "Alias for Colors.rgb_to_hsv\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Alias for Colors.rgb_to_hsv\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen": {
       "signature": "constant roxen = this_object();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_dist_os": {
       "signature": "protected string dist_os;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_dist_version": {
       "signature": "protected string dist_version;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_is_cms": {
       "signature": "protected int roxen_is_cms;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_path": {
       "signature": "string roxen_path( string filename );",
-      "markdown": "Expands the following paths in the given string and returns the\n result. If on Windows, also strips off trailing slashes.\n  - `\"$LOCALDIR\"` — The local directory of the web server, Normally \"../local\",\n     but it can be changed in by setting the environment\n     variable LOCALDIR.\n  - `\"$LOGDIR\"` — The log directory of the web server. Normally \"../logs\",\n     but it can be changed in the configuration interface under\n     global settings.\n  - `\"$LOGFILE\"` — The debug log of the web server. Normally\n     \"../logs/debug/default.1\", but it can be the name of the\n     configuration directory if multiple instances are used.\n  - `\"$VARDIR\"` — The web server's var directory. Normally \"../var\", but it can\n     be changed by setting the environment variable VARDIR.\n  - `\"$VVARDIR\"` — Same as $VARDIR, but with a server version specific subdirectory.\n  - `\"$SERVERDIR\"` — Base path for the version-specific installation directory.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Expands the following paths in the given string and returns the\n result. If on Windows, also strips off trailing slashes.\n  - `\"$LOCALDIR\"` — The local directory of the web server, Normally \"../local\",\n     but it can be changed in by setting the environment\n     variable LOCALDIR.\n  - `\"$LOGDIR\"` — The log directory of the web server. Normally \"../logs\",\n     but it can be changed in the configuration interface under\n     global settings.\n  - `\"$LOGFILE\"` — The debug log of the web server. Normally\n     \"../logs/debug/default.1\", but it can be the name of the\n     configuration directory if multiple instances are used.\n  - `\"$VARDIR\"` — The web server's var directory. Normally \"../var\", but it can\n     be changed by setting the environment variable VARDIR.\n  - `\"$VVARDIR\"` — Same as $VARDIR, but with a server version specific subdirectory.\n  - `\"$SERVERDIR\"` — Base path for the version-specific installation directory.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_perror": {
       "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_popen": {
       "signature": "string popen(string|array(string) cmd, void|mapping env, int|void uid, int|void gid);",
-      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Starts the specified process and returns a string\n with the result. Mostly a compatibility functions, uses\n Process.Process\nIf cmd is a string then it's interpreted as a command line with\n glob expansion, argument splitting, etc according to the command\n shell rules on the system. If it's an array of strings then it's\n taken as processed argument list and is sent to\n Process.Process as-is.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_product_code": {
       "signature": "protected string roxen_product_code;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_product_name": {
       "signature": "protected string roxen_product_name;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_release": {
       "signature": "constant roxen_release = release || roxen_release;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxen_version": {
       "signature": "string roxen_version();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxenloader": {
       "signature": "constant roxenloader = this_object();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.roxenp": {
       "signature": "constant roxenp = lambda() { return roxen; };",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.spawn_pike": {
       "signature": ".Process spawn_pike(array(string) args, void|string wd, Stdio.File|void stdin, Stdio.File|void stdout, Stdio.File|void stderr);",
-      "markdown": "Start a new Pike process with the same configuration as the current one\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Start a new Pike process with the same configuration as the current one\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.spawne": {
       "signature": ".Process spawne(string s, array(string) args, mapping|array env, Stdio.File stdin, Stdio.File stdout, Stdio.File stderr, void|string wd, void|array(int) uid);",
-      "markdown": "Create a process\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Create a process\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.throw": {
       "signature": "void paranoia_throw(mixed err);",
-      "markdown": "Overloads Pikes throw function.\nExists for detection of code that throws non-errors.\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Overloads Pikes throw function.\nExists for detection of code that throws non-errors.\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.uname": {
       "signature": "mapping uname();",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.user_mysql": {
       "signature": ".Sql user_mysql;",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.verify_password": {
       "signature": "constant verify_password = Crypto.Password.verify;",
-      "markdown": "Verify a password against a hash.\nThis function attempts to support most\n password hashing schemes.\n**Returns:** Returns `1` on success, and `0` (zero) otherwise.\n**See also:** hash_password(), predef::crypt()\n\nInjected into Pike's namespace at run time by roxenloader."
+      "markdown": "Verify a password against a hash.\nThis function attempts to support most\n password hashing schemes.\n**Returns:** Returns `1` on success, and `0` (zero) otherwise.\n**See also:** hash_password(), predef::crypt()\n\nInjected into Pike's namespace at run time by Roxen's startup."
     },
     "predef.werror": {
       "signature": "void roxen_perror(sprintf_format format, sprintf_args ... args);",
-      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+      "markdown": "Injected into Pike's namespace at run time by Roxen's startup."
     },
     "roxen.ACON_DNS_FAIL": {
       "signature": "constant ACON_DNS_FAIL = -2;",
@@ -4835,6 +4879,46 @@
     "roxen.fonts": {
       "signature": "Fonts fonts;",
       "markdown": "Member of `roxen` (server/base_server/roxen.pike)."
+    },
+    "roxen.fonts.Font": {
+      "signature": "class Font",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.FontHandler": {
+      "signature": "class FontHandler",
+      "markdown": "A fontname -> font object resolver.\n\nMember of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.available_font_versions": {
+      "signature": "array available_font_versions(string name, int size);",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.available_fonts": {
+      "signature": "array(string) available_fonts(int(0..1)|void force_reload );",
+      "markdown": "return a list of all valid font names\n\nMember of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.describe_font_type": {
+      "signature": "string describe_font_type(string n);",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.font_handlers": {
+      "signature": "array(FontHandler) font_handlers;",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.get_font": {
+      "signature": "Font get_font(string f, int size, int bold, int italic, string justification, float|int xspace, float|int yspace);",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.get_font_information": {
+      "signature": "array get_font_information(void|int scalable_only);",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.resolve_font": {
+      "signature": "Font resolve_font(string f, string|void justification);",
+      "markdown": "Member of `roxen.fonts` (server/base_server/fonts.pike)."
+    },
+    "roxen.fonts.verify_font": {
+      "signature": "string verify_font(string font, int size);",
+      "markdown": "Returns the real name of the resolved font.\n\nMember of `roxen.fonts` (server/base_server/fonts.pike)."
     },
     "roxen.format_cycle": {
       "signature": "string format_cycle(array(mixed) cycle);",
