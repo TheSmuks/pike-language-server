@@ -99,11 +99,23 @@ mkdir -p "$STAGE/server/pike"
 cp "$ROOT/server/pike/worker.pike" "$STAGE/server/pike/"
 cp "$ROOT/server/pike/Common.pike" "$STAGE/server/pike/"
 
-# Copy web-tree-sitter runtime WASM (needed by server AND client).
-# Server resolves relative to server/dist/server.mjs → server/dist/web-tree-sitter.wasm
-# Client resolves relative to client/dist/extension.cjs → client/dist/web-tree-sitter.wasm
+# Copy web-tree-sitter runtime WASM. Server only: it resolves relative to
+# server/dist/server.mjs → server/dist/web-tree-sitter.wasm.
+#
+# A second copy used to go to client/dist for a client-side tree-sitter
+# provider. That provider was removed (client/extension.ts: "tree-sitter
+# syntactic provider removed (the LSP server provides…)") and the copy was
+# not, so every install carried 192 KB — a fifth of the packed VSIX — that
+# nothing loaded. The guard below is what keeps the two in step: if the client
+# ever loads tree-sitter again, this build fails rather than silently shipping
+# a client that cannot find its runtime.
 cp "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" "$STAGE/server/dist/"
-cp "$ROOT/node_modules/web-tree-sitter/web-tree-sitter.wasm" "$STAGE/client/dist/"
+
+if grep -q "web-tree-sitter" "$STAGE/client/dist/extension.cjs"; then
+  echo "[ERROR] client bundle references web-tree-sitter but no runtime WASM is staged for it." >&2
+  echo "        Either drop the dependency or restore the client/dist copy above." >&2
+  exit 1
+fi
 
 # Copy TextMate grammar (instant syntax highlighting before WASM loads)
 if [ -d "$ROOT/client/syntaxes" ]; then
