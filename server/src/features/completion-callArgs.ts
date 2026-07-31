@@ -17,6 +17,7 @@ import {
   extractParamsFromStdlibSignature,
   extractConstructorParams,
   extractParamsFromType,
+  extractParamsFromDecl,
 } from "./completion-items";
 import type { CompletionContext } from "./completionTrigger";
 import { getStdlibEntriesByName } from "./completion-stdlib";
@@ -42,7 +43,24 @@ export async function completeCallArgs(
 ): Promise<CompletionItem[]> {
   // 1. Local/inner-function lookup
   const localDecl = findDeclarationForName(table, calleeName, line, character);
-  if (localDecl && (localDecl.kind === "function" || localDecl.kind === "method") && localDecl.declaredType) {
+  if (localDecl && (localDecl.kind === "function" || localDecl.kind === "method")) {
+    // Parameters first: a function declaration's declaredType is its return
+    // type, so the type route below only fires for a variable holding a
+    // function type.
+    const fromScope = extractParamsFromDecl(localDecl, table);
+    if (fromScope !== null) {
+      return [makeArgSnippet(calleeName, fromScope, localDecl.declaredType ?? "function")];
+    }
+    if (localDecl.declaredType) {
+      const params = extractParamsFromType(localDecl.declaredType);
+      if (params !== null) {
+        return [makeArgSnippet(calleeName, params, localDecl.declaredType)];
+      }
+    }
+  }
+
+  // A variable holding a function type is callable too.
+  if (localDecl && (localDecl.kind === "variable" || localDecl.kind === "parameter") && localDecl.declaredType) {
     const params = extractParamsFromType(localDecl.declaredType);
     if (params !== null) {
       return [makeArgSnippet(calleeName, params, localDecl.declaredType)];

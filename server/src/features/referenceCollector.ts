@@ -170,21 +170,49 @@ function collectFunctionReturnTypeRefs(node: Node, state: BuildState): void {
   collectReturnTypeIdRecursive(returnType, state);
 }
 
+/**
+ * Record every identifier an `id_type` names, not only the first.
+ *
+ * A dotted type is a path: `Stdio.File` names the member `File` of the module
+ * `Stdio`. Recording just `Stdio` left the cursor on `File` sitting on no
+ * reference at all, so highlight, references and rename all went silent there
+ * — while the identical `Stdio.File()` one line over, in expression position,
+ * answered fine.
+ *
+ * Only the head is resolved by name. A later segment is a member of what
+ * precedes it, not something in scope, and resolving it as a scope lookup
+ * would happily point `File` at any local class of that name.
+ */
+function collectIdTypeRefs(idType: Node, state: BuildState): void {
+  const identifiers = idType.children.filter(c => c.type === 'identifier');
+  for (let i = 0; i < identifiers.length; i++) {
+    const ident = identifiers[i];
+    if (i === 0) {
+      const declId = resolveName(ident.text, ident, state);
+      state.references.push({
+        name: ident.text,
+        loc: toLoc(ident.startPosition),
+        kind: 'type_ref',
+        resolvesTo: declId,
+        confidence: declId !== null ? 'high' : 'low',
+      });
+      continue;
+    }
+    state.references.push({
+      name: ident.text,
+      loc: toLoc(ident.startPosition),
+      kind: 'dot_access',
+      resolvesTo: null,
+      confidence: 'low',
+      lhsName: identifiers[i - 1].text,
+    });
+  }
+}
+
 function collectReturnTypeIdRecursive(node: Node, state: BuildState): void {
   for (const child of node.children) {
     if (child.type === 'id_type') {
-      const identChild = child.children.find(c => c.type === 'identifier');
-      if (identChild) {
-        const name = identChild.text;
-        const declId = resolveName(name, identChild, state);
-        state.references.push({
-          name,
-          loc: toLoc(identChild.startPosition),
-          kind: 'type_ref',
-          resolvesTo: declId,
-          confidence: declId !== null ? 'high' : 'low',
-        });
-      }
+      collectIdTypeRefs(child, state);
     } else if (
       child.type === 'type' ||
       child.type === 'union_type' ||
@@ -332,18 +360,7 @@ function collectTypeRefsRecursive(node: Node, state: BuildState): void {
   for (const child of node.children) {
     if (child.type === 'id_type') {
       // id_type contains identifier or scope_expr
-      const identChild = child.children.find(c => c.type === 'identifier');
-      if (identChild) {
-        const name = identChild.text;
-        const declId = resolveName(name, identChild, state);
-        state.references.push({
-          name,
-          loc: toLoc(identChild.startPosition),
-          kind: 'type_ref',
-          resolvesTo: declId,
-          confidence: declId !== null ? 'high' : 'low',
-        });
-      }
+      collectIdTypeRefs(child, state);
     } else if (
       child.type === 'type' ||
       child.type === 'union_type' ||

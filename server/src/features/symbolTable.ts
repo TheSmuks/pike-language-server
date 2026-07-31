@@ -23,6 +23,15 @@ export interface Declaration {
   scopeId: number;
   /** For inherit declarations: local alias (e.g. 'creature' in 'inherit Animal : creature'). */
   alias?: string;
+  /**
+   * Where the alias itself is written.
+   *
+   * `nameRange` covers the inherited path, which for `inherit "engine.pike" :
+   * motor;` is a string literal — not a name any position query should match.
+   * The alias is the name this file actually introduces, so it needs its own
+   * range for highlight, references and rename to land on it.
+   */
+  aliasRange?: Range;
   /** For variables and parameters: the declared type annotation text, if present. */
   declaredType?: string;
   /** For variables: type inferred from assignment initializer (e.g., Dog d = makeDog()). */
@@ -356,7 +365,7 @@ function runReferencePass(rootNode: any, state: BuildState, table: SymbolTable):
 // Public query API (delegated)
 // ---------------------------------------------------------------------------
 
-export { getDefinitionAt, getReferencesTo } from './query';
+export { getDefinitionAt, getLocalDeclarationAt, declOccurrenceRangeAt, getReferencesTo } from './query';
 
 /**
  * Sort scopes by (startLine, startChar) for binary search in findScopeForNode.

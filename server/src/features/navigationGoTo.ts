@@ -13,6 +13,8 @@ import type { NavigationContext } from "./navigationHandler";
 import type { ResolutionContext } from "./accessResolver";
 import { parse } from "../parser";
 import {
+  getLocalDeclarationAt,
+  declOccurrenceRangeAt,
   getDefinitionAt,
   getReferencesTo,
 } from "./symbolTable";
@@ -171,7 +173,18 @@ async function handleDefinition(
   const accessResult = await resolveAccessForDefinition(ctx, resolutionCtx, makeTypeInferrer, table, params);
   if (accessResult) return accessResult;
 
-  return resolveModulePathTarget(ctx, table, includeDoc, params);
+  const modulePathResult = await resolveModulePathTarget(ctx, table, includeDoc, params);
+  if (modulePathResult) return modulePathResult;
+
+  // Nothing above found a target, and the cursor is on a declaration's own
+  // name. That happens on an inherit or import whose target does not resolve —
+  // and the server hands out exactly this location as the definition when
+  // asked from anywhere else in the file, so answering nothing here is only an
+  // inconsistency with itself.
+  const local = getLocalDeclarationAt(table, params.position.line, params.position.character);
+  if (!local) return null;
+  const occurrence = declOccurrenceRangeAt(local, params.position.line, params.position.character);
+  return declToLspLocation(table.uri, occurrence ? { nameRange: occurrence } : local);
 }
 
 /**
@@ -408,9 +421,16 @@ function prependDeclIfNotDuplicate(
   table: import("./symbolTable").SymbolTable,
   params: { position: { line: number; character: number } },
 ): LspLocation[] {
-  const decl = getDefinitionAt(table, params.position.line, params.position.character);
+  // The cross-file inherit/import case answers null here — see
+  // getLocalDeclarationAt. `includeDeclaration` still has a declaration to
+  // include: the one the cursor is sitting on.
+  const decl = getDefinitionAt(table, params.position.line, params.position.character)
+    ?? getLocalDeclarationAt(table, params.position.line, params.position.character);
   if (!decl) return results;
-  const declLoc = declToLspLocation(table.uri, decl);
+  // On a renamed inherit, the alias is the declaration the cursor is on; the
+  // path it renames is a different location entirely.
+  const occurrence = declOccurrenceRangeAt(decl, params.position.line, params.position.character);
+  const declLoc = declToLspLocation(table.uri, occurrence ? { nameRange: occurrence } : decl);
   const isDuplicate = results.some(
     r => r.range.start.line === declLoc.range.start.line &&
       r.range.start.character === declLoc.range.start.character,
