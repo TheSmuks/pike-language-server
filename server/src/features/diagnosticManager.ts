@@ -21,6 +21,7 @@ import {
 import { TextDocument } from "vscode-languageserver-textdocument";
 
 import { PikeWorker, PikeUnavailableError } from "./pikeWorker.js";
+import { isPikeUnavailable } from "./pikeWorkerTypes";
 import type { PikeDiagnostic } from "./pikeWorkerTypes.js";
 import { getParseDiagnostics } from "./diagnostics";
 import { runLintRules } from "./lintRules";
@@ -334,8 +335,7 @@ export class DiagnosticManager {
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
-        const isPikeUnavailable = err instanceof Error && err.name === "PikeUnavailableError";
-        if (!isPikeUnavailable) {
+        if (!isPikeUnavailable(err)) {
           logError(this.connection, ErrorCategory.Diagnostics, `diagnosticManager.dispatchDiagnose(${uri})`, err);
         }
       }

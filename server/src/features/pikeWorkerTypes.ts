@@ -158,3 +158,16 @@ export function clampPriority(p: number): 0 | 1 | 2 {
   if (p >= 2) return 2;
   return 1;
 }
+
+/**
+ * True when a rejection is simply "Pike is not installed".
+ *
+ * That is a supported steady state, not an incident: tree-sitter parsing,
+ * symbols, folding and highlighting all work without the binary. The user is
+ * told once, at startup. Logging it again on every save turns a known
+ * configuration into a stream of warnings, which is what made a Pike-less
+ * install look broken.
+ */
+export function isPikeUnavailable(err: unknown): boolean {
+  return err instanceof Error && err.name === "PikeUnavailableError";
+}

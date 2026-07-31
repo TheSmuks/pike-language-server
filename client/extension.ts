@@ -21,6 +21,7 @@ import {
   TransportKind,
   Trace,
 } from "vscode-languageclient/node";
+import { RestartPolicy, type ServerState } from "./restartPolicy";
 
 import {
   setErrorCount,
@@ -249,8 +250,9 @@ function getSettings(): Record<string, unknown> {
 
 /** Create a state-change handler with crash auto-restart and exponential backoff. */
 function handleClientStateChange(label: string): (event: StateChangeEvent) => void {
-  let restartAttempt = 0;
-  const maxRestartAttempts = 3;
+  const policy = new RestartPolicy();
+  const toPolicyState = (s: State): ServerState =>
+    s === State.Running ? "running" : s === State.Starting ? "starting" : "stopped";
   return (event: StateChangeEvent) => {
     updateStatusBar(event.newState);
     const stateLabel = event.newState === State.Starting ? "Starting"
@@ -259,25 +261,23 @@ function handleClientStateChange(label: string): (event: StateChangeEvent) => vo
       : `unknown(${event.newState})`;
     log("info", "CLIENT", `[${label}] state change: ${stateLabel}`);
 
-    // Auto-restart on unexpected server crash (Stopped without explicit deactivate).
-    if (event.newState === State.Stopped && event.oldState === State.Running) {
-      if (restartAttempt < maxRestartAttempts) {
-        restartAttempt++;
-        const delayMs = restartAttempt * 2000; // 2s, 4s, 6s backoff
-        log("warn", "CLIENT", `Server crashed — restarting in ${delayMs}ms (attempt ${restartAttempt}/${maxRestartAttempts})`);
-        setTimeout(() => {
-          if (client) {
-            client.start();
-          }
-        }, delayMs);
-      } else {
-        log("error", "CLIENT", `Server crashed ${maxRestartAttempts} times — giving up. Reload window to retry.`);
-      }
-    }
-
-    // Reset restart counter on successful start.
-    if (event.newState === State.Running) {
-      restartAttempt = 0;
+    // Auto-restart on unexpected server crash. The decision lives in
+    // RestartPolicy so it can be unit-tested: resetting the attempt counter the
+    // moment the server reported Running let a crash loop restart forever, and
+    // every restart re-ran server init and re-notified the user.
+    const decision = policy.onStateChange(
+      toPolicyState(event.newState as State),
+      toPolicyState(event.oldState as State),
+    );
+    if (decision.action === "restart") {
+      log("warn", "CLIENT", `Server crashed — restarting in ${decision.delayMs}ms (attempt ${decision.attempt}/${decision.maxAttempts})`);
+      setTimeout(() => {
+        if (client) {
+          client.start();
+        }
+      }, decision.delayMs);
+    } else if (decision.action === "give-up") {
+      log("error", "CLIENT", `Server crashed ${decision.maxAttempts} times — giving up. Reload window to retry.`);
     }
   };
 }
