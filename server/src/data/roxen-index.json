@@ -3356,6 +3356,238 @@
       "signature": "mapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)",
       "markdown": "```pike\nmapping(string : mixed)|int(0..1) write_access(string relative_path, int(0..1) recursive, object(RequestID) id)\n```\n\nUsed by some default implementations to check if we may perform a\n write access to path. It should at least call\n check_if_header to check DAV locks. It takes the same arguments\n and has the same return value as that function.\nWARNING: This function has some design issues and will very likely\n get a different interface. Compatibility is NOT guaranteed.\nA filesystem module should typically put all needed write access\n checks here and then use this from find_file(),\n delete_file() etc."
     },
+    "cache.CM_GDS_1": {
+      "signature": "class CM_GDS_1",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CM_GDS_CPUTime": {
+      "signature": "class CM_GDS_CPUTime",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CM_GDS_RealTime": {
+      "signature": "class CM_GDS_RealTime",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CM_GDS_Time": {
+      "signature": "class CM_GDS_Time",
+      "markdown": "Like CM_GDS_1 but adds support for calculating entry cost based\n on passed time.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CM_GreedyDual": {
+      "signature": "class CM_GreedyDual",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CM_Random": {
+      "signature": "class CM_Random",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheEntry": {
+      "signature": "class CacheEntry (mixed key, mixed data, string cache_name)",
+      "markdown": "The manager-specific class to use to create CacheEntry objects.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheManager": {
+      "signature": "class CacheManager",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheManagerMIB": {
+      "signature": "class CacheManagerMIB",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheManagerPrefs": {
+      "signature": "class CacheManagerPrefs(int(0..1) extend_entries )",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheStats": {
+      "signature": "class CacheStats",
+      "markdown": "Holds statistics for each named cache.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.CacheStatsMIB": {
+      "signature": "class CacheStatsMIB",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.avg_destruct_garbage_ratio": {
+      "signature": "float avg_destruct_garbage_ratio;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.avg_timeout_garbage_ratio": {
+      "signature": "float avg_timeout_garbage_ratio;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_change_manager": {
+      "signature": "void cache_change_manager(string cache_name, CacheManager manager);",
+      "markdown": "Changes the manager for a cache. All the cache entries are moved\n to the new manager, but it might not have adequate information to\n give them an accurate cost (typically applies to cost derived from\n the creation time).\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_clear_deltas": {
+      "signature": "void cache_clear_deltas();",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_entries": {
+      "signature": "mapping(mixed:CacheEntry) cache_entries(string cache_name);",
+      "markdown": "Returns the lookup mapping for the given named cache. Don't be\n destructive on the returned mapping or anything inside it.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_expire": {
+      "signature": "void cache_expire(void|string cache_name);",
+      "markdown": "Expires (i.e. removes) all entries in a named cache, or in all\n caches if cache_name is left out.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_expire_by_prefix": {
+      "signature": "void cache_expire_by_prefix(string cache_name_prefix);",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_get_manager": {
+      "signature": "CacheManager cache_get_manager(string cache_name);",
+      "markdown": "Returns the cache manager for the given cache, or zero if the\n cache isn't registered.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_indices": {
+      "signature": "array cache_indices(string|void cache_name);",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_list": {
+      "signature": "mapping(string:CacheManager) cache_list();",
+      "markdown": "Returns a list of all currently registered caches and their\n managers.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_lookup": {
+      "signature": "mixed cache_lookup(string cache_name, mixed key, void|mapping cache_context);",
+      "markdown": "Looks up an entry in a cache. Returns UNDEFINED if not found, or\n if the stored value was zero and the cache garb evicted the entry.\ncache_context is an optional mapping used to pass info between\n cache_lookup and cache_set, which some cache managers need\n to determine the cost of the created entry (the work done between\n a failed cache_lookup and the following cache_set with the\n same key is assumed to be the creation of the cache entry).\nIf cache_context is not specified, a thread local mapping is\n used. cache_context is necessary when cache_lookup and\n cache_set are called from different threads, or in different\n callbacks from a backend. It should not be specified otherwise.\nIf you need to use cache_context, create an empty mapping and\n give it to cache_lookup. Then give the same mapping to the\n corresponding cache_set when the entry has been created.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_manager_prefs": {
+      "signature": "mapping(string:CacheManager) cache_manager_prefs;",
+      "markdown": "The preferred managers according to various caching requirements.\n When several apply for a cache, choose the first one in this list.\n- **\"default\"** — The default manager for caches that do not specify any\n   requirements.\n- **\"no_cpu_timings\"** — The manager to use for caches where a cache entry is created\n   synchronously by one thread, but that thread spends most of its\n   time waiting for a result from an external party, meaning that\n   consumed cpu time is not an accurate measurement of the cost.\n- **\"no_thread_timings\"** — The manager to use for caches where a cache entry isn't created\n   synchronously by one thread in the span between the\n   cache_lookup miss and the following cache_set.\n- **\"no_timings\"** — The manager to use for caches that do not have a usage pattern\n   where it is meaningful to calculate the creation cost from the\n   time between a cache_lookup miss to the following\n   cache_set.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_managers": {
+      "signature": "array(CacheManager) cache_managers;",
+      "markdown": "All available cache managers.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_mgmt_mutex": {
+      "signature": ".Mutex cache_mgmt_mutex;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_peek": {
+      "signature": "mixed cache_peek(string cache_name, mixed key);",
+      "markdown": "Checks if the cache contains an entry. Same as cache_lookup\n except that it doesn't affect the hit/miss statistics or the time\n accounting used to estimate entry creation cost.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_register": {
+      "signature": "CacheManager cache_register(string cache_name, void|string|CacheManager manager, void|CacheManagerPrefs prefs);",
+      "markdown": "Registers a new cache. Returns its CacheManager instance.\nmanager can be a specific CacheManager instance to use, a\n string that specifies a type of manager (see\n cache_manager_prefs), or zero to select the default manager.\nIf prefs is given it should point to an instance of\n CacheManagerPrefs that defines various cache behavior.\nIf the cache already exists, its current manager is simply\n returned, and manager has no effect. It is however possible to\n update prefs for existing caches.\nRegistering a cache is not mandatory before it is used - one will\n be created automatically with the default manager otherwise.\n Still, it's a good idea so that the cache list in the admin\n interface gets populated timely.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_remove": {
+      "signature": "void cache_remove(string cache_name, mixed key);",
+      "markdown": "Removes an entry from the cache.\n**Note:** If key was zero, this function used to remove the whole cache.\n Use cache_expire for that instead.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_set": {
+      "signature": "mixed cache_set(string cache_name, mixed key, mixed data, void|int timeout, void|mapping|int(1..1) cache_context);",
+      "markdown": "Adds an entry to a cache.\n- `cache_name` — The name of the cache. The cache has preferably been created with\n cache_register, but otherwise it is created on-demand using the\n default cache manager.\n- `key` — The key for the cache entry. Normally a string, but can be\n anything that works as an index in a mapping.\n- `data` — The payload data. Note that if it is zero, the cache garb will\n consider it a destructed object and evict it from the cache so\n future lookups may return UNDEFINED instead.\n- `timeout` — If nonzero, sets the maximum time in seconds that the entry is\n valid.\n- `cache_context` — The cache context mapping given to the earlier cache_lookup\n which failed to find the entry that this call adds to the cache.\n See cache_lookup for more details.\n\ncache_context can also be the integer 1, which is a flag that\n this entry got created without any prior lookup, so cache managers\n tracking cost has to fall back to some default then.\n**Returns:** Returns data.\n**Note:** Cache managers commonly uses the time from the closest preceding\n cache_lookup call to calculate a weight for the entry. That\n means the caller should avoid repeated calls to cache_set for\n the same entry.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_stats": {
+      "signature": "mapping(CacheManager:mapping(string:CacheStats)) cache_stats();",
+      "markdown": "Returns the complete cache statistics. For each cache manager, a\n mapping with the named caches it handles is returned, with their\n respective CacheStat objects. Don't be destructive on any part\n of the returned value.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.cache_unregister": {
+      "signature": "void cache_unregister(string cache_name);",
+      "markdown": "Unregisters the specified cache. This empties the cache and also\n removes it from the cache overview in the admin interface.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.clear_session": {
+      "signature": "void clear_session(string id, void|string db_name);",
+      "markdown": "Removes the session data associated with id from the session\n cache and session database.\ndb_name may be given to use another database than the default\n \"local\". That implictly disables the RAM based bucket cache.\n**See also:** set_session_data\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.create": {
+      "signature": "void create();",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.destroy": {
+      "signature": "void destroy();",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.flush_memory_cache": {
+      "signature": "void flush_memory_cache(void|string cache_name);",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.gc_stats_period": {
+      "signature": "constant gc_stats_period = 60 * 60;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.get_session_data": {
+      "signature": "mixed get_session_data(string id, void|string db_name);",
+      "markdown": "Returns the data associated with the session id.\n Returns a zero type upon failure.\ndb_name may be given to use another database than the default\n \"local\". That implictly disables the RAM based bucket cache.\n**See also:** set_session_data\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.init_call_outs": {
+      "signature": "void init_call_outs();",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.init_session_cache": {
+      "signature": "void init_session_cache();",
+      "markdown": "Initializes the session handler.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.last_gc_run": {
+      "signature": "int last_gc_run;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.mib": {
+      "signature": ".SimpleMIB mib;",
+      "markdown": "The SNMP lookup root for the cache.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.ngc_status": {
+      "signature": "mapping(string:array(int)) ngc_status();",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.nongarbing_cache_flush": {
+      "signature": "void nongarbing_cache_flush(string cache_id);",
+      "markdown": "Flush a cache in the non-garbing cache.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.nongarbing_cache_lookup": {
+      "signature": "mixed nongarbing_cache_lookup(string cache_id, string key);",
+      "markdown": "Returns the value associated to the key in the cache\n identified by cache_id in the non-garbing cache.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.nongarbing_cache_remove": {
+      "signature": "void nongarbing_cache_remove(string cache_id, string key);",
+      "markdown": "Remove a value from the non-garbing cache.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.nongarbing_cache_set": {
+      "signature": "void nongarbing_cache_set(string cache_id, string key, mixed value);",
+      "markdown": "Associates a value to a key in a cache identified with\n the cache_id. This cache does not garb, hence it should be\n used for storing data where its size is well controled.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.rebalance_adaptivity": {
+      "signature": "constant rebalance_adaptivity = 30 * 60;",
+      "markdown": "Number of seconds it should take to update the size balance\n between the cache managers for a different workload.\nNote: If this changes then the help texts in\n config_interface/actions/cachestatus.pike should be updated.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.rebalance_interval": {
+      "signature": "constant rebalance_interval = 10;",
+      "markdown": "Seconds between update_cache_size_balance calls.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.rebalance_keep_factor": {
+      "signature": "constant rebalance_keep_factor = 1.0 - 1.0 / (rebalance_adaptivity / rebalance_interval);",
+      "markdown": "Every time update_cache_size_balance is called, the size\n assigned to each cache manager is allowed to shrink to no more\n than its currently assigned size multiplied by this factor.\n**Note:** It's possible that cache managers are rebalanced a lot quicker\n than this: If a manager overshoots in one iteration then all\n caches are shrunk linearly in the next, and that is not limited by\n this value. Remains to be seen whether that is a feature or a bug.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.rebalance_min_size": {
+      "signature": "constant rebalance_min_size = 1024 * 1024;",
+      "markdown": "Minimum size to give a cache manager.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.set_session_data": {
+      "signature": "string set_session_data(mixed data, void|string id, void|int persistence, void|int(0..1)|string store);",
+      "markdown": "Associates the session id to the data. If no id is provided\n a unique id will be generated. The session id is returned from the\n function. The minimum guaranteed storage time may be set with the\n persistence argument. Note that this is a time stamp, not a time out.\nIf store is set, the data will be stored in a database\n directly, and not when the garbage collect tries to delete the\n data. This will ensure that the data is kept safe in case the\n server restarts before the next GC. store may also be the name\n of another database where the \"session_cache\" table resides. In\n that case the data is always stored directly.\n**Note:** The data must not contain any object, programs or functions, or the\n   storage in database will throw an error.\n**See also:** get_session_data, clear_session\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.set_total_size_limit": {
+      "signature": "void set_total_size_limit(int size);",
+      "markdown": "Sets the total size limit available to all caches.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.setup_session_table": {
+      "signature": "int setup_session_table(string db_name);",
+      "markdown": "Creates a table \"session_cache\" with the proper definition in the\n given database.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.sum_destruct_garbage_size": {
+      "signature": "float sum_destruct_garbage_size;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.sum_gc_runs": {
+      "signature": "float sum_gc_runs;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.sum_timeout_garbage_size": {
+      "signature": "float sum_timeout_garbage_size;",
+      "markdown": "Member of `cache` (server/base_server/cache.pike)."
+    },
+    "cache.total_size_limit": {
+      "signature": "int total_size_limit;",
+      "markdown": "Maximum allowed size including the cache manager overhead.\n\nMember of `cache` (server/base_server/cache.pike)."
+    },
     "predef.ArgCache": {
       "signature": "class ArgCache",
       "markdown": "Generic cache for storing away a persistent mapping of data to be\n refetched later by a short string key. This being a cache, your\n data may be thrown away at random when the cache is full.\n\nInjected into Pike's namespace at run time by roxenloader."
@@ -3574,6 +3806,10 @@
     },
     "predef.add_cvs_ids": {
       "signature": "void add_cvs_ids(mixed to);",
+      "markdown": "Injected into Pike's namespace at run time by roxenloader."
+    },
+    "predef.cache": {
+      "signature": "constant cache = this_object();",
       "markdown": "Injected into Pike's namespace at run time by roxenloader."
     },
     "predef.cache_clear": {

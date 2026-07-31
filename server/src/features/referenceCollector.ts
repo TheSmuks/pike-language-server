@@ -15,7 +15,8 @@ import {
   findDeclInScope,
 } from './scope-helpers';
 import { collectPostfixRef } from './postfixRefs';
-import { resolveScoped } from './scopeRefs';
+import { resolveScoped, collectScopeQualifierRef } from './scopeRefs';
+import { scopeQualifierText } from './scopeQualifier';
 import { PIKE_KEYWORDS } from './pikeKeywords';
 
 // ---------------------------------------------------------------------------
@@ -414,33 +415,10 @@ function collectScopeRef(node: Node, state: BuildState): void {
     kind: 'scope_access',
     resolvesTo: declId,
     confidence: declId !== null ? 'medium' : 'low',
-  });
-}
-
-/**
- * Record the qualifier of a scoped access — the `A` in `A::value()`.
- *
- * The qualifier names a class, exactly like a type reference does, so it
- * resolves the same way. Without this the qualifier has no entry in the
- * reference table at all, and every position-driven feature — definition,
- * declaration, references, hover, completion, documentHighlight — returns
- * null there while the member after `::` resolves fine.
- *
- * Bare `::` has no identifier child and is skipped: there is no qualifier to
- * point at.
- */
-function collectScopeQualifierRef(scopeNode: Node, state: BuildState): void {
-  if (scopeNode.type !== 'inherit_specifier') return;
-  const qualifier = scopeNode.children.find(c => c.type === 'identifier');
-  if (!qualifier) return;
-
-  const declId = resolveName(qualifier.text, qualifier, state);
-  state.references.push({
-    name: qualifier.text,
-    loc: toLoc(qualifier.startPosition),
-    kind: 'type_ref',
-    resolvesTo: declId,
-    confidence: declId !== null ? 'high' : 'low',
+    // Recorded even when resolution succeeded: the cross-file fallback needs
+    // it to tell `B::shared` from `A::shared`, and without it that fallback
+    // answered whichever inherit came first.
+    scopeQualifier: scopeNode ? scopeQualifierText(scopeNode) : undefined,
   });
 }
 

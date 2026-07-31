@@ -52,8 +52,21 @@ const BASE = join("server", "base_server");
 /** Sources whose file scope every Roxen module inherits, via module.pike. */
 const PROTOTYPE_SOURCES = [join(BASE, "module.pike"), join(BASE, "basic_defvar.pike")];
 
-/** Sources that call `add_constant`, in the order roxenloader runs them. */
-const GLOBAL_SOURCES = [join(BASE, "roxenloader.pike"), join(BASE, "roxen.pike")];
+/**
+ * Sources that call `add_constant`, in the order roxenloader runs them.
+ *
+ * `cache.pike` is one of them at arm's length: roxenloader instantiates it
+ * (`cache=((program)"base_server/cache")();`, roxenloader.pike:833) and the
+ * file injects itself with `add_constant("cache", this_object())` at its own
+ * line 2393. Leaving it out indexed the forwarded members `cache_lookup` and
+ * `cache_set` while the object they hang off — the one `VFS.pmod:119` writes
+ * as `predef::cache` — was absent.
+ */
+const GLOBAL_SOURCES = [
+  join(BASE, "roxenloader.pike"),
+  join(BASE, "roxen.pike"),
+  join(BASE, "cache.pike"),
+];
 
 const PROTOTYPES = join(BASE, "prototypes.pike");
 

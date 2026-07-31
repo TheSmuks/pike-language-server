@@ -9,35 +9,41 @@
 
 import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
-import { findDeclInScope, findEnclosingClassScopeId } from './scope-helpers';
+import {
+  findDeclInScope, findEnclosingClassScopeId, findScopeForNode, resolveName, toLoc,
+} from './scope-helpers';
+import { scopeQualifierText, inheritMatchesQualifier } from './scopeQualifier';
 
 /**
  * Resolve a scoped reference (e.g., `A::method`, `::create`).
+ *
+ * Each qualifier selects a different scope, and Pike 8.0.1116 distinguishes
+ * them. With `pown.pike` inheriting `pbase.pike` and both declaring `who()`:
+ *
+ *     plain=OWN  bare=INHERITED  this_program=OWN  this=OWN  local=OWN
+ *
+ * so a bare `::` is the ONLY one that skips the program's own declaration.
+ * `this_program::onlyparent()` still reaches the parent's `onlyparent`, so the
+ * inherited scopes remain a fallback rather than being excluded.
  */
 export function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: BuildState): number | null {
-  // `global::name` names the FILE scope. The token is `global`, not an
-  // identifier, so without this it fell through to the bare-`::` branch below
-  // and resolved to the first inherited class — a different scope entirely,
-  // and the opposite of what the user wrote `global::` to ask for.
-  if (scopeNode.children.some(c => c.type === 'global')) {
-    return resolveGlobalScopeAccess(name, state);
-  }
+  // The grammar emits every one of these as an ANONYMOUS token, never as an
+  // `identifier`, so a test for "has no identifier child" reads them all as a
+  // bare `::` — which is a different scope and, for the three below, the wrong
+  // answer rather than a missing one.
+  const qualifier = scopeQualifierText(scopeNode);
 
-  // Bare `::` means parent scope (first inherited class)
-  // The inherit_specifier for bare `::` has only the `::` token as child
-  const isBareScope = scopeNode.type === 'inherit_specifier' &&
-    !scopeNode.children.some(c => c.type === 'identifier');
-  if (isBareScope) {
-    return resolveBareScopeAccess(name, refNode, state);
+  switch (qualifier) {
+    // `global::name` names the FILE scope, ignoring anything that shadows it.
+    case 'global': return resolveGlobalScopeAccess(name, state);
+    // Pike's own top-level namespace. Nothing declared in this file answers
+    // it; the builtin and stdlib tiers do.
+    case 'predef': return null;
+    case 'this': case 'this_program': case 'local':
+      return resolveProgramScopeAccess(name, refNode, state);
+    case '': return resolveBareScopeAccess(name, refNode, state);
+    default: return resolveScopedByIdentifier(name, qualifier, refNode, state);
   }
-
-  // Identifier::name — resolve identifier to inherited class by alias or name
-  const firstIdent = scopeNode.children.find(c => c.type === 'identifier');
-  if (firstIdent) {
-    return resolveScopedByIdentifier(name, firstIdent.text, refNode, state);
-  }
-
-  return null;
 }
 
 /** Resolve `global::name` against the file scope, ignoring any shadowing. */
@@ -47,40 +53,111 @@ export function resolveGlobalScopeAccess(name: string, state: BuildState): numbe
   return findDeclInScope(name, fileScope.id, state);
 }
 
-/** Resolve bare `::` scope access to the first inherited class. */
-export function resolveBareScopeAccess(name: string, refNode: Node, state: BuildState): number | null {
+/**
+ * The scope of the program a node sits in: the innermost enclosing class, or
+ * the file, since a Pike source file is itself a program.
+ */
+function enclosingProgramScopeId(refNode: Node, state: BuildState): number | null {
   const classScopeId = findEnclosingClassScopeId(refNode, state);
-  if (classScopeId === null) return null;
-
-  const classScope = state.scopeMap.get(classScopeId);
-  if (!classScope || classScope.inheritedScopes.length === 0) return null;
-
-  return findDeclInScope(name, classScope.inheritedScopes[0], state);
+  if (classScopeId !== null) return classScopeId;
+  return state.scopes.find(s => s.kind === 'file')?.id ?? null;
 }
 
-/** Resolve `Identifier::name` scoped access by inherit alias or path name. */
-export function resolveScopedByIdentifier(
-  name: string,
-  inheritName: string,
-  refNode: Node,
-  state: BuildState,
-): number | null {
+/**
+ * Resolve `this::`, `this_program::` and `local::` — the current program.
+ *
+ * `findDeclInScope` searches the scope's own declarations before its inherited
+ * ones, which is exactly the order the oracle shows: the program's own `who`
+ * wins, and a name only it inherits is still found.
+ */
+export function resolveProgramScopeAccess(name: string, refNode: Node, state: BuildState): number | null {
+  const programScopeId = enclosingProgramScopeId(refNode, state);
+  if (programScopeId === null) return null;
+  return findDeclInScope(name, programScopeId, state);
+}
+
+/**
+ * Resolve bare `::` — what the enclosing program inherits, skipping its own
+ * declarations.
+ *
+ * Every inherit is consulted, not just the first: a file with two inherits
+ * reaches members of both under Pike.
+ */
+export function resolveBareScopeAccess(name: string, refNode: Node, state: BuildState): number | null {
   const classScopeId = findEnclosingClassScopeId(refNode, state);
   if (classScopeId === null) return null;
 
   const classScope = state.scopeMap.get(classScopeId);
   if (!classScope) return null;
 
-  for (const declId of classScope.declarations) {
-    const decl = state.declMap.get(declId);
-    if (!decl || decl.kind !== 'inherit') continue;
-    if (decl.alias !== inheritName && decl.name !== inheritName) continue;
-
-    const match = resolveInheritedScopeMember(name, decl.name, classScope.inheritedScopes, state);
+  for (const inheritedId of classScope.inheritedScopes) {
+    const match = findDeclInScope(name, inheritedId, state);
     if (match !== null) return match;
   }
-
   return null;
+}
+
+/**
+ * Resolve `Outer::name` where `Outer` is a lexically SURROUNDING class.
+ *
+ * Pike's own error text names both referents — `No inherit or surrounding
+ * class Session.` — and a nested class really does reach out this way:
+ * `class Session { int maxtime=1, timeout=2; class SessionQuery { …
+ * Session::maxtime … } }` prints `12`, the outer class's own values. Roxen's
+ * `HTTPClient.pmod` is written exactly like that.
+ */
+function resolveSurroundingClass(
+  name: string,
+  className: string,
+  refNode: Node,
+  state: BuildState,
+): number | null {
+  let scopeId: number | null = findScopeForNode(refNode, state);
+  while (scopeId !== null) {
+    const scope = state.scopeMap.get(scopeId);
+    if (!scope) return null;
+    if (scope.kind === 'class' && scope.parentId !== null) {
+      const parent = state.scopeMap.get(scope.parentId);
+      const owner = parent?.declarations
+        .map(id => state.declMap.get(id))
+        .find(d => d?.kind === 'class' && d.name === className);
+      if (owner) return findDeclInScope(name, scopeId, state);
+    }
+    scopeId = scope.parentId;
+  }
+  return null;
+}
+
+/**
+ * Resolve `Identifier::name` — an inherit of the enclosing program or of one
+ * around it, or a surrounding class.
+ *
+ * The search walks OUTWARD: a nested class may name an enclosing class's
+ * inherit, and Pike proves it — `class Outer { inherit "pbase" : parent;
+ * class Nested { … parent::who() … } }` prints `INHERITED`. (A bare `::` in
+ * that same `Nested` does not; it is program-local.)
+ */
+export function resolveScopedByIdentifier(
+  name: string,
+  inheritName: string,
+  refNode: Node,
+  state: BuildState,
+): number | null {
+  let scopeId: number | null = findEnclosingClassScopeId(refNode, state);
+  while (scopeId !== null) {
+    const scope = state.scopeMap.get(scopeId);
+    if (!scope) break;
+    for (const declId of scope.declarations) {
+      const decl = state.declMap.get(declId);
+      if (!decl || !inheritMatchesQualifier(decl, inheritName)) continue;
+
+      const match = resolveInheritedScopeMember(name, decl.name, scope.inheritedScopes, state);
+      if (match !== null) return match;
+    }
+    scopeId = scope.parentId;
+  }
+
+  return resolveSurroundingClass(name, inheritName, refNode, state);
 }
 
 /**
@@ -125,4 +202,31 @@ export function resolveInheritedScopeMember(
     }
   }
   return null;
+}
+
+/**
+ * Record the qualifier of a scoped access — the `A` in `A::value()`.
+ *
+ * The qualifier names a class, exactly like a type reference does, so it
+ * resolves the same way. Without this the qualifier has no entry in the
+ * reference table at all, and every position-driven feature — definition,
+ * declaration, references, hover, completion, documentHighlight — returns
+ * null there while the member after `::` resolves fine.
+ *
+ * Bare `::` has no identifier child and is skipped: there is no qualifier to
+ * point at.
+ */
+export function collectScopeQualifierRef(scopeNode: Node, state: BuildState): void {
+  if (scopeNode.type !== 'inherit_specifier') return;
+  const qualifier = scopeNode.children.find(c => c.type === 'identifier');
+  if (!qualifier) return;
+
+  const declId = resolveName(qualifier.text, qualifier, state);
+  state.references.push({
+    name: qualifier.text,
+    loc: toLoc(qualifier.startPosition),
+    kind: 'type_ref',
+    resolvesTo: declId,
+    confidence: declId !== null ? 'high' : 'low',
+  });
 }
