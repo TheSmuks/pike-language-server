@@ -46,6 +46,7 @@
     "audit:sweep": "bun run tools/lsp-audit/cli.ts sweep",
     "audit:triage": "bun run tools/lsp-audit/cli.ts triage",
     "audit:standalone": "node tools/lsp-audit/standalone-sweep.mjs",
+    "audit:client-surface": "node tools/lsp-audit/client-surface-check.mjs",
     "watch:client": "bun run scripts/watch-client.mjs",
     "watch:server": "bun run scripts/watch-server.mjs",
     "test": "bun test",

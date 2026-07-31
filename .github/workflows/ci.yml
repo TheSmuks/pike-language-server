@@ -120,6 +120,12 @@ jobs:
         run: bun run check:standalone
       - name: Helix LSP features return real results
         run: bun run check:helix
+      # Two things nothing else covers: a contributed setting no shipped code
+      # reads, and a semantic token painted over a comment or string literal.
+      # Both are silent in every other gate — the second sat failing until it
+      # was run by hand.
+      - name: Client surface (settings are read, tokens stay out of literals)
+        run: bun run audit:client-surface
 
   # Every artifact a user can install must serve LSP when run outside the
   # repository. Guards the whole no-build install path: an earlier bundle only
