@@ -1394,4 +1394,29 @@ describe("definition: chained access resolution", () => {
     expect(viaArray).not.toBeNull();
     expect(viaArray!.range.start.line).toBe(1);
   });
+
+  test("global:: resolves to file scope, not the shadowing class member", async () => {
+    // Audit iteration 7: `global::total_size_limit` resolved to nothing. Pike's
+    // `global::` names the file-level scope; the collector saw no `identifier`
+    // child (the token is `global`) and fell through to the bare-`::` branch,
+    // which means "first inherited class" — a different thing entirely.
+    const src = [
+      'int limit = 10;',
+      'class Cache {',
+      '  int limit = 5;',
+      '  int get_global() { return global::limit; }',
+      '}',
+    ].join('\n');
+    const uri = server.openDoc("file:///test-global-scope.pike", src);
+
+    const result = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri },
+      position: { line: 3, character: 37 },
+    }) as LspLocation | null;
+
+    expect(result).not.toBeNull();
+    // Line 0 is the file-scope `limit`; line 2 is the class member that shadows
+    // it. Resolving to line 2 would defeat the point of writing `global::`.
+    expect(result!.range.start.line).toBe(0);
+  });
 });

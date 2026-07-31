@@ -14,6 +14,7 @@ import {
   findDeclInScope,
 } from './scope-helpers';
 import { collectPostfixRef } from './postfixRefs';
+import { resolveScoped } from './scopeRefs';
 
 // ---------------------------------------------------------------------------
 // Reference collection and resolution
@@ -413,83 +414,7 @@ function resolveName(name: string, refNode: Node, state: BuildState): number | n
   return null;
 }
 
-/**
- * Resolve a scoped reference (e.g., `A::method`, `::create`).
- */
-function resolveScoped(name: string, scopeNode: Node, refNode: Node, state: BuildState): number | null {
-  // Bare `::` means parent scope (first inherited class)
-  // The inherit_specifier for bare `::` has only the `::` token as child
-  const isBareScope = scopeNode.type === 'inherit_specifier' &&
-    !scopeNode.children.some(c => c.type === 'identifier');
-  if (isBareScope) {
-    return resolveBareScopeAccess(name, refNode, state);
-  }
 
-  // Identifier::name — resolve identifier to inherited class by alias or name
-  const firstIdent = scopeNode.children.find(c => c.type === 'identifier');
-  if (firstIdent) {
-    return resolveScopedByIdentifier(name, firstIdent.text, refNode, state);
-  }
 
-  return null;
-}
 
-/** Resolve bare `::` scope access to the first inherited class. */
-function resolveBareScopeAccess(name: string, refNode: Node, state: BuildState): number | null {
-  const classScopeId = findEnclosingClassScopeId(refNode, state);
-  if (classScopeId === null) return null;
 
-  const classScope = state.scopeMap.get(classScopeId);
-  if (!classScope || classScope.inheritedScopes.length === 0) return null;
-
-  return findDeclInScope(name, classScope.inheritedScopes[0], state);
-}
-
-/** Resolve `Identifier::name` scoped access by inherit alias or path name. */
-function resolveScopedByIdentifier(
-  name: string,
-  inheritName: string,
-  refNode: Node,
-  state: BuildState,
-): number | null {
-  const classScopeId = findEnclosingClassScopeId(refNode, state);
-  if (classScopeId === null) return null;
-
-  const classScope = state.scopeMap.get(classScopeId);
-  if (!classScope) return null;
-
-  for (const declId of classScope.declarations) {
-    const decl = state.declMap.get(declId);
-    if (!decl || decl.kind !== 'inherit') continue;
-    if (decl.alias !== inheritName && decl.name !== inheritName) continue;
-
-    const match = resolveInheritedScopeMember(name, decl.name, classScope.inheritedScopes, state);
-    if (match !== null) return match;
-  }
-
-  return null;
-}
-
-/** Find a member declaration in an inherited scope matching the inherit name. */
-function resolveInheritedScopeMember(
-  name: string,
-  inheritDeclName: string,
-  inheritedScopes: number[],
-  state: BuildState,
-): number | null {
-  for (const inheritedId of inheritedScopes) {
-    const inheritedScope = state.scopeMap.get(inheritedId);
-    if (!inheritedScope || inheritedScope.parentId === null) continue;
-
-    const parentScope = state.scopeMap.get(inheritedScope.parentId);
-    if (!parentScope) continue;
-
-    for (const parentDeclId of parentScope.declarations) {
-      const parentDecl = state.declMap.get(parentDeclId);
-      if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === inheritDeclName) {
-        return findDeclInScope(name, inheritedId, state);
-      }
-    }
-  }
-  return null;
-}
