@@ -62,6 +62,8 @@ const DISPATCHED_DECL_TYPES = new Set<string>([
   'preproc_include',
   'preproc_define',
   'preprocessor_directive',
+  'preproc_if',
+  'preproc_undef',
   'local_function_decl',
   'lambda_expr',
   'for_statement',
@@ -175,6 +177,11 @@ function dispatchCollectDeclarations(node: Node, state: BuildState): void {
   }
   if (node.type === 'preprocessor_directive') {
     // Every remaining directive is a flat text token that declares nothing.
+    return;
+  }
+  if (node.type === 'preproc_if' || node.type === 'preproc_undef') {
+    // A conditional directive names macros rather than declaring anything; its
+    // identifiers are uses, collected by the reference collector.
     return;
   }
 

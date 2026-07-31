@@ -2,7 +2,6 @@
   "corpusRevision": "4f1d04f82b3ea95f680cddab552d4912990c9c2f",
   "total": 442,
   "failing": [
-    "server/base_server/hosts.pike",
     "server/base_server/roxenloader.pike",
     "server/etc/modules/RXML.pmod/module.pmod",
     "server/etc/roxen_master.pike",

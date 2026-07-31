@@ -39,6 +39,8 @@ const DISPATCHED_REF_TYPES = new Set<string>([
   'inherit_decl',
   'import_decl',
   'preproc_define',
+  'preproc_if',
+  'preproc_undef',
 ]);
 
 /**
@@ -63,6 +65,17 @@ export function collectReferences(node: Node, state: BuildState): void {
     return;
   }
 
+  dispatchCollectReferences(node, state);
+
+  // Recurse into children, but skip return_type on function_decl — it's
+  // already handled by collectFunctionReturnTypeRefs above. This prevents
+  // the generic type walker from collecting duplicate type_refs for the
+  // return type identifier.
+  descendForReferences(node, state, node.type === 'function_decl');
+}
+
+/** Route `node` to the handler for its type. Keep in sync with DISPATCHED_REF_TYPES. */
+function dispatchCollectReferences(node: Node, state: BuildState): void {
   switch (node.type) {
     case 'identifier_expr':
       collectIdentifierRef(node, state);
@@ -87,15 +100,13 @@ export function collectReferences(node: Node, state: BuildState): void {
     case 'preproc_define':
       collectPreprocDefineRefs(node, state);
       break;
+    case 'preproc_if':
+    case 'preproc_undef':
+      collectPreprocConditionRefs(node, state);
+      break;
     default:
       break;
   }
-
-  // Recurse into children, but skip return_type on function_decl — it's
-  // already handled by collectFunctionReturnTypeRefs above. This prevents
-  // the generic type walker from collecting duplicate type_refs for the
-  // return type identifier.
-  descendForReferences(node, state, node.type === 'function_decl');
 }
 
 /**
@@ -280,6 +291,49 @@ function collectPreprocDefineRefs(node: Node, state: BuildState): void {
       resolvesTo: declId,
       confidence: declId !== null ? 'high' : 'low',
     });
+  }
+}
+
+/**
+ * Names a `#if` condition can contain that are not Pike symbols.
+ *
+ * These are directives of the preprocessor's own expression language, not
+ * functions — `pike -e` accepts `#if efun(sprintf)` while warning the form is
+ * deprecated, and none of the three is resolvable as a Pike identifier. Left in,
+ * every `#if constant(X)` in the corpus would record an unresolved reference to
+ * `constant`.
+ */
+const PREPROC_OPERATORS = new Set(['defined', 'constant', 'efun']);
+
+/**
+ * References inside a conditional directive: `#ifdef X`, `#if constant(Y)`,
+ * `#undef Z`.
+ *
+ * The names that decide what compiles are written here, and until the grammar
+ * modelled these directives they sat inside one opaque token — 2316 identifier
+ * occurrences across the Roxen corpus at which no position-driven capability
+ * could answer. Like a macro body, a condition is a token sequence rather than
+ * an expression, so its identifiers are bare `identifier` nodes that no
+ * expression rule dispatches.
+ */
+function collectPreprocConditionRefs(node: Node, state: BuildState): void {
+  for (const child of node.children) {
+    const identifiers = child.type === 'identifier' ? [child]
+      : child.type === 'preproc_body' ? child.children.filter(c => c.type === 'identifier')
+      : [];
+    for (const id of identifiers) {
+      const name = id.text;
+      if (PIKE_KEYWORDS.has(name) || PREPROC_OPERATORS.has(name)) continue;
+
+      const declId = resolveName(name, id, state);
+      state.references.push({
+        name,
+        loc: toLoc(id.startPosition),
+        kind: 'identifier',
+        resolvesTo: declId,
+        confidence: declId !== null ? 'high' : 'low',
+      });
+    }
   }
 }
 
