@@ -379,22 +379,49 @@ Roxen-tier empty would be an artifact of missing configuration rather than a
 defect: with `rootUri` set to the Roxen tree, hover on a `MODULE_*` constant
 resolves. The Roxen findings are genuine gaps.
 
+### New finding, found and fixed: qualified access resolved to the wrong class (`34bcef7`)
+
+The tier-2 check on `class-multi-inherit.pike` reported a wrong reference count.
+Investigating found something worse than the missing reference: on a name
+collision, the qualifier resolved to the **wrong class**.
+
+```
+A::value()  ->  A.value   correct
+B::value()  ->  A.value   WRONG — silently the other class's member
+A::name()   ->  A.name    correct
+B::label()  ->  null      B.label exists, but was unreachable
+```
+
+`resolveInheritedScopeMember` checked whether the inherited scope's *parent*
+contained a class of the qualifier's name — but every class body shares the file
+scope as its parent, so `class B` is visible from `class A`'s scope and the
+first inherited scope always matched. It now requires the scope to be the body
+of that class.
+
+This is the defect class tier 2 exists for: a wrong answer, returned
+confidently, that no crash or empty-result check could ever surface. The fixture
+was written to exercise exactly this ("Name collision on `value()` — resolve
+with `A::value()` and `B::value()`") and the audit is what noticed it was not.
+
 ### Measured impact
 
 Corpus tier re-swept after all three fixes, same harness, same 87 files:
 
 | | Before | After |
 |---|---|---|
-| Findings | 253 | **34** (−87%) |
+| Findings | 253 | **33** (−87%) |
 | `documentHighlight` empties | 211 | **9** (−96%) |
-| Tier-2 wrong answers | 2 | **1** |
+| Tier-2 wrong answers | 2 | **0** |
+
+Every wrong answer the harness can detect is now fixed; the 33 remaining corpus
+findings are all empty results, not incorrect ones.
 
 **The Roxen tier improved far less, and the reason matters.** A re-sweep of 40
 Roxen files that previously produced empties gives:
 
 | | Before | After |
 |---|---|---|
-| Empty results | 1,567 | **1,136** (−27.5%) |
+| Empty results | 1,567 | **1,138** (−27.4%) |
 
 The gap is not noise. The Roxen instances of this cluster have a **different
 root cause**, confirmed by inspection: the reported example
