@@ -353,14 +353,40 @@ from N1, which was about lone declarations.
 Reproduction:
 `bun run scripts/lsp-probe.ts raw textDocument/documentHighlight <file> '{"position":{...on a ->member...}}'`
 
+### New finding, found and fixed: member access with an outer-scope receiver (`413e853`)
+
+`documentHighlight` returned null for `obj->member` in every form — including
+the direct case `definition` resolved fine — because the two take different
+paths. `definition` goes through `accessResolver`; `documentHighlight` reads the
+reference table, and the member reference only resolves if its **receiver** can
+be found.
+
+That receiver lookup used `findDeclInScope`, which checks the given scope and
+its *inherited* scopes but never walks the **parent** chain. A field declared on
+the class is therefore invisible from inside a method body, so `single` was not
+found and `single->configure(...)` resolved to nothing. Switched to
+`resolveName`, which walks the chain — and which had to move into
+`scope-helpers.ts` first, since `referenceCollector` imports `postfixRefs` and
+exporting it the other way would have cycled.
+
+Effect at the reported position: `null` → 3 highlights (the declaration and both
+call sites).
+
+### Methodology check: Roxen mode is active during sweeps
+
+Confirmed directly rather than assumed, because if it were not, every
+Roxen-tier empty would be an artifact of missing configuration rather than a
+defect: with `rootUri` set to the Roxen tree, hover on a `MODULE_*` constant
+resolves. The Roxen findings are genuine gaps.
+
 ### Measured impact
 
 Corpus tier re-swept after all three fixes, same harness, same 87 files:
 
 | | Before | After |
 |---|---|---|
-| Findings | 253 | **36** (−86%) |
-| `documentHighlight` empties | 211 | **11** (−95%) |
+| Findings | 253 | **34** (−87%) |
+| `documentHighlight` empties | 211 | **9** (−96%) |
 | Tier-2 wrong answers | 2 | **1** |
 
 **The Roxen tier improved far less, and the reason matters.** A re-sweep of 40
@@ -368,7 +394,7 @@ Roxen files that previously produced empties gives:
 
 | | Before | After |
 |---|---|---|
-| Empty results | 1,567 | **1,172** (−25%) |
+| Empty results | 1,567 | **1,136** (−27.5%) |
 
 The gap is not noise. The Roxen instances of this cluster have a **different
 root cause**, confirmed by inspection: the reported example
