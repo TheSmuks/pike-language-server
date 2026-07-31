@@ -5,7 +5,7 @@ category: project-management
 tags: [template, conventions, compliance, upgrade]
 version: 1.0.0
 
-template-version: 0.8.52
+template-version: 0.8.53
 ---
 
 # Template Guide
