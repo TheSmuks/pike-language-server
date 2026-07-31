@@ -1,7 +1,7 @@
 {
   "name": "pike-language-server",
   "displayName": "Pike Language Server",
-  "description": "Language support for Pike — diagnostics, completion, go-to-definition, hover, references, rename, formatting, and more",
+  "description": "IDE-grade Pike tooling — real compiler diagnostics, cross-file navigation, type-aware completion, and Roxen WebServer support out of the box.",
   "version": "0.8.37",
   "publisher": "thesmuks",
   "engines": {
@@ -10,13 +10,18 @@
   "icon": "icon.png",
   "categories": [
     "Programming Languages",
+    "Linters",
     "Formatters"
   ],
   "keywords": [
     "pike",
     "pike-language",
     "lsp",
-    "language-server"
+    "language-server",
+    "roxen",
+    "roxen-webserver",
+    "autocomplete",
+    "intellisense"
   ],
   "galleryBanner": {
     "color": "#1a1a2e",

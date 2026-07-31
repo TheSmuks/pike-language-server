@@ -5,7 +5,7 @@
     "onLanguage:pike"
   ],
   "main": "./client/dist/extension.cjs",
-  "description": "Tier-3 LSP implementation for Pike",
+  "description": "IDE-grade Pike tooling — real compiler diagnostics, cross-file navigation, type-aware completion, and Roxen WebServer support out of the box.",
   "type": "module",
   "extensionKind": [
     "workspace"

@@ -21,6 +21,8 @@
 
 Pike is a powerful language with a sparse tooling story. This extension brings a modern editing experience to `.pike`, `.pmod`, and `.mmod` files by using **`pike` itself as the semantic oracle** — diagnostics, types, and symbol resolution come from the real compiler, not heuristics — with [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) providing fast, incremental syntax parsing.
 
+It also understands **[Roxen WebServer](https://www.roxen.com/)** source out of the box, with a bundled Roxen 6.1 index so its constants and APIs resolve even on a machine with no Roxen installed.
+
 The extension bundles and manages the language server automatically. Install it, open a Pike file, and it just works.
 
 ## Installation
@@ -80,6 +82,11 @@ A comprehensive LSP feature set, all backed by real compiler information:
 - **Semantic tokens** for precise highlighting
 - Smart, scope-aware selection ranges
 
+**Roxen WebServer**
+- Roxen source is Pike, but `#include <module.h>` and the other Roxen headers never resolve on their own. A local installation is detected automatically — explicit setting, then `pike.json`, then a workspace ancestor, then `/usr/local/roxen*` — and its module, include, and program paths are folded into Pike's.
+- A generated index of **Roxen 6.1** (212 constants, 499 Roxen/RXML/module-prototype symbols) ships with the server, so hover and completion work with **no Roxen installed at all**. A detected installation takes precedence and additionally gives go-to-definition into real sources.
+- Roxen mode is decided **per file** — from a Roxen header include, `inherit "module"`, or `constant module_type = MODULE_*`, with directory inheritance for helper files. A plain Pike file in a mixed workspace is never offered a Roxen symbol. Override with `pike.roxen.mode`.
+
 ## Configuration
 
 Configure under **Settings → Extensions → Pike Language Server**, or in `settings.json`. The most common settings:
@@ -97,8 +104,10 @@ Configure under **Settings → Extensions → Pike Language Server**, or in `set
 | `pike.languageServer.format.operatorSpacing` | `false` | Add spaces around operators when formatting. |
 | `pike.languageServer.memory.budgetMb` | `512` | Heap budget (MB) before the server sheds non-essential index entries. |
 | `pike.languageServer.trace.server` | `"off"` | LSP protocol tracing (`off`/`messages`/`verbose`) for debugging. |
+| `pike.roxen.mode` | `"auto"` | Roxen support: `auto` (detect per file), `on`, or `off`. |
+| `pike.roxen.path` | `""` | Roxen installation root. Overrides auto-detection when set. |
 
-There are 25+ settings in total — including worker lifecycle, background indexing, and hibernation tuning — all discoverable in the Settings UI.
+There are 28 settings in total — including worker lifecycle, background indexing, and hibernation tuning — all discoverable in the Settings UI.
 
 ## Troubleshooting
 
@@ -115,9 +124,11 @@ For deeper diagnosis, set `pike.languageServer.trace.server` to `verbose` and ch
 
 ## Architecture
 
-A **Tier-3 LSP**: `pike` is the semantic oracle and [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) is the syntactic parser. The server is TypeScript (`vscode-languageserver-node`) split into 60+ focused modules, following a strict style budget (500-line files, 50-line functions, explicit error handling, bounded caches).
+A **Tier-3 LSP**: `pike` is the semantic oracle and [tree-sitter-pike](https://github.com/TheSmuks/tree-sitter-pike) is the syntactic parser. The server is TypeScript (`vscode-languageserver-node`) split into 137 focused modules, following a strict style budget (500-line files, 50-line functions, explicit error handling, bounded caches) enforced in CI.
 
-Correctness is anchored to the compiler: the test suite derives every expected result from `pike` itself — no hand-written expectations — across ~490 Pike (PUnit) tests, a 90-file language corpus, and TypeScript LSP integration tests.
+Correctness is anchored to the compiler: the test suite derives every expected result from `pike` itself — no hand-written expectations — across **487 Pike (PUnit) tests**, **2,480+ TypeScript tests**, a **91-file language corpus**, and VS Code integration tests.
+
+Behaviour is also audited by running the server for real rather than reasoning about it. A harness fires every declared capability at every declaration and sampled reference across a workspace, gating each finding against the Pike compiler so a defect in the *source* is never reported as a defect in the server. The most recent sweep put **200,936 requests** through all 442 Pike files of Roxen 6.1 with **zero crashes and zero timeouts**, and the semantic corpus answers **every request it owes** — 7,874 requests, no empty or incorrect results. Findings and remaining gaps are written up in [docs/audits/](./docs/audits/).
 
 See **[docs/architecture.md](./docs/architecture.md)** for the full design and **[docs/decisions/](./docs/decisions/)** for the decision records.
 
