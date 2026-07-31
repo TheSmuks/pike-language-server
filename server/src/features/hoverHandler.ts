@@ -23,6 +23,7 @@ import {
   resolveAccessDeclaration,
   resolveAccessQualifiedType,
   modulePathAtPosition,
+  headOfDottedPath,
   type ResolutionContext,
 } from "./accessResolver";
 import type { PikeWorker } from "./pikeWorker";
@@ -40,6 +41,8 @@ import {
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
 import { memberOfMemberlessReceiver } from "./receiverMembers";
+import { magicConstantHover } from "./pikeMagicConstants";
+import { hoverFromModulePath } from "./hoverModulePath";
 import { type RoxenIndexData } from "./roxenIndex";
 import { roxenHover, roxenPathHover, roxenTypedMemberHover } from "./hoverRoxen";
 import {
@@ -311,73 +314,6 @@ async function hoverFromTree(
 }
 
 /**
- * Hover on a dotted type/module path — `Stdio.File` in a declaration, or a
- * relative module reference like `.Util`. Tries the static stdlib index
- * (rich class docs), then the workspace module resolver, then the Pike
- * worker's runtime resolve for stdlib types the index doesn't carry
- * (e.g. `String.Buffer`).
- */
-async function hoverFromModulePath(
-  ctx: HoverContext,
-  doc: { getText(): string },
-  params: { textDocument: { uri: string }; position: { line: number; character: number } },
-): Promise<Hover | null> {
-  const lines = doc.getText().split('\n');
-  const path = modulePathAtPosition(lines, params.position.line, params.position.character);
-  if (!path) return null;
-
-  // The bundled Roxen API is dotted too, but it is consulted before the
-  // bare-name tiers rather than here — see roxenPathHover.
-
-  // Static stdlib entry: class/module docs. Signatures are empty for class
-  // entries (`predef.Stdio.File`), so synthesize a readable header.
-  if (!path.startsWith(".")) {
-    const entry = ctx.stdlibIndex[`predef.${path}`];
-    if (entry) {
-      return formatHover({
-        name: path,
-        signature: entry.signature || `class ${path}`,
-        documentation: entry.markdown,
-        line: params.position.line,
-        character: params.position.character,
-        isAutodoc: true,
-      });
-    }
-  }
-
-  // Workspace module (including Pike's relative `.Util` form).
-  const moduleUri = await ctx.index.resolveModule(path, params.textDocument.uri);
-  if (moduleUri) {
-    const basename = moduleUri.replace(/\/+$/, "").split("/").pop() ?? moduleUri;
-    return formatHover({
-      name: path,
-      signature: `module ${path}`,
-      documentation: `Defined in \`${basename}\``,
-      line: params.position.line,
-      character: params.position.character,
-    });
-  }
-
-  // Runtime resolve: stdlib types absent from the static index.
-  if (!path.startsWith(".") && path.includes(".")) {
-    try {
-      const resolved = await ctx.worker.resolve(path);
-      if (resolved.resolved && resolved.kind) {
-        return formatHover({
-          name: path,
-          signature: `${resolved.kind} ${path}`,
-          documentation: "",
-          line: params.position.line,
-          character: params.position.character,
-        });
-      }
-    } catch { /* Worker unavailable — no hover */ }
-  }
-
-  return null;
-}
-
-/**
  * Try to find stdlib hover info for a resolved access declaration.
  *
  * When hovering over `f->open()` where `f` is `Stdio.File`, the access
@@ -473,6 +409,11 @@ function resolveHoverBuiltin(
     hoverTree, params.position.line, params.position.character,
   );
   if (!identName) return null;
+
+  // Compiler-defined constants come first: none is declared in any Pike
+  // source, so no index below carries them.
+  const magic = magicConstantHover(identName, params.position);
+  if (magic) return magic;
 
   const builtinSig = ctx.predefBuiltins[identName];
   if (builtinSig) {

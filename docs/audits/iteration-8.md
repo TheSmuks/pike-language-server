@@ -122,7 +122,7 @@ a reason for the declaration to become unreachable.
 | `Qualifier::` (mostly `predef::`) | 89 | ~~Needs Roxen index coverage~~ — wrong, see correction |
 | Bare `::` | 74 | ~~Partly~~ — wrong, see correction |
 | After `.` | 61 | ~~Partly~~ — see amendment 4 |
-| Plain identifier | 24 | Yes |
+| Plain identifier | 24 | ~~Yes~~ — see amendment 5 |
 | `->` on a subscript | 13 | Yes |
 
 **~~The `#define` bucket is structural.~~ Wrong — see the amendment.** This
@@ -356,3 +356,33 @@ module-path tier is entitled to answer it. Hover had the same problem from a
 different direction: its module-path tier ran *after* the bare-name tiers.
 
 Answered 8,832 → 8,751, paths that resolve inconsistently 112 → 98.
+
+## Amendment 5 — the plain-identifier bucket, 2026-07-31
+
+145,301 plain identifier references in Roxen 6.1, not the 24 the sweep
+recorded. 38,253 are unresolved in the symbol table, but most of those are
+answered by a later tier — probing one occurrence of each of the 2,127 distinct
+unresolved names found 1,163 that answer nothing, covering 6,819 occurrences.
+
+Two clean causes, both fixed:
+
+- **Compiler-defined constants** (`UNDEFINED` 170, `__FILE__` 58, `__DIR__`,
+  `__LINE__`, …). Defined by the compiler, declared in no Pike source, so the
+  autodoc-derived index never had them. `__NT__` (96) is *correctly* empty —
+  Pike rejects it outside Windows.
+- **`Image`** (272). It installs as `Image.so`; the file-based resolver looks
+  for `.pmod`, and the runtime fallback that would have found it was gated on
+  the path containing a dot, which a bare head never has.
+
+6,819 → 6,256 occurrences behind names that answer nothing.
+
+**What is left is mostly one shape, and it is not what it looks like.** `err`
+(271), `result` (191), `conf` (118), `id` (104) are not macro-body names: they
+are members inherited from a class the Roxen index carries. `class RequestID2
+{ inherit RequestID; … return conf; }` — `conf` is `RequestID`'s, declared as
+the getter/setter pair `` `conf() ``/`` `conf=() ``. Closing it needs two
+things this iteration did not do: the declaration extractor does not emit
+backtick-named members at all, and a bare name inside a class that inherits an
+indexed Roxen class is never looked up as `Class.name` (only `RoxenModule.` is
+tried). Neither is speculative — both are specific and small — but they are
+unstarted, not partially done.

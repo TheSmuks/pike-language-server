@@ -464,3 +464,26 @@ function findDeclUri(
   }
   return localUri;
 }
+
+/**
+ * True when `path` appears on this line immediately followed by a `.`.
+ *
+ * Distinguishes the head of a module path from an ordinary identifier, so a
+ * bare name can be sent to the runtime resolver without every unresolved
+ * identifier in the file costing a worker round-trip. `Image` is installed as
+ * `Image.so`, a compiled C module with no `.pmod` on disk, so nothing else
+ * could tell it from a local.
+ */
+export function headOfDottedPath(lines: string[], line: number, path: string): boolean {
+  const text = lines[line] ?? "";
+  let from = 0;
+  // Bounded by the line length: every iteration advances `from` by at least 1.
+  for (;;) {
+    const at = text.indexOf(path, from);
+    if (at < 0) return false;
+    const before = at > 0 ? text[at - 1] : "";
+    const after = text[at + path.length] ?? "";
+    if (!/[A-Za-z0-9_.]/.test(before) && after === ".") return true;
+    from = at + 1;
+  }
+}
