@@ -22,7 +22,7 @@ import type {
   TypeHierarchyItem,
 } from "vscode-languageserver-protocol";
 import type { NavigationContext } from "./navigationHandler";
-import { parse } from "../parser";
+import { parse, withBorrowedTree } from "../parser";
 import { isPikeUnavailable } from "./pikeWorkerTypes";
 import {
   prepareCallHierarchy,
@@ -105,15 +105,18 @@ async function handleOutgoingCalls(
   if (!table) return [];
   const doc = ctx.documents.get(uri);
   if (!doc) return [];
-  const source = doc.getText();
-  const tree = parse(source, uri);
-  if (!ctx.index) return [];
-  await prepareGlobalQuery({
-    connection, index: ctx.index,
-    workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,
+  const index = ctx.index;
+  if (!index) return [];
+  // prepareGlobalQuery may index the whole workspace; the parses it runs can
+  // evict this document's cached tree, so hold a borrow across it.
+  return withBorrowedTree(parse(doc.getText(), uri), async (tree) => {
+    await prepareGlobalQuery({
+      connection, index,
+      workspaceRoot: index.workspaceRoot, cancellationToken: token,
+    });
+    if (token.isCancellationRequested) return [];
+    return getOutgoingCalls(item, tree, table, uri, index);
   });
-  if (token.isCancellationRequested) return [];
-  return getOutgoingCalls(item, tree, table, uri, ctx.index);
 }
 
 // Type hierarchy handlers

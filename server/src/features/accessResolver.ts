@@ -122,8 +122,14 @@ async function locateAccessSite(
 
   const parsedTree = tree ?? parse(doc.getText(), uri);
 
+  // A freed tree reports a null root. Callers that keep a tree across an
+  // `await` must hold it through withBorrowedTree; this says which document
+  // broke that rule instead of failing anonymously three frames deeper.
+  const root = parsedTree.rootNode;
+  if (!root) throw new Error(`accessResolver: parse tree for ${uri} was freed while in use`);
+
   // LSP character and tree-sitter column are both UTF-16 code units.
-  const node = parsedTree.rootNode.descendantForPosition({ row: line, column: character });
+  const node = root.descendantForPosition({ row: line, column: character });
   if (!node) return null;
 
   let postfixNode: Node = node;

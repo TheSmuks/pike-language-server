@@ -7,6 +7,7 @@ import type { ModuleResolver, PikePaths, PikePathOverrides } from "./moduleResol
 import { rewireDependents as rewireDependentsFn } from "./dependentsInvalidator";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
+import { withBorrowedTree } from "../parser";
 import { uriToPath as uriToPathUtil } from "../util/uri";
 import {
   resolveCrossFileDefinition as resolveCrossFileDefinitionFn,
@@ -110,9 +111,12 @@ export class WorkspaceIndex {
    * Used for user-initiated operations (didOpen, didChange).
    */
   async upsertFile(
-    uri: string, version: number, tree: Tree, content: string, modSource: ModificationSource,
+    uri: string, version: number, callerTree: Tree, content: string, modSource: ModificationSource,
   ): Promise<FileEntry> {
-    return measureAsync("upsertFile", async () => {
+    // `callerTree` belongs to the parser's LRU cache, which frees it as soon as
+    // this URI is re-parsed or the cache evicts — and the tree is read again
+    // after warmResolverCache is awaited below.
+    return measureAsync("upsertFile", () => withBorrowedTree(callerTree, async (tree) => {
       const normalizedUri = normUri(uri);
       const existing = this.files.get(normalizedUri);
       if (existing) removeDependencies(this.dependents, existing, normUri);
@@ -139,7 +143,7 @@ export class WorkspaceIndex {
       bump("indexWrites");
       bump("indexWritesFull");
       return entry;
-    });
+    }));
   }
 
   /**
