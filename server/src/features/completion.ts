@@ -18,6 +18,7 @@ import {
 import { type SymbolTable, type Declaration, getSymbolsInScope, getDeclarationsInScope, findClassScopeAt, resolveTypeName } from "./symbolTable";
 import {
   type CompletionContext,
+  type TriggerContext,
   detectTriggerContext,
   resetCompletionCache,
 } from "./completionTrigger";
@@ -82,38 +83,41 @@ export async function getCompletions(
 
   // Determine completion context
   const triggerContext = detectTriggerContext(node, line, character, tree, lines[line] ?? "");
+  if (triggerContext.type === "none") return { isIncomplete: false, items: [] };
 
-  let items: CompletionItem[];
+  const items = await completeForTrigger(triggerContext, table, tree, line, character, ctx, node);
+  return { isIncomplete: items.length > 50, items };
+}
 
+/** Dispatch to the provider the detected trigger calls for. */
+async function completeForTrigger(
+  triggerContext: Exclude<TriggerContext, { type: "none" }>,
+  table: SymbolTable,
+  tree: Tree,
+  line: number,
+  character: number,
+  ctx: CompletionContext,
+  node: Node,
+): Promise<CompletionItem[]> {
   switch (triggerContext.type) {
     case "dot":
-      items = await completeDotAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
-      break;
+      return completeDotAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
     case "arrow":
-      items = await completeArrowAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
-      break;
+      return completeArrowAccess(table, tree, line, character, triggerContext.lhsNode, ctx);
     case "scope":
-      items = await completeScopeAccess(table, line, character, triggerContext.scopeNode, ctx);
-      break;
-    case "call_args":
-      items = await completeCallArgs(table, tree, line, character, triggerContext.calleeName, ctx);
+      return completeScopeAccess(table, line, character, triggerContext.scopeNode, ctx);
+    case "call_args": {
+      const args = await completeCallArgs(table, tree, line, character, triggerContext.calleeName, ctx);
       // An unresolvable callee says nothing about the callee — it says nothing
       // about the argument the user is about to write either. The cursor is
       // still in expression position, so the symbols in scope remain the
       // answer; returning none of them is what made this position dead.
-      if (items.length === 0) {
-        items = await completeUnqualified(table, tree, line, character, ctx, node);
-      }
-      break;
-    case "unqualified":
+      if (args.length > 0) return args;
+      return completeUnqualified(table, tree, line, character, ctx, node);
+    }
     default:
-      items = await completeUnqualified(table, tree, line, character, ctx, node);
-      break;
-    case "none":
-      return { isIncomplete: false, items: [] };
+      return completeUnqualified(table, tree, line, character, ctx, node);
   }
-
-  return { isIncomplete: items.length > 50, items };
 }
 
 // ---------------------------------------------------------------------------

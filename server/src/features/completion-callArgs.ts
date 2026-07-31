@@ -8,7 +8,7 @@ import {
   CompletionItemKind,
   InsertTextFormat,
 } from "vscode-languageserver/node";
-import type { SymbolTable } from "./symbolTable";
+import type { SymbolTable, Declaration } from "./symbolTable";
 import { getDeclarationsInScope } from "./symbolTable";
 import {
   findDeclarationForName,
@@ -41,39 +41,10 @@ export async function completeCallArgs(
   calleeName: string,
   ctx: CompletionContext,
 ): Promise<CompletionItem[]> {
-  // 1. Local/inner-function lookup
+  // 1-2. Anything the file itself declares: function, callable variable, class.
   const localDecl = findDeclarationForName(table, calleeName, line, character);
-  if (localDecl && (localDecl.kind === "function" || localDecl.kind === "method")) {
-    // Parameters first: a function declaration's declaredType is its return
-    // type, so the type route below only fires for a variable holding a
-    // function type.
-    const fromScope = extractParamsFromDecl(localDecl, table);
-    if (fromScope !== null) {
-      return [makeArgSnippet(calleeName, fromScope, localDecl.declaredType ?? "function")];
-    }
-    if (localDecl.declaredType) {
-      const params = extractParamsFromType(localDecl.declaredType);
-      if (params !== null) {
-        return [makeArgSnippet(calleeName, params, localDecl.declaredType)];
-      }
-    }
-  }
-
-  // A variable holding a function type is callable too.
-  if (localDecl && (localDecl.kind === "variable" || localDecl.kind === "parameter") && localDecl.declaredType) {
-    const params = extractParamsFromType(localDecl.declaredType);
-    if (params !== null) {
-      return [makeArgSnippet(calleeName, params, localDecl.declaredType)];
-    }
-  }
-
-  // 2. Class constructor lookup (same file)
-  if (localDecl && localDecl.kind === "class") {
-    const createParams = extractConstructorParams(localDecl, table);
-    if (createParams !== null) {
-      return [makeArgSnippet(calleeName, createParams, "constructor")];
-    }
-  }
+  const local = localDecl ? localSnippet(localDecl, calleeName, table) : null;
+  if (local) return local;
 
   // 3. Predef builtins
   const predefSig = ctx.predefBuiltins[calleeName];
@@ -108,6 +79,35 @@ export async function completeCallArgs(
 // -----------------------------------------------------------------------
 // Internal helpers
 // -----------------------------------------------------------------------
+
+/**
+ * Argument snippet for a callee this file declares, or null.
+ *
+ * A function declaration's `declaredType` is its *return* type — the parameters
+ * live in its own scope — so the scope route is tried first and the type route
+ * only ever fires for a variable holding a function type.
+ */
+function localSnippet(
+  decl: Declaration,
+  calleeName: string,
+  table: SymbolTable,
+): CompletionItem[] | null {
+  if (decl.kind === "function" || decl.kind === "method") {
+    const fromScope = extractParamsFromDecl(decl, table);
+    if (fromScope !== null) {
+      return [makeArgSnippet(calleeName, fromScope, decl.declaredType ?? "function")];
+    }
+  }
+
+  if (decl.kind === "class") {
+    const createParams = extractConstructorParams(decl, table);
+    return createParams === null ? null : [makeArgSnippet(calleeName, createParams, "constructor")];
+  }
+
+  if (!decl.declaredType) return null;
+  const params = extractParamsFromType(decl.declaredType);
+  return params === null ? null : [makeArgSnippet(calleeName, params, decl.declaredType)];
+}
 
 /** Look up a callable (function/method/class constructor) in imported modules. */
 async function lookupImportedCallable(
