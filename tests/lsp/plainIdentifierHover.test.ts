@@ -17,7 +17,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForIndexed, type TestServer } from "./helpers";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -140,8 +140,12 @@ int handle(Request id) { return sizeof(id->conf); }
     writeFileSync(join(dir, "mymod.pike"), USER);
     u = pathToFileURL(join(dir, "mymod.pike")).href;
     s = await createTestServer({ rootUri: pathToFileURL(dir).href });
-    s.openDoc(pathToFileURL(join(dir, "FwBase.pike")).href, BASE);
+    const baseUri = pathToFileURL(join(dir, "FwBase.pike")).href;
+    s.openDoc(baseUri, BASE);
     s.openDoc(u, USER);
+    // `conf` is declared in FwBase.pike and read from mymod.pike, so the answer
+    // exists only once the index holds both.
+    await waitForIndexed(s, [baseUri, u]);
   });
 
   afterAll(async () => {

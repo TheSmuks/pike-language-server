@@ -215,3 +215,37 @@ export async function createTestServer(options?: TestServerOptions): Promise<Tes
     },
   };
 }
+
+/**
+ * Wait until the workspace index holds a symbol table for each given URI.
+ *
+ * `openDoc` returns as soon as the notification has been written; indexing the
+ * file, and the files it inherits, happens afterwards on the server's own
+ * schedule. A test that asserts a cross-file answer straight after opening is
+ * racing that work — it passes on a machine where indexing wins and fails
+ * where it does not, which is why the same test can pass locally and fail in
+ * CI (or pass in a full run and fail run alone, when an earlier file has
+ * already warmed the index).
+ *
+ * Polls the index itself rather than sleeping a fixed interval: it costs only
+ * as long as the work actually takes, and it cannot pass by luck the way a
+ * `setTimeout(300)` can. Throws rather than returning on timeout, so a genuine
+ * indexing regression fails loudly instead of becoming a null assertion later.
+ */
+export async function waitForIndexed(
+  server: TestServer,
+  uris: string[],
+  timeoutMs = 5000,
+): Promise<void> {
+  const missing = () => uris.filter((u) => !server.server.index.getSymbolTable(u));
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (missing().length === 0) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `waitForIndexed: timed out after ${timeoutMs}ms; not indexed: ${missing().join(", ")}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
