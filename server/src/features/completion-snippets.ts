@@ -61,6 +61,46 @@ export function extractParamsFromType(typeStr: string): string | null {
 }
 
 /**
+ * Extract parameter placeholders for a function or method declaration.
+ *
+ * A function declaration's `declaredType` holds its *return* type — the
+ * parameters live in the function's own scope, as `parameter` declarations.
+ * Reading a signature out of `declaredType` therefore only ever worked for a
+ * variable holding a function type (`function(int:int) doubler`), and never
+ * for a function declared in the file, which is the common case.
+ *
+ * Returns "" for a function that takes no arguments, and null when the
+ * declaration has no parameter scope to read.
+ */
+export function extractParamsFromDecl(decl: Declaration, table: SymbolTable): string | null {
+  const scope = findParameterScope(decl, table);
+  if (!scope) return null;
+
+  const placeholders: string[] = [];
+  for (const declId of scope.declarations) {
+    const param = table.declById.get(declId);
+    if (!param || param.kind !== "parameter") continue;
+    const label = param.declaredType ? `${param.declaredType} ${param.name}` : param.name;
+    placeholders.push(`\${${placeholders.length + 1}:${label}}`);
+  }
+  return placeholders.join(", ");
+}
+
+/**
+ * The function scope holding a declaration's parameters.
+ *
+ * Scoped to children of the declaring scope so a nested function or a lambda
+ * in the body cannot be mistaken for the declaration's own parameter list.
+ */
+function findParameterScope(decl: Declaration, table: SymbolTable) {
+  const containing = table.scopes.find(s => s.declarations.includes(decl.id));
+  if (!containing) return undefined;
+  return table.scopes.find(
+    s => s.parentId === containing.id && s.kind === "function" && rangesOverlap(s.range, decl.range),
+  );
+}
+
+/**
  * Extract constructor parameter placeholders for a class declaration.
  *
  * Looks up the class scope, finds the `create()` method, and extracts
@@ -76,10 +116,13 @@ export function extractConstructorParams(classDecl: Declaration, table: SymbolTa
 
   // Find the create() method declaration in the class scope (or inherited)
   const createDecl = findCreateMethod(table, classScope);
-  if (!createDecl || !createDecl.declaredType) return null;
+  if (!createDecl) return null;
 
-  const params = extractParamsFromType(createDecl.declaredType);
-  return params; // null if not a function type, "" if void/no-params
+  const fromScope = extractParamsFromDecl(createDecl, table);
+  if (fromScope !== null) return fromScope;
+
+  if (!createDecl.declaredType) return null;
+  return extractParamsFromType(createDecl.declaredType); // null if not a function type
 }
 
 /**

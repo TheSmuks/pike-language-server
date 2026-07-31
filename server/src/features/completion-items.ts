@@ -26,6 +26,7 @@ import { resolveType, collectClassMembers } from "./typeResolver";
 import type { CompletionContext } from "./completionTrigger";
 import {
   extractParamsFromType,
+  extractParamsFromDecl,
   extractConstructorParams,
   extractParamsFromPredefType,
   extractParamsFromStdlibSignature,
@@ -35,6 +36,7 @@ import {
 // Re-export snippet helpers for backward compatibility
 export {
   extractParamsFromType,
+  extractParamsFromDecl,
   extractConstructorParams,
   extractParamsFromPredefType,
   extractParamsFromStdlibSignature,

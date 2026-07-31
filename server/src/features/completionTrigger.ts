@@ -72,13 +72,13 @@ export function detectTriggerContext(
   // First check: is this a scope_expr? (Foo::member)
   if (current.type === "scope_expr") {
     const scopeNode = current.childForFieldName("scope");
-    if (scopeNode) {
+    if (scopeNode && cursorIsPastScopeOperator(scopeNode, line, character)) {
       return { type: "scope", scopeNode };
     }
   }
 
   // Check parent chain for scope_expr
-  const scopeFromParent = findScopeInParentChain(current);
+  const scopeFromParent = findScopeInParentChain(current, line, character);
   if (scopeFromParent) return scopeFromParent;
 
   // Check for dot or arrow access in postfix_expr
@@ -110,13 +110,38 @@ export function detectTriggerContext(
   return resolveTriggerFromLineText(character, lineText, tree, line);
 }
 
+/**
+ * True when the cursor sits at or past the `::` of a scope qualifier.
+ *
+ * The enclosing `scope_expr` is reachable from anywhere inside it, qualifier
+ * included. On `A::value()` with the cursor on the `A`, the user is naming the
+ * scope rather than indexing into it, so A's members are the wrong answer —
+ * the symbols visible at that point are. A qualifier still being typed has no
+ * `::` yet, and stays a scope trigger.
+ */
+function cursorIsPastScopeOperator(scopeNode: Node, line: number, character: number): boolean {
+  const operator = findScopeOperator(scopeNode);
+  if (!operator) return true;
+  const end = operator.endPosition;
+  return line > end.row || (line === end.row && character >= end.column);
+}
+
+/** The `::` token of a scope qualifier, searched one level into the node. */
+function findScopeOperator(scopeNode: Node): Node | null {
+  if (scopeNode.type === "::") return scopeNode;
+  for (const child of scopeNode.children) {
+    if (child.type === "::") return child;
+  }
+  return null;
+}
+
 /** Walk parent chain looking for a scope_expr node. */
-function findScopeInParentChain(node: Node): TriggerContext | null {
+function findScopeInParentChain(node: Node, line: number, character: number): TriggerContext | null {
   let parent: Node | null = node.parent;
   while (parent) {
     if (parent.type === "scope_expr") {
       const scopeNode = parent.childForFieldName("scope");
-      if (scopeNode) {
+      if (scopeNode && cursorIsPastScopeOperator(scopeNode, line, character)) {
         return { type: "scope", scopeNode };
       }
     }
@@ -186,7 +211,10 @@ function resolveTriggerFromLineText(
   tree: Tree,
   line: number,
 ): TriggerContext {
-  if (character < 1) return { type: "none" };
+  // Column 0. There is no preceding character to read a trigger out of, which
+  // is not the same as there being nothing to complete: a statement, a
+  // declaration or a type name can all begin here.
+  if (character < 1) return { type: "unqualified" };
 
   const oneBefore = lineText[character - 1];
   const rootNode = tree.rootNode;

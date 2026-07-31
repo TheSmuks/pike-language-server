@@ -97,6 +97,13 @@ export async function getCompletions(
       break;
     case "call_args":
       items = await completeCallArgs(table, tree, line, character, triggerContext.calleeName, ctx);
+      // An unresolvable callee says nothing about the callee — it says nothing
+      // about the argument the user is about to write either. The cursor is
+      // still in expression position, so the symbols in scope remain the
+      // answer; returning none of them is what made this position dead.
+      if (items.length === 0) {
+        items = await completeUnqualified(table, tree, line, character, ctx, node);
+      }
       break;
     case "unqualified":
     default:

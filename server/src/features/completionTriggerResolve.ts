@@ -203,6 +203,12 @@ export function findCalleeBeforeOpenParen(rootNode: Node, line: number, parenCol
   const node = rootNode.descendantForPosition(pos);
   if (!node) return null;
 
+  // A '(' that opens a parameter list belongs to a declaration, not a call:
+  // `string color_name(Color c)` names a function being defined. There is no
+  // callee to describe, and treating the name as one offers the user an
+  // argument snippet for the very function they are declaring.
+  if (node.parent?.type === "parameters") return null;
+
   // The '(' token itself — look for an identifier sibling before it.
   if (node.type === "(" && node.parent) {
     const callee = findCalleeBeforeParenInSiblings(node, node.parent.children);

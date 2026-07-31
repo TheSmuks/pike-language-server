@@ -310,7 +310,7 @@ describe("no references for unknown positions", () => {
     expect(refs).toEqual([]);
   });
 
-  test("unresolved reference returns empty when queried at that position", () => {
+  test("unresolved reference returns its own occurrences, not nothing", () => {
     const src = readCorpus("err-undef-fn.pike");
     const table = buildTable(src);
 
@@ -320,8 +320,12 @@ describe("no references for unknown positions", () => {
     );
     expect(unresolved).toBeDefined();
     const refs = getReferencesTo(table, unresolved!.loc.line, unresolved!.loc.character);
-    // Unresolved → targetDeclId will be null → empty array
-    expect(refs).toEqual([]);
+    // The declaration is not in this file — a name from an import, an include,
+    // or in this fixture's case nowhere at all. The uses here are still known,
+    // and they are what a document-local query is asking for.
+    expect(refs.length).toBeGreaterThanOrEqual(1);
+    expect(refs.every(r => r.name === unresolved!.name)).toBe(true);
+    expect(refs).toContainEqual(unresolved!);
   });
 });
 

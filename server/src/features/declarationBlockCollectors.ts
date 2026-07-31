@@ -442,5 +442,6 @@ function collectInheritDecl(node: Node, state: BuildState): void {
     range: toRange(node),
     scopeId,
     alias: aliasNode ? aliasNode.text : undefined,
+    aliasRange: aliasNode ? toRange(aliasNode) : undefined,
   });
 }

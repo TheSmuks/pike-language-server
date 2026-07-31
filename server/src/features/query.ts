@@ -59,6 +59,49 @@ export function getDefinitionAt(
 }
 
 /**
+ * The declaration whose own name sits under the cursor, in this file.
+ *
+ * Unlike getDefinitionAt this never follows an inherit or import through to
+ * what it names. Go-to-definition wants the target and answers null when the
+ * target is in another file, so navigation can resolve it cross-file. Document
+ * highlight and `includeDeclaration` want the opposite: the occurrence the
+ * cursor is on, which for `import Stdio;` is the word `Stdio` right there.
+ */
+export function getLocalDeclarationAt(
+  table: SymbolTable,
+  line: number,
+  character: number,
+): Declaration | null {
+  for (const decl of table.declarations) {
+    if (declOccurrenceRangeAt(decl, line, character)) return decl;
+  }
+  return null;
+}
+
+/**
+ * The written occurrence of a declaration's name at a position, or null.
+ *
+ * An inherit has two: the path it names and, when renamed, the alias. Only the
+ * alias is a name this file introduces — `inherit "engine.pike" : motor;` puts
+ * `motor` in scope and nothing called `"engine.pike"` — so a position query
+ * must be able to land on either and say which.
+ */
+export function declOccurrenceRangeAt(
+  decl: Declaration,
+  line: number,
+  character: number,
+): Declaration['nameRange'] | null {
+  for (const range of [decl.nameRange, decl.aliasRange]) {
+    if (!range) continue;
+    if (range.start.line === line && range.end.line === line &&
+        character >= range.start.character && character < range.end.character) {
+      return range;
+    }
+  }
+  return null;
+}
+
+/**
  * Resolve an inherit declaration to the target class declaration.
  * Returns the class Declaration if found, null otherwise.
  */
@@ -175,10 +218,47 @@ export function getReferencesTo(
   character: number,
 ): Reference[] {
   const targetDeclId = findDeclIdAtPosition(table, line, character);
-  if (targetDeclId === null) return [];
+  if (targetDeclId === null) return collectSiblingUnresolvedRefs(table, line, character);
 
   const results = collectResolvedReferences(table, targetDeclId);
   collectUnresolvedArrowDotRefs(table, targetDeclId, results);
+  return results;
+}
+
+/**
+ * Occurrences of a name whose declaration this file cannot see.
+ *
+ * A member of an imported module, a macro from an include, a method reached
+ * through `->` on an untyped receiver: the reference is recorded with
+ * `resolvesTo: null`, and every position query treated that as "nothing here".
+ * The declaration is indeed elsewhere, but the uses *in this file* are known,
+ * and they are what document-local callers are asking for.
+ *
+ * Matching is by name and by receiver: `a->greet()` and `b->greet()` are two
+ * different symbols that happen to share a name, so an unresolved member only
+ * ever groups with uses reached the same way.
+ */
+function collectSiblingUnresolvedRefs(
+  table: SymbolTable,
+  line: number,
+  character: number,
+): Reference[] {
+  const anchor = table.references.find(
+    r => r.resolvesTo === null && r.loc.line === line &&
+      character >= r.loc.character && character < r.loc.character + r.name.length,
+  );
+  if (!anchor) return [];
+
+  const results: Reference[] = [];
+  const seenLocs = new Set<string>();
+  for (const ref of table.references) {
+    if (ref.resolvesTo !== null || ref.name !== anchor.name) continue;
+    if (ref.lhsName !== anchor.lhsName) continue;
+    const locKey = `${ref.loc.line}:${ref.loc.character}`;
+    if (seenLocs.has(locKey)) continue;
+    seenLocs.add(locKey);
+    results.push(ref);
+  }
   return results;
 }
 
@@ -190,11 +270,7 @@ function findDeclIdAtPosition(
 ): number | null {
   // Check declarations first
   for (const decl of table.declarations) {
-    const nr = decl.nameRange;
-    if (nr.start.line === line && nr.end.line === line &&
-        character >= nr.start.character && character < nr.end.character) {
-      return decl.id;
-    }
+    if (declOccurrenceRangeAt(decl, line, character)) return decl.id;
   }
 
   // Check references

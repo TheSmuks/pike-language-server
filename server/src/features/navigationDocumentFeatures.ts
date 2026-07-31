@@ -18,6 +18,8 @@ import type { NavigationContext } from "./navigationHandler";
 import { initParser, isParserReady, parse } from "../parser";
 import { getDocumentSymbols } from "./documentSymbol";
 import {
+  getLocalDeclarationAt,
+  declOccurrenceRangeAt,
   getDefinitionAt,
   getReferencesTo,
   type SymbolTable,
@@ -382,30 +384,41 @@ async function handleDocumentHighlight(
   // buildDocumentHighlights already yields null when nothing is found, so the
   // guard that used to sit here only ever suppressed the lone-declaration case.
   const refs = getReferencesTo(table, params.position.line, params.position.character);
-  const targetDecl = getDefinitionAt(table, params.position.line, params.position.character);
-  return buildDocumentHighlights(targetDecl, refs);
+  // getDefinitionAt answers null on an inherit or import naming another file,
+  // which is right for navigation and wrong here: the module name under the
+  // cursor is itself an occurrence in this document.
+  const targetDecl = getDefinitionAt(table, params.position.line, params.position.character)
+    ?? getLocalDeclarationAt(table, params.position.line, params.position.character);
+  // A renamed inherit is written twice — the path and the alias. Highlight the
+  // one the cursor is on, not whichever the declaration happens to record as
+  // its name.
+  const declRange = targetDecl
+    ? declOccurrenceRangeAt(targetDecl, params.position.line, params.position.character)
+      ?? targetDecl.nameRange
+    : null;
+  return buildDocumentHighlights(declRange, refs);
 }
 
-/** Build DocumentHighlight[] from references and optional declaration. */
+/** Build DocumentHighlight[] from references and the declaration's own range. */
 function buildDocumentHighlights(
-  targetDecl: import("./symbolTable").Declaration | null,
+  declRange: import("./symbolTable").Declaration["nameRange"] | null,
   refs: Array<{ loc: { line: number; character: number }; name: string }>,
 ): DocumentHighlight[] | null {
   const highlights: DocumentHighlight[] = [];
 
-  if (targetDecl) {
+  if (declRange) {
     highlights.push({
       range: {
-        start: { line: targetDecl.nameRange.start.line, character: targetDecl.nameRange.start.character },
-        end: { line: targetDecl.nameRange.end.line, character: targetDecl.nameRange.end.character },
+        start: { line: declRange.start.line, character: declRange.start.character },
+        end: { line: declRange.end.line, character: declRange.end.character },
       },
       kind: DocumentHighlightKind.Write,
     });
   }
 
   for (const ref of refs) {
-    if (targetDecl && ref.loc.line === targetDecl.nameRange.start.line &&
-        ref.loc.character === targetDecl.nameRange.start.character) {
+    if (declRange && ref.loc.line === declRange.start.line &&
+        ref.loc.character === declRange.start.character) {
       continue;
     }
     highlights.push({

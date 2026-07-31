@@ -18,7 +18,7 @@ import type { TextDocuments } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { parse } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
-import { getDefinitionAt, type SymbolTable, type Declaration } from "./symbolTable";
+import { getDefinitionAt, getLocalDeclarationAt, type SymbolTable, type Declaration } from "./symbolTable";
 import {
   resolveAccessDeclaration,
   resolveAccessQualifiedType,
@@ -249,7 +249,16 @@ async function resolveHoverFallback(
   const aliasHover = hoverFromInheritAlias(table, hoverTree, params);
   if (aliasHover) return aliasHover;
 
-  return hoverFromModulePath(ctx, doc, params);
+  const modulePathHover = await hoverFromModulePath(ctx, doc, params);
+  if (modulePathHover) return modulePathHover;
+
+  // Last resort: the cursor is on a declaration's own name and nothing above
+  // could resolve what it points at — an inherit or import of a target this
+  // workspace does not have. The declaration is still there to describe, and
+  // hovering a use of the same name already renders it.
+  const local = getLocalDeclarationAt(table, params.position.line, params.position.character);
+  if (!local) return null;
+  return formatHover(declForHover(local, params.textDocument.uri, ctx));
 }
 
 /**

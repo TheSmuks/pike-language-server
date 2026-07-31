@@ -161,6 +161,23 @@ async function completeIdentifierScope(
   return items;
 }
 
+/**
+ * The qualifier name a scope node names, without the `::`.
+ *
+ * The node arrives in two shapes. A half-typed `Base::` does not parse, so the
+ * trigger falls back to a lexical scan and hands over the bare identifier
+ * `Base`. A complete `A::value()` parses, and the trigger hands over the
+ * `inherit_specifier`, whose text is `A::` — which matches no inherit named
+ * `A` and is why qualified completion found nothing on anything that parsed.
+ */
+function qualifierName(scopeNode: Node): string {
+  if (scopeNode.type !== "inherit_specifier") return scopeNode.text;
+  for (const child of scopeNode.children) {
+    if (child.type === "identifier") return child.text;
+  }
+  return scopeNode.text.replace(/::$/, "");
+}
+
 export async function completeScopeAccess(
   table: SymbolTable,
   line: number,
@@ -169,7 +186,7 @@ export async function completeScopeAccess(
   ctx: CompletionContext,
 ): Promise<CompletionItem[]> {
   const seenNames = new Set<string>();
-  const scopeText = scopeNode.text;
+  const scopeText = qualifierName(scopeNode);
 
   if (scopeText === "local") {
     return completeLocalScope(table, line, character, seenNames);
