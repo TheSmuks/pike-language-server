@@ -7,11 +7,13 @@
 // pike -I corpus/files/ corpus/files/cross-lib-consumer.pike
 #pragma strict_types
 
-// Inherit from the base file (Pike resolves this as a program on include path)
-inherit .cross_lib_base.Formatter;
-
-// Alternative: import the module path
-// import .cross_lib_base;
+// Inherit the base file as a program. The dot-relative form `.cross_lib_base`
+// cannot be used here: Pike maps that to a file literally named
+// `cross_lib_base.pike`, and this file is `cross-lib-base.pike` — hyphens are
+// legal in a filename but not in the dotted module path. The string form
+// inherits the file directly, which is what the sibling fixtures do too
+// (see rename-main.pike).
+inherit "cross-lib-base.pike";
 
 class BracketFormatter {
   inherit Formatter;
