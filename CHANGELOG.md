@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The VSIX no longer ships a copy of the tree-sitter runtime nothing loads.** `web-tree-sitter.wasm` was staged twice, once for the server and once for a client-side syntactic provider that was removed some time ago. The client bundle contains no reference to tree-sitter at all, so every install carried 192 KB — a fifth of the unpacked extension — that was never read. The packaged VSIX drops from 16 files and 1010 KB to 15 and 933 KB. The build now fails if the client starts referencing tree-sitter again while no runtime is staged for it, so the two cannot drift apart silently a second time.
+
 ## [0.8.52] — 2026-07-31
 
 ### Changed
