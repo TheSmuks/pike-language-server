@@ -104,14 +104,23 @@ a reason for the declaration to become unreachable.
 
 ## What Remains on the Roxen Tier
 
+> **Correction (2026-07-31, after this iteration was recorded).** This section
+> measures *empty* results only, and the two `::` rows below are wrong because
+> of it. The Roxen tier runs with `checker: undefined` (`cli.ts`) — Roxen's
+> correct answers are unknown, so nothing checks them — which means **a
+> confident wrong answer is recorded in the "answered" column**, not here.
+> Read "1,847 empty" as "1,847 positions with no answer", never as "everything
+> else was right". The corpus tier does have a checker; the Roxen tier's
+> wrong-answer count is unmeasured, not zero. See the amendment at the end.
+
 1,847 empty results, split by where the cursor is:
 
 | | Records | Reachable from this repo? |
 |---|---|---|
 | Inside a `#define` body | 647 | No — see below |
 | `->` on a receiver | 936 | Partly |
-| `Qualifier::` (mostly `predef::`) | 89 | Needs Roxen index coverage |
-| Bare `::` | 74 | Partly |
+| `Qualifier::` (mostly `predef::`) | 89 | ~~Needs Roxen index coverage~~ — wrong, see correction |
+| Bare `::` | 74 | ~~Partly~~ — wrong, see correction |
 | After `.` | 61 | Partly |
 | Plain identifier | 24 | Yes |
 | `->` on a subscript | 13 | Yes |
@@ -135,6 +144,16 @@ the remaining findings.
   declaration to point at, and hover/definition returning nothing is correct.
 - ~29 are declared `object` with no class, and a further handful `mixed` or
   `object|void`. Pike cannot resolve these statically either.
+
+**The two `::` rows were diagnosed wrong.** Attributing them to index coverage
+took the "answered" column at face value. Probing every `::` site in the tree
+instead of only the empty ones found the real defect: the qualifier was being
+*ignored*, so `A::name` searched every inherit for a bare `name`. In
+`RXML.pmod/PXml.pike` all twelve `low_parser::` expressions — `low_parser` is
+an alias of the stdlib `Parser.HTML` — resolved into `RXML.pmod` instead.
+Every one of them sat in the answered column, so none of them is in the table
+above. Index coverage was a real but much smaller part of it (`predef::cache`).
+Fixed in `6da9e3d`; see the amendment.
 
 `predef::` is the same shape as the `RoxenModule` case:
 `predef::report_fatal` is a global roxenloader injects at run time, present in
@@ -191,3 +210,44 @@ set published.
 
 The tool misled this investigation before it was caught, which is the argument
 for fixing it rather than working around it.
+
+## Amendment — 2026-07-31, after this iteration was recorded
+
+The measurements above are left as taken. What has changed since, and what was
+wrong rather than merely superseded:
+
+**Wrong: the two `::` rows, and the framing that produced them.** The Roxen
+sweep has no checker, so it counts empties and errors and cannot see a wrong
+answer at all. Reading the remainder as "what is left" therefore skipped the
+worse defect. A targeted probe of *every* `::` site — answered ones included —
+found the qualifier was being dropped whenever the enclosing program was the
+file rather than a class, so `A::name` searched every inherit for a bare
+`name`. Five further rules were modelled backwards, each settled against Pike
+8.0.1116:
+
+- An alias *replaces* an inherit's name. `inherit X.Y.Session : parent;` makes
+  `Session::` an error, so `Session::timeout` in `HTTPClient.pmod` pointing
+  into `Protocols.HTTP.Query` was a wrong answer that read as a right one.
+- A surrounding class is a legal qualifier; the server had no notion of it.
+- `this::`, `this_program::` and `local::` mean the program's *own*
+  declaration first. All three were being read as a bare `::`, which is the
+  one qualifier that skips it, so all three answered the inherited symbol.
+- A nested class may name an enclosing class's inherit, but a bare `::` there
+  is program-local.
+- Hover was blank on `::` itself and on every qualifier keyword.
+
+Fixed in `6da9e3d`. Across the tree's `::` sites, hover on the qualifier went
+30 → 53 answered and on the member 99 → 107. **Definition went 92 → 83, which
+is the fix working**: the thirteen it lost were all pointing at the wrong
+class. That is the shape to expect whenever a wrong answer is corrected, and
+it is invisible to a sweep that counts empties.
+
+**Superseded, not wrong.** These were accurate when recorded and have since
+been closed: the open Critical (the freed tree — `withBorrowedTree` now guards
+five sites, `6d3219d`); `predef::report_fatal` and `RoxenModule.cvs_version`
+absent from the bundled index (`a45bf0f`); `predef::cache` absent (`6da9e3d`).
+
+**Method to carry forward.** Give the Roxen tier a way to see wrong answers,
+or stop describing its remainder as though empties were the whole of it. Until
+then, probe answered positions too — reading what the server *said*, not only
+whether it said anything, is what surfaced all six defects.
