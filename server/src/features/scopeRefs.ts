@@ -83,6 +83,21 @@ export function resolveScopedByIdentifier(
   return null;
 }
 
+/**
+ * True when `scope` is the body of `classDecl`.
+ *
+ * A class body scope lies inside its declaration's range. Without this check a
+ * qualifier resolves against whichever inherited class comes first, silently
+ * returning a member of the wrong class on a name collision.
+ */
+function scopeIsBodyOf(
+  scope: { range: { start: { line: number }; end: { line: number } } },
+  classDecl: { range: { start: { line: number }; end: { line: number } } },
+): boolean {
+  return scope.range.start.line >= classDecl.range.start.line &&
+    scope.range.start.line <= classDecl.range.end.line;
+}
+
 /** Find a member declaration in an inherited scope matching the inherit name. */
 export function resolveInheritedScopeMember(
   name: string,
@@ -99,9 +114,14 @@ export function resolveInheritedScopeMember(
 
     for (const parentDeclId of parentScope.declarations) {
       const parentDecl = state.declMap.get(parentDeclId);
-      if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === inheritDeclName) {
-        return findDeclInScope(name, inheritedId, state);
-      }
+      if (!parentDecl || parentDecl.kind !== 'class') continue;
+      if (parentDecl.name !== inheritDeclName) continue;
+      // The class must be the one this scope is the BODY of. Matching on name
+      // alone is not enough: every class body shares the file scope as its
+      // parent, so `class B` is visible from `class A`'s scope too — which made
+      // `B::value()` resolve to A::value whenever A was inherited first.
+      if (!scopeIsBodyOf(inheritedScope, parentDecl)) continue;
+      return findDeclInScope(name, inheritedId, state);
     }
   }
   return null;
