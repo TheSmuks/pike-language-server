@@ -178,8 +178,28 @@ function loadStaticIndices(connection: Connection) {
     stdlibIndex: loadStdlibAutodocIndex(stdlibAutodocIndexRaw, connection),
     predefBuiltins: loadPredefBuiltinIndex(predefBuiltinIndexRaw, connection),
     predefAutodoc: loadPredefAutodocIndex(predefAutodocIndexRaw, connection),
-    roxenIndex: asRoxenIndex(roxenIndexRaw),
+    roxenIndex: loadRoxenIndex(connection),
   };
+}
+
+/**
+ * Validate and return the bundled Roxen index.
+ *
+ * `asRoxenIndex` already degrades to an empty index on a malformed file, but
+ * silently — and silence here looks exactly like "this file is not a Roxen
+ * file", which is the state a user would spend a long time trying to explain.
+ * The other three static indices say what a failed load costs; this one now
+ * does too.
+ */
+function loadRoxenIndex(connection: Connection): RoxenIndexData {
+  const index = asRoxenIndex(roxenIndexRaw);
+  if (Object.keys(index.symbols).length > 0) return index;
+
+  logWarn(
+    connection,
+    "roxen-index.json validation failed — Roxen constants and API symbols will be unavailable",
+  );
+  return index;
 }
 
 // ---------------------------------------------------------------------------

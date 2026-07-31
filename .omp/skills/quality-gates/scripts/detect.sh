@@ -74,6 +74,11 @@ exclude_parts = {
     # for anyone who has run build:standalone / check:standalone locally — and
     # they carry third-party markers we neither own nor can annotate.
     "standalone", "dist-npm",
+    # Agent worktrees and other scratch. A worktree is a second checkout of this
+    # repo, so scanning it re-reports every finding in the tracked docs it
+    # contains — 16 spurious failures from two worktrees, none of them about the
+    # working tree being linted.
+    ".claude",
 }
 exclude_rel_prefixes = ("docs/audits/", "docs/plans/")
 source_exts = {".ts", ".tsx", ".js", ".mjs", ".cjs"}
