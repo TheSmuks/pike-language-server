@@ -268,10 +268,12 @@ describe("hover on the surface Roxen leaves undocumented", () => {
     expect(hover!.contents.value).toContain("bundled index");
   });
 
-  test("resolves a global roxenloader injects and nothing else declares", async () => {
+  test("resolves a global Roxen's startup injects and nothing else declares", async () => {
     // roxen_path exists only because roxenloader add_constant()s it; no header
     // defines it and no prototype declares it, so before it was harvested this
-    // request had nothing to answer with.
+    // request had nothing to answer with. The note says "Roxen's startup", not
+    // "roxenloader": other files inject too (`chroot` from the master,
+    // `get_font` from fonts.pike), so crediting the loader was inaccurate.
     const hover = await server.client.sendRequest("textDocument/hover", {
       textDocument: { uri: undocumentedUri },
       position: positionOf(ROXEN_UNDOCUMENTED, "roxen_path"),
@@ -279,7 +281,7 @@ describe("hover on the surface Roxen leaves undocumented", () => {
 
     expect(hover).not.toBeNull();
     expect(hover!.contents.value).toContain("roxen_path");
-    expect(hover!.contents.value).toContain("roxenloader");
+    expect(hover!.contents.value).toContain("Injected into Pike's namespace");
     expect(hover!.contents.value).toContain("bundled index");
   });
 
