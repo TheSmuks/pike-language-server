@@ -260,6 +260,17 @@ jobs:
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
 
+      - name: DIAGNOSTIC — what modules does this Pike actually have
+        run: |
+          P="$HOME/.pike/pike/$PIKE_VERSION"
+          echo "=== lib/modules (C modules are .so, directory modules are .pmod) ==="
+          ls -la "$P/lib/modules" | head -60
+          echo "=== count: $(ls "$P/lib/modules" | wc -l) entries, $(ls "$P/lib/modules" | grep -c '\.so$') .so ==="
+          echo "=== resolv probe ==="
+          "$P/bin/pike" -e 'foreach(({"Image","Parser","Parser.HTML","ADT","Stdio","Image.Image"}), string n) { mixed e = catch { write("%-14s => %O\n", n, master()->resolv(n)); }; if (e) write("%-14s => ERROR %s\n", n, describe_error(e)); }'
+          echo "=== install size ==="
+          du -sh "$P" "$P/lib/modules"
+
       - name: Run Bun tests with real Pike oracle
         run: bun run test
 
