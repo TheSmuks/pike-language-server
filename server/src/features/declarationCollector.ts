@@ -239,38 +239,83 @@ function collectClassDecl(node: Node, state: BuildState): void {
   popScope(state);
 }
 
+/**
+ * The property name a `\`name` / `\`name=` declaration contributes.
+ *
+ * Only a backtick followed by an identifier is a property. An operator
+ * overload — `\`+`, `\`[]`, `\`()`, `\`->` — keeps its declared spelling,
+ * because it is not a member anyone reads by name.
+ */
+function propertyNameOf(declared: string): string | null {
+  const match = /^`([A-Za-z_][A-Za-z0-9_]*)=?$/.exec(declared);
+  return match ? match[1] : null;
+}
+
+/** The declared type of a function's first parameter, for a setter. */
+function firstParameterType(node: Node): string | undefined {
+  const params = node.childForFieldName('parameters');
+  for (const param of params?.children ?? []) {
+    const type = param.childForFieldName?.('type') ??
+      param.children?.find(c => c.type === 'type');
+    if (type) return type.text;
+  }
+  return undefined;
+}
+
+/** True when `name` is already declared directly in `scopeId`. */
+function declaredInScope(state: BuildState, name: string, scopeId: number): boolean {
+  const scope = state.scopeMap.get(scopeId);
+  if (!scope) return false;
+  return scope.declarations.some(id => state.declMap.get(id)?.name === name);
+}
+
+/** Enter the function's own scope and collect its parameters and body. */
+function collectFunctionBody(node: Node, state: BuildState): void {
+  pushScope(state, 'function', toRange(node));
+  const params = node.childForFieldName('parameters');
+  if (params) collectParameters(params, state);
+  const body = node.childForFieldName('body');
+  if (body) collectDeclarations(body, state);
+  popScope(state);
+}
+
 function collectFunctionDecl(node: Node, state: BuildState): void {
   const nameNode = node.childForFieldName('name');
   const returnType = node.childForFieldName('return_type');
   const scopeId = currentScopeId(state);
 
   if (nameNode) {
+    // Pike spells a property as a getter/setter pair — `int `v()` and
+    // `void `v=(int x)` — and every reader writes it as a plain `v`, including
+    // through inheritance: with `class Sub { inherit R; … v = 5; … }` the
+    // compiler prints 10 for a setter that doubles, so `v` is genuinely the
+    // member's name. Recorded under the declared spelling, `v` matched nothing
+    // at all — not bare in a subclass, not as `obj->v`.
+    const property = propertyNameOf(nameNode.text);
+    // The getter and the setter are two declarations of ONE member. Recording
+    // both put `conf` in the scope twice, so every lookup had to pick and
+    // rename would have rewritten only one of them.
+    if (property && declaredInScope(state, property, scopeId)) {
+      collectFunctionBody(node, state);
+      return;
+    }
     addDeclaration(state, {
-      name: nameNode.text,
-      kind: 'function',
+      name: property ?? nameNode.text,
+      // A property reads as a value, not as something to call.
+      kind: property ? 'variable' : 'function',
       nameRange: toRange(nameNode),
       range: toRange(node),
       scopeId,
-      declaredType: returnType?.text,
+      // The setter's parameter type is what the property holds; the getter's
+      // return type is the same thing. Either way the return type is right,
+      // except for the setter, whose `void` says nothing about the property.
+      declaredType: property && returnType?.text === 'void'
+        ? firstParameterType(node)
+        : returnType?.text,
     });
   }
 
-  // Enter function scope — parameters are in this scope
-  pushScope(state, 'function', toRange(node));
-
-  // Collect parameters
-  const params = node.childForFieldName('parameters');
-  if (params) {
-    collectParameters(params, state);
-  }
-
-  // Collect body
-  const body = node.childForFieldName('body');
-  if (body) {
-    collectDeclarations(body, state);
-  }
-
-  popScope(state);
+  collectFunctionBody(node, state);
 }
 
 function collectLambda(node: Node, state: BuildState): void {

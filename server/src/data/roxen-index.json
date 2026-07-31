@@ -1676,6 +1676,14 @@
       "signature": "array _values();",
       "markdown": ""
     },
+    "ModuleCopies.`[]": {
+      "signature": "mixed `[](mixed q );",
+      "markdown": ""
+    },
+    "ModuleCopies.`[]=": {
+      "signature": "mixed `[]=(mixed q,mixed w );",
+      "markdown": ""
+    },
     "ModuleCopies.copies": {
       "signature": "mapping copies;",
       "markdown": ""
@@ -1802,6 +1810,10 @@
     },
     "MultiStatusStatus._sprintf": {
       "signature": "string _sprintf(int flag);",
+      "markdown": ""
+    },
+    "MultiStatusStatus.`==": {
+      "signature": "int `==(mixed other);",
       "markdown": ""
     },
     "MultiStatusStatus.build_response": {
@@ -3456,6 +3468,10 @@
       "signature": "RequestID clone_me();",
       "markdown": ""
     },
+    "RequestID.conf": {
+      "signature": "Configuration `conf();",
+      "markdown": ""
+    },
     "RequestID.config": {
       "signature": "multiset(string) config;",
       "markdown": "Much like prestates, the id->config multiset is typically used for\n boolean information of state supplied by the client. The config state,\n however, is hidden in a client-side cookie treated specially by roxen,\n namely the <tt>RoxenConfig</tt> cookie.\nThe transport encoding has been decoded (i.e. any `%XX`\n escapes and the charset according to input_charset)."
@@ -3711,6 +3727,10 @@
     "RequestID.request_headers": {
       "signature": "mapping (string:array(string)|string) request_headers;",
       "markdown": "Indices and values map to the names and values of all HTTP\n headers sent with the request, with lowercased header names.\n Here is where you look for the \"user-agent\" header, the\n \"referer\" [sic!] header and similar interesting data provided by\n the client."
+    },
+    "RequestID.request_uuid": {
+      "signature": "string `request_uuid();",
+      "markdown": ""
     },
     "RequestID.rest_query": {
       "signature": "string rest_query;",

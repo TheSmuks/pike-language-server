@@ -17,8 +17,10 @@
  * development machine at the reader.
  */
 
-import type { Hover } from "vscode-languageserver/node";
+import type { Hover, CompletionItem } from "vscode-languageserver/node";
+import { CompletionItemKind } from "vscode-languageserver/node";
 import { formatHover } from "./hoverContent";
+import { padSortKey } from "./completion-items";
 
 export interface MagicConstant {
   /** Type as the compiler yields it, for the signature line. */
@@ -65,4 +67,28 @@ export function magicConstantHover(
     line: position.line,
     character: position.character,
   });
+}
+
+/**
+ * Offer the constants the compiler defines.
+ *
+ * They are not functions and take no arguments, so they get Constant kind and
+ * no snippet — `__FILE__(` would be wrong. Sorted with the builtins, since
+ * that is what they are from the reader's side.
+ */
+export function collectMagicConstantItems(
+  items: CompletionItem[], seenNames: Set<string>,
+): void {
+  for (const [name, entry] of Object.entries(PIKE_MAGIC_CONSTANTS)) {
+    if (seenNames.has(name)) continue;
+    seenNames.add(name);
+    items.push({
+      label: name,
+      kind: CompletionItemKind.Constant,
+      detail: `${entry.type} ${name}`,
+      documentation: entry.description,
+      sortText: padSortKey(30) + name,
+      filterText: name,
+    });
+  }
 }
