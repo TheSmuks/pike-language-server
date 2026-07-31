@@ -78,6 +78,32 @@ export function roxenPathHover(
 }
 
 /**
+ * A member reached through a receiver whose declared type is a Roxen class —
+ * `RequestID id; id->real_variables`.
+ *
+ * These classes live in `prototypes.pike` and are injected as globals, so no
+ * inherit or import leads there from the file writing `id->misc`: the
+ * type-driven resolver finds no workspace class and the stdlib index has never
+ * heard of them. `RequestID` alone is the receiver at 847 `->` positions in
+ * Roxen 6.1 — the most-used type in the tree — and every one answered nothing.
+ *
+ * Keyed `Class.member`, exactly as the dotted path tier is, so the index needs
+ * no second shape.
+ */
+export function roxenTypedMemberHover(
+  ctx: HoverContext,
+  typeName: string,
+  memberName: string,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Hover | null {
+  if (!ctx.roxenActive.get(params.textDocument.uri)) return null;
+
+  const entry = lookupRoxenSymbol(ctx.roxenIndex, `${typeName}.${memberName}`);
+  if (!entry) return null;
+  return roxenSymbolHover(ctx, memberName, entry, params.position);
+}
+
+/**
  * Render a dotted Roxen index entry, with the provenance line the bundled
  * index always carries — it tells the reader the answer came from a pinned
  * copy of Roxen rather than their installation, which is also why

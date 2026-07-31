@@ -448,11 +448,19 @@ function findDeclUri(
   // Synthetic declarations from cross-file inheritance carry their origin URI.
   if (targetDecl.sourceUri) return targetDecl.sourceUri;
 
-  if (localTable.declarations.some(d => d.id === targetDecl.id)) return localUri;
+  // Identity, not id. A Declaration id is a per-file counter, so `id === id`
+  // across two tables compares two unrelated declarations that happen to have
+  // been numbered the same. `b->get_value()` on a `Base` from base.pike came
+  // back with base.pike's RANGE under child.pike's URI, because child.pike had
+  // its own declaration numbered the same as base.pike's `get_value` — a
+  // location pointing into the wrong file at coordinates that mean nothing
+  // there. The resolver hands back the very object it found, so `includes`
+  // answers the question that was actually being asked.
+  if (localTable.declarations.includes(targetDecl)) return localUri;
   for (const uri of ctx.index.getAllUris()) {
     if (uri === localUri) continue;
     const t = ctx.index.getSymbolTable(uri);
-    if (t?.declarations.some(d => d.id === targetDecl.id)) return uri;
+    if (t?.declarations.includes(targetDecl)) return uri;
   }
   return localUri;
 }

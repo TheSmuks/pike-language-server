@@ -34,6 +34,7 @@ import { parseXml, type XmlNode } from "../server/src/features/xmlParser";
 import { initParser } from "../server/src/parser";
 import {
   harvestPrototypeMembers,
+  harvestPrototypeClassMembers,
   harvestConventionalMembers,
   harvestInjectedGlobals,
   harvestGlobalObjectMembers,
@@ -307,6 +308,7 @@ function build(root: string): RoxenIndex {
   const docFor = makeDocLookup();
   console.log(`Injected globals (predef::):${harvestInjectedGlobals(root, symbols, docFor)}`);
   console.log(`Members of file globals:    ${harvestGlobalObjectMembers(root, symbols, docFor)}`);
+  console.log(`Prototype class members:    ${harvestPrototypeClassMembers(root, symbols, docFor)}`);
   console.log(`Symbols total:              ${Object.keys(symbols).length}`);
 
   return {

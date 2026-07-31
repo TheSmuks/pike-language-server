@@ -135,6 +135,48 @@ export function harvestPrototypeMembers(root: string, into: Record<string, Symbo
   return added;
 }
 
+/**
+ * Members of every class `prototypes.pike` declares, keyed `Class.member`.
+ *
+ * `RequestID` is Roxen's request object and the most-used type in the tree —
+ * `RequestID id` is the first parameter of almost every module entry point —
+ * yet nothing reached its members. It is injected as a global, so no inherit
+ * or import leads to `prototypes.pike` from the file writing `id->misc`, and
+ * the index carried the class name with none of its contents. 847 `id->…`
+ * positions in Roxen 6.1 answered nothing on that one type, 236 more on
+ * `Configuration` and 33 on `ModuleInfo`.
+ *
+ * `RoxenModule` is harvested by `harvestPrototypeMembers` under the same key
+ * shape and runs first; the `key in into` guard there and here keeps whichever
+ * arrives first, so the two never fight.
+ */
+export function harvestPrototypeClassMembers(
+  root: string,
+  into: Record<string, SymbolEntry>,
+  docFor: DocLookup,
+): number {
+  const protos = join(root, PROTOTYPES);
+  if (!existsSync(protos)) return 0;
+
+  let added = 0;
+  const parsed = parsePikeDeclarations(read(protos), `file://${protos}`);
+  for (const [className, members] of parsed.classes) {
+    for (const decl of members) {
+      const key = `${className}.${decl.name}`;
+      if (!isExported(decl) || key in into) continue;
+      into[key] = {
+        signature: decl.signature,
+        // The entry already carries the declaration's own signature, and the
+        // extractor prepends another one to the doc body — rendering both
+        // showed `real_variables` twice, in two different spellings.
+        markdown: withoutSignatureBlock(docFor(protos, decl.name) ?? ""),
+      };
+      added++;
+    }
+  }
+  return added;
+}
+
 // ---------------------------------------------------------------------------
 // 2. Conventional members, measured on the module corpus
 // ---------------------------------------------------------------------------
