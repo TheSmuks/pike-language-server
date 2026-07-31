@@ -70,9 +70,15 @@ export async function hoverFromModulePath(
   // would cost a worker round-trip.
   const isModuleHead = /^[A-Za-z_][A-Za-z0-9_]*$/.test(path) &&
     headOfDottedPath(lines, params.position.line, path);
+  if (process.env.PIKE_LSP_DIAG === "1") {
+    console.error(`[DIAG] hoverModulePath path=${JSON.stringify(path)} isModuleHead=${isModuleHead} line=${params.position.line} ch=${params.position.character}`);
+  }
   if (!path.startsWith(".") && (path.includes(".") || isModuleHead)) {
     try {
       const resolved = await ctx.worker.resolve(path);
+      if (process.env.PIKE_LSP_DIAG === "1") {
+        console.error(`[DIAG] worker.resolve(${JSON.stringify(path)}) => ${JSON.stringify(resolved)}`);
+      }
       if (resolved.resolved && resolved.kind) {
         return formatHover({
           name: path,

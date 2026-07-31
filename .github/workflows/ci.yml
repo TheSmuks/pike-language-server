@@ -260,16 +260,13 @@ jobs:
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
 
-      - name: DIAGNOSTIC — what modules does this Pike actually have
+      - name: DIAGNOSTIC — the two failing files in isolation, with hover tracing
+        continue-on-error: true
         run: |
-          P="$HOME/.pike/pike/$PIKE_VERSION"
-          echo "=== lib/modules (C modules are .so, directory modules are .pmod) ==="
-          ls -la "$P/lib/modules" | head -60
-          echo "=== count: $(ls "$P/lib/modules" | wc -l) entries, $(ls "$P/lib/modules" | grep -c '\.so$') .so ==="
-          echo "=== resolv probe ==="
-          "$P/bin/pike" -e 'foreach(({"Image","Parser","Parser.HTML","ADT","Stdio","Image.Image"}), string n) { mixed e = catch { write("%-14s => %O\n", n, master()->resolv(n)); }; if (e) write("%-14s => ERROR %s\n", n, describe_error(e)); }'
-          echo "=== install size ==="
-          du -sh "$P" "$P/lib/modules"
+          echo "########## isolated ##########"
+          PIKE_LSP_DIAG=1 bun test tests/lsp/scopeSpecifierHover.test.ts tests/lsp/plainIdentifierHover.test.ts 2>&1 | grep -E "DIAG|\(fail\)|\(pass\)|[0-9]+ (pass|fail)" | head -60
+          echo "########## whole suite, tracing only these ##########"
+          PIKE_LSP_DIAG=1 bun test 2>&1 | grep -E "DIAG|\(fail\)|[0-9]+ (pass|fail)" | head -80
 
       - name: Run Bun tests with real Pike oracle
         run: bun run test
