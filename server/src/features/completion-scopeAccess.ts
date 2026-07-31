@@ -9,6 +9,7 @@ import { CompletionItem } from "vscode-languageserver/node";
 import type { SymbolTable } from "./symbolTable";
 import { getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
 import { declToCompletionItem } from "./completion-items";
+import { addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import type { CompletionContext } from "./completionTrigger";
 
 // ---------------------------------------------------------------------------
@@ -38,6 +39,20 @@ async function completeLocalScope(
   return items;
 }
 
+/** Handle global:: — the file scope, whatever shadows it further in. */
+function completeFileScope(table: SymbolTable, seenNames: Set<string>): CompletionItem[] {
+  const fileScope = table.scopes.find(s => s.kind === "file");
+  if (!fileScope) return [];
+
+  const items: CompletionItem[] = [];
+  for (const decl of getDeclarationsInScope(table, fileScope.id)) {
+    if (seenNames.has(decl.name)) continue;
+    seenNames.add(decl.name);
+    items.push(declToCompletionItem(decl, 0, table));
+  }
+  return items;
+}
+
 /** Handle bare :: (no identifier before it) — first inherited class. */
 async function completeBareScope(
   table: SymbolTable,
@@ -45,6 +60,7 @@ async function completeBareScope(
   character: number,
   scopeNode: Node,
   seenNames: Set<string>,
+  ctx: CompletionContext,
 ): Promise<CompletionItem[]> {
   const children = scopeNode.children;
   const hasIdentifier = children.some(c => c.type === "identifier");
@@ -55,16 +71,29 @@ async function completeBareScope(
   if (classScopeId === null) return items;
 
   const classScope = table.scopeById.get(classScopeId);
-  if (!classScope || classScope.inheritedScopes.length === 0) return items;
+  if (!classScope) return items;
 
-  const firstInherited = classScope.inheritedScopes[0];
-  const decls = getDeclarationsInScope(table, firstInherited);
-  for (const decl of decls) {
-    if (seenNames.has(decl.name)) continue;
-    seenNames.add(decl.name);
-    items.push(declToCompletionItem(decl, 0, table));
+  if (classScope.inheritedScopes.length > 0) {
+    const firstInherited = classScope.inheritedScopes[0];
+    const decls = getDeclarationsInScope(table, firstInherited);
+    for (const decl of decls) {
+      if (seenNames.has(decl.name)) continue;
+      seenNames.add(decl.name);
+      items.push(declToCompletionItem(decl, 0, table));
+    }
+    if (items.length > 0) return items;
   }
-  return items;
+
+  // `inheritedScopes` only holds inherits wired to a class in this file. Roxen
+  // inherits a cross-file module or a stdlib class far more often than a
+  // sibling class — `class CacheStatsMIB { inherit SNMP.SimpleMIB; … ::create(…) }`
+  // — and for those the list is empty, which read as "nothing to offer".
+  const firstInherit = classScope.declarations
+    .map(id => table.declById.get(id))
+    .find(decl => decl?.kind === "inherit");
+  if (!firstInherit) return items;
+
+  return completeFromInheritDecl(firstInherit.name, table, classScopeId, seenNames, ctx);
 }
 
 /** Try to collect declarations from a resolved inherit target. */
@@ -144,20 +173,42 @@ async function completeIdentifierScope(
     const decl = table.declById.get(declId);
     if (!decl || (decl.kind !== "inherit" && decl.kind !== "import")) continue;
     if (decl.name !== inheritName && decl.alias !== inheritName) continue;
-
-    // Try resolving through index
-    const targetUri = await ctx.index.resolveInherit(decl.name, false, ctx.uri);
-    if (targetUri) {
-      const fromTarget = await collectFromResolvedTarget(decl, targetUri, ctx, seenNames, table);
-      items.push(...fromTarget);
-    }
-
-    // Also check same-file inheritance
-    const fromInherit = collectFromSameFileInheritance(classScopeId, decl.name, table, seenNames);
-    items.push(...fromInherit);
-    break;
+    return completeFromInheritDecl(decl.name, table, classScopeId, seenNames, ctx);
   }
 
+  return items;
+}
+
+/**
+ * Members of whatever an inherit names, wherever it lives.
+ *
+ * Four tiers, most specific first: a workspace file the index resolves, a
+ * class declared in this file, the static stdlib index, and finally the Pike
+ * worker's runtime resolve for types the static index does not carry
+ * (`SNMP.SimpleMIB`, `Image.Image`). Only the first two existed, so an inherit
+ * of anything outside the workspace completed to nothing.
+ */
+async function completeFromInheritDecl(
+  inheritName: string,
+  table: SymbolTable,
+  classScopeId: number,
+  seenNames: Set<string>,
+  ctx: CompletionContext,
+): Promise<CompletionItem[]> {
+  const items: CompletionItem[] = [];
+
+  const targetUri = await ctx.index.resolveInherit(inheritName, false, ctx.uri);
+  if (targetUri) {
+    items.push(...await collectFromResolvedTarget({ name: inheritName }, targetUri, ctx, seenNames, table));
+  }
+
+  items.push(...collectFromSameFileInheritance(classScopeId, inheritName, table, seenNames));
+  if (items.length > 0) return items;
+
+  addStdlibMembersByType(inheritName, ctx, items, seenNames);
+  if (items.length > 0) return items;
+
+  await addResolvedMembers(inheritName, ctx, items, seenNames);
   return items;
 }
 
@@ -192,8 +243,15 @@ export async function completeScopeAccess(
     return completeLocalScope(table, line, character, seenNames);
   }
 
+  // `global::` names the file scope, which is what the reference collector
+  // already resolves it to (see resolveGlobalScopeAccess). Completion did not
+  // know the keyword, looked for an inherit named `global`, and found none.
+  if (scopeText === "global") {
+    return completeFileScope(table, seenNames);
+  }
+
   if (scopeText === "::" || scopeNode.type === "inherit_specifier") {
-    const bare = await completeBareScope(table, line, character, scopeNode, seenNames);
+    const bare = await completeBareScope(table, line, character, scopeNode, seenNames, ctx);
     if (bare.length > 0) return bare;
   }
 

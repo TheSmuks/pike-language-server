@@ -152,3 +152,37 @@ describe("scope access through a parsed qualifier", () => {
     expect(labels).toContain("sum");
   });
 });
+
+describe("completion after a scope keyword", () => {
+  test("global:: offers the file scope", async () => {
+    const src = [
+      "int total_size_limit = 10;",
+      "string label = \"x\";",
+      "class Sub {",
+      "  int total_size_limit = 1;",
+      "  int f() { return global::total_size_limit; }",
+      "}",
+    ].join("\n");
+
+    // `global::` names the file scope, deliberately ignoring the member of the
+    // same name that shadows it one scope in.
+    const labels = await completeAt(src, 4, 29);
+    expect(labels).toContain("total_size_limit");
+    expect(labels).toContain("label");
+  });
+
+  test("bare :: offers members of an inherit the file does not declare", async () => {
+    const src = [
+      "class MyFile {",
+      "  inherit Stdio.File;",
+      "  int f() { return ::read(10); }",
+      "}",
+    ].join("\n");
+
+    // `::` names the inherited scope. Roxen inherits stdlib and cross-file
+    // classes far more often than same-file ones, and the same-file scope
+    // wiring is the only thing this ever looked at.
+    const labels = await completeAt(src, 2, 22);
+    expect(labels).toContain("read");
+  });
+});
