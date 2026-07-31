@@ -44,7 +44,9 @@ import { memberOfMemberlessReceiver } from "./receiverMembers";
 import { magicConstantHover } from "./pikeMagicConstants";
 import { hoverFromModulePath } from "./hoverModulePath";
 import { type RoxenIndexData } from "./roxenIndex";
-import { roxenHover, roxenPathHover, roxenTypedMemberHover } from "./hoverRoxen";
+import {
+  roxenHover, roxenPathHover, roxenTypedMemberHover, roxenInheritedMemberHover,
+} from "./hoverRoxen";
 import {
   hoverScopeSpecifier, hoverQualifiedInheritMember, hoverFromInheritAlias,
 } from "./hoverScopeAccess";
@@ -295,6 +297,13 @@ async function hoverFromTree(
 
   const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
   if (builtinHover) return builtinHover;
+
+  // A bare member of a class this one inherits, where that class is known
+  // only to the bundled index — the symbol table has no scope to search.
+  const inheritedMember = roxenInheritedMemberHover(
+    ctx, table, identifierAtPosition(hoverTree, params.position.line, params.position.character) ?? "", params,
+  );
+  if (inheritedMember) return inheritedMember;
 
   const aliasHover = hoverFromInheritAlias(table, hoverTree, params);
   if (aliasHover) return aliasHover;

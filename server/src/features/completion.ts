@@ -46,6 +46,7 @@ import { collectKeywordSnippets } from "./completion-keywords";
 import { addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import { buildAutodocCompletion } from "./completion-autodoc";
 import { roxenCompletionCandidates } from "./roxenIndex";
+import { collectMagicConstantItems } from "./pikeMagicConstants";
 
 // Re-export for backward compatibility
 export { type CompletionContext, resetCompletionCache } from "./completionTrigger";
@@ -170,6 +171,7 @@ async function completeUnqualified(
   collectLocalScopeItems(table, line, character, items, seenNames);
   await collectImportedItems(table, ctx, items, seenNames);
   await collectDirectoryModuleItems(ctx, items, seenNames);
+  collectMagicConstantItems(items, seenNames);
   collectPredefBuiltinItems(ctx, items, seenNames);
   collectRoxenItems(ctx, items, seenNames);
   collectStdlibTopLevelItems(ctx, items, seenNames);

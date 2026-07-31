@@ -86,12 +86,21 @@ function children(node: Node, type: string): Node[] {
  * the end of the parameter list makes both read the same in hover.
  */
 function renderFunction(core: Node, mods: string[], prefix: string): DeclInfo[] {
-  const name = child(core, "identifier");
+  // A getter/setter pair is one PROPERTY, and the grammar gives its name as a
+  // `backtick_identifier` rather than an `identifier` — so asking only for the
+  // latter dropped `RequestID`'s `conf` and `request_uuid` entirely. Readers
+  // write `id->conf`, never ``id->`conf``, so that is the name to record.
+  const name = child(core, "identifier") ?? child(core, "backtick_identifier");
   const params = child(core, "parameters");
   if (!name || !params) return [];
+  const property = /^`([A-Za-z_][A-Za-z0-9_]*)=?$/.exec(name.text);
   const type = child(core, "type");
   const head = `${type ? `${collapse(type.text)} ` : ""}${name.text}${collapse(params.text)}`;
-  return [{ name: name.text, signature: collapse(`${prefix}${head};`), modifiers: mods }];
+  return [{
+    name: property ? property[1] : name.text,
+    signature: collapse(`${prefix}${head};`),
+    modifiers: mods,
+  }];
 }
 
 /** Render a variable declaration, dropping any initializer. */

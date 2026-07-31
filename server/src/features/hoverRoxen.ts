@@ -9,6 +9,7 @@ import { formatHover } from "./hoverContent";
 import { modulePathAtPosition } from "./accessResolver";
 import { lookupRoxenIdentifier, lookupRoxenSymbol } from "./roxenIndex";
 import type { HoverContext } from "./hoverHandler";
+import type { SymbolTable } from "./symbolTable";
 
 /**
  * Last resort: the bundled Roxen index.
@@ -75,6 +76,54 @@ export function roxenPathHover(
 
   const entry = lookupRoxenSymbol(ctx.roxenIndex, path);
   return entry ? roxenSymbolHover(ctx, path, entry, params.position) : null;
+}
+
+/**
+ * A bare name that is a member of a class this one INHERITS, where the class
+ * exists only in the bundled index.
+ *
+ * `class RequestID2 { inherit RequestID; … return conf; }` — Roxen's own
+ * `ftp.pike` — reads `conf` with no receiver, because it is a member of the
+ * `RequestID` it inherits. That class is injected as a global, so the workspace
+ * never resolves the inherit and `inheritedScopes` stays empty: the symbol
+ * table has nowhere to look, and every bare-name tier is about names in scope,
+ * which this is not. `err`, `result`, `conf` and `id` between them account for
+ * ~680 such reads in Roxen 6.1.
+ *
+ * Only inherits visible from the cursor are consulted — the enclosing classes
+ * and the file — so a sibling class's inherit cannot answer.
+ */
+export function roxenInheritedMemberHover(
+  ctx: HoverContext,
+  table: SymbolTable,
+  identName: string,
+  params: { textDocument: { uri: string }; position: { line: number; character: number } },
+): Hover | null {
+  if (!ctx.roxenActive.get(params.textDocument.uri)) return null;
+
+  for (const inheritName of visibleInheritNames(table, params.position.line)) {
+    const entry = lookupRoxenSymbol(ctx.roxenIndex, `${inheritName}.${identName}`);
+    if (entry) return roxenSymbolHover(ctx, identName, entry, params.position);
+  }
+  return null;
+}
+
+/** Inherit names declared by a scope covering `line`, innermost first. */
+function visibleInheritNames(table: SymbolTable, line: number): string[] {
+  const scopes = table.scopes
+    .filter(s => (s.kind === "class" || s.kind === "file") &&
+      s.range.start.line <= line && line <= s.range.end.line)
+    .sort((a, b) =>
+      (a.range.end.line - a.range.start.line) - (b.range.end.line - b.range.start.line));
+
+  const names: string[] = [];
+  for (const scope of scopes) {
+    for (const declId of scope.declarations) {
+      const decl = table.declById.get(declId);
+      if (decl?.kind === "inherit") names.push(decl.name.replace(/^"|"$/g, ""));
+    }
+  }
+  return names;
 }
 
 /**
