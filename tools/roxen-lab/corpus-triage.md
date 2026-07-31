@@ -134,8 +134,55 @@ of thing this server should eventually be able to point out.
 | `server/etc/modules/DBManager.pmod` | 331 | MISSING, at `protected class SqlFileSplitIterator` |
 
 Oracle: `semantic` — the file is valid Pike. A MISSING node means the parser
-inserted a token to recover, so the defect is upstream of the reported position
-and needs narrowing before a grammar change. Not yet reduced to a minimal case.
+inserted a token to recover, so the defect is upstream of the reported position.
+
+**Classified: the modifier block is modelled as a statement block.** Minimal
+reproduction, four lines:
+
+```pike
+private
+{
+  string v;
+  protected class Inner { int y; }
+}
+```
+
+The inserted token is a `;`, and its parent is a `local_declaration` whose
+children are `modifier type identifier`. The enclosing node is a `block`
+spanning lines 29–986 — the body of `private { … }` at line 28, which the
+grammar admits through `declaration`'s `$.block` alternative.
+
+Pike's modifier block groups *declarations*, not statements. The braces do not
+open a scope, which is measurable rather than inferred: pike compiles
+`{ int hidden = 3; } int main(){ return hidden == 3 ? 0 : 1; }` and the
+variable is visible outside the braces (exit 0). It also accepts the
+reproduction above, warning only that `v` is unused.
+
+A class declaration, meanwhile, is genuinely not a statement — pike rejects
+`int main(){ class Inner { int y = 7; } return 0; }` with *syntax error,
+unexpected TOK_RETURN*. So the grammar is right to want a `;` inside a `block`
+and wrong to have routed this body there.
+
+The fix is a `modifier_block` rule bodied like `class_body`
+(`seq('{', repeat($.declaration), '}')`), replacing `$.block` in `declaration`.
+**Three attempts at it all hit unresolvable LR conflicts** and were reverted:
+
+- Admitting `$._stmt` alongside `$.declaration` collides with
+  `macro_statement`, whose body is a `block`.
+- Keeping the `';'` alternative collides `_stmt`'s `;` with
+  `class_body_repeat1`'s.
+- Dropping both still collides `identifier_expr` / `macro_invocation` /
+  `macro_invocation_stmt` / `macro_statement`.
+
+Routing `_definition`'s bare `{ … }` through the new rule additionally fails
+54 of the grammar's own 234 corpus tests, which wrap expression snippets in a
+top-level bare block — a construct pike rejects outright
+(`{ (int)1.5; }` at file scope is a syntax error, modifier or not), so those
+fixtures would have to be rewritten first.
+
+This is one file of 442 and the corpus floor is 1 regardless (see below), so
+it is parked rather than forced. Read
+[[tree-sitter-pike-conflict-resolution]] before picking it up.
 
 ## Macro-expansion gaps
 
@@ -179,6 +226,11 @@ corpus baseline should keep expecting exactly one failure for this file.
 Triage is complete: every failing file is classified and carries the oracle's
 verdict. Named class expressions and the `for`-condition declaration are fixed
 upstream and the WASM here is rebuilt, so `corpus-baseline.json` now records
-10. The `DBManager.pmod` MISSING is untouched, as are the eight
-macro-expansion gaps. The floor is 1: `scale.pike` is invalid Pike and must
-keep failing.
+10. `DBManager.pmod` is now classified too — a modifier block modelled as a
+statement block, with a four-line reproduction above — but not fixed: every
+route to the fix hit an LR conflict elsewhere in the grammar. The eight
+macro-expansion gaps are untouched.
+
+The floor is 1: `scale.pike` is invalid Pike and must keep failing. So the
+reachable target here is 1, not 0, and the remaining distance from 10 to 1 is
+one grammar rule plus the macro-expansion work — not a defect in this server.
