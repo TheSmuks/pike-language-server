@@ -19,7 +19,7 @@ import { readFileSync } from "node:fs";
 import { uriToPath } from "../util/uri";
 import { decodeSource } from "../util/sourceDecoder.js";
 import { fileLevelHover } from "./hoverContent-file";
-import { renderAutodocLines } from "./autodocLineRenderer";
+import { hoverFromComments } from "./hoverContent-comments";
 
 // Re-export for backward compatibility
 export { fileLevelHover };
@@ -342,6 +342,12 @@ function hoverFromStdlib(
   signature: string,
   ctx: HoverContentContext,
 ): HoverInfo | null {
+  // A macro parameter is a substitution placeholder, never a global. Roxen
+  // names them `X`, `Y`, `MODE`, `LEVEL` — and also `text`, `name`, `id`,
+  // which do collide with things Pike and Roxen predefine. Answering one of
+  // those with the builtin's documentation is a wrong answer.
+  if (decl.kind === "macro_parameter") return null;
+
   const entry = ctx.stdlibIndex[`predef.${decl.name}`];
   if (entry) {
     return makeHoverInfo(decl, entry.signature, entry.markdown, true);
@@ -370,86 +376,6 @@ function hoverFromStdlib(
   return null;
 }
 
-/** Scan backwards from declLine, collecting //! autodoc lines. */
-function collectAutodocLines(lines: string[], declLine: number): string[] {
-  const autodocLines: string[] = [];
-  let scanLine = declLine - 1;
-  while (scanLine >= 0) {
-    const lineText = (lines[scanLine] ?? "").trimEnd();
-    if (lineText.endsWith("*/")) {
-      // Skip over block comments by scanning back to the opening /*.
-      // Default to bailing out in case /* is never found (malformed input)
-      // to avoid an infinite loop when scanLine is not decremented.
-      const commentEnd = scanLine;
-      scanLine = -1;
-      for (let bl = commentEnd; bl >= 0; bl--) {
-        if ((lines[bl] ?? "").includes("/*")) {
-          scanLine = bl - 1;
-          break;
-        }
-      }
-      continue;
-    }
-    const match = lineText.match(/^\/\/!\s?(.*)/);
-    if (match) {
-      autodocLines.unshift(match[1]);
-      scanLine--;
-    } else if (lineText === "" || lineText.startsWith("//")) {
-      scanLine--;
-    } else {
-      break;
-    }
-  }
-  return autodocLines;
-}
-
-/** Group autodoc lines into paragraphs on blank separators. */
-function autodocParagraphs(autodocLines: string[]): string[] {
-  const paragraphs: string[] = [];
-  let current: string[] = [];
-  for (const line of autodocLines) {
-    if (line.length === 0) {
-      if (current.length > 0) {
-        paragraphs.push(current.join(" "));
-        current = [];
-      }
-    } else {
-      current.push(line);
-    }
-  }
-  if (current.length > 0) paragraphs.push(current.join(" "));
-  return paragraphs;
-}
-
-/** Tier 2b: //! autodoc comments above the declaration. */
-function hoverFromComments(
-  decl: { name: string; nameRange: { start: { line: number; character: number } } },
-  signature: string,
-  lines: string[],
-): HoverInfo | null {
-  const declLine = decl.nameRange.start.line;
-  if (declLine <= 0) return null;
-
-  const autodocLines = collectAutodocLines(lines, declLine);
-  if (autodocLines.length === 0) return null;
-
-  const paragraphs = autodocParagraphs(autodocLines);
-  if (paragraphs.length === 0) return null;
-
-  const rendered = renderAutodocLines(autodocLines);
-  // isAutodoc stays false: it means "documentation already embeds the
-  // signature", which is true of Tier 1's XML render but not here —
-  // renderAutodocLines emits comment prose only (it strips @decl). Marking
-  // these autodoc made formatHover drop the signature block, so a `//!`-
-  // documented symbol lost its signature whenever the XML cache was cold or
-  // the extractor was unavailable.
-  return makeHoverInfo(decl, signature, rendered || paragraphs.join("\n\n"));
-}
-
-// ---------------------------------------------------------------------------
-// Public: declForHover
-// ---------------------------------------------------------------------------
-
 /**
  * Build hover info for a declaration from any source.
  * Implements the three-tier hover resolution:
@@ -469,6 +395,15 @@ export function declForHover(
 ): HoverInfo | null {
   const source = getSource(uri, ctx.documents) ?? ctx.documents.get(uri)?.getText() ?? "";
   const lines = source.split("\n");
+
+  // A macro parameter's own text is just `X` — true but useless. Say what it
+  // is and which macro binds it, and stop: none of the tiers below can add
+  // anything, and two of them would answer with an unrelated symbol.
+  if (decl.kind === "macro_parameter") {
+    const owner = (decl as { declaredType?: string }).declaredType ?? "";
+    return makeHoverInfo(decl, `${decl.name} — macro ${owner}`.trimEnd(), "");
+  }
+
   const signature = extractSignature(decl, lines);
 
   // Tier 1: Workspace AutoDoc — check XML cache, render from XML

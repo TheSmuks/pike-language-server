@@ -117,7 +117,7 @@ a reason for the declaration to become unreachable.
 
 | | Records | Reachable from this repo? |
 |---|---|---|
-| Inside a `#define` body | 647 | No — see below |
+| Inside a `#define` body | 647 | ~~No~~ — wrong, see amendment 2 |
 | `->` on a receiver | 936 | Partly |
 | `Qualifier::` (mostly `predef::`) | 89 | ~~Needs Roxen index coverage~~ — wrong, see correction |
 | Bare `::` | 74 | ~~Partly~~ — wrong, see correction |
@@ -125,13 +125,16 @@ a reason for the declaration to become unreachable.
 | Plain identifier | 24 | Yes |
 | `->` on a subscript | 13 | Yes |
 
-**The `#define` bucket is structural.** The grammar makes an entire directive
-one opaque `preprocessor_directive` token — `#define sQUERY(X,Y...)
-get_sdb()->query(X,Y)` contains no identifier nodes at all, so no
-position-driven capability can answer anywhere inside it. Closing this means
-parsing macro replacement lists in tree-sitter-pike; it is the same
-macro-expansion family the parse triage put out of scope, and it is a third of
-the remaining findings.
+**~~The `#define` bucket is structural.~~ Wrong — see the amendment.** This
+said the grammar makes an entire directive one opaque `preprocessor_directive`
+token containing no identifier nodes, so nothing could answer inside it, and
+that closing it meant parsing macro replacement lists in tree-sitter-pike.
+
+The grammar already parsed them. `#define sQUERY(X,Y...) get_sdb()->query(X,Y)`
+gives `preproc_define` → `identifier`, `preproc_params` → `preproc_param` →
+`identifier`, `preproc_body` → four `identifier` nodes. It was true when the
+sweep ran and stopped being true two commits later (`e9e262e`, `cc9f9a1`),
+before this document was written. No tree-sitter work was needed.
 
 **Most of the `->` bucket has no static answer.** Sampling the receivers:
 
@@ -251,3 +254,41 @@ absent from the bundled index (`a45bf0f`); `predef::cache` absent (`6da9e3d`).
 or stop describing its remainder as though empties were the whole of it. Until
 then, probe answered positions too — reading what the server *said*, not only
 whether it said anything, is what surfaced all six defects.
+
+## Amendment 2 — the `#define` bucket, 2026-07-31
+
+Also wrong, and for a second reason on top of the stale grammar claim: the
+bucket was never one thing. Probing all 5,842 identifier positions inside
+Roxen's `#define`s — the sweep only ever visited the empty ones — splits the
+2,940 with no hover into three unrelated causes:
+
+| Cause | Count | Verdict |
+|---|---|---|
+| Macro parameters — the `X` and `Y` of `#define LOC_M(X,Y) …` | 1,831 | Fixed |
+| Pike keywords (`if`, `while`, `string`, `return`) | 618 | Correctly empty |
+| Names bound at the expansion site, or `->` on an untyped receiver | 491 | Not a `#define` problem |
+
+**The parameters were being skipped on purpose.** `collectPreprocDefineRefs`
+had an explicit `if (parameters.has(name)) continue`, reasoning that resolving
+them against the enclosing scope would point them at unrelated declarations
+sharing the name. That reasoning is right — Pike's preprocessor substitutes
+textually, so with `int X = 100;` and `#define F(X) (X + X)`, `F(1)` is 2 — but
+the remedy left 1,831 positions answering nothing rather than answering
+correctly. A function-like `#define` now opens a scope of its own holding its
+parameters, so they resolve to themselves and shadow the file exactly as the
+preprocessor does. 1,831 → 0, no position regressed (`b8c153f` diffed
+position-by-position; the single flip re-ran identically on a worktree of the
+previous commit, per the determinism note above).
+
+**The 618 keywords are not defects.** A macro body has no keyword positions for
+the lexer, so `if` and `while` arrive as `identifier` nodes; hover on a keyword
+correctly answers nothing. Any future count of this bucket should exclude them
+rather than carry them as findings.
+
+**The 491 remainder belongs to the other two clusters.** `#define ENC_ADD(X) …
+res->res += …` refers to a `res` local to whichever function expands it, and
+`FD->set_blocking()` is `->` on a macro parameter. Neither has a static answer,
+and Pike does not have one either without expanding at each call site.
+
+So the "third of the remaining findings that needs grammar work" was, in the
+end, a scope the symbol table was declining to build.

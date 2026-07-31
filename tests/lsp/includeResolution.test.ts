@@ -78,14 +78,56 @@ describe("#define macros", () => {
     expect(bodyRef!.resolvesTo).toBe(helper.id);
   });
 
-  test("a macro parameter used in the body never resolves to a same-named symbol", () => {
+  test("a macro parameter used in the body resolves to the parameter, not a same-named symbol", () => {
     // `x` at file scope and `x` as the macro's parameter are unrelated; binding
     // the body occurrence to the global would make rename rewrite the macro.
+    // Pike agrees: with `int X = 100;` and `#define F(X) (X + X)`, `F(1)` is 2.
+    //
+    // This used to be enforced by collecting no reference at all, which kept
+    // the body from resolving anywhere — the parameter is now a declaration of
+    // its own, so the guarantee is positive rather than an absence.
     const src = 'int x;\n#define DOUBLE(x) ((x)+(x))\n';
     const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
 
+    const global = table.declarations.find(d => d.name === "x" && d.kind === "variable")!;
+    const param = table.declarations.find(d => d.kind === "macro_parameter")!;
+    expect(param.name).toBe("x");
+
     const onLine1 = table.references.filter(r => r.loc.line === 1 && r.name === "x");
-    expect(onLine1).toEqual([]);
+    expect(onLine1.length).toBe(2);
+    for (const ref of onLine1) {
+      expect(ref.resolvesTo).toBe(param.id);
+      expect(ref.resolvesTo).not.toBe(global.id);
+    }
+  });
+
+  test("a macro parameter is scoped to its own #define", () => {
+    // Two macros may bind the same name, and a use in one body must not reach
+    // the other's parameter.
+    const src = '#define A(v) (v)\n#define B(v) (v + 1)\n';
+    const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
+
+    const params = table.declarations.filter(d => d.kind === "macro_parameter");
+    expect(params.length).toBe(2);
+    expect(params[0].id).not.toBe(params[1].id);
+
+    const bodyRefs = table.references.filter(r => r.name === "v");
+    expect(bodyRefs.length).toBe(2);
+    // Each body reaches the parameter declared on its own line.
+    for (const ref of bodyRefs) {
+      const target = table.declById.get(ref.resolvesTo!)!;
+      expect(target.nameRange.start.line).toBe(ref.loc.line);
+    }
+  });
+
+  test("a name the macro does not bind still reaches the enclosing scope", () => {
+    // The macro scope shadows; it does not seal.
+    const src = 'int outer;\n#define USE(v) (v + outer)\n';
+    const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
+
+    const outer = table.declarations.find(d => d.name === "outer")!;
+    const ref = table.references.find(r => r.name === "outer" && r.loc.line === 1)!;
+    expect(ref.resolvesTo).toBe(outer.id);
   });
 
   test("a keyword in a macro body is not collected as a reference", () => {

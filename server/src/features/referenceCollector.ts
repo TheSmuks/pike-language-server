@@ -245,19 +245,6 @@ function collectReturnTypeIdRecursive(node: Node, state: BuildState): void {
   }
 }
 
-/** The names a function-like macro binds at expansion time. */
-function macroParameterNames(node: Node): Set<string> {
-  const names = new Set<string>();
-  const params = node.childForFieldName('parameters');
-  if (!params) return names;
-  for (const param of params.children) {
-    if (param.type !== 'preproc_param') continue;
-    const name = param.childForFieldName('name');
-    if (name) names.add(name.text);
-  }
-  return names;
-}
-
 /**
  * References inside a `#define` body.
  *
@@ -267,22 +254,30 @@ function macroParameterNames(node: Node): Set<string> {
  * answer anywhere inside a macro, and what stops a symbol whose only use is a
  * macro body from being reported as unused.
  *
- * Two kinds of identifier are dropped. A macro's own parameters are bound at
- * expansion, so resolving them against the enclosing scope would point them at
- * unrelated declarations that happen to share the name — and rename would then
- * rewrite the body. Keywords reach here spelled as identifiers, because a body
- * has no keyword positions for the lexer to recognise them in; they name
- * nothing.
+ * Only keywords are dropped. They reach here spelled as identifiers, because
+ * a body has no keyword positions for the lexer to recognise them in, and they
+ * name nothing — 618 of Roxen's macro-body identifiers are `if`, `while`,
+ * `string` and the like.
+ *
+ * A macro's own parameters used to be dropped too, on the reasoning that
+ * resolving them against the enclosing scope would point them at unrelated
+ * declarations sharing the name. That reasoning was right and the remedy was
+ * not: `collectPreprocDefine` now declares them in a scope of the macro's own,
+ * so they resolve to themselves and shadow the file exactly as Pike's textual
+ * substitution does.
  */
 function collectPreprocDefineRefs(node: Node, state: BuildState): void {
   const body = node.childForFieldName('body');
   if (!body) return;
 
-  const parameters = macroParameterNames(node);
   for (const child of body.children) {
     if (child.type !== 'identifier') continue;
     const name = child.text;
-    if (parameters.has(name) || PIKE_KEYWORDS.has(name)) continue;
+    // Keywords only. A macro parameter used to be skipped here too, which is
+    // why `X` in `#define F(X) (X + X)` answered nothing; it now resolves to
+    // the parameter declared in the macro's own scope, which shadows the file
+    // exactly as Pike's textual substitution does.
+    if (PIKE_KEYWORDS.has(name)) continue;
 
     const declId = resolveName(name, child, state);
     state.references.push({
