@@ -7,9 +7,10 @@
 import { Node } from "web-tree-sitter";
 import { CompletionItem, CompletionItemKind } from "vscode-languageserver/node";
 import type { SymbolTable } from "./symbolTable";
-import { getDeclarationsInScope, findClassScopeAt } from "./symbolTable";
+import { getDeclarationsInScope, findProgramScopeAt } from "./symbolTable";
 import { declToCompletionItem, cleanPredefSignature, padSortKey } from "./completion-items";
 import { addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
+import { collectFileInheritMembers, resolveInheritTargetUri } from "./inheritFileMembers";
 import { roxenInjectedGlobals } from "./roxenIndex";
 import type { CompletionContext } from "./completionTrigger";
 
@@ -17,7 +18,13 @@ import type { CompletionContext } from "./completionTrigger";
 // Scope access completion (:: )
 // ---------------------------------------------------------------------------
 
-/** Handle local:: — gather declarations from enclosing class scope. */
+/**
+ * Handle local:: — gather declarations from the enclosing program's scope.
+ *
+ * At file level that program is the file, which is why this asks for the
+ * program scope and not a class scope: `local::` in a `.pike` file with no
+ * class around it is ordinary Pike and used to complete to nothing.
+ */
 async function completeLocalScope(
   table: SymbolTable,
   line: number,
@@ -25,7 +32,7 @@ async function completeLocalScope(
   seenNames: Set<string>,
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
-  const classScopeId = findClassScopeAt(table, line, character);
+  const classScopeId = findProgramScopeAt(table, line, character);
   if (classScopeId === null) return items;
 
   const classScope = table.scopeById.get(classScopeId);
@@ -91,7 +98,7 @@ function completePredefScope(ctx: CompletionContext, seenNames: Set<string>): Co
   return items;
 }
 
-/** Handle bare :: (no identifier before it) — first inherited class. */
+/** Handle bare :: (no identifier before it) — everything the program inherits. */
 async function completeBareScope(
   table: SymbolTable,
   line: number,
@@ -105,7 +112,7 @@ async function completeBareScope(
   if (hasIdentifier) return [];
 
   const items: CompletionItem[] = [];
-  const classScopeId = findClassScopeAt(table, line, character);
+  const classScopeId = findProgramScopeAt(table, line, character);
   if (classScopeId === null) return items;
 
   const classScope = table.scopeById.get(classScopeId);
@@ -126,36 +133,37 @@ async function completeBareScope(
   // inherits a cross-file module or a stdlib class far more often than a
   // sibling class — `class CacheStatsMIB { inherit SNMP.SimpleMIB; … ::create(…) }`
   // — and for those the list is empty, which read as "nothing to offer".
-  const firstInherit = classScope.declarations
-    .map(id => table.declById.get(id))
-    .find(decl => decl?.kind === "inherit");
-  if (!firstInherit) return items;
-
-  return completeFromInheritDecl(firstInherit.name, table, classScopeId, seenNames, ctx);
-}
-
-/** Try to collect declarations from a resolved inherit target. */
-async function collectFromResolvedTarget(
-  decl: { name: string; alias?: string },
-  targetUri: string,
-  ctx: CompletionContext,
-  seenNames: Set<string>,
-  table: SymbolTable,
-): Promise<CompletionItem[]> {
-  const items: CompletionItem[] = [];
-  const targetTable = await ctx.index.getOrIndexSymbolTable(targetUri);
-  if (!targetTable) return items;
-
-  const fileScope = targetTable.scopes.find(s => s.kind === "file");
-  if (!fileScope) return items;
-
-  const decls = getDeclarationsInScope(targetTable, fileScope.id);
-  for (const td of decls) {
-    if (seenNames.has(td.name)) continue;
-    seenNames.add(td.name);
-    items.push(declToCompletionItem(td, 0, targetTable));
+  //
+  // Every inherit is consulted, not only the first: bare `::` in Pike searches
+  // the whole inherit list, and `roxen.pike` inherits nine sibling files whose
+  // members it reaches through exactly this syntax.
+  const inheritNames = programInheritNames(table, classScope);
+  for (const inheritName of inheritNames) {
+    items.push(...await completeFromInheritDecl(inheritName, table, classScopeId, seenNames, ctx));
   }
   return items;
+}
+
+/**
+ * The inherit paths declared directly by a program scope.
+ *
+ * Capped because the last tier of each lookup is a Pike worker round-trip, and
+ * a completion request must not turn into an unbounded fan-out of them. Roxen's
+ * widest program inherits nine files, so the cap is never reached in practice.
+ */
+const MAX_INHERITS_CONSULTED = 16;
+
+function programInheritNames(
+  table: SymbolTable,
+  scope: { declarations: number[] },
+): string[] {
+  const names: string[] = [];
+  for (const declId of scope.declarations) {
+    if (names.length >= MAX_INHERITS_CONSULTED) break;
+    const decl = table.declById.get(declId);
+    if (decl?.kind === "inherit") names.push(decl.name);
+  }
+  return names;
 }
 
 /** Collect declarations from same-file inheritance chain. */
@@ -201,7 +209,7 @@ async function completeIdentifierScope(
   ctx: CompletionContext,
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
-  const classScopeId = findClassScopeAt(table, line, character);
+  const classScopeId = findProgramScopeAt(table, line, character);
   if (classScopeId === null) return items;
 
   const classScope = table.scopeById.get(classScopeId);
@@ -225,6 +233,9 @@ async function completeIdentifierScope(
  * worker's runtime resolve for types the static index does not carry
  * (`SNMP.SimpleMIB`, `Image.Image`). Only the first two existed, so an inherit
  * of anything outside the workspace completed to nothing.
+ *
+ * The file tier follows the target's OWN file-level inherits: a file is a
+ * program, so what it inherits is part of what it contributes.
  */
 async function completeFromInheritDecl(
   inheritName: string,
@@ -235,19 +246,55 @@ async function completeFromInheritDecl(
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
 
-  const targetUri = await ctx.index.resolveInherit(inheritName, false, ctx.uri);
+  const targetUri = await resolveInheritTargetUri(ctx.index, inheritName, ctx.uri);
   if (targetUri) {
-    items.push(...await collectFromResolvedTarget({ name: inheritName }, targetUri, ctx, seenNames, table));
+    items.push(...await collectFileInheritMembers(ctx.index, targetUri, seenNames));
   }
 
   items.push(...collectFromSameFileInheritance(classScopeId, inheritName, table, seenNames));
   if (items.length > 0) return items;
 
-  addStdlibMembersByType(inheritName, ctx, items, seenNames);
+  const typeName = stdlibTypeNameFor(inheritName, table, classScopeId);
+  addStdlibMembersByType(typeName, ctx, items, seenNames);
   if (items.length > 0) return items;
 
-  await addResolvedMembers(inheritName, ctx, items, seenNames);
+  await addResolvedMembers(typeName, ctx, items, seenNames);
   return items;
+}
+
+/**
+ * The dotted type name an inherit path denotes, for the stdlib and runtime
+ * tiers.
+ *
+ * `inherit basic::Monitor;` (fsgc.pike) qualifies the class by the ALIAS of an
+ * outer inherit — `inherit Filesystem.Monitor.basic : basic;` — so the literal
+ * text names nothing the stdlib index or `master()->resolv` has ever heard of.
+ * Expanding the alias back to its path yields `Filesystem.Monitor.basic.Monitor`,
+ * which they do know.
+ */
+function stdlibTypeNameFor(
+  inheritName: string,
+  table: SymbolTable,
+  classScopeId: number,
+): string {
+  const separator = inheritName.indexOf("::");
+  if (separator <= 0) return inheritName;
+  const alias = inheritName.slice(0, separator);
+  const member = inheritName.slice(separator + 2);
+
+  let scopeId: number | null = classScopeId;
+  while (scopeId !== null) {
+    const scope = table.scopeById.get(scopeId);
+    if (!scope) break;
+    for (const declId of scope.declarations) {
+      const decl = table.declById.get(declId);
+      if (decl?.kind === "inherit" && decl.alias === alias) {
+        return `${decl.name}.${member}`;
+      }
+    }
+    scopeId = scope.parentId;
+  }
+  return inheritName;
 }
 
 /**
