@@ -120,14 +120,40 @@ function printTokens(tokens: DecodedToken[], summary: boolean): void {
   }
 }
 
-/** Wait for the first publishDiagnostics notification for the given URI. */
-function waitForDiagnostics(server: TestServer, uri: string, timeoutMs: number): Promise<unknown> {
+/**
+ * Collect publishDiagnostics for a URI and return the last set published.
+ *
+ * The server publishes twice: a parse-only pass right after didOpen, then the
+ * real compiler's verdict once the Pike worker answers. Taking the first
+ * notification therefore reported `[]` for every file whose only problem is
+ * semantic — an undefined identifier, a type error — which is to say for most
+ * files anyone would reach for this tool to investigate.
+ *
+ * Settles once no further notification has arrived for `quietMs`, so a file
+ * that really is clean does not cost the full timeout.
+ */
+function waitForDiagnostics(
+  server: TestServer,
+  uri: string,
+  timeoutMs: number,
+  quietMs = 1_500,
+): Promise<unknown> {
   return new Promise((resolvePromise) => {
-    const timer = setTimeout(() => resolvePromise(null), timeoutMs);
+    let latest: unknown = null;
+    let quietTimer: ReturnType<typeof setTimeout> | null = null;
+    const deadline = setTimeout(() => finish(), timeoutMs);
+
+    function finish(): void {
+      clearTimeout(deadline);
+      if (quietTimer) clearTimeout(quietTimer);
+      resolvePromise(latest);
+    }
+
     server.client.onNotification("textDocument/publishDiagnostics", (params: { uri: string; diagnostics: unknown[] }) => {
       if (params.uri !== uri) return;
-      clearTimeout(timer);
-      resolvePromise(params.diagnostics);
+      latest = params.diagnostics;
+      if (quietTimer) clearTimeout(quietTimer);
+      quietTimer = setTimeout(finish, quietMs);
     });
   });
 }
