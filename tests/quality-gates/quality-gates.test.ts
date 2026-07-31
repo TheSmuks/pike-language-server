@@ -44,12 +44,12 @@ describe("quality gate detector fixtures", () => {
     const result = await runGateFixture("skipped-tests", "--skips");
     expect(result.status).toBe(1);
     expect(result.stderr).toContain("documented-skips");
-    expect(result.stderr).toContain("bad.test.ts");
+    expect(result.stderr).toContain("bad-skip.fixture.ts");
   });
 
   test("allows documented skipped tests", async () => {
     const result = await runGateFixture("skipped-tests", "--skips");
-    expect(result.stderr).not.toContain("clean-documented.test.ts");
+    expect(result.stderr).not.toContain("clean-documented.fixture.ts");
   });
 
   test("rejects invalid rule catalog entries as setup errors", async () => {
