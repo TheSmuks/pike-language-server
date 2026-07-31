@@ -403,13 +403,40 @@ confidently, that no crash or empty-result check could ever surface. The fixture
 was written to exercise exactly this ("Name collision on `value()` — resolve
 with `A::value()` and `B::value()`") and the audit is what noticed it was not.
 
+### F-B — the corpus fixture that did not compile (`aaacdcf`)
+
+`corpus/files/cross-lib-consumer.pike` was marked `Valid*` in the manifest but
+failed under stock Pike: `inherit .cross_lib_base.Formatter;` maps the dotted
+path to a file literally named `cross_lib_base.pike`, and the file on disk is
+`cross-lib-base.pike`. Hyphens are legal in a filename but not in a dotted
+module path, so the inherit could never resolve — and a fixture whose whole
+purpose is cross-file inheritance was testing nothing of the sort.
+
+Fixed by using the string form, `inherit "cross-lib-base.pike";`, which is what
+the sibling fixtures already do (`rename-main.pike`). Verified against the real
+binary: `pike -I . cross-lib-consumer.pike` now exits 0, and the oracle verdict
+went from failing to `ok`. The manifest's `Valid*` marker became true rather
+than being edited to match reality.
+
+The ground-truth artifacts record the repair exactly — `exit_code: 1 -> 0`, with
+`Failed to index module cross_lib_base` and `Illegal program pointer` replaced
+by unused-variable warnings.
+
+**Fixing it briefly made the audit look worse, which is the point.** Findings
+rose 33 -> 38 and tier-2 wrong answers 0 -> 2, because the fix shifted line
+numbers by two and the tier-2 expectations carry hardcoded coordinates. Those
+expectations had also been written *around* the broken inherit rather than
+through it. Corrected, the corpus settles at **28 findings, tier-2 wrong
+answers 0** — and the expectations now exercise the cross-file inheritance the
+fixture was always meant to test.
+
 ### Measured impact
 
 Corpus tier re-swept after all three fixes, same harness, same 87 files:
 
 | | Before | After |
 |---|---|---|
-| Findings | 253 | **33** (−87%) |
+| Findings | 253 | **28** (−89%) |
 | `documentHighlight` empties | 211 | **9** (−96%) |
 | Tier-2 wrong answers | 2 | **0** |
 
