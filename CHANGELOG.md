@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.52] — 2026-07-31
+
 ### Changed
 
 - **`lsp-probe diagnostics` now reports the compiler's verdict, not the parser's.** It resolved on the first `publishDiagnostics` for a URI, and the server publishes twice — a parse-only pass right after the file opens, then the Pike worker's result — so the tool printed `[]` for every file whose only problem is semantic. `err-undef-class.pike`, whose entire purpose is to inherit a class that does not exist, reported clean.
