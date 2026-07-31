@@ -41,6 +41,9 @@ import {
 import { getStdlibEntriesByName } from "./completion-stdlib";
 import { type RoxenIndexData } from "./roxenIndex";
 import { roxenHover, roxenPathHover } from "./hoverRoxen";
+import {
+  hoverScopeSpecifier, hoverQualifiedInheritMember, hoverFromInheritAlias,
+} from "./hoverScopeAccess";
 
 // Re-export for any external consumers
 export type { HoverInfo } from "./hoverContent";
@@ -269,11 +272,23 @@ async function hoverFromTree(
   const roxenPath = roxenPathHover(ctx, doc, params);
   if (roxenPath) return roxenPath;
 
+  // Ahead of the bare-name tiers for the same reason roxenPathHover is: a
+  // member reached through `low_parser::` is not the same symbol as a bare one
+  // of that name, and answering it from the unqualified index was the wrong
+  // answer rather than a missing one.
+  const qualifiedMember = await hoverQualifiedInheritMember(ctx, table, hoverTree, params);
+  if (qualifiedMember) return qualifiedMember;
+
   const builtinHover = resolveHoverBuiltin(ctx, hoverTree, params);
   if (builtinHover) return builtinHover;
 
   const aliasHover = hoverFromInheritAlias(table, hoverTree, params);
   if (aliasHover) return aliasHover;
+
+  // The scope keywords and `::` itself are anonymous tokens with no
+  // declaration anywhere, so every tier above walks past them.
+  const specifierHover = hoverScopeSpecifier(table, hoverTree, params);
+  if (specifierHover) return specifierHover;
 
   const modulePathHover = await hoverFromModulePath(ctx, doc, params);
   if (modulePathHover) return modulePathHover;
@@ -285,35 +300,6 @@ async function hoverFromTree(
   const local = getLocalDeclarationAt(table, params.position.line, params.position.character);
   if (!local) return null;
   return formatHover(declForHover(local, params.textDocument.uri, ctx));
-}
-
-/**
- * Hover on an inherit alias — `inherit Vec : base;` on `base`, or the
- * `base` in `base::create()`. The alias is not a reference in the symbol
- * table, so the earlier tiers miss it; show the inherit it names.
- */
-function hoverFromInheritAlias(
-  table: SymbolTable,
-  hoverTree: Tree,
-  params: { position: { line: number; character: number } },
-): Hover | null {
-  const identName = identifierAtPosition(
-    hoverTree, params.position.line, params.position.character,
-  );
-  if (!identName) return null;
-
-  const inheritDecl = table.declarations.find(
-    d => d.kind === "inherit" && d.alias === identName,
-  );
-  if (!inheritDecl) return null;
-
-  return formatHover({
-    name: identName,
-    signature: `inherit ${inheritDecl.name} : ${identName}`,
-    documentation: "",
-    line: params.position.line,
-    character: params.position.character,
-  });
 }
 
 /**

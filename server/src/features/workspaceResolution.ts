@@ -10,6 +10,7 @@ import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, t
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
+import { inheritSearchScope, inheritsReachableBy } from "./scopeQualifier";
 
 // ---------------------------------------------------------------------------
 // Context interface
@@ -379,8 +380,7 @@ async function searchInheritChainForSymbol(
   seen: Set<string>,
   currentDepth: number,
 ): Promise<{ uri: string; decl: Declaration } | null> {
-  for (const decl of table.declarations) {
-    if (decl.kind !== "inherit" && decl.kind !== "import") continue;
+  for (const decl of inheritsReachableBy(ref, table, currentDepth)) {
     const target = await resolveInheritTarget(ctx, decl, uri);
     if (!target) continue;
     const targetEntry = getFile(ctx, target.uri);
@@ -431,6 +431,12 @@ async function resolveUnresolvedReference(
 
   // Try the implicit directory module.pmod: files inside Foo.pmod/
   // automatically see symbols from Foo.pmod/module.pmod.
+  //
+  // Not for a qualified `::`, and not for `predef::`. The implicit module is
+  // reached by writing the bare name; `A::name` asks a different question, and
+  // answering it from the sibling module.pmod is how `predef::cache` came back
+  // pointing at an unrelated local `cache`.
+  if (currentDepth === 0 && inheritSearchScope(ref) !== "all") return null;
   const directoryModule = await ctx.resolver.findDirectoryModulePmod(uri);
   if (directoryModule) {
     const moduleEntry = getFile(ctx, directoryModule);

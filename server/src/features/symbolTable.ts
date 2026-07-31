@@ -70,6 +70,17 @@ export interface Reference {
   confidence: 'high' | 'medium' | 'low';
   /** For arrow/dot access: the LHS identifier name (e.g., 'd' in d->bark). */
   lhsName?: string;
+  /**
+   * For scope access: the text before the `::`.
+   *
+   * An inherit name or alias (`A` in `A::value()`), one of Pike's scope
+   * keywords (`predef`, `global`, `this`, `this_program`, `local`), or the
+   * empty string for a bare `::`. The qualifier is binding — Pike rejects
+   * `A::only_b` outright when `only_b` belongs to a different inherit — so any
+   * fallback that searches for the name must honour it rather than accept a
+   * match from whichever inherit happens to come first.
+   */
+  scopeQualifier?: string;
 }
 
 export type RefKind =
