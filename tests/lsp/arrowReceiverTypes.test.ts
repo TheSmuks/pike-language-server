@@ -113,3 +113,38 @@ describe("receivers that do have members still answer", () => {
     expect(def!.range.start.line).toBe(2);
   });
 });
+
+/**
+ * A dotted path names a module, and its member belongs to that module.
+ *
+ * `Image.PNG.encode` is `encode` of `Image.PNG`. When the path cannot be
+ * resolved the answer is nothing — not whichever `encode` the bare-name search
+ * turns up in the inherit chain. Roxen's `configuration.pike` had three of
+ * these (`ADT.Table.ASCII.encode`, `Image.JPEG.encode`, `Image.PNG.encode`)
+ * all answering the same unrelated `encode` in `Variable.pmod`.
+ */
+describe("a dotted module path binds its member", () => {
+  test("an unresolvable path does not fall back to a same-named symbol", async () => {
+    // `abase.pike` declares `shared`, and main.pike inherits it — so the
+    // bare-name search has an answer available and must not give it.
+    const src = 'inherit "abase";\nint probe() { return Nonexistent.Thing.shared(); }\n';
+    const dir = mkdtempSync(join(tmpdir(), "pike-dot-path-"));
+    writeFileSync(join(dir, "abase.pike"), BASE_SRC);
+    writeFileSync(join(dir, "m.pike"), src);
+    const uri = pathToFileURL(join(dir, "m.pike")).href;
+
+    const s = await createTestServer({ rootUri: pathToFileURL(dir).href });
+    try {
+      s.openDoc(pathToFileURL(join(dir, "abase.pike")).href, BASE_SRC);
+      s.openDoc(uri, src);
+      const result = await s.client.sendRequest("textDocument/definition", {
+        textDocument: { uri },
+        position: { line: 1, character: src.split("\n")[1].indexOf("shared") },
+      });
+      expect(result).toBeNull();
+    } finally {
+      await s.teardown();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
