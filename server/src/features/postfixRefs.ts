@@ -17,7 +17,7 @@ import { PRIMITIVE_TYPES } from './symbolTable';
 import { toLoc, resolveTypeName } from './scope-helpers';
 import { elementTypeOf } from './typeResolver';
 import {
-  findScopeForNode,
+  resolveName,
   findDeclInScope,
 } from './scope-helpers';
 
@@ -114,7 +114,13 @@ function resolvePostfixMember(
 ): { resolvesTo: number | null; confidence: 'high' | 'low' } {
   if (!lhsName) return { resolvesTo: null, confidence: 'low' };
 
-  const lhsDeclId = findDeclInScope(lhsName, findScopeForNode(node, state) ?? -1, state);
+  // resolveName, not findDeclInScope: the latter checks only the given scope
+  // and its inherited scopes, never the PARENT chain. A field declared on the
+  // class is invisible from inside a method body, so the receiver was not
+  // found and the member never resolved — which is why documentHighlight
+  // returned nothing on `obj->member` while definition, taking a different
+  // path, resolved it fine.
+  const lhsDeclId = resolveName(lhsName, node, state);
   if (lhsDeclId === null) return { resolvesTo: null, confidence: 'low' };
 
   const lhsDecl = state.declMap.get(lhsDeclId);

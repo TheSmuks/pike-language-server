@@ -188,6 +188,39 @@ describe("US-015: textDocument/documentHighlight", () => {
     expect(result!.length).toBeGreaterThanOrEqual(1);
   });
 
+  test("highlights a member accessed through a receiver declared in an outer scope", async () => {
+    // Audit iteration 7: documentHighlight returned null on `obj->member` while
+    // definition resolved it fine. The member reference is only resolved if the
+    // RECEIVER can be found, and that lookup used findDeclInScope, which checks
+    // the given scope and its inherited scopes but never walks PARENT scopes —
+    // so a field declared on the class was invisible from inside a method body.
+    const src = [
+      "class Item {",
+      "  void configure(int v) { }",
+      "}",
+      "class Holder {",
+      "  Item single;",
+      "  void go() {",
+      "    single->configure(1);",
+      "    single->configure(2);",
+      "  }",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/highlight-member.pike", src);
+
+    // Cursor on `configure` in the first call.
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri },
+      position: { line: 6, character: 14 },
+    }) as HighlightResult[] | null;
+
+    expect(result).not.toBeNull();
+    // Both call sites must be highlighted, not just the one under the cursor.
+    const lines = result!.map(h => h.range.start.line).sort();
+    expect(lines).toContain(6);
+    expect(lines).toContain(7);
+  });
+
   test("returns null for position with no symbol", async () => {
     const src = "int main() { return 0; }";
     const uri = server.openDoc("file:///test/highlight-empty.pike", src);
