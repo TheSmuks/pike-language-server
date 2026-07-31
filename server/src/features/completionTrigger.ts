@@ -219,10 +219,12 @@ function resolveTriggerFromLineText(
   const oneBefore = lineText[character - 1];
   const rootNode = tree.rootNode;
 
-  if (oneBefore === ":" && (character < 2 || lineText[character - 2] !== ":")) {
-    return { type: "none" };
-  }
-
+  // A lone `:` is not a trigger — only `::` is, and tryTwoCharTrigger below
+  // handles that. It used to return "none" here instead of falling through,
+  // which forbade completion after every single colon in the language: the
+  // value type of a mapping (`mapping(string:CacheEntry)`), a ternary's second
+  // arm, a `case` label. A type name is exactly what the user types next in
+  // the first of those.
   const dotCtx = tryDotOrArrowFromChar(oneBefore, character, lineText, rootNode, line);
   if (dotCtx) return dotCtx;
 
