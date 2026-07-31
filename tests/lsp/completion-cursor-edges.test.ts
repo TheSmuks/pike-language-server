@@ -186,3 +186,33 @@ describe("completion after a scope keyword", () => {
     expect(labels).toContain("read");
   });
 });
+
+describe("completion after a single colon", () => {
+  test("offers type names inside a mapping type", async () => {
+    const src = [
+      "class CacheEntry { int n; }",
+      "class CacheStats { int m; }",
+      "mapping(string:mapping(mixed:CacheEntry)) lookup = ([]);",
+    ].join("\n");
+
+    // Cursor at the start of `CacheEntry`, one character after the `:` of the
+    // inner mapping type. A lone colon is not a trigger, which is not the same
+    // as it forbidding completion — a type name is exactly what goes here.
+    const labels = await completeAt(src, 2, 29);
+    expect(labels).toContain("CacheEntry");
+    expect(labels).toContain("CacheStats");
+  });
+
+  test("still routes a double colon to scope completion", async () => {
+    const src = [
+      "class A { int value() { return 1; } }",
+      "class C {",
+      "  inherit A;",
+      "  int sum() { return A::value(); }",
+      "}",
+    ].join("\n");
+
+    const labels = await completeAt(src, 3, 24);
+    expect(labels).toContain("value");
+  });
+});
