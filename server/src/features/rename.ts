@@ -24,35 +24,7 @@ import {
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveTypeName } from "./scope-helpers";
 import { resolveType } from "./typeResolver";
-// ---------------------------------------------------------------------------
-// Pike reserved words — cannot be used as identifiers (rename targets/new names)
-// Source: Pike lexer src/lexer.h keyword switch + Pike manual ch2-7
-// ---------------------------------------------------------------------------
-
-const PIKE_KEYWORDS = new Set([
-  // Type keywords
-  "array", "auto", "float", "function", "int", "mapping", "mixed",
-  "multiset", "object", "program", "string", "void",
-
-  // Declaration keywords
-  "class", "constant", "enum", "extern", "import", "inherit", "lambda",
-  "predef", "typedef", "typeof",
-
-  // Modifier keywords
-  "final", "inline", "local", "nomask", "optional", "private",
-  "protected", "public", "static", "variant",
-
-  // Control flow keywords
-  "break", "case", "catch", "continue", "default", "do", "else",
-  "for", "foreach", "goto", "if", "return", "sscanf", "switch", "while",
-
-  // Special expression keywords
-  "gauge", "global",
-
-  // Double-underscore modifier keywords (Pike 9.0+)
-  "__async__", "__attribute__", "__deprecated__", "__experimental__",
-  "__generator__", "__weak__", "__unused__", "__unknown__",
-]);
+import { PIKE_KEYWORDS } from "./pikeKeywords";
 
 // ---------------------------------------------------------------------------
 // Validation

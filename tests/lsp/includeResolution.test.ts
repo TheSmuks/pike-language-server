@@ -65,6 +65,37 @@ describe("#define macros", () => {
     expect(names).not.toContain('"x.h"');
   });
 
+  test("identifiers inside a macro body resolve to their declarations", () => {
+    const src = 'int helper(int a) { return a; }\n#define CALL_IT(x) helper(x)\n';
+    const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
+
+    const helper = table.declarations.find(d => d.name === "helper")!;
+    // Column 19 is `helper` inside the body, not the macro name at column 8.
+    const bodyRef = table.references.find(
+      r => r.name === "helper" && r.loc.line === 1 && r.loc.character === 19,
+    );
+    expect(bodyRef).toBeDefined();
+    expect(bodyRef!.resolvesTo).toBe(helper.id);
+  });
+
+  test("a macro parameter used in the body never resolves to a same-named symbol", () => {
+    // `x` at file scope and `x` as the macro's parameter are unrelated; binding
+    // the body occurrence to the global would make rename rewrite the macro.
+    const src = 'int x;\n#define DOUBLE(x) ((x)+(x))\n';
+    const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
+
+    const onLine1 = table.references.filter(r => r.loc.line === 1 && r.name === "x");
+    expect(onLine1).toEqual([]);
+  });
+
+  test("a keyword in a macro body is not collected as a reference", () => {
+    const src = '#define LOOP(X) do { X; } while(0)\n';
+    const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
+
+    expect(table.references.map(r => r.name)).not.toContain("do");
+    expect(table.references.map(r => r.name)).not.toContain("while");
+  });
+
   test("#include is recorded as an include declaration with the raw path", () => {
     const src = '#include "foo.h"\n#include <bar.h>';
     const table = buildSymbolTable(parse(src), "file:///t.pike", 1, undefined, src);
