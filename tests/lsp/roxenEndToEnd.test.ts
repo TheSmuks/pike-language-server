@@ -110,6 +110,42 @@ function positionOf(text: string, needle: string): { line: number; character: nu
   throw new Error(`${needle} not present in the fixture`);
 }
 
+describe("hover on a dotted Roxen symbol", () => {
+  /**
+   * `RXML.` and `Roxen.` are 446 of the index's 719 symbols, and they are only
+   * ever written dotted. Bare-name lookup cannot reach them: the cursor sits on
+   * `Tag`, and `Tag` alone means nothing — the entry is keyed `RXML.Tag`.
+   */
+  test("resolves a dotted API symbol in expression position", async () => {
+    const src = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_LOCATION;
+
+mixed truth() { return Roxen.True; }
+`;
+    const uri = server.openDoc("file:///test/roxen-dotted.pike", src);
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: positionOf(src, "True"),
+    }) as HoverResult | null;
+
+    expect(hover).not.toBeNull();
+    expect(hover!.contents.value).toContain("bundled index");
+  });
+
+  test("offers nothing dotted in a plain Pike file", async () => {
+    const src = "mixed truth() { return Roxen.True; }\n";
+    const uri = server.openDoc("file:///test/plain-dotted.pike", src);
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri },
+      position: positionOf(src, "True"),
+    }) as HoverResult | null;
+
+    expect(hover === null || !hover.contents.value.includes("bundled index")).toBe(true);
+  });
+});
+
 describe("hover in a Roxen file without an installation", () => {
   test("renders the declaration, not just its provenance", async () => {
     const hover = await server.client.sendRequest("textDocument/hover", {

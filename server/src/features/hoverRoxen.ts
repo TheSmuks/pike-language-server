@@ -47,3 +47,26 @@ export function roxenHover(
     isAutodoc: false,
   });
 }
+
+/**
+ * Render a dotted Roxen index entry, with the provenance line the bundled
+ * index always carries — it tells the reader the answer came from a pinned
+ * copy of Roxen rather than their installation, which is also why
+ * go-to-definition declines to jump anywhere.
+ */
+export function roxenSymbolHover(
+  ctx: HoverContext,
+  path: string,
+  entry: { signature: string; markdown?: string },
+  position: { line: number; character: number },
+): Hover | null {
+  const provenance = `\n\n*Roxen (bundled index, Roxen ${ctx.roxenIndex.roxenVersion})*`;
+  return formatHover({
+    name: path,
+    signature: entry.signature,
+    documentation: entry.markdown ? `${entry.markdown}\n${provenance}` : provenance.trimStart(),
+    line: position.line,
+    character: position.character,
+    isAutodoc: false,
+  });
+}

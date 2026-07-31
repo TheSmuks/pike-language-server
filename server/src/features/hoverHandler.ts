@@ -39,8 +39,8 @@ import {
   type HoverInfo,
 } from "./hoverContent";
 import { getStdlibEntriesByName } from "./completion-stdlib";
-import { type RoxenIndexData } from "./roxenIndex";
-import { roxenHover } from "./hoverRoxen";
+import { lookupRoxenSymbol, type RoxenIndexData } from "./roxenIndex";
+import { roxenHover, roxenSymbolHover } from "./hoverRoxen";
 
 // Re-export for any external consumers
 export type { HoverInfo } from "./hoverContent";
@@ -325,6 +325,17 @@ async function hoverFromModulePath(
   const lines = doc.getText().split('\n');
   const path = modulePathAtPosition(lines, params.position.line, params.position.character);
   if (!path) return null;
+
+  // Bundled Roxen API, which is written dotted and only ever dotted:
+  // `RXML.Tag`, `Roxen.True`. Those two prefixes are 446 of the index's 719
+  // symbols, and bare-name lookup cannot reach any of them — the cursor rests
+  // on `Tag`, which means nothing on its own, while the entry is keyed
+  // `RXML.Tag`. Gated on the file being a Roxen file, like every other Roxen
+  // tier, so a plain Pike program is never told about them.
+  if (ctx.roxenActive.get(params.textDocument.uri)) {
+    const entry = lookupRoxenSymbol(ctx.roxenIndex, path);
+    if (entry) return roxenSymbolHover(ctx, path, entry, params.position);
+  }
 
   // Static stdlib entry: class/module docs. Signatures are empty for class
   // entries (`predef.Stdio.File`), so synthesize a readable header.
