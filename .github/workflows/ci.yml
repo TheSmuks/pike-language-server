@@ -260,14 +260,28 @@ jobs:
       - name: Add Pike and pmp to PATH
         run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH && echo "$HOME/.pmp/bin" >> $GITHUB_PATH
 
-      - name: Run Bun tests with real Pike oracle
-        run: bun run test
-
       - name: Install pmp
         run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
 
+      # Must precede the test run, not follow it. `pmp install` is what puts the
+      # introspect module at `modules/pike_introspect` — the directory is
+      # gitignored, so a checkout alone never has it. INTROSPECT_PATH resolves
+      # from that path, and the worker is spawned with `-M $INTROSPECT_PATH`
+      # only when it resolved; with the module absent every `worker.resolve()`
+      # answers `Introspect module not available` and each caller degrades to no
+      # answer rather than failing loudly. Running these steps after
+      # `bun run test` left the Pike oracle the job is named for half present:
+      # `Image` and `Parser.HTML` — C modules, reachable only through the
+      # runtime resolver — hovered as nothing, while the `.pmod` directory
+      # modules kept passing, so the gap looked like three unrelated hover bugs.
       - name: Install Pike dependencies
         run: ~/.pmp/bin/pmp install
+
+      - name: Verify the module the runtime resolver needs is installed
+        run: test -d modules/pike_introspect/src || test -d modules/Introspect/src
+
+      - name: Run Bun tests with real Pike oracle
+        run: bun run test
 
       - name: Run Pike tests
         run: bun run test:pike
