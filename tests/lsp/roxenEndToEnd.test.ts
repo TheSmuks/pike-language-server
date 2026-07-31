@@ -404,3 +404,78 @@ describe("go-to-definition on an index-only symbol", () => {
     expect(empty).toBe(true);
   });
 });
+
+/**
+ * A bundled-index entry renders once, whatever shape it arrived in.
+ *
+ * Entries come two ways. Harvested ones carry a bare declaration in
+ * `signature` and prose in `markdown`. The 499 AutoDoc-derived ones —
+ * `RXML.Tag`, `RXML.Frame` and their members — have the signature rendered
+ * into the markdown as well, so rendering both printed `mixed result` twice,
+ * and `RXML.Tag`, whose signature is empty, opened with a blank ```pike fence.
+ * Both are exactly the surface someone writing an RXML tag reads.
+ */
+describe("bundled index entries render once", () => {
+  const MODULE = `#include <module.h>
+inherit "module";
+
+constant module_type = MODULE_TAG;
+
+class TagGreet {
+  inherit RXML.Tag;
+  constant name = "greet";
+
+  class Frame {
+    inherit RXML.Frame;
+    array do_return(RequestID id) {
+      result = args->who;
+      return 0;
+    }
+  }
+}
+`;
+
+  test("a self-describing entry does not repeat its signature", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pike-rxml-render-"));
+    writeFileSync(join(dir, "m.pike"), MODULE);
+    const uri = pathToFileURL(join(dir, "m.pike")).href;
+    const s = await createTestServer({ rootUri: pathToFileURL(dir).href });
+    try {
+      s.openDoc(uri, MODULE);
+      const line = MODULE.split("\n").findIndex(l => l.includes("result = args"));
+      const hover = await s.client.sendRequest("textDocument/hover", {
+        textDocument: { uri },
+        position: { line, character: MODULE.split("\n")[line].indexOf("result") },
+      }) as { contents: { value: string } } | null;
+
+      expect(hover).not.toBeNull();
+      const fences = hover!.contents.value.split("```pike").length - 1;
+      expect(fences).toBeLessThanOrEqual(1);
+      expect(hover!.contents.value).toContain("result");
+    } finally {
+      await s.teardown();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("an entry with no signature does not open an empty code fence", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "pike-rxml-empty-sig-"));
+    writeFileSync(join(dir, "m.pike"), MODULE);
+    const uri = pathToFileURL(join(dir, "m.pike")).href;
+    const s = await createTestServer({ rootUri: pathToFileURL(dir).href });
+    try {
+      s.openDoc(uri, MODULE);
+      const line = MODULE.split("\n").findIndex(l => l.includes("inherit RXML.Tag"));
+      const hover = await s.client.sendRequest("textDocument/hover", {
+        textDocument: { uri },
+        position: { line, character: MODULE.split("\n")[line].indexOf("Tag") },
+      }) as { contents: { value: string } } | null;
+
+      expect(hover).not.toBeNull();
+      expect(hover!.contents.value).not.toContain("```pike\n\n```");
+    } finally {
+      await s.teardown();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
