@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.51] — 2026-07-31
+
+### Fixed
+
+- **A missing Pike binary no longer produces an endless stream of notifications.** The client reset its crash-restart counter the moment the server reported Running, so a server that started and then crashed reset the cap on every cycle: the "give up after three" never fired, the client restarted forever, and each restart re-ran server initialisation and re-showed the "Pike binary not found" notice. The counter is now cleared only once the server has stayed up long enough to call the session healthy, and the decision lives in a unit-tested policy rather than inline in a state-change handler. Separately, AutoDoc extraction logged a warning on every save when Pike was absent — 18 warnings in a 45-second editing session, measured — where the diagnostics path already treated an absent binary as the supported steady state it is. Both paths now share one predicate, so a Pike-less install is quiet after the single notice at startup.
+- **`global::name` resolved to the wrong scope.** Pike's `global::` names the file-level scope, but the token is `global` rather than an identifier, so the collector saw no identifier child and fell through to the bare-`::` branch — which means "the first inherited class", the opposite of what the qualifier asks for. In a class that shadows a file-level name, go-to-definition landed on the shadowing member or on nothing at all. Scope resolution also moved to its own module, `scopeRefs.ts`, to stay inside the file-size limit.
+
 ## [0.8.50] — 2026-07-31
 
 ### Changed
