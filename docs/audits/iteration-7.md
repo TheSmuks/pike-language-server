@@ -320,18 +320,26 @@ The Roxen sample barely moved after this fix (−25.2% → −25.8%), so the
 remaining empties were characterised rather than assumed. They are **not** one
 defect. A sample of live positions:
 
-| Pattern | Example | Gap |
+| Pattern | Example | Status after investigation |
 |---|---|---|
-| Module-qualified element type | `mapping(string:Variable.Variable) v; v[k]->set()` | Cross-module type resolution |
-| Member on a call result | `get_sdb()->query(X,Y)` | Return-type inference through a call |
-| `global::` scope access | `global::total_size_limit` | Scope operator not resolved |
+| `global::` scope access | `global::total_size_limit` | **Fixed** (`2cbf999`). The token is `global`, not an identifier, so it fell through to the bare-`::` branch — which means "first inherited class", the opposite of what `global::` asks for. Now resolved against file scope. |
+| Member on a call result | `get_sdb()->query(X,Y)` | **Not a defect.** Local call-result access already resolves (`get_db()->query()` works, and is now pinned by a test). The cited position is inside a `#define` macro body, and `get_sdb` is not declared in that file at all — so nothing could resolve it without cross-file inheritance. |
+| Module-qualified element type | `mapping(string:Stdio.File)` | **Largely by design.** `definition` returns null for stdlib members whether or not a subscript is involved — deliberate, so the editor never jumps to a path that may not exist on the user's machine. `hover` works. What remains is Roxen-module classes (`Variable.Variable`), which need workspace-level Roxen detection. |
 
 Confirmed by isolation: `mapping(string:Item)` (local class) resolves, while
 `mapping(string:Stdio.File)` (module-qualified) returns null — the subscript
 machinery is correct, and the block is now purely cross-module type resolution.
 
-These are feature-level gaps, not one-line defects, and each needs its own
-design. They are the honest remainder of N2/N3/C1/C2.
+Investigating each individually mattered: one was a real one-line defect, one
+was not a defect at all, and one is mostly intended behaviour. Characterising
+the cluster from its aggregate count alone would have produced three pieces of
+speculative work, two of them pointless.
+
+**A limitation of this report's own reproduction commands, found the same way:**
+`lsp-probe` opens a single file with no workspace root, so a command that
+depends on workspace-level Roxen detection cannot reproduce the finding it was
+generated from. Any Roxen finding that needs module resolution has to be
+re-checked through the sweep, not the one-line command.
 
 ### New finding: `documentHighlight` does not resolve member accesses
 
