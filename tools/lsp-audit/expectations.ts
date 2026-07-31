@@ -34,19 +34,19 @@ export const EXPECTATIONS: Expectation[] = [
   // --- cross-lib-consumer.pike -----------------------------------------
   // `bf->format("hello")` — BracketFormatter declares its own format(), which
   // shadows anything it might inherit, so this resolves locally regardless of
-  // how the cross-file `inherit .cross_lib_base.Formatter;` above resolves.
+  // how the file-level `inherit "cross-lib-base.pike";` above resolves.
   {
     file: "cross-lib-consumer.pike",
-    line: 30,
+    line: 32,
     character: 22,
     method: "textDocument/definition",
-    expect: { kind: "definitionAt", file: "cross-lib-consumer.pike", line: 23 },
+    expect: { kind: "definitionAt", file: "cross-lib-consumer.pike", line: 25 },
   },
-  // `bf` is declared once (line 30) and used once (line 31): 2 occurrences,
+  // `bf` is declared once (line 31) and used once (line 32): 2 occurrences,
   // and references is requested with includeDeclaration: true.
   {
     file: "cross-lib-consumer.pike",
-    line: 29,
+    line: 31,
     character: 19,
     method: "textDocument/references",
     expect: { kind: "referenceCount", count: 2 },

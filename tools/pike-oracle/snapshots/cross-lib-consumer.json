@@ -1,31 +1,64 @@
 {
   "autodoc": null,
   "compilation": {
-    "exit_code": 1,
+    "exit_code": 0,
     "strict_types": true
   },
   "diagnostics": [
     {
-      "category": "unknown",
-      "line": 12,
-      "message": "Failed to index module cross_lib_base with 'Formatter'. (Module doesn't exist?)",
-      "severity": "error"
+      "category": "unused_variable",
+      "line": 34,
+      "message": "Unused local variable result.",
+      "severity": "warning"
     },
     {
-      "category": "unknown",
-      "line": 12,
-      "message": "Illegal program pointer.",
-      "severity": "error"
+      "category": "unused_variable",
+      "line": 37,
+      "message": "Unused local variable n.",
+      "severity": "warning"
     },
     {
-      "category": "undefined_identifier",
-      "line": 18,
-      "message": "Undefined identifier Formatter.",
-      "severity": "error"
+      "category": "unused_variable",
+      "line": 38,
+      "message": "Unused local variable rev.",
+      "severity": "warning"
     }
   ],
   "error": null,
   "file": "corpus/files/cross-lib-consumer.pike",
   "pike_version": "8.0.1116",
-  "symbols": []
+  "symbols": [
+    {
+      "kind": "variable",
+      "name": "VERSION"
+    },
+    {
+      "kind": "class",
+      "line": 19,
+      "members": [
+        {
+          "kind": "function",
+          "name": "create"
+        },
+        {
+          "kind": "function",
+          "name": "format"
+        },
+        {
+          "kind": "function",
+          "name": "get_prefix"
+        },
+        {
+          "kind": "function",
+          "name": "get_suffix"
+        }
+      ],
+      "name": "BracketFormatter"
+    },
+    {
+      "kind": "function",
+      "line": 32,
+      "name": "main"
+    }
+  ]
 }
