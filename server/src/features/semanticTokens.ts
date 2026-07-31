@@ -222,6 +222,13 @@ export function produceSemanticTokens(
     const typeId = resolveDeclTokenType(decl, table);
     if (typeId === undefined) continue;
 
+    // `inherit "other.pike";` names its target with a string literal, and the
+    // declaration's nameRange is that literal, quotes and all. Painting it
+    // `namespace` repaints a string as a namespace and fights the TextMate
+    // grammar, which colours it as the string it is. The path is still a
+    // document link and still resolves — it just is not a name token.
+    if (decl.name.startsWith('"')) continue;
+
     const modifiers = tokenModifiersForDecl(decl.kind, {
       isClassScope: isInClassScope(decl, table) && decl.kind !== 'class',
     });

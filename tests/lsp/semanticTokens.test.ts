@@ -195,6 +195,30 @@ describe("tokenModifiersForDecl", () => {
 // ---------------------------------------------------------------------------
 
 describe("produceSemanticTokens", () => {
+  /**
+   * `inherit "path.pike";` names its target with a string literal, and the
+   * declaration's nameRange is that literal — quotes included. Emitting a
+   * `namespace` token over it repaints a string as a namespace, which fights
+   * the TextMate grammar colouring it as a string. The client surface check
+   * flags any token landing inside a comment or literal, and this was the one.
+   */
+  test("emits no token over a string-literal inherit path", () => {
+    const src = 'inherit "other.pike";\n';
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    const onLiteral = tokens.filter(t => t.line === 0 && t.character >= 8);
+    expect(onLiteral).toEqual([]);
+  });
+
+  test("still emits a token for a bare-identifier inherit", () => {
+    const src = "class Base {}\nclass Sub { inherit Base; }\n";
+    const table = parseAndBuild(src);
+    const tokens = produceSemanticTokens(table);
+
+    expect(findToken(tokens, 1, 20)).toBeDefined();
+  });
+
   test("produces tokens for class and method", () => {
     const src = [
       "class Dog {",
