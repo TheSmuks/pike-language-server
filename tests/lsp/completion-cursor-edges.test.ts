@@ -216,3 +216,20 @@ describe("completion after a single colon", () => {
     expect(labels).toContain("value");
   });
 });
+
+describe("completion after predef::", () => {
+  test("offers Pike's predefined builtins", async () => {
+    const src = [
+      "void f(string fmt) {",
+      "  predef::upper_case(fmt);",
+      "}",
+    ].join("\n");
+
+    // `predef::` names Pike's predefined namespace. Nothing looked there, so
+    // the qualifier fell through to the inherit search and found no inherit
+    // called `predef`.
+    const labels = await completeAt(src, 1, 10);
+    expect(labels).toContain("upper_case");
+  });
+});
+
