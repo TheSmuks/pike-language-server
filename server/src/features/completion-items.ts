@@ -57,6 +57,7 @@ const DECL_KIND_TO_COMPLETION_KIND: Record<DeclKind, CompletionItemKind> = {
   enum_member: CompletionItemKind.EnumMember,
   typedef: CompletionItemKind.TypeParameter,
   parameter: CompletionItemKind.Variable,
+  macro_parameter: CompletionItemKind.Variable,
   inherit: CompletionItemKind.Class,
   import: CompletionItemKind.Module,
   include: CompletionItemKind.File,

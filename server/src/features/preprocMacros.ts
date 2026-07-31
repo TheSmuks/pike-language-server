@@ -18,6 +18,8 @@ import {
   toRange,
   addDeclaration,
   currentScopeId,
+  pushScope,
+  popScope,
 } from './scopeBuilder';
 
 /**
@@ -28,6 +30,7 @@ export function collectPreprocDefine(node: Node, state: BuildState): boolean {
   const nameNode = node.childForFieldName('name');
   if (!nameNode) return false;
 
+  const params = node.childForFieldName('parameters');
   addDeclaration(state, {
     name: nameNode.text,
     kind: 'macro',
@@ -36,9 +39,52 @@ export function collectPreprocDefine(node: Node, state: BuildState): boolean {
     scopeId: currentScopeId(state),
     // A parameter list is only parsed when the paren abuts the name, which is
     // exactly the rule that makes a macro function-like.
-    functionLike: node.childForFieldName('parameters') !== null,
+    functionLike: params !== null,
   });
+
+  if (params) collectMacroParameters(node, params, nameNode.text, state);
   return true;
+}
+
+/**
+ * Declare a function-like macro's parameters in a scope of their own.
+ *
+ * They used to be skipped outright — the reference collector had an explicit
+ * `if (parameters.has(name)) continue` — which kept them from resolving to the
+ * wrong thing but left 1,831 positions across Roxen 6.1 with no answer at all:
+ * every `X` and `Y` in `#define LOC_M(X,Y) _STR_LOCALE("roxen_message",X,Y)`,
+ * on both the parameter list and its uses in the body.
+ *
+ * A scope rather than a flat declaration, because a macro parameter *shadows*.
+ * Pike's preprocessor substitutes textually, so with `int X = 100;` at file
+ * level and `#define F(X) (X + X)`, `F(1)` evaluates to 2 — verified against
+ * 8.0.1116, and `cpp()` shows the substitution. Resolving the `X` in that body
+ * to the file's `X` would be a wrong answer; the innermost-scope lookup now
+ * finds the parameter first and falls through to the file only for names the
+ * macro does not bind.
+ */
+function collectMacroParameters(
+  node: Node,
+  params: Node,
+  macroName: string,
+  state: BuildState,
+): void {
+  const macroScope = pushScope(state, 'macro', toRange(node));
+  for (const param of params.children) {
+    if (param.type !== 'preproc_param') continue;
+    const name = param.childForFieldName('name');
+    if (!name) continue;
+    addDeclaration(state, {
+      name: name.text,
+      kind: 'macro_parameter',
+      nameRange: toRange(name),
+      // The whole `preproc_param`, so a varargs `Y...` reads as written.
+      range: toRange(param),
+      scopeId: macroScope,
+      declaredType: `parameter of ${macroName}`,
+    });
+  }
+  popScope(state);
 }
 
 /**

@@ -81,6 +81,7 @@ const DECL_KIND_TO_SYMBOL_KIND: Record<DeclKind, SymbolKind> = {
   enum_member: SymbolKind.EnumMember,
   typedef: SymbolKind.TypeParameter,
   parameter: SymbolKind.Variable,
+  macro_parameter: SymbolKind.Variable,
   inherit: SymbolKind.Module,
   import: SymbolKind.Module,
   include: SymbolKind.File,
@@ -192,8 +193,11 @@ function collectMatchingSymbols(
     // Case-insensitive prefix match
     if (!decl.name.toLowerCase().startsWith(lowerQuery)) continue;
 
-    // Skip parameters and imports — not useful in workspace search
-    if (decl.kind === "parameter" || decl.kind === "import") continue;
+    // Skip parameters and imports — not useful in workspace search. A macro
+    // parameter is the strongest case of it: `X` and `Y` are scoped to one
+    // `#define` line, and Roxen alone declares 920 of them.
+    if (decl.kind === "parameter" || decl.kind === "macro_parameter" ||
+        decl.kind === "import") continue;
 
     const kind = DECL_KIND_TO_SYMBOL_KIND[decl.kind];
     if (kind === undefined) continue;

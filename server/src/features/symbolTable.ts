@@ -54,6 +54,11 @@ export type DeclKind =
   | 'enum_member'
   | 'typedef'
   | 'parameter'
+  // A parameter of a function-like `#define`. Kept apart from 'parameter'
+  // because it has no type and no value — it is a substitution placeholder —
+  // so the tiers that would otherwise answer it from Pike's predefs must not.
+  // A macro parameter named `write` is not `predef::write`.
+  | 'macro_parameter'
   | 'inherit'
   | 'import'
   // Preprocessor `#include "file.h"` / `#include <file.h>` directive. `name`
@@ -115,7 +120,12 @@ export type ScopeKind =
   | 'while'
   | 'do_while'
   | 'switch'
-  | 'catch';
+  | 'catch'
+  // The body of a function-like `#define`. Its only declarations are the
+  // macro's parameters, and it exists so they shadow the file scope the way
+  // Pike's preprocessor does: with `int X = 100;` and
+  // `#define F(X) (X + X)`, `F(1)` is 2, not 200.
+  | 'macro';
 export interface SymbolTable {
   uri: string;
   version: number;
