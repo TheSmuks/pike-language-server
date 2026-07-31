@@ -8,6 +8,7 @@ import type { Node } from 'web-tree-sitter';
 import type { BuildState } from './symbolTable';
 import { toLoc } from './scope-helpers';
 import {
+  resolveName,
   findScopeForNode,
   findEnclosingClassScopeId,
   findEnclosingClassDecl,
@@ -362,57 +363,6 @@ function collectTypeRefsRecursive(node: Node, state: BuildState): void {
 // Resolution
 // ---------------------------------------------------------------------------
 
-/**
- * Resolve a name by walking the scope chain from innermost to outermost.
- * Returns the Declaration ID of the first matching declaration, or null.
- */
-function resolveName(name: string, refNode: Node, state: BuildState): number | null {
-  // Find which scope contains the reference
-  const refScopeId = findScopeForNode(refNode, state);
-  if (refScopeId === null) return null;
-
-  // Walk scope chain outward
-  let scopeId: number | null = refScopeId;
-  // Bounded: each iteration moves to parentId in the finite scope tree.
-  while (scopeId !== null) {
-    const scope = state.scopeMap.get(scopeId);
-    if (!scope) break;
-
-    // Check declarations in this scope
-    for (const declId of scope.declarations) {
-      const decl = state.declMap.get(declId);
-      if (decl && decl.name === name) {
-        // For non-class scopes, check that declaration is before reference
-        // (class scope is flat — no ordering constraint)
-        if (scope.kind === 'class' || decl.kind === 'parameter') {
-          return declId;
-        }
-        if (scope.kind === 'file') {
-          // File scope: ordering doesn't matter for top-level declarations
-          return declId;
-        }
-        // Block/function scope: declaration must be before reference
-        if (decl.range.start.line < refNode.startPosition.row ||
-            (decl.range.start.line === refNode.startPosition.row &&
-             decl.range.start.character <= refNode.startPosition.column)) {
-          return declId;
-        }
-      }
-    }
-
-    // For class scopes, also check inherited scopes
-    if (scope.kind === 'class') {
-      for (const inheritedId of scope.inheritedScopes) {
-        const match = findDeclInScope(name, inheritedId, state);
-        if (match !== null) return match;
-      }
-    }
-
-    scopeId = scope.parentId;
-  }
-
-  return null;
-}
 
 
 
