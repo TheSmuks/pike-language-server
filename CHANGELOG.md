@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Marketplace and npm listings now say what the extension actually does.** The description led with "Tier-3 LSP implementation", which describes the architecture rather than the benefit, and neither listing mentioned Roxen WebServer support at all. Keywords gained `roxen`, `roxen-webserver`, `autocomplete` and `intellisense`, and `Linters` joins the categories to match the diagnostics the server ships.
+
 ## [0.8.53] — 2026-07-31
 
 ### Changed
