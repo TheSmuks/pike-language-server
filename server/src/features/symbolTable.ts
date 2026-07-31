@@ -141,6 +141,7 @@ export {
   getSymbolsInScope,
   getDeclarationsInScope,
   findClassScopeAt,
+  findProgramScopeAt,
 } from './completion-scope';
 export {
   PRIMITIVE_TYPES,

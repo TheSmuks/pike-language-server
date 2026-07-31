@@ -150,3 +150,19 @@ export function findClassScopeAt(table: SymbolTable, line: number, character: nu
   }
   return null;
 }
+
+/**
+ * The scope of the program a position belongs to: the innermost enclosing
+ * class, or the file itself when there is none.
+ *
+ * A Pike source file IS a program — `inherit "middle";` at file level is the
+ * file's own inherit, and `::name` at file level names what it inherits.
+ * Roxen is written this way throughout (`roxen.pike` inherits nine siblings
+ * and calls `::remove_configuration`). Asking for a `class` scope there finds
+ * none, which is why every `::` at file level resolved to nothing.
+ */
+export function findProgramScopeAt(table: SymbolTable, line: number, character: number): number | null {
+  const classScopeId = findClassScopeAt(table, line, character);
+  if (classScopeId !== null) return classScopeId;
+  return table.scopes.find(s => s.kind === 'file')?.id ?? null;
+}
