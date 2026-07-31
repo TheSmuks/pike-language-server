@@ -189,11 +189,18 @@ function loadStaticIndices(connection: Connection) {
 /**
  * Create hibernation hooks referencing the worker, index, and bg-index CTS holder.
  * The manager drives hibernate/wake via these callbacks.
+ *
+ * The index arrives as a mutable ref, not a value. These hooks are built before
+ * `initialize`, while `ctx.index` is still the `/tmp/unused` placeholder, and
+ * `serverInitHandler` swaps in the real index once it knows the workspace root.
+ * Capturing the placeholder by value meant hibernation saved an empty index
+ * under `/tmp/unused` and cleared one nobody read — silently, since neither
+ * operation errors, so waking simply never found a warm cache.
  */
-function createHibernationHooks(
+export function createHibernationHooks(
   connection: Connection,
   worker: PikeWorker,
-  index: WorkspaceIndex,
+  indexRef: { current: WorkspaceIndex },
   bgIndexCtsHolder: { cts?: CancellationTokenSource },
 ): import("./features/hibernation").HibernationCallbacks {
   return {
@@ -212,9 +219,9 @@ function createHibernationHooks(
         "tree-sitter-pike.wasm",
       );
       const wasmHash = computeWasmHash(wasmPath);
-      await saveCache(index.workspaceRoot, index, wasmHash);
+      await saveCache(indexRef.current.workspaceRoot, indexRef.current, wasmHash);
     },
-    onClearIndex: () => { index.clear(); },
+    onClearIndex: () => { indexRef.current.clear(); },
     onStopWorker: () => { worker.stop(); },
     onWakeStart: async () => {
       // Rehydration happens through normal on-demand indexing on next request.
@@ -229,6 +236,14 @@ function createHibernationHooks(
  * Create the shared mutable server context (documents, caches, index, etc.).
  * Called once at the top of createPikeServer.
  */
+/** Resource-resilience tracker, with the cancellation source it owns. */
+function createResourceState(connection: Connection): ResourceStateTracker {
+  return new ResourceStateTracker(
+    createResourceStateSender(connection),
+    new CancellationTokenSource(),
+  );
+}
+
 export function createServerContext(
   connection: Connection,
 ): ServerContext {
@@ -238,22 +253,23 @@ export function createServerContext(
 
   const worker = setupWorker(connection);
   const { autodocCache, pikeCache } = createCaches();
-  const index = new WorkspaceIndex({ workspaceRoot: "/tmp/unused" });
+  // Placeholder until `initialize` supplies the real workspace root. Held in a
+  // ref so everything built before then — the hibernation hooks below — follows
+  // the swap instead of freezing onto `/tmp/unused`.
+  const indexRef = { current: new WorkspaceIndex({ workspaceRoot: "/tmp/unused" }) };
   const diagnosticManager = createDiagnosticManager(
-    worker, documents, connection, index, pikeCache,
+    worker, documents, connection, indexRef.current, pikeCache,
   );
   const { stdlibIndex, predefBuiltins, predefAutodoc, roxenIndex } = loadStaticIndices(connection);
 
-  const resourceStateSender = createResourceStateSender(connection);
-  const resourceCts = new CancellationTokenSource();
-  const resourceState = new ResourceStateTracker(resourceStateSender, resourceCts);
+  const resourceState = createResourceState(connection);
 
   // Mutable holder for the background-index CTS.
   const bgIndexCtsHolder: { cts?: CancellationTokenSource } = {};
 
   const hibernationManager = new HibernationManager(
     { ...HIBERNATION_DEFAULTS, idleTimeoutMs: HIBERNATION_DEFAULTS.idleTimeoutMs },
-    createHibernationHooks(connection, worker, index, bgIndexCtsHolder),
+    createHibernationHooks(connection, worker, indexRef, bgIndexCtsHolder),
   );
 
   return {
@@ -262,26 +278,40 @@ export function createServerContext(
     worker,
     autodocCache,
     pikeCache,
-    index,
+    // Backed by the ref so `ctx.index = …` in serverInitHandler is visible to
+    // everything that captured it before initialize.
+    get index() { return indexRef.current; },
+    set index(next: WorkspaceIndex) { indexRef.current = next; },
     diagnosticManager,
+    stdlibIndex,
+    predefBuiltins,
+    predefAutodoc,
+    roxenIndex,
+    resourceState,
+    hibernationManager,
+    ...mutableContextDefaults(),
+  };
+}
+
+/**
+ * The context fields that start at a fixed value and are rewritten later by
+ * `initialize` or by request handlers. Fresh objects every call — sharing a
+ * Map between connections would leak one workspace's state into another.
+ */
+function mutableContextDefaults() {
+  return {
     upsertInFlight: new Map<string, Promise<any>>(),
     formattingConfig: { insertFinalNewline: true, operatorSpacing: false },
     backgroundIndexEnabled: true,
     backgroundIndexBatchSize: 8,
     clientSupportsWatchedFiles: false,
     clientSupportsSemanticTokensRefresh: false,
-    stdlibIndex,
-    predefBuiltins,
-    predefAutodoc,
     debugTelemetry: false,
     roxenMode: DEFAULT_ROXEN_MODE,
-    roxenIndex,
     roxenActive: new Map<string, boolean>(),
     pendingParserDocuments: new Map<string, TextDocument>(),
     // Own a fresh config rather than aliasing the frozen defaults singleton.
     resourceConfig: parseResourceConfig(undefined),
-    resourceState,
-    hibernationManager,
   };
 }
 
