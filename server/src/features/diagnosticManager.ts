@@ -280,6 +280,17 @@ export class DiagnosticManager {
   /**
    * Run diagnose for a URI. Handles caching, timeout, staleness.
    */
+  private requestDiagnose(uri: string, source: string) {
+    return this.worker.diagnose(source, uriToPath(uri), {
+      modulePaths: this.index.pikePaths.modulePaths,
+      includePaths: this.index.pikePaths.includePaths,
+      programPaths: this.index.pikePaths.programPaths,
+      dependencies: collectDependencyOverlays(uri, this.index, this.documents, {
+        connection: this.connection,
+      }),
+    });
+  }
+
   private async runDiagnose(uri: string): Promise<void> {
     if (this.disposed) return;
     const doc = this.documents.get(uri);
@@ -303,15 +314,7 @@ export class DiagnosticManager {
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
-      const filepath = uriToPath(uri);
-      const result = await this.worker.diagnose(source, filepath, {
-        modulePaths: this.index.pikePaths.modulePaths,
-        includePaths: this.index.pikePaths.includePaths,
-        programPaths: this.index.pikePaths.programPaths,
-        dependencies: collectDependencyOverlays(uri, this.index, this.documents, {
-          connection: this.connection,
-        }),
-      });
+      const result = await this.requestDiagnose(uri, source);
       this.clearStaleTimer(state);
 
       if (result.timedOut) {
