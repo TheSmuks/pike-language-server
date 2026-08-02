@@ -26,7 +26,9 @@ export function registerFileWatchHandlers(
 
   // Handle file renames — the file watcher sends Created/Deleted but
   // that loses the old→new mapping needed for dependency propagation.
-  (connection as any).onDidRenameFiles?.(async (params: { files: Array<{ oldUri: string; newUri: string }> }) => {
+  // vscode-languageserver mixes file-operation handlers into
+  // connection.workspace, not onto connection itself.
+  connection.workspace.onDidRenameFiles(async (params) => {
     await handleFileRenames(ctx, params.files);
   });
 }
