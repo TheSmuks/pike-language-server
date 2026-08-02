@@ -449,7 +449,7 @@ async function completeMemberAccess(
       }
     }
 
-    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx, line, character);
+    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
     for (const item of typeMembers) {
       if (seenNames.has(item.label)) continue;
       seenNames.add(item.label);
