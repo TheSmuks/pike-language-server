@@ -65,7 +65,7 @@ async function medianDiagnoseMs(
     times.push(performance.now() - started);
     // A compile error would mean the imports never resolved and the timing
     // measures nothing.
-    expect(result.diagnostics.filter((d) => d.severity === 1)).toEqual([]);
+    expect(result.diagnostics.filter((d) => d.severity === "error")).toEqual([]);
   }
   return times.sort((a, b) => a - b)[Math.floor(times.length / 2)]!;
 }
