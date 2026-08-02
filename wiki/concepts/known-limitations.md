@@ -94,7 +94,7 @@ Pike's `compile_error` handler reports line numbers but not column positions. Ad
 
 ### Stdlib hover: C-level builtins not indexed
 
-The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not indexed. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) covers the gap.
+The stdlib index (9,016 symbols) is harvested from Pike source and reconciled against the runtime, so C-module members re-exported through modules (`Stdio.Buffer`, `Stdio.Stat`, …) are included. Top-level C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not. The LSP's predef builtin index (`predef-builtin-index.json`, 283 symbols) covers the gap.
 
 ### AutoDoc hover coverage depends on codebase conventions -- BY DESIGN
 

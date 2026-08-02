@@ -213,6 +213,10 @@
       {
         "command": "pike.moveLinesDown",
         "title": "Pike: Move Lines Down"
+      },
+      {
+        "command": "pike.showErrorLog",
+        "title": "Pike: Show Error Log"
       }
     ],
     "keybindings": [
@@ -307,6 +311,12 @@
           "description": "Redact absolute file paths and file:// URIs in Pike language server log output.",
           "scope": "window"
         },
+        "pike.languageServer.debug.telemetry": {
+          "type": "boolean",
+          "default": false,
+          "description": "Log extra diagnostic-lifecycle detail (e.g. why a diagnostic publish was dropped) to the Pike Language Server output channel. Local logging only — this sends nothing over the network and reports nothing to anyone.",
+          "scope": "window"
+        },
         "pike.languageServer.backgroundIndex.enabled": {
           "type": "boolean",
           "default": true,
@@ -360,6 +370,12 @@
           "minimum": 0,
           "maximum": 19,
           "scope": "window"
+        },
+        "pike.languageServer.worker.ldLibraryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Directory to add to LD_LIBRARY_PATH when spawning the Pike worker (e.g. /usr/lib/x86_64-linux-gnu). Set this if the worker logs \"Failed to load library\" for a shared library — it names the directory that library lives in. Leave empty to auto-detect from the Pike installation (<pike home>/lib).",
+          "scope": "machine-overridable"
         },
         "pike.languageServer.format.insertFinalNewline": {
           "type": "boolean",

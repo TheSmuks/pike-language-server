@@ -175,4 +175,4 @@ pike --version
 
 ### No completion for stdlib symbols
 
-The server includes a pre-built stdlib index (5,505 symbols). This should work without any configuration. If completions are missing, check that `stdlib-autodoc.json` exists in the same directory as `server.js`.
+The server includes a pre-built stdlib index (9,016 symbols, runtime-reconciled). This should work without any configuration. If completions are missing, check that `stdlib-autodoc.json` exists in the same directory as `server.js`.
