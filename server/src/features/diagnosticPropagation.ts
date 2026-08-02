@@ -80,6 +80,11 @@ export function propagateToDependents(
 /**
  * Hard cap on dependency payloads per diagnose, guarding degenerate graphs.
  *
+ * Measured on Roxen 6.1 (442 .pike/.pmod files, production Roxen path
+ * detection): the largest real transitive closure is 17
+ * (`base_server/roxen.pike`); the next is 10 and 94% of the tree is at 5 or
+ * below. 64 has 3.7x headroom over the worst real code we have.
+ *
  * Do not raise it without a measurement showing real code exceeding it: every
  * overlay is a cache eviction plus a recompile in the worker, so the cap is
  * what keeps a pathological graph from making one keystroke recompile the
