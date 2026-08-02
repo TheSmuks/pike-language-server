@@ -354,11 +354,21 @@ function collectNamedDecl(decl: Node, actualKind: DeclKind, state: BuildState, s
  * are `modifier` children of the enclosing `declaration` node, not of the inner
  * `variable_decl`/`constant_decl`, so look at the parent when present.
  */
-function collectModifiers(decl: Node): string[] | undefined {
-  const container = decl.parent?.type === 'declaration' ? decl.parent : decl;
+export function collectModifiers(decl: Node): string[] | undefined {
   const mods: string[] = [];
-  for (const child of container.children) {
-    if (child.type === 'modifier') mods.push(child.text);
+  let node: Node | null = decl.parent?.type === 'declaration' ? decl.parent : decl;
+  while (node) {
+    for (const child of node.children) {
+      if (child.type === 'modifier') mods.push(child.text);
+    }
+    // A modifier block — `private { … }` — applies its modifiers to every
+    // declaration it wraps. Blocks nest through alternating declaration /
+    // modifier_block nodes, and a class_body/block boundary ends the chain,
+    // so a block's modifiers never leak into a wrapped class's own members.
+    const parent: Node | null = node.parent;
+    if (parent?.type === 'modifier_block') { node = parent; continue; }
+    if (node.type === 'modifier_block' && parent?.type === 'declaration') { node = parent; continue; }
+    break;
   }
   return mods.length > 0 ? mods : undefined;
 }

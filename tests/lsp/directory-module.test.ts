@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -74,7 +74,7 @@ describe("directory module.pmod implicit resolution", () => {
     server.openDoc(consumerPikeUri, CONSUMER_PIKE_SRC);
 
     // Wait for indexing
-    await new Promise(r => setTimeout(r, 200));
+    await waitForFileEntry(server, [modulePmodUri, consumerPikeUri]);
 
     // helper("world") — "helper" starts at line 2, char 18
     const result = await server.client.sendRequest("textDocument/hover", {

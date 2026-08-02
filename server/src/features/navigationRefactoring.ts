@@ -37,7 +37,13 @@ const predefBuiltins = validatePredefBuiltinIndexOrEmpty(predefBuiltinIndexRaw);
 
 /**
  * Build the set of protected symbol names that cannot be renamed.
- * Combines predef builtins (283) and unqualified stdlib names (5,471 FQNs).
+ *
+ * Only names reachable *bare* belong here: the predef builtins (write,
+ * search, …) and the top-level stdlib module names (Stdio, Array, …), which a
+ * file-scope declaration of the same name would shadow. A dotted member's
+ * last segment is not bare-reachable — `e` from predef.Math.e can only ever
+ * be written `Math.e` — so protecting every member tail made ordinary
+ * file-scope names like `e`, `cache` or `diff` refuse to rename.
  */
 function buildProtectedNames(
   stdlibAutodoc: Record<string, unknown>,
@@ -48,18 +54,20 @@ function buildProtectedNames(
   for (const name of Object.keys(predef)) {
     names.add(name);
   }
-  // Stdlib: keys are FQNs (predef.Array.diff). Extract unqualified name.
+  // Stdlib: keys are FQNs (predef.Array.diff). Only the module segment is a
+  // bare name.
   for (const fqn of Object.keys(stdlibAutodoc)) {
     const parts = fqn.split(".");
-    const short = parts[parts.length - 1];
-    names.add(short);
+    if (parts.length >= 2 && parts[0] === "predef") {
+      names.add(parts[1]);
+    }
   }
   return names;
 }
 
 const stdlibAutodocValidated = validateStdlibAutodocIndexOrEmpty(stdlibAutodocIndexRaw);
 
-const protectedNames: Set<string> = buildProtectedNames(
+export const protectedNames: Set<string> = buildProtectedNames(
   stdlibAutodocValidated,
   predefBuiltins,
 );
@@ -74,8 +82,9 @@ function buildStdlibModules(
   const modules = new Set<string>();
   for (const fqn of Object.keys(stdlibAutodoc)) {
     const parts = fqn.split(".");
-    // predef.X.Y... → X is the module name
-    if (parts.length >= 2) {
+    // predef.X.Y... → X is the module name. The index also carries
+    // `reconciled.*` bookkeeping keys in the same keyspace — skip them.
+    if (parts.length >= 2 && parts[0] === "predef") {
       modules.add(parts[1]);
     }
   }

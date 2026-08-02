@@ -13,7 +13,7 @@ import {
   getSymbolsInScope,
 } from "../../server/src/features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -209,7 +209,7 @@ describe("T044: Dependency-closure indexing — depth and count caps (US2)", () 
     server.openDoc(aUri, 'inherit "b.pike";\nclass A { }');
 
     // Wait for fire-and-forget closure indexing to complete.
-    await new Promise(resolve => setTimeout(resolve, 200));
+    await waitForFileEntry(server, [bUri, cUri]);
 
     // b.pike should be indexed as a direct dependency.
     const bEntry = server.server.index.getFile(bUri);
@@ -235,7 +235,11 @@ describe("T044: Dependency-closure indexing — depth and count caps (US2)", () 
     const cUri = pathToFileURL(join(tempDir, "c.pike")).href;
 
     cappedServer.openDoc(aUri, 'inherit "b.pike";\nclass A { }');
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // Wait for the one dependency the cap allows; c.pike's absence is the
+    // property under test, so there is nothing positive to poll for it —
+    // by the time b.pike (indexed after it, same closure walk) lands, the
+    // cap has already been enforced for c.pike too.
+    await waitForFileEntry(cappedServer, [bUri]);
 
     // b.pike should be indexed (first dependency, count = 1).
     expect(cappedServer.server.index.getFile(bUri)).toBeDefined();
@@ -261,7 +265,9 @@ describe("T044: Dependency-closure indexing — depth and count caps (US2)", () 
     const cUri = pathToFileURL(join(tempDir, "c.pike")).href;
 
     depthServer.openDoc(aUri, 'inherit "b.pike";\nclass A { }');
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // c.pike's absence is the property under test (depth cap), so there is
+    // nothing positive to poll for it directly — see the count-cap test above.
+    await waitForFileEntry(depthServer, [bUri]);
 
     // b.pike is at depth 1 — should be indexed.
     expect(depthServer.server.index.getFile(bUri)).toBeDefined();

@@ -87,7 +87,7 @@ interface CacheIndex {
 
 const CACHE_SUBDIR = "cache";
 const CACHE_INDEX_FILENAME = "cacheIndex.json";
-export const FORMAT_VERSION = 3; // re-exported for cacheManifest.ts — one constant, bump it here only; was 2: byte-converted, now UTF-16 pass-through
+export const FORMAT_VERSION = 4; // re-exported for cacheManifest.ts — one constant, bump it here only; was 3: class/function decls cached without modifiers, which the module-member visibility filter needs
 const MAX_ENTRIES = 100_000;
 /** Maximum entries to load in one batch. Prevents memory spike on large caches. */
 const LOAD_BATCH_SIZE = 50;

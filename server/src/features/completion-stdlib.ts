@@ -285,6 +285,7 @@ export function getStdlibEntriesByName(
  */
 function inferStdlibKind(signature: string): CompletionItemKind {
   if (signature.startsWith("inherit ")) return CompletionItemKind.Class;
+  if (signature.startsWith("class ")) return CompletionItemKind.Class;
   if (signature.includes("(")) return CompletionItemKind.Method;
   if (/^(constant|final)\s/.test(signature)) return CompletionItemKind.Constant;
   return CompletionItemKind.Variable;

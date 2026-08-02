@@ -145,6 +145,23 @@ export function resolvePikeRuntime(): { dir?: string; script?: string } {
 // Spawn-command construction
 // ---------------------------------------------------------------------------
 
+/**
+ * A directory the worker can actually be spawned in.
+ *
+ * DEV_ROOT, VSIX_ROOT and STANDALONE_ROOT all derive from `__dirname`, which
+ * `bun build --compile` bakes into the binary as a build-time constant — on
+ * every machine but the builder's they name a directory that does not exist.
+ * spawn() with a missing cwd fails before the child starts, so the last resort
+ * is a directory that exists everywhere. The worker takes absolute paths for
+ * everything it loads, so cwd only has to be valid, not particular.
+ *
+ * Even tmpdir() is checked: TMPDIR can name a directory that is gone, and the
+ * whole point here is to never hand spawn() a path that is not there.
+ */
+export function resolveSpawnCwd(...candidates: string[]): string {
+  return resolveDir(...candidates, tmpdir(), process.cwd()) ?? "/";
+}
+
 export interface SpawnCommand {
   cmd: string;
   args: string[];
@@ -186,7 +203,9 @@ export function buildSpawnCommand(
     env.LD_LIBRARY_PATH = base ? `${libraryPath}:${base}` : libraryPath;
   }
 
-  return { cmd, args, cwd: VSIX_ROOT || DEV_ROOT, env };
+  const cwd = resolveSpawnCwd(VSIX_ROOT, DEV_ROOT, STANDALONE_ROOT, runtime.dir ?? "");
+
+  return { cmd, args, cwd, env };
 }
 
 /**

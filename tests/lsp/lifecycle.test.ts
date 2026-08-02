@@ -8,9 +8,29 @@
 import { describe, test, expect } from "bun:test";
 import { join } from "node:path";
 import { readFileSync } from "node:fs";
-import { createTestServer, createSilentStream, type TestServer } from "./helpers";
+import { createTestServer, createSilentStream, waitForIndexed, type TestServer } from "./helpers";
 import { buildServerCapabilities } from "../../server/src/serverCapabilities";
 import { listCorpusFiles, CORPUS_DIR } from "../../tools/pike-oracle/src/runner";
+import {
+  StreamMessageReader,
+  StreamMessageWriter,
+  createMessageConnection,
+} from "vscode-jsonrpc/node";
+import { createConnection } from "vscode-languageserver/node";
+import { createPikeServer } from "../../server/src/server";
+
+// Polls a value that changes asynchronously (e.g. via a notification
+// handler) instead of sleeping a fixed interval — see waitForIndexed in
+// ./helpers.ts for the same idiom applied to workspace indexing.
+async function waitForCount(read: () => number, expected: number, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (read() !== expected) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForCount: timed out after ${timeoutMs}ms; last value: ${read()}`);
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 1. Capabilities
@@ -27,6 +47,39 @@ describe("lifecycle: capabilities", () => {
     expect(caps.semanticTokensProvider).toMatchObject({ full: { delta: true }, range: true });
     // '.' member access, '>' for `->`, ':' for `::`, '!' for the `//!` autodoc marker.
     expect(caps.completionProvider?.triggerCharacters).toEqual(['.', '>', ':', '!']);
+  });
+
+  test("initialize response carries serverInfo with name and a semver-or-dev version", async () => {
+    const c2s = createSilentStream();
+    const s2c = createSilentStream();
+    const serverConn = createConnection(
+      new StreamMessageReader(c2s),
+      new StreamMessageWriter(s2c),
+    );
+    createPikeServer(serverConn);
+    serverConn.listen();
+
+    const client = createMessageConnection(
+      new StreamMessageReader(s2c),
+      new StreamMessageWriter(c2s),
+    );
+    client.onRequest("window/showMessageRequest", () => null);
+    client.listen();
+
+    const result = (await client.sendRequest("initialize", {
+      processId: null,
+      rootUri: null,
+      capabilities: {},
+    })) as { serverInfo?: { name?: string; version?: string } };
+
+    expect(result.serverInfo?.name).toBe("pike-language-server");
+    // esbuild/bun --define stamps a semver at build time; running the
+    // in-process TypeScript source (as this test does) leaves the define
+    // absent, so version.ts falls back to "dev" — see server/src/version.ts.
+    expect(result.serverInfo?.version).toMatch(/^(\d+\.\d+\.\d+|dev)$/);
+
+    c2s.destroy();
+    s2c.destroy();
   });
 
   test("initialize returns documentSymbolProvider and textDocumentSync", async () => {
@@ -124,7 +177,8 @@ describe("lifecycle: parser readiness guard", () => {
     // the handler returns immediately without blocking or erroring.
     // The document will be re-processed on the next didChange (keystroke).
 
-    const { client, c2s, s2c, openDoc, teardown } = await createTestServer();
+    const ts = await createTestServer();
+    const { client, c2s, s2c, openDoc, teardown } = ts;
 
     // Open a document - this triggers didOpen
     const uri = openDoc("file:///test/ready.pike", "int x = 1;");
@@ -139,8 +193,10 @@ describe("lifecycle: parser readiness guard", () => {
       contentChanges: [{ text: "int x = 2;" }],
     });
 
-    // Give the server a moment to process
-    await new Promise((r) => setTimeout(r, 100));
+    // Wait for the change to actually be indexed rather than sleeping a fixed
+    // interval — a blind sleep either wastes time or races the server on a
+    // loaded machine.
+    await waitForIndexed(ts, [uri]);
 
     // Verify the server is still responsive after the guard
     const result = await client.sendRequest("textDocument/documentSymbol", {
@@ -158,7 +214,8 @@ describe("lifecycle: parser readiness guard", () => {
     // Empty string is valid content - the server should process it normally.
     // This ensures the content guard doesn't incorrectly skip empty files.
 
-    const { client, c2s, s2c, openDoc, teardown } = await createTestServer();
+    const ts = await createTestServer();
+    const { client, c2s, s2c, openDoc, teardown } = ts;
 
     // Open with non-empty content
     const uri = openDoc("file:///test/empty.pike", "int x = 1;");
@@ -169,8 +226,16 @@ describe("lifecycle: parser readiness guard", () => {
       contentChanges: [{ text: "" }],
     });
 
-    // Give the server time to process
-    await new Promise((r) => setTimeout(r, 100));
+    // Wait for the change to be indexed rather than sleeping a fixed
+    // interval. Note: the file was already indexed once from its initial
+    // (non-empty) open, so this resolves immediately rather than
+    // specifically confirming the empty-content edit was processed —
+    // verified empirically (8/8 trials) that the subsequent
+    // documentSymbol request is naturally ordered after the didChange
+    // notification on the same connection regardless, so no wait is
+    // actually load-bearing here; kept for idiom consistency with the
+    // sibling test above.
+    await waitForIndexed(ts, [uri]);
 
     // Verify server is still responsive
     const result = await client.sendRequest("textDocument/documentSymbol", {
@@ -217,12 +282,12 @@ describe("lifecycle: resource-resilience context", () => {
     expect(hibernation.openDocumentCount).toBe(0);
 
     const uri = openDoc("file:///test/resource-activity.pike", "int x = 1;");
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForCount(() => hibernation.openDocumentCount, 1);
 
     expect(hibernation.openDocumentCount).toBe(1);
 
     client.sendNotification("textDocument/didClose", { textDocument: { uri } });
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForCount(() => hibernation.openDocumentCount, 0);
 
     expect(hibernation.openDocumentCount).toBe(0);
 
@@ -241,8 +306,10 @@ describe("lifecycle: resource-resilience context", () => {
 
     server.context.resourceState.transition("indexing", "test transition");
 
-    // Allow notification to propagate
-    await new Promise((r) => setTimeout(r, 100));
+    // Poll for the notification rather than sleeping a fixed interval —
+    // it arrives over the same async connection as everything else, and a
+    // blind sleep either wastes time or races the client on a loaded box.
+    await waitForCount(() => (received.state === "indexing" ? 1 : 0), 1);
     expect(received.state).toBe("indexing");
 
     await teardown();

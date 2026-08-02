@@ -7,7 +7,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForIndexed, type TestServer } from "./helpers";
 import { pikeAvailable } from "../helpers/pikeAvailable";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,6 +43,47 @@ afterAll(async () => {
 interface HoverResult {
   contents: { kind: string; value: string };
   range?: { start: { line: number; character: number }; end: { line: number; character: number } };
+}
+
+// Polls a condition that becomes true asynchronously (e.g. a spied worker
+// call landing) instead of sleeping a fixed interval — same idiom as
+// waitForIndexed in ./helpers.ts, applied to conditions other than indexing.
+async function waitForCondition(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForCondition: timed out after ${timeoutMs}ms`);
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
+/**
+ * Poll a hover request until it returns a non-null result.
+ *
+ * Cross-file inherit wiring can complete after the index reports both files
+ * as "indexed" (waitForIndexed only checks that a symbol table exists, not
+ * that inter-file links are wired) — so retry the hover itself, the actual
+ * condition the test cares about, instead of trusting a proxy.
+ */
+async function waitForHover(
+  server: TestServer,
+  uri: string,
+  position: { line: number; character: number },
+  timeoutMs = 5000,
+): Promise<HoverResult> {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const result = await server.client.sendRequest(
+      "textDocument/hover",
+      { textDocument: { uri }, position },
+    ) as HoverResult | null;
+    if (result !== null) return result;
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForHover: timed out after ${timeoutMs}ms; hover on ${uri} stayed null`);
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
 }
 
 /** Pre-populate the autodoc XML cache for a URI. */
@@ -375,11 +416,20 @@ describe("hover LSP: cross-file inherited member (US-001)", () => {
     const srcB = readCorpusSource("cross-inherit-simple-b.pike");
     const uriB = server.openDoc(corpusUri("cross-inherit-simple-b.pike"), srcB);
 
+    // Indexing the base file and its dependent happens on the server's own
+    // schedule after openDoc returns — asserting a cross-file answer right
+    // after opening races that work. See helpers.ts:waitForIndexed.
+    await waitForIndexed(server, [corpusUri("cross-inherit-simple-a.pike"), uriB]);
+
+    // waitForIndexed only confirms both files have *a* symbol table; wiring
+    // b.pike's inherit of a.pike's class (so `Dog` resolves to `Animal`) is a
+    // separate step that can still land after that — empirically, gated on
+    // waitForIndexed alone this hover call flakes (~1/3 runs) inside the full
+    // suite, where earlier tests have queued other indexing work. Poll the
+    // hover result itself, the thing actually under test, rather than a
+    // second internal proxy.
     // d->speak() — speak is at line 25, char 28
-    const result = await server.client.sendRequest("textDocument/hover", {
-      textDocument: { uri: uriB },
-      position: { line: 25, character: 28 },
-    }) as HoverResult | null;
+    const result = await waitForHover(server, uriB, { line: 25, character: 28 });
 
     expect(result).not.toBeNull();
     expect(result!.contents.value).toContain("speak");
@@ -484,8 +534,9 @@ describe("didOpen AutoDoc extraction", () => {
     ].join("\n");
     server.openDoc(uri, source);
 
-    // Wait for the worker to process the autodoc (fire-and-forget, give it time)
-    await new Promise((r) => setTimeout(r, 200));
+    // Wait for the worker to process the autodoc (fire-and-forget) rather
+    // than sleeping a fixed interval — poll the actual cache it populates.
+    await waitForCondition(() => server.server.autodocCache.get(uri) !== undefined);
 
     // Hover over the function name
     const result = await server.client.sendRequest(
@@ -517,10 +568,16 @@ describe("didOpen AutoDoc extraction", () => {
     try {
       // Open the document
       server.openDoc(uri, source);
-      await new Promise((r) => setTimeout(r, 200));
+      // Wait for the open-triggered autodoc call rather than sleeping a
+      // fixed interval — poll the spy's own call count.
+      await waitForCondition(() => autodocCallCount >= 1);
 
       // Save the document
       server.client.sendNotification("textDocument/didSave", { textDocument: { uri } });
+      // There is no positive condition to poll for here — a successful dedup
+      // means NO second call happens, so there is nothing that "becomes
+      // true". A fixed settle window is the only option without touching
+      // server/src to add an observable "save processed" signal.
       await new Promise((r) => setTimeout(r, 200));
 
       // autodoc should be called at most once (hash dedup should prevent second call)
@@ -550,8 +607,9 @@ describe("didOpen AutoDoc extraction", () => {
       // Open the document — should not crash
       server.openDoc(uri, source);
 
-      // Wait a bit for the async handler to run
-      await new Promise((r) => setTimeout(r, 200));
+      // Wait for the async handler to run rather than sleeping a fixed
+      // interval — poll the spy flag it sets directly.
+      await waitForCondition(() => wasCalled);
 
       // Verify the worker was called (didOpen triggered autodoc)
       expect(wasCalled).toBe(true);

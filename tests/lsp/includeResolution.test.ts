@@ -18,7 +18,7 @@ import {
   type Declaration,
 } from "../../server/src/features/symbolTable";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -313,12 +313,13 @@ describe("completion — included symbols (end-to-end)", () => {
 
   test("a header macro is offered as a completion in the includer", async () => {
     const fileUri = pathToFileURL(join(tempDir, "main.pike")).href;
+    const headerUri = pathToFileURL(join(tempDir, "consts.h")).href;
     // Cursor at end of the `return ` expression on line 2.
     const src = '#include "consts.h"\nint main() {\n  return L\n}';
     server.openDoc(fileUri, src);
 
     // Wait for fire-and-forget dependency-closure indexing + rewire to settle.
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await waitForFileEntry(server, [fileUri, headerUri]);
 
     const result = await server.client.sendRequest("textDocument/completion", {
       textDocument: { uri: fileUri },

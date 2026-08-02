@@ -18,11 +18,11 @@ behavior that resists automation. It is not a substitute for the automated suite
 
 - [ ] **Phase 2**: Syntax highlighting
   - **Expected**: Keywords, types, strings, and comments are colorized correctly in a `.pike` or `.pmod` file.
-  - **How**: Open any Pike file from `corpus/files/` (e.g. `basic.pike`). Confirm tokens are highlighted and no raw-text regions appear where highlighting is expected.
+  - **How**: Open any Pike file from `corpus/files/` (e.g. `basic-types.pike`). Confirm tokens are highlighted and no raw-text regions appear where highlighting is expected.
 
 - [ ] **Phase 2**: Outline view shows document symbols
   - **Expected**: The VSCode outline panel lists top-level symbols (classes, functions, variables). Clicking a symbol jumps the cursor to its definition.
-  - **How**: Open a multi-symbol file (e.g. `class_with_inherit.pike`). Open the outline view (View → Open View → Outline). Verify symbol names appear and navigation works.
+  - **How**: Open a multi-symbol file (e.g. `class-single-inherit.pike`). Open the outline view (View → Open View → Outline). Verify symbol names appear and navigation works.
 
 - [ ] **Phase 2**: Syntax error appears in Problems panel
   - **Expected**: A file with deliberate syntax errors shows diagnostics in the Problems panel. The server does not crash or become unresponsive.
@@ -46,4 +46,4 @@ behavior that resists automation. It is not a substitute for the automated suite
 
 - [ ] **Phase 6 P2**: saveOnly mode
   - **Expected**: In saveOnly mode, typing does not trigger Pike diagnostics. Only Ctrl+S does.
-  - **How**: Configure `"pike.diagnosticMode": "saveOnly"` in VSCode settings. Open a Pike file with a type error. Confirm no error appears while typing. Press Ctrl+S. Confirm the error appears.
+  - **How**: Configure `"pike.languageServer.diagnosticMode": "saveOnly"` in VSCode settings. Open a Pike file with a type error. Confirm no error appears while typing. Press Ctrl+S. Confirm the error appears.

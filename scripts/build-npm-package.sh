@@ -34,6 +34,9 @@ mkdir -p "$OUT_DIR/bin" "$OUT_DIR/standalone" "$OUT_DIR/docs"
 
 cp "$ROOT/bin/pike-language-server" "$OUT_DIR/bin/"
 chmod +x "$OUT_DIR/bin/pike-language-server"
+# Stamp the version so --version works without a repo checkout on disk — see
+# the VERSION_TOKEN comment in bin/pike-language-server.
+sed -i "s/__PIKE_LSP_VERSION__/$VERSION/" "$OUT_DIR/bin/pike-language-server"
 cp "$ROOT/standalone/server.js" "$OUT_DIR/standalone/"
 cp "$ROOT/standalone/"*.wasm "$OUT_DIR/standalone/"
 cp "$ROOT/standalone/"*.json "$OUT_DIR/standalone/"

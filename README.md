@@ -84,7 +84,7 @@ A comprehensive LSP feature set, all backed by real compiler information:
 
 **Roxen WebServer**
 - Roxen source is Pike, but `#include <module.h>` and the other Roxen headers never resolve on their own. A local installation is detected automatically — explicit setting, then `pike.json`, then a workspace ancestor, then `/usr/local/roxen*` — and its module, include, and program paths are folded into Pike's.
-- A generated index of **Roxen 6.1** (212 constants, 499 Roxen/RXML/module-prototype symbols) ships with the server, so hover and completion work with **no Roxen installed at all**. A detected installation takes precedence and additionally gives go-to-definition into real sources.
+- A generated index of **Roxen 6.1** (212 constants, 1694 Roxen/RXML/module-prototype symbols) ships with the server, so hover and completion work with **no Roxen installed at all**. A detected installation takes precedence and additionally gives go-to-definition into real sources.
 - Roxen mode is decided **per file** — from a Roxen header include, `inherit "module"`, or `constant module_type = MODULE_*`, with directory inheritance for helper files. A plain Pike file in a mixed workspace is never offered a Roxen symbol. Override with `pike.roxen.mode`.
 
 ## Configuration

@@ -222,7 +222,7 @@ variables when a runtime inferrer is available.
 
 ### Stdlib hover: C-level builtins not indexed
 
-The stdlib index (5,471 symbols) covers Pike source files only. C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are not in Pike source files and are not indexed. These symbols return null hover from Tier 2.
+The stdlib index (9,016 symbols) is harvested from Pike source and reconciled against the runtime, so C-module members re-exported through modules (`Stdio.Buffer`, `Stdio.Stat`, …) are included. Top-level C-level builtins (`write`, `werror`, `arrayp`, `all_constants`, etc.) are still outside it and return null hover from Tier 2.
 
 **Fallback path**: pike-ai-kb `pike-signature` tool — blocked on [TheSmuks/pike-ai-kb#11](https://github.com/TheSmuks/pike-ai-kb/issues/11) (C-level predef resolution gap). The LSP's predef builtin index (283 symbols from runtime introspection) covers the gap for now.
 

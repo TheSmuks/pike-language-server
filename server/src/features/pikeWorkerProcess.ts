@@ -7,7 +7,7 @@
  * Extracted from pikeWorker.ts to keep each file under 500 lines.
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess } from "node:child_process";
 import { LSPErrorCodes } from "vscode-languageserver-protocol/lib/common/api";
 import type {
   PikeWorkerConfig,
@@ -25,6 +25,11 @@ import {
   buildSpawnCommand,
   assertPikeRuntimeReady,
 } from "./pikeWorkerPaths.js";
+import {
+  trySpawnWorker,
+  writeToWorkerStdin,
+  isPermanentSpawnFailure,
+} from "./pikeWorkerSpawn.js";
 import {
   PikeWorkerHealthMonitor,
   isIdleEvictionCandidate,
@@ -69,6 +74,8 @@ export abstract class PikeWorkerProcess {
 
   // Pike binary availability: null=unknown, true=available, false=not found (exit 127).
   protected pikeAvailable: boolean | null = null;
+  // The last spawn attempt never produced a process, so nothing can drain the queue.
+  protected spawnFailed = false;
 
   pikeVersion: string | null = null;
 
@@ -105,7 +112,12 @@ export abstract class PikeWorkerProcess {
       this.config.libraryPath,
     );
 
-    this.proc = spawn(cmd, args, { stdio: ["pipe", "pipe", "pipe"], cwd, env });
+    const attempt = trySpawnWorker(cmd, args, cwd, env);
+    if (!attempt.proc) {
+      this.failSpawn(attempt.error);
+      return;
+    }
+    this.proc = attempt.proc;
 
     const stdout = this.proc.stdout;
     const stderr = this.proc.stderr;
@@ -143,6 +155,13 @@ export abstract class PikeWorkerProcess {
 
     const exitingProc = this.proc;
 
+    // An unlistened `error` is an uncaughtException, and serverLifecycle turns
+    // that into process.exit(1).
+    this.proc.on("error", (err) => {
+      if (this.restarting || this.proc !== exitingProc) return;
+      this.failSpawn(err);
+    });
+
     this.proc.on("exit", (code, signal) => {
       this.clearIdleTimer();
       // Only reject pending if this is the CURRENT proc (not an old one
@@ -168,22 +187,37 @@ export abstract class PikeWorkerProcess {
         }
 
         // Reject pending requests with typed error
-        const error = code === 127
+        this.abandonWorker(code === 127
           ? new PikeUnavailableError()
-          : new Error(`Pike worker exited (code=${code}, signal=${signal})`);
-        this.rejectAllPending(error);
-        this.rejectAllQueued(error);
-        this.sending = false;
-        this.proc = null;
+          : new Error(`Pike worker exited (code=${code}, signal=${signal})`));
       }
-
     });
 
     // Reset tracking
+    this.spawnFailed = false;
     this.requestCount = 0;
     this.startTime = Date.now();
     this.buffer = "";
     this.consecutiveMalformed = 0;
+  }
+
+  /** Drop a process that is gone, rejecting everything it will never answer. */
+  protected abandonWorker(error: Error): void {
+    this.rejectAllPending(error);
+    this.rejectAllQueued(error);
+    this.sending = false;
+    this.proc = null;
+  }
+
+  /** A worker that never started is as dead an end as one that exited 127. */
+  protected failSpawn(err: unknown): void {
+    this.clearIdleTimer();
+    this.spawnFailed = true;
+    if (isPermanentSpawnFailure(err)) this.pikeAvailable = false;
+    this.onCriticalError?.("worker.spawnFailed", err);
+    this.abandonWorker(this.pikeAvailable === false
+      ? new PikeUnavailableError()
+      : new Error(`Pike worker failed to spawn: ${String(err)}`));
   }
 
   /**
@@ -241,7 +275,12 @@ export abstract class PikeWorkerProcess {
    */
   protected drainQueue(): void {
     if (this.sending) return;
-    if (!this.proc || this.proc.killed) return;
+    if (!this.proc || this.proc.killed) {
+      // Queued behind a worker that failed to start: nothing will ever drain
+      // these, so reject now instead of stranding them until their timeouts.
+      if (this.spawnFailed) this.rejectAllQueued(new PikeUnavailableError());
+      return;
+    }
 
     // Drain highest-priority non-empty sub-queue first (O(1) dequeue).
     for (const q of this.queues) {
@@ -285,30 +324,8 @@ export abstract class PikeWorkerProcess {
     }
   }
 
-  /**
-   * Write a payload to stdin, respecting backpressure.
-   * If the write returns false (buffer full), wait for the drain event.
-   */
   protected writeToStdin(payload: string): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (!this.proc || this.proc.killed || !this.proc.stdin) {
-        reject(new Error("Pike worker process not available"));
-        return;
-      }
-      const stdin = this.proc.stdin;
-      if (!stdin.write(payload)) {
-        const onDrain = () => { cleanup(); resolve(); };
-        const onError = (err: Error) => { cleanup(); reject(err); };
-        const cleanup = () => {
-          stdin.removeListener("drain", onDrain);
-          stdin.removeListener("error", onError);
-        };
-        stdin.once("drain", onDrain);
-        stdin.once("error", onError);
-      } else {
-        resolve();
-      }
-    });
+    return writeToWorkerStdin(this.proc, payload);
   }
 
   // ---------------------------------------------------------------------------
@@ -389,15 +406,11 @@ export abstract class PikeWorkerProcess {
       `Request id=${timedOutRequestId} timed out — force-killing Pike process (pid=${dying.pid})`,
     );
 
-    // Null proc so the exit handler knows this is intentional.
-    this.proc = null;
     try { dying.kill("SIGKILL"); } catch { /* may have already exited */ }
-
-    this.rejectAllPending(
+    // abandonWorker nulls proc, so the exit handler knows this was intentional.
+    this.abandonWorker(
       new Error(`Pike worker force-killed after timeout on request id=${timedOutRequestId}`),
     );
-    this.rejectAllQueued(new Error("Pike worker queue cleared after timeout force-kill"));
-    this.sending = false;
   }
 
   // ---------------------------------------------------------------------------
@@ -405,35 +418,21 @@ export abstract class PikeWorkerProcess {
   // Delegated to PikeWorkerHealthMonitor.
   // ---------------------------------------------------------------------------
 
-  get isHeartbeatActive(): boolean {
-    return this.health.isHeartbeatActive;
-  }
+  get isHeartbeatActive(): boolean { return this.health.isHeartbeatActive; }
 
   startHeartbeat(): void {
     this.health.startHeartbeat(() => this.proc, this.config.heartbeatIntervalMs ?? 30_000);
   }
 
-  stopHeartbeat(): void {
-    this.health.stopHeartbeat();
-  }
+  stopHeartbeat(): void { this.health.stopHeartbeat(); }
 
-  get consecutiveHealthCheckFailures(): number {
-    return this.health.consecutiveHealthCheckFailures;
-  }
+  get consecutiveHealthCheckFailures(): number { return this.health.consecutiveHealthCheckFailures; }
 
-  recordHealthCheckFailure(): void {
-    this.health.recordHealthCheckFailure();
-  }
+  recordHealthCheckFailure(): void { this.health.recordHealthCheckFailure(); }
 
-  recordHealthCheckSuccess(): void {
-    this.health.recordHealthCheckSuccess();
-  }
+  recordHealthCheckSuccess(): void { this.health.recordHealthCheckSuccess(); }
 
-  static computeBackoffDelayMs(
-    attempt: number,
-    baseMs: number,
-    maxMs: number,
-  ): number {
+  static computeBackoffDelayMs(attempt: number, baseMs: number, maxMs: number): number {
     return PikeWorkerHealthMonitor.computeBackoffDelayMs(attempt, baseMs, maxMs);
   }
 

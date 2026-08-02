@@ -12,7 +12,7 @@
  */
 
 import { describe, test, expect, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForIndexed, type TestServer } from "./helpers";
 
 describe("T047: workspace symbol progress and cancellation (US2)", () => {
   let ws: TestServer;
@@ -24,14 +24,14 @@ describe("T047: workspace symbol progress and cancellation (US2)", () => {
   test("workspace/symbol reports workDoneProgress on global query", async () => {
     ws = await createTestServer({ workDoneProgress: true });
 
-    ws.openDoc("file:///test/t047-progress.pike", [
+    const uri = ws.openDoc("file:///test/t047-progress.pike", [
       "class ProgressTest {",
       "  int value;",
       "}",
     ].join("\n"));
 
     // Allow the server to index the document.
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await waitForIndexed(ws, [uri]);
 
     // Request with a client-generated workDoneToken so progress flows back.
     await ws.client.sendRequest("workspace/symbol", {

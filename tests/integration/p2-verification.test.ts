@@ -594,6 +594,108 @@ describe("S3: Cross-File Propagation Correctness", () => {
       await ctx.teardown();
     }
   });
+
+  // The tests above cover `inherit`; this covers the other cross-file
+  // dependency edge — `import <module>;` (unquoted module-name form,
+  // resolved via ModuleResolver.resolveImport, as distinct from a quoted
+  // `inherit "path.pike";`). Every content expectation below is oracle-
+  // verified (pike-oracle-verification-rule) against
+  // `pike -M <dir> consumer.pike`: clean with lib.pmod intact or after a
+  // no-op edit, "Undefined identifier label." once label() is removed,
+  // clean again on revert. The breaking edit is didChange-only (never
+  // saved), so it also proves the worker compiles the importer against the
+  // live buffer of the imported module, not the stale on-disk copy.
+  test("import chain: editing an imported .pmod propagates correct diagnostics", async () => {
+    const tmpDir = resolve(import.meta.dir, "__p2_tmp_import_prop__");
+    if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true });
+    mkdirSync(tmpDir, { recursive: true });
+
+    try {
+      const libContent = [
+        "#pragma strict_types",
+        "",
+        "constant LIB_VALUE = \"1.0\";",
+        "string label(string s) { return s; }",
+        "",
+        "int main() { return 0; }",
+      ].join("\n");
+
+      const consumerContent = [
+        "#pragma strict_types",
+        "",
+        "import lib;",
+        "",
+        "string use() { return label(LIB_VALUE); }",
+        "",
+        "int main() { return 0; }",
+      ].join("\n");
+
+      writeFileSync(join(tmpDir, "lib.pmod"), libContent);
+      writeFileSync(join(tmpDir, "consumer.pike"), consumerContent);
+
+      const ctx = await createMeasurementServer({ workspaceRoot: tmpDir });
+      try {
+        const libUri = `file://${join(tmpDir, "lib.pmod")}`;
+        const consumerUri = `file://${join(tmpDir, "consumer.pike")}`;
+        const errorsOf = (r: { diagnostics: unknown[] }) =>
+          (r.diagnostics as Array<{ severity?: number; message: string }>)
+            .filter(d => d.severity === 1);
+
+        ctx.openDoc(libUri, libContent);
+        await ctx.waitForPublish(libUri);
+        ctx.openDoc(consumerUri, consumerContent);
+        await ctx.waitForPublish(consumerUri);
+
+        // The dependency graph must have gained the import edge — this is
+        // the mechanism `propagateToDependents` reads from.
+        const libDeps = ctx.server.index.getDependents(libUri);
+        console.log("──────────────────────────────────────────────");
+        console.log("S3 IMPORT CHAIN:");
+        console.log(`  lib.pmod dependents: ${[...libDeps].map(u => u.split("/").pop()).join(", ") || "(none)"}`);
+        expect(libDeps.has(consumerUri)).toBe(true);
+
+        // --- No-op edit: propagated re-diagnose must stay clean. ---
+        ctx.resetPublishCount(consumerUri);
+        ctx.changeDoc(libUri, libContent + "\n");
+        await ctx.waitForPublish(libUri, 5000);
+        const afterNoop = await ctx.waitForPublish(consumerUri, 8000);
+        expect(errorsOf(afterNoop)).toEqual([]);
+
+        // --- Breaking edit (unsaved): the real error must propagate. ---
+        const editedLib = libContent.replace(
+          "string label(string s) { return s; }",
+          "",
+        );
+        ctx.resetPublishCount(consumerUri);
+        const editStart = performance.now();
+        ctx.changeDoc(libUri, editedLib);
+        await ctx.waitForPublish(libUri, 5000);
+        const afterBreak = await ctx.waitForPublish(consumerUri, 8000);
+        const totalMs = performance.now() - editStart;
+        const breakErrors = errorsOf(afterBreak);
+
+        console.log("");
+        console.log("S3 IMPORT PROPAGATION RESULT:");
+        console.log(`  breaking edit → importer diagnosed: ${totalMs.toFixed(0)} ms`);
+        console.log(`  importer errors: ${JSON.stringify(breakErrors.map(d => d.message))}`);
+        console.log("──────────────────────────────────────────────");
+
+        expect(breakErrors.some(d => d.message.includes("Undefined identifier label"))).toBe(true);
+        expect(breakErrors.some(d => d.message.includes("neither mapping nor object"))).toBe(false);
+
+        // --- Revert: clean again. ---
+        ctx.resetPublishCount(consumerUri);
+        ctx.changeDoc(libUri, libContent);
+        await ctx.waitForPublish(libUri, 5000);
+        const afterRevert = await ctx.waitForPublish(consumerUri, 8000);
+        expect(errorsOf(afterRevert)).toEqual([]);
+      } finally {
+        await ctx.teardown();
+      }
+    } finally {
+      if (existsSync(tmpDir)) rmSync(tmpDir, { recursive: true });
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------

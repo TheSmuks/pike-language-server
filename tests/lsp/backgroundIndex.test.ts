@@ -5,7 +5,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForIndexed, type TestServer } from "./helpers";
 import { initParser } from "../../server/src/parser";
 import { indexWorkspaceFiles } from "../../server/src/features/backgroundIndex";
 import { WorkspaceIndex } from "../../server/src/features/workspaceIndex";
@@ -72,10 +72,10 @@ describe("US-021: Background workspace indexing", () => {
     const src = [
       "class TestClass { }",
     ].join("\n");
-    server.openDoc(`file://${join(tempDir, "test.pike")}`, src);
+    const uri = server.openDoc(`file://${join(tempDir, "test.pike")}`, src);
 
-    // Wait a tick for indexing
-    await new Promise(resolve => setTimeout(resolve, 10));
+    // Wait for indexing rather than sleeping a fixed interval.
+    await waitForIndexed(server, [uri]);
 
     const result = await server.client.sendRequest("workspace/symbol", {
       query: "TestClass",

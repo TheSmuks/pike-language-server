@@ -18,7 +18,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 
 const BASE_SRC = [
   "class Shared {",
@@ -63,7 +63,7 @@ describe("T048: lazy-candidate references and rename (US2)", () => {
     ws.openDoc(baseUri, BASE_SRC);
     ws.openDoc(childUri, CHILD_SRC);
     // Allow background indexing to settle.
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await waitForFileEntry(ws, [baseUri, childUri]);
   });
 
   afterAll(async () => {

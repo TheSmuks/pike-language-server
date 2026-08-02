@@ -90,6 +90,27 @@ export interface ServerContext {
   roxenActive: Map<string, boolean>;
   /** Latest document version dropped while parser initialization was pending. */
   pendingParserDocuments: Map<string, TextDocument>;
+  /**
+   * URIs whose didOpen has been seen but whose first content event has not.
+   *
+   * `TextDocuments` emits didOpen and didChangeContent back to back on open,
+   * so the content handler cannot tell the initial event from a keystroke.
+   * The didOpen listener records the URI synchronously and the content handler
+   * consumes it, which is what lets the open path do work — repairing the
+   * index entries of open documents its upsert invalidated — that must never
+   * run per keystroke. Bounded by the open document set: entries are removed
+   * on the first content event and on close.
+   */
+  justOpenedDocuments: Set<string>;
+  /**
+   * Coalescing state for the open-document index repair.
+   *
+   * Both the post-open upsert and the dependency-closure walk ask for a
+   * repair, and several documents can open in the same tick. A request that
+   * arrives while a pass is running sets `rerun` rather than starting a pass
+   * of its own.
+   */
+  indexRepair: { inFlight: Promise<void> | null; rerun: boolean; requestedAt: number };
   /** Resource-resilience configuration (indexing, memory, worker, hibernation). */
   resourceConfig: ResourceConfiguration;
   /** Resource-state tracker (activity, hibernation, state transitions). */
@@ -330,6 +351,8 @@ function mutableContextDefaults() {
     roxenMode: DEFAULT_ROXEN_MODE,
     roxenActive: new Map<string, boolean>(),
     pendingParserDocuments: new Map<string, TextDocument>(),
+    justOpenedDocuments: new Set<string>(),
+    indexRepair: { inFlight: null as Promise<void> | null, rerun: false, requestedAt: 0 },
     // Own a fresh config rather than aliasing the frozen defaults singleton.
     resourceConfig: parseResourceConfig(undefined),
   };

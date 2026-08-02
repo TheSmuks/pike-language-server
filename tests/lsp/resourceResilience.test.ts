@@ -10,7 +10,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { loadCache, getCachePath } from "../../server/src/features/persistentCache";
+import { loadCache, getCachePath, FORMAT_VERSION } from "../../server/src/features/persistentCache";
 
 describe("US1: Bloated-cache startup (Phase 3)", () => {
   let bloatedDir: string;
@@ -54,7 +54,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(bloatedDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 200 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 200 }),
     );
 
     const loaded = await loadCache(bloatedDir, wasmHash);
@@ -87,7 +87,7 @@ describe("US1: Bloated-cache startup (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(bloatedDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(bloatedDir, wasmHash);

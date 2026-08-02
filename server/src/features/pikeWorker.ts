@@ -191,6 +191,9 @@ export class PikeWorker extends PikeWorkerProcess {
       modulePaths?: string[];
       includePaths?: string[];
       programPaths?: string[];
+      /** Workspace dependency files, leaf-first; the worker evicts its module
+       *  caches for each and compiles `source` overlays in place of disk. */
+      dependencies?: Array<{ file: string; source?: string }>;
     },
     token?: CancellationToken,
   ): Promise<DiagnoseResult> {
@@ -202,6 +205,7 @@ export class PikeWorker extends PikeWorkerProcess {
         module_paths: options?.modulePaths ?? [],
         include_paths: options?.includePaths ?? [],
         program_paths: options?.programPaths ?? [],
+        dependencies: options?.dependencies ?? [],
       }, token, PikePriority.background);
 
       if (response.error) {

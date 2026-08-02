@@ -25,7 +25,7 @@ quality expectations, and architectural boundaries.
 |--------|------|-------|----------|
 | **Tree-sitter** (syntactic) | Real-time parsing, declaration extraction | Instant (<1ms) | Local variables with declared types, function signatures, class member declarations |
 | **Pike oracle** (semantic) | `typeof()` evaluation, compilation diagnostics | Debounced (~500ms) | Inferred types, runtime-verified type information |
-| **Pre-built indices** | Stdlib (5,505 symbols) + predef builtins (283 symbols) | Instant (lookup) | Standard library hover and completion |
+| **Pre-built indices** | Stdlib (9,016 symbols) + predef builtins (283 symbols) | Instant (lookup) | Standard library hover and completion |
 
 The fundamental constraint driving this design: `typeof(o->member)` returns
 `mixed` for any object member. The compiler knows the declared type at compile

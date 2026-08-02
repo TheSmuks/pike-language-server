@@ -16,6 +16,7 @@ import { logError, logInfo, ErrorCategory, logUnsupportedCharset } from "./util/
 import { readSource } from "./util/sourceDecoder.js";
 import type { ServerContext } from "./serverContext";
 import { isRoxenFile } from "./features/roxenActivation";
+import { scheduleIndexRepair } from "./features/openDocumentRepair";
 
 // ---------------------------------------------------------------------------
 // Registration
@@ -28,6 +29,10 @@ export function registerDocumentHandlers(
 ): void {
   documents.onDidOpen(async (event) => {
     ctx.hibernationManager.onDocumentOpen();
+    // Recorded before the first await: TextDocuments emits didChangeContent
+    // for this same open immediately after this listener yields, and the
+    // content handler needs to know that event is the open, not an edit.
+    ctx.justOpenedDocuments.add(event.document.uri);
     await refreshRoxenActivation(ctx, event.document);
     await handleDidOpen(ctx, event.document);
   });
@@ -146,6 +151,10 @@ async function handleOpenedOrChangedContent(
     return;
   }
 
+  // Consumed before the null-content bail-out below: leaving the URI recorded
+  // would make some much later keystroke look like this document's open event.
+  const isOpenEvent = ctx.justOpenedDocuments.delete(doc.uri);
+
   const content = validateDocumentContent(ctx.connection, doc);
   if (content === null) return;
 
@@ -159,6 +168,18 @@ async function handleOpenedOrChangedContent(
 
   if (invalidatedCount > 1) {
     logInfo(ctx.connection, `Invalidated ${invalidatedCount} files (change in ${doc.uri})`);
+  }
+
+  // This upsert rewired the dependents of the document, dropping the symbol
+  // table of any open document that inherits or includes it. On open that has
+  // to be repaired; on a keystroke it must not be, because rebuilding every
+  // open dependent on every edit is exactly what the stale-mark plus
+  // lazy-rebuild design exists to avoid. Not awaited: diagnostics for the
+  // document the user just opened must not queue behind repairing the others.
+  if (isOpenEvent) {
+    void requestIndexRepair(ctx).catch((err) => {
+      logError(ctx.connection, ErrorCategory.Index, `indexRepair(${doc.uri})`, err);
+    });
   }
 
   triggerDiagnostics(ctx, doc.uri);
@@ -249,6 +270,48 @@ export async function indexDependencyClosure(
 }
 
 /**
+ * Ask for the open documents left without a symbol table to be repaired.
+ *
+ * The work, and why it is needed at all, lives in `openDocumentRepair.ts`.
+ * This wires it to the two ways a document is written here: a full re-index
+ * (which rewires dependents, and so can invalidate another open document), and
+ * a plain re-install used to settle a dependency cycle without invalidating
+ * anything. Both read the live buffer, which keeps unsaved edits authoritative
+ * — the lazy on-demand path reads from disk.
+ */
+function requestIndexRepair(ctx: ServerContext): Promise<void> {
+  return scheduleIndexRepair(
+    ctx,
+    (doc) => repairDocument(ctx, doc, true),
+    (doc) => repairDocument(ctx, doc, false),
+  );
+}
+
+async function repairDocument(
+  ctx: ServerContext,
+  doc: TextDocument,
+  rewireDependents: boolean,
+): Promise<void> {
+  const content = validateDocumentContent(ctx.connection, doc);
+  if (content === null) return;
+  try {
+    if (rewireDependents) {
+      await parseAndIndexDocument(ctx, doc, content, ModificationSource.DidOpen);
+      return;
+    }
+    const tree = parse(content, doc.uri);
+    await ctx.index.upsertFile(
+      doc.uri, doc.version, tree, content, ModificationSource.DidOpen,
+    );
+  } catch (err) {
+    logError(
+      ctx.connection, ErrorCategory.Parse,
+      `repairOpenDocument(${doc.uri})`, err,
+    );
+  }
+}
+
+/**
  * Read a single file from disk, parse it, and insert as a background entry.
  * Returns true if the file was successfully indexed, false on any error.
  */
@@ -321,9 +384,14 @@ async function handleDidOpen(
   // Proactively index the dependency closure of the opened file.
   // Bounded by dependencyClosureDepth and dependencyClosureCount from config.
   // Fire-and-forget: didOpen must not block on closure indexing.
-  void indexDependencyClosure(ctx, doc.uri).catch((err) => {
-    logError(ctx.connection, ErrorCategory.System, `indexDependencyClosure(${doc.uri})`, err);
-  });
+  // The closure invalidates the dependents of everything it indexes — the
+  // opened document among them. Repair the open documents afterwards, or the
+  // index entry for the file on screen stays empty for the whole session.
+  void indexDependencyClosure(ctx, doc.uri)
+    .then(() => requestIndexRepair(ctx))
+    .catch((err) => {
+      logError(ctx.connection, ErrorCategory.System, `indexDependencyClosure(${doc.uri})`, err);
+    });
 }
 
 async function handleDidChangeContent(
@@ -341,6 +409,7 @@ function handleDidClose(
   ctx.index.removeFile(uri);
   ctx.pikeCache.delete(uri);
   ctx.pendingParserDocuments.delete(uri);
+  ctx.justOpenedDocuments.delete(uri);
   ctx.roxenActive.delete(uri);
   ctx.diagnosticManager.onDidClose(uri);
 }

@@ -3,7 +3,7 @@
  * See architecture decision 0010 for design rationale.
  */
 
-import type { ModuleResolver, PikePaths, PikePathOverrides } from "./moduleResolver";
+import type { ModuleResolver, PikePaths, PikePathOverrides, ResolveResult } from "./moduleResolver";
 import { rewireDependents as rewireDependentsFn } from "./dependentsInvalidator";
 import { buildSymbolTable, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { Tree } from "web-tree-sitter";
@@ -425,8 +425,13 @@ export class WorkspaceIndex {
   }
 
   async resolveModule(modulePath: string, fromUri: string): Promise<string | null> {
+    return (await this.resolveModuleWithSource(modulePath, fromUri))?.uri ?? null;
+  }
+
+  /** Like resolveModule, but keeps where the resolution came from (system vs workspace). */
+  async resolveModuleWithSource(modulePath: string, fromUri: string): Promise<ResolveResult | null> {
     const resolver = this.scopedResolver(this.files.get(normUri(fromUri)));
-    return (await resolver.resolveModule(modulePath, this.fromPath(fromUri)))?.uri ?? null;
+    return resolver.resolveModule(modulePath, this.fromPath(fromUri));
   }
 
   async resolveInherit(pathText: string, isStringLiteral: boolean, fromUri: string): Promise<string | null> {

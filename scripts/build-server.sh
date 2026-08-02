@@ -5,6 +5,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
+# .template-version is the canonical release version; package.json's version
+# is deliberately stale (see bump-version.sh) and must never be stamped here.
+VERSION="$(tr -d '[:space:]' < "$ROOT/.template-version")"
 
 esbuild "$ROOT/server/src/main.ts" \
   --bundle \
@@ -14,6 +17,7 @@ esbuild "$ROOT/server/src/main.ts" \
   --format=esm \
   --sourcemap \
   --loader:.wasm=file \
+  --define:__PIKE_LSP_VERSION__="\"$VERSION\"" \
   --banner:js="import{createRequire}from'module';const require=createRequire(import.meta.url)"
 
 # The bundled parser resolves WASM assets relative to server.mjs at runtime.

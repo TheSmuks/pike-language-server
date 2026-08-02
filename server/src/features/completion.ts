@@ -43,7 +43,7 @@ import { resolveChainedType } from "./completion-chain";
 import { completeScopeAccess } from "./completion-scopeAccess";
 import { completeCallArgs } from "./completion-callArgs";
 import { collectKeywordSnippets } from "./completion-keywords";
-import { addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
+import { addWorkspaceModuleMembers, addStdlibMembers, addStdlibMembersByType, addResolvedMembers } from "./completion-stdlib-members";
 import { buildAutodocCompletion } from "./completion-autodoc";
 import { roxenCompletionCandidates } from "./roxenIndex";
 import { collectMagicConstantItems } from "./pikeMagicConstants";
@@ -424,9 +424,10 @@ async function completeMemberAccess(
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
   const seenNames = new Set<string>();
+  const lhsText = dottedLhsText(lhsNode);
 
-  await addWorkspaceModuleMembers(lhsNode.text, ctx, items, seenNames);
-  addStdlibMembers(lhsNode.text, ctx, items, seenNames);
+  await addWorkspaceModuleMembers(lhsText, ctx, items, seenNames);
+  addStdlibMembers(lhsText, ctx, items, seenNames);
 
   // Type-resolved member access: resolves variable type → class members.
   // Also falls back to stdlib lookup using the resolved type name when
@@ -448,7 +449,7 @@ async function completeMemberAccess(
       }
     }
 
-    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx);
+    const typeMembers = await resolveTypeMembers(resolvedDecl, table, ctx, line, character);
     for (const item of typeMembers) {
       if (seenNames.has(item.label)) continue;
       seenNames.add(item.label);
@@ -464,28 +465,24 @@ async function completeMemberAccess(
   return items;
 }
 
-/** Strategy 1: Resolve lhs as a workspace module and collect its members. */
-async function addWorkspaceModuleMembers(
-  lhsText: string,
-  ctx: CompletionContext,
-  items: CompletionItem[],
-  seenNames: Set<string>,
-): Promise<void> {
-  const wsTarget = await ctx.index.resolveModule(lhsText, ctx.uri);
-  if (!wsTarget) return;
-
-  const targetTable = await ctx.index.getOrIndexSymbolTable(wsTarget);
-  if (!targetTable) return;
-
-  const fileScope = targetTable.scopes.find(s => s.kind === "file");
-  if (!fileScope) return;
-
-  const decls = getDeclarationsInScope(targetTable, fileScope.id);
-  for (const decl of decls) {
-    if (seenNames.has(decl.name)) continue;
-    seenNames.add(decl.name);
-    items.push(declToCompletionItem(decl, 0, targetTable));
+/**
+ * Reassemble the full dotted path a member-access lhs sits at the end of.
+ *
+ * While a nested module path is being typed (`Protocols.HTTP.`), the tree has
+ * an ERROR node whose children are the flat `identifier . identifier .` chain,
+ * and lhs extraction lands on the last identifier alone. The module strategies
+ * need the whole path — `HTTP` resolves to nothing, `Protocols.HTTP` does.
+ */
+function dottedLhsText(lhsNode: Node): string {
+  let text = lhsNode.text;
+  let dot = lhsNode.previousSibling;
+  while (dot && dot.type === ".") {
+    const prev = dot.previousSibling;
+    if (!prev || (prev.type !== "identifier" && prev.type !== "identifier_expr")) break;
+    text = `${prev.text}.${text}`;
+    dot = prev.previousSibling;
   }
+  return text;
 }
 
-/** Strategy 2 & 3b: imported from completion-stdlib-members.ts */
+/** Strategies 1, 2 & 3b: imported from completion-stdlib-members.ts */

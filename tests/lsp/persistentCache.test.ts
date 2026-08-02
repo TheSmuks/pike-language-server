@@ -15,6 +15,7 @@ import {
   deserializeSymbolTable,
   computeWasmHash,
   getCachePath,
+  FORMAT_VERSION,
 } from "../../server/src/features/persistentCache";
 import { WorkspaceIndex } from "../../server/src/features/workspaceIndex";
 import type { SymbolTable, Declaration, Scope } from "../../server/src/features/symbolTable";
@@ -259,7 +260,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     // Write the cacheIndex.json to match.
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -297,7 +298,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 2 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 2 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -331,7 +332,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
 
     writeFileSync(
       join(getCachePath(migrationDir), "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 2 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 2 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);
@@ -416,7 +417,7 @@ describe("US1: Cache migration and self-healing (Phase 3)", () => {
     }));
     writeFileSync(
       join(migrationDir, ".pike-lsp", "cacheIndex.json"),
-      JSON.stringify({ formatVersion: 3, wasmHash, entryCount: 1 }),
+      JSON.stringify({ formatVersion: FORMAT_VERSION, wasmHash, entryCount: 1 }),
     );
 
     const loaded = await loadCache(migrationDir, wasmHash);

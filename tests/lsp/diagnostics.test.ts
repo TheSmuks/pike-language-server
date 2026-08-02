@@ -268,6 +268,212 @@ describe("DiagnosticManager unit", () => {
     });
   });
 
+  describe("mergeDiagnostics spans the referenced identifier (not zero-width)", () => {
+    // Live-session evidence: Pike reports "Undefined identifier X." with a
+    // line number but no column. Previously the server placed a zero-width
+    // range at the first non-whitespace token of the line (statement start)
+    // instead of spanning the identifier the message actually names.
+    // Real Pike 8.0 message shapes (verified against the pike binary, not
+    // guessed — see docs/audits and the pike-oracle-verification rule):
+    //   "Undefined identifier compute_greeting."
+    //   "Index 'NoSuchThing' not present in module Stdio."
+    //   "No such variable (nosuchmember) in object."
+    //   "Attempt to call a non function value gvar."
+
+    test("Undefined identifier: range spans the full identifier, not zero-width", async () => {
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "int main() {",
+        "  string greeting = compute_greeting();",
+        "  return 0;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2, // 1-based: "  string greeting = compute_greeting();"
+        severity: "error" as const,
+        message: "Undefined identifier compute_greeting.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      expect(result).toHaveLength(1);
+
+      const range = result[0].range;
+      const expectedStart = lines[1].indexOf("compute_greeting");
+      expect(expectedStart).toBeGreaterThan(0);
+      expect(range.start.line).toBe(1);
+      expect(range.start.character).toBe(expectedStart);
+      // The range must NOT be zero-width — it must span the identifier.
+      expect(range.end.character).toBe(expectedStart + "compute_greeting".length);
+      expect(range.end.character).toBeGreaterThan(range.start.character);
+    });
+
+    test("Undefined identifier: UTF-16 code units stay correct with a non-ASCII character before the identifier on the SAME line", async () => {
+      // STANDING RULE: tree-sitter/LSP positions in this repo are UTF-16 code
+      // units — never a byte conversion. "å" is 2 bytes in UTF-8 but a single
+      // UTF-16 code unit; a byte-offset implementation would overshoot by one.
+      //
+      // The multi-byte character must sit on the DIAGNOSTIC'S OWN line, before
+      // the identifier, or this test proves nothing — a byte-offset bug only
+      // shifts columns *after* the multi-byte character on the *same* line.
+      //
+      // Line: `  string håndtag = compute_greeting();`
+      // Hand-counted UTF-16 code units (verified: "å" is one code unit, so
+      // this line has no surrogate pairs and `.length` agrees with a manual
+      // per-character count):
+      //   0:' ' 1:' ' 2:'s' 3:'t' 4:'r' 5:'i' 6:'n' 7:'g' 8:' '
+      //   9:'h' 10:'å' 11:'n' 12:'d' 13:'t' 14:'a' 15:'g'
+      //   16:' ' 17:'=' 18:' '
+      //   19:'c' ... 34:'g' (compute_greeting, 16 characters: 19..34)
+      // So "compute_greeting" starts at column 19 and ends at column 35.
+      // These are literal, hand-derived expectations — not `indexOf` calls —
+      // so the test cannot pass merely by being self-consistent with the
+      // implementation under test.
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "int main() {",
+        "  string håndtag = compute_greeting();",
+        "  return 0;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2, // 1-based: "  string håndtag = compute_greeting();"
+        severity: "error" as const,
+        message: "Undefined identifier compute_greeting.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      expect(result).toHaveLength(1);
+
+      const range = result[0].range;
+      expect(range.start.line).toBe(1);
+      expect(range.start.character).toBe(19);
+      expect(range.end.character).toBe(35);
+    });
+
+    test("word-boundary: 'foo' does not match inside 'foobar' — reviewer repro", async () => {
+      // Reviewer-reported bug: a plain substring search for "foo" on a line
+      // containing "foobar" earlier than the real standalone "foo" would
+      // highlight columns 9-12 (inside "foobar") instead of the real "foo".
+      //
+      // Line: `  return foobar + foo;`
+      //   0:' ' 1:' ' 2:'r' 3:'e' 4:'t' 5:'u' 6:'r' 7:'n' 8:' '
+      //   9:'f' 10:'o' 11:'o' 12:'b' 13:'a' 14:'r' 15:' ' 16:'+' 17:' '
+      //   18:'f' 19:'o' 20:'o' 21:';'
+      // The standalone "foo" is at columns 18..21 — NOT 9..12 (inside "foobar").
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "int main() {",
+        "  return foobar + foo;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2, // 1-based: "  return foobar + foo;"
+        severity: "error" as const,
+        message: "Undefined identifier foo.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      expect(result).toHaveLength(1);
+
+      const range = result[0].range;
+      expect(range.start.line).toBe(1);
+      // Must span the standalone "foo" at 18..21, never the "foo" inside
+      // "foobar" at 9..12.
+      expect(range.start.character).toBe(18);
+      expect(range.end.character).toBe(21);
+    });
+
+    test("Index 'X' not present in module: range spans the identifier", async () => {
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "int main() {",
+        "  return Stdio.NoSuchThing;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2,
+        severity: "error" as const,
+        message: "Index 'NoSuchThing' not present in module Stdio.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      const range = result[0].range;
+      const expectedStart = lines[1].indexOf("NoSuchThing");
+      expect(range.start.character).toBe(expectedStart);
+      expect(range.end.character).toBe(expectedStart + "NoSuchThing".length);
+    });
+
+    test("No such variable (X) in object: range spans the identifier", async () => {
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = [
+        "int main() {",
+        "  return this->nosuchmember;",
+        "}",
+      ].join("\n");
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2,
+        severity: "error" as const,
+        message: "No such variable (nosuchmember) in object.",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      const range = result[0].range;
+      const expectedStart = lines[1].indexOf("nosuchmember");
+      expect(range.start.character).toBe(expectedStart);
+      expect(range.end.character).toBe(expectedStart + "nosuchmember".length);
+    });
+
+    test("unrecognized message shape falls back to zero-width at first token (unchanged behavior)", async () => {
+      const { initParser } = await import("../../server/src/parser");
+      await initParser();
+      const { mergeDiagnostics } = await import("../../server/src/features/diagnosticManager");
+      const { parse } = await import("../../server/src/parser");
+
+      const source = "int main() {\n  return 0;\n}\n";
+      const tree = parse(source);
+      const lines = source.split("\n");
+
+      const pikeDiags = [{
+        line: 2,
+        severity: "error" as const,
+        message: "Some completely novel diagnostic shape with no identifiable token",
+      }];
+      const result = mergeDiagnostics([], pikeDiags, tree, [], lines);
+      const range = result[0].range;
+      expect(range.start.character).toBe(range.end.character);
+    });
+  });
+
 
 
   test("computeContentHash is deterministic", async () => {
