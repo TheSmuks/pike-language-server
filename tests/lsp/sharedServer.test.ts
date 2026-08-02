@@ -9,6 +9,19 @@ import { describe, test, expect, afterAll } from "bun:test";
 import { PikeWorker } from "../../server/src/features/pikeWorker";
 import { pikeAvailable } from "../helpers/pikeAvailable";
 
+// Polls a worker's isAlive flag instead of sleeping a fixed interval past the
+// idle timeout — a blind sleep either wastes time or races the eviction timer
+// on a loaded machine. Same idiom as the SIGTERM poll in shutdown.test.ts.
+async function waitForIdleEviction(worker: PikeWorker, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (worker.isAlive) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitForIdleEviction: timed out after ${timeoutMs}ms; worker still alive`);
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Idle eviction
 // ---------------------------------------------------------------------------
@@ -28,7 +41,7 @@ describe.skipIf(!pikeAvailable)("Idle worker eviction", () => {
     expect(worker.isAlive).toBe(true);
 
     // Wait for idle timeout (500ms + buffer)
-    await new Promise((r) => setTimeout(r, 800));
+    await waitForIdleEviction(worker);
 
     // Worker should have been killed
     expect(worker.isAlive).toBe(false);
@@ -50,7 +63,7 @@ describe.skipIf(!pikeAvailable)("Idle worker eviction", () => {
     expect(worker.isAlive).toBe(true);
 
     // Wait for idle timeout
-    await new Promise((r) => setTimeout(r, 800));
+    await waitForIdleEviction(worker);
     expect(worker.isAlive).toBe(false);
 
     // Next request should restart

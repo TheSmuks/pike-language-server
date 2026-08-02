@@ -15,7 +15,7 @@
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -93,7 +93,7 @@ beforeAll(async () => {
   server.openDoc(inheritUri, INHERIT_SRC);
   server.openDoc(utilUri, UTIL_PMOD_SRC);
   // Let didOpen indexing settle before querying cross-file state.
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitForFileEntry(server, [memberUri, importUri, inheritUri, utilUri]);
 });
 
 afterAll(async () => {
