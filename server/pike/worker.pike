@@ -39,18 +39,53 @@ void invalidate_module_caches(string path) {
   if (programp(prog)) catch { m->unregister(prog); };
   m_delete(m->programs, path);
   m_delete(m->fc, path);
+}
 
-  string dir = dirname(path);
+//! Rebuild the directory node listing `dir`, so a module created or deleted
+//! since the last diagnose is seen.
+//!
+//! Once per directory per diagnose, never once per dependency: rebuilding a
+//! module-path entry re-reads the whole directory, so repeating it for each
+//! dependency costs (dependencies x directory entries) per diagnose. On a
+//! workspace root holding a few thousand files that is the difference between
+//! a millisecond and a tenth of a second on every keystroke.
+void refresh_module_directory(string dir) {
+  object m = master();
   object dn = m->fc[dir];
   if (objectp(dn) && dn->is_resolv_dirnode)
     catch { dn->cache = ([]); };
-  if (has_value(m->pike_module_path, dir)) {
-    // Rebuild the dirnode entirely so its file listing is fresh too.
-    catch {
-      m->remove_module_path(dir);
-      m_delete(m->fc, dir);
-      m->add_module_path(dir);
-    };
+  if (!has_value(m->pike_module_path, dir)) return;
+  catch {
+    m->remove_module_path(dir);
+    m_delete(m->fc, dir);
+    m->add_module_path(dir);
+  };
+}
+
+//! Whether `dep` carries a usable dependency path.
+int(0..1) is_dependency(mixed dep) {
+  return mappingp(dep) && stringp(dep["file"]) && sizeof(dep["file"]);
+}
+
+//! Refresh every workspace dependency of one diagnose.
+//!
+//! Directories first, then the per-file evictions and overlays leaf-first: an
+//! overlay compiles at registration time, so its own imports must already be
+//! fresh, and a directory rebuild must not run between two overlays.
+void refresh_dependencies(array deps) {
+  array(string) dirs = ({});
+  foreach(deps, mixed dep) {
+    if (!is_dependency(dep)) continue;
+    string dir = dirname(dep["file"]);
+    if (!has_value(dirs, dir)) dirs += ({ dir });
+  }
+  foreach(dirs, string dir) refresh_module_directory(dir);
+
+  foreach(deps, mixed dep) {
+    if (!is_dependency(dep)) continue;
+    invalidate_module_caches(dep["file"]);
+    if (stringp(dep["source"]))
+      register_dependency_overlay(dep["file"], dep["source"]);
   }
 }
 
@@ -93,17 +128,8 @@ mapping handle_diagnose(mapping params) {
     }
   }
 
-  // Refresh workspace dependencies, leaf-first: an overlay compiles at
-  // registration time, so its own imports must already be fresh.
-  if (arrayp(params["dependencies"])) {
-    foreach(params["dependencies"], mixed dep) {
-      if (!mappingp(dep) || !stringp(dep["file"]) || !sizeof(dep["file"]))
-        continue;
-      invalidate_module_caches(dep["file"]);
-      if (stringp(dep["source"]))
-        register_dependency_overlay(dep["file"], dep["source"]);
-    }
-  }
+  if (arrayp(params["dependencies"]))
+    refresh_dependencies(params["dependencies"]);
 
   // Prepend strict_types pragma if requested
   if (strict && !has_prefix(source, "#pragma strict_types")) {
