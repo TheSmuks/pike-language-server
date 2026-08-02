@@ -22,7 +22,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForIndexed, type TestServer } from "./helpers";
 
 interface HoverResult { contents: { value: string } }
 
@@ -56,6 +56,8 @@ describe("hover on a :: member", () => {
   test("describes the inherited member, not the same-named local one", async () => {
     const uri = pathToFileURL(join(root, "leaf.pike")).href;
     server.openDoc(uri, 'inherit "base.pike";\n\nvoid configure() { }\n\nvoid go() { ::configure("/", 1); }\n');
+
+    await waitForIndexed(server, [uri]);
 
     // `configure` in `::configure("/", 1)` on line 4.
     const hover = await server.client.sendRequest("textDocument/hover", {
