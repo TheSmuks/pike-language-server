@@ -239,6 +239,10 @@ jobs:
       # test. The `test` job below hit exactly this gap; this job builds the
       # same Pike but was never given the same module, so its integration
       # tests ran the degraded path unnoticed.
+      # pmp resolves `pike` from PATH, not from PIKE_BINARY.
+      - name: Put Pike on PATH
+        run: echo "$HOME/.pike/pike/${PIKE_VERSION}/bin" >> $GITHUB_PATH
+
       - name: Install pmp
         run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
 
