@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.60] — 2026-08-02
+
 ### Fixed
 
 - **An open file could drop out of workspace symbol search, find-references, rename and the hierarchies for a moment.** Indexing a file rewires its dependents, dropping their symbol tables so the wiring can be rebuilt against the symbols now available; that rebuild is deferred and coalesced so typing stays cheap. Hover, go-to-definition and completion never see the gap, because they resolve one URI through the on-demand indexer, which rebuilds what it is asked for. The six readers that sweep every entry — workspace symbol search, cross-file references, rename, implementations, call hierarchy and type hierarchy — skip whatever is empty, so for the length of the rebuild the file did not participate at all, and a cached snapshot could not stand in for it because a snapshot holds what is on disk and never the unsaved buffer. A reference missing from a rename is a wrong answer rather than a slow one. Those readers now restore the emptied entries before sweeping, bounded by how many were invalidated and each one a file the on-demand indexer would have rebuilt the moment it was asked. Pinning the suite to a single core made `workspace/symbol` fail 5 runs in 60; it is 0 in 60 after.
