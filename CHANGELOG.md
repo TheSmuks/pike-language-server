@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.56] — 2026-08-02
+
 ### Fixed
 
 - **Diagnosing a file re-read its dependencies' directory once per dependency.** Compiling a file with the modules it imports (new in 0.8.55) refreshes each dependency in the worker so an unsaved edit is what the compiler sees. Refreshing a file also rebuilt the *directory node* it belongs to, and that rebuild re-reads the whole directory — so a file importing twenty modules from one directory read that directory twenty times, on every keystroke, and again for every dependent the change propagated to. Measured against the real worker in a 5,000-file root: 7 ms for one dependency, 32 ms for five, 128 ms for twenty. Each distinct directory is now rebuilt once per diagnose, before the per-file work, which leaves every freshness case answering exactly as before — a module created, deleted or renamed mid-session is still seen, listed or not. The regression test compares the twenty-dependency cost against the one-dependency cost rather than a wall-clock threshold, so it means the same thing on a slower machine: 19.08x before, 1.41x after.
