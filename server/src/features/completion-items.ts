@@ -20,7 +20,6 @@ import {
   type DeclKind,
   getSymbolsInScope,
   resolveTypeName,
-  findClassScopeAt,
   PRIMITIVE_TYPES,
 } from "./symbolTable";
 import { resolveType, collectClassMembers } from "./typeResolver";
@@ -202,38 +201,35 @@ export function findDeclarationForName(
 // ---------------------------------------------------------------------------
 
 /**
- * Whether a class member is reachable from the cursor position.
+ * Whether a class member can be reached through `->` or `.`.
  *
- * Oracle (pike 8.0.1116): indexing an object from outside its class hides
- * protected and private members — `c->prot` is UNDEFINED and calling it
- * throws, and indices(c) lists public members only. Code lexically inside
- * the declaring class reaches everything, including through another instance
- * of the same class; a subclass reaches inherited protected members but
- * never private ones (`priv` is an undefined identifier there). `static` is
- * Pike's legacy spelling of protected.
+ * Oracle (pike 8.0.1116, real .pike/.pmod programs — `pike -e` cannot express
+ * these, they need class bodies): the indexing operators never expose a
+ * protected or private member, in ANY context. Not from outside the class,
+ * and not from inside it either:
+ *
+ *   - `this->prot()` inside a method of the declaring class throws
+ *     "Attempt to call the NULL-value" — `this->prot` is 0, not the function.
+ *   - `o->prot()` where `o` is another instance of the same class, called
+ *     from a method of that class, fails identically.
+ *   - `indices(this)` inside the declaring class lists the public members
+ *     only; `prot` and `priv` are absent.
+ *   - Inherited protected is no different: `this->prot()` in a subclass whose
+ *     base declares it is also NULL, even though the bare call `prot()` works.
+ *   - For `.` it is a compile error rather than a runtime 0, including
+ *     self-reference: `M.prot` inside M.pmod is "Index 'prot' not present in
+ *     module M", and `C.PK` for a protected constant fails in the very file
+ *     that declares C.
+ *
+ * Lexical reach is the separate rule that does vary by position — a bare
+ * `prot()` works inside the declaring class and in a subclass — but that path
+ * is scope completion, not member access, and does not come through here.
+ * `static` is Pike's legacy spelling of protected.
  */
-function memberVisibleFrom(
-  member: Declaration,
-  ownerTable: SymbolTable,
-  table: SymbolTable,
-  line: number,
-  character: number,
-): boolean {
+function memberVisibleFrom(member: Declaration): boolean {
   const mods = member.modifiers;
   if (!mods) return true;
-  const isPrivate = mods.includes("private");
-  const isProtected = mods.includes("protected") || mods.includes("static");
-  if (!isPrivate && !isProtected) return true;
-  if (ownerTable.uri !== table.uri) return false;
-  let scopeId = findClassScopeAt(table, line, character);
-  while (scopeId !== null) {
-    if (scopeId === member.scopeId) return true;
-    const scope = table.scopeById.get(scopeId);
-    if (!scope) break;
-    if (!isPrivate && scope.inheritedScopes.includes(member.scopeId)) return true;
-    scopeId = scope.parentId;
-  }
-  return false;
+  return !mods.includes("private") && !mods.includes("protected") && !mods.includes("static");
 }
 
 /** Append the members of a class the cursor's context may index. */
@@ -241,12 +237,9 @@ function addVisibleClassMembers(
   items: CompletionItem[],
   classDecl: Declaration,
   ownerTable: SymbolTable,
-  table: SymbolTable,
-  line: number,
-  character: number,
 ): void {
   for (const cd of collectClassMembers(ownerTable, classDecl)) {
-    if (!memberVisibleFrom(cd, ownerTable, table, line, character)) continue;
+    if (!memberVisibleFrom(cd)) continue;
     items.push(declToCompletionItem(cd, 5, ownerTable));
   }
 }
@@ -260,14 +253,12 @@ export async function resolveTypeMembers(
   decl: Declaration,
   table: SymbolTable,
   ctx: CompletionContext,
-  line: number,
-  character: number,
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
 
   // If the declaration is a class, collect its members
   if (decl.kind === "class") {
-    addVisibleClassMembers(items, decl, table, table, line, character);
+    addVisibleClassMembers(items, decl, table);
   }
 
   // If the declaration is a variable/parameter/function, resolve its type
@@ -298,7 +289,7 @@ export async function resolveTypeMembers(
       };
       const result = await resolveType(typeName, typeCtx);
       if (result?.decl.kind === "class") {
-        addVisibleClassMembers(items, result.decl, result.table, table, line, character);
+        addVisibleClassMembers(items, result.decl, result.table);
       }
     }
   }

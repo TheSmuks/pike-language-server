@@ -308,7 +308,9 @@ export class DiagnosticManager {
         modulePaths: this.index.pikePaths.modulePaths,
         includePaths: this.index.pikePaths.includePaths,
         programPaths: this.index.pikePaths.programPaths,
-        dependencies: collectDependencyOverlays(uri, this.index, this.documents),
+        dependencies: collectDependencyOverlays(uri, this.index, this.documents, {
+          connection: this.connection,
+        }),
       });
       this.clearStaleTimer(state);
 

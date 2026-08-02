@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Completion offered protected and private members after `->` and `.` when the cursor was inside the declaring class.** The rule the code implemented — that a receiver inside the declaring class reaches everything — is not Pike's. Verified against pike 8.0.1116 with real programs: `this->prot()` inside a method of the declaring class throws "Attempt to call the NULL-value" because `this->prot` is 0, `o->prot()` on another instance of the same class fails the same way from inside that class, and `indices(this)` lists the public members only. Inherited protected is no different — the bare call `prot()` works in a subclass, `this->prot()` does not. For `.` it is a compile error rather than a runtime zero, self-reference included: `M.prot` inside `M.pmod` is "Index 'prot' not present in module M", and a protected constant `C.PK` fails to compile in the very file that declares `C`. Member-access completion now offers the public members and nothing else, in every context. Lexical reach still varies with position — a bare `prot()` is offered inside the class and in a subclass — because that is scope completion, a different path.
+- **A truncated diagnose dependency closure said nothing.** Each dependency handed to the Pike worker is a cache eviction it performs before recompiling, so a dependency dropped by the 64-entry cap is a module the worker keeps serving from its stale cache — the file's diagnostics can then describe a version of it that no longer exists, which is a wrong answer rather than a missing one. Truncation is now logged with the count dropped and the file, deduplicated per file so a per-keystroke diagnose cannot flood the output channel. The cap itself is unchanged: measured across Roxen 6.1's 442 Pike files, the largest real closure is 17 and 94% of the tree is at 5 or below. The cap also did not bound depth at all — it compared against the number of overlays already emitted, but they are emitted post-order, so that count stays zero all the way down a chain and a 500-deep chain walked past 64 unbounded. It is now counted on the way down.
+
 ## [0.8.56] — 2026-08-02
 
 ### Fixed

@@ -1,14 +1,18 @@
 /**
  * Instance-member completion visibility.
  *
- * The oracle is the real Pike runtime: indexing an object from outside its
- * class hides protected and private members — `c->prot` is UNDEFINED (and
- * calling it throws), and indices(c) lists public members only. Inside the
- * declaring class everything is accessible, including through another
- * instance (`o->priv` from a method of the same class works). A subclass
- * sees inherited protected members but not private ones (`priv` is an
- * undefined identifier there). Completion must offer exactly what the
- * cursor's context can legally reach.
+ * The oracle is the real Pike runtime (8.0.1116, verified with .pike/.pmod
+ * programs): `->` and `.` never expose a protected or private member, in ANY
+ * context. `c->prot` is UNDEFINED and calling it throws — and that is just as
+ * true inside a method of the declaring class, whether the receiver is `this`
+ * or another instance of the same class. `indices(this)` inside the class
+ * lists the public members only. Inherited protected is no different: the
+ * bare call `prot()` works in a subclass, `this->prot()` is NULL. For `.` it
+ * is a compile error instead of a runtime 0, self-reference included.
+ *
+ * Lexical reach — the bare identifier — does vary with position, but that is
+ * scope completion, not member access, and is covered elsewhere. Member-access
+ * completion must offer exactly the public members.
  */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { createTestServer, waitForIndexed, TestServer } from "./helpers";
@@ -83,7 +87,7 @@ describe("instance member completion follows Pike visibility", () => {
   // mid-typing there resolves no receiver at all — a pre-existing grammar
   // recovery limit, separate from visibility.
 
-  test("inside the declaring class, another instance shows everything", async () => {
+  test("inside the declaring class, another instance still hides non-publics", async () => {
     const src = [
       "class C {",
       "  int pub = 1;",
@@ -98,12 +102,14 @@ describe("instance member completion follows Pike visibility", () => {
       server, "file:///test/vis-internal.pike", src, 5, 7,
     );
 
+    // Oracle: `o->prot()` from a method of C throws "Attempt to call the
+    // NULL-value" — being inside the declaring class buys the arrow nothing.
     expect(labels).toContain("pub");
-    expect(labels).toContain("prot");
-    expect(labels).toContain("priv");
+    expect(labels).not.toContain("prot");
+    expect(labels).not.toContain("priv");
   });
 
-  test("inside a subclass, protected is visible and private is not", async () => {
+  test("inside a subclass, inherited protected is hidden from the arrow too", async () => {
     const src = [
       CLASS_SRC,
       "class Sub {",
@@ -117,9 +123,11 @@ describe("instance member completion follows Pike visibility", () => {
       server, "file:///test/vis-subclass.pike", src, 13, 7,
     );
 
+    // Oracle: `this->prot()` in a subclass of C is NULL even though the bare
+    // call `prot()` compiles and runs.
     expect(labels).toContain("pub");
-    expect(labels).toContain("prot");
-    expect(labels).toContain("pfn");
+    expect(labels).not.toContain("prot");
+    expect(labels).not.toContain("pfn");
     expect(labels).not.toContain("priv");
     expect(labels).not.toContain("blk_priv");
   });
