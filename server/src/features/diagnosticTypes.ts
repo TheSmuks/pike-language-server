@@ -23,4 +23,11 @@ export interface FileDiagnosticState {
   staleTimer: ReturnType<typeof setTimeout> | null;
   /** Last published diagnostics (for staleness overlay). */
   lastDiagnostics: Diagnostic[];
+  /**
+   * URIs already re-diagnosed in the propagation wave that scheduled this
+   * diagnose, or null when scheduled by a real edit. Cycle guard: a
+   * propagated re-diagnose bypasses the content-hash cache, so an import
+   * cycle would otherwise ping-pong forever.
+   */
+  propagationChain: Set<string> | null;
 }

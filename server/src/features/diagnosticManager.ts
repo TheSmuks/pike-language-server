@@ -15,7 +15,6 @@
 import {
   Connection,
   Diagnostic,
-  DiagnosticSeverity,
   TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -30,9 +29,12 @@ import { buildSymbolTable, type SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
-import { computeContentHash, mergeDiagnostics, buildTruncationNotice } from "./diagnosticUtils";
+import {
+  computeContentHash, mergeDiagnostics, buildTruncationNotice,
+  buildStaleDiagnostic, buildTimeoutDiagnostic,
+} from "./diagnosticUtils";
 import { type FileDiagnosticState } from "./diagnosticTypes";
-import { propagateToDependents } from "./diagnosticPropagation";
+import { propagateToDependents, collectDependencyOverlays } from "./diagnosticPropagation";
 
 // Re-export utilities for backward compatibility
 export {
@@ -53,7 +55,7 @@ export interface DiagnosticManagerOptions {
   connection: Connection;
   index: WorkspaceIndex;
   /** Pike cache (shared with server.ts for LRU eviction). */
-  pikeCache: { get(key: string): PikeCacheEntry | undefined };
+  pikeCache: { get(key: string): PikeCacheEntry | undefined; delete(key: string): boolean };
   /** Function to update the LRU cache. */
   cacheSet: (uri: string, entry: PikeCacheEntry) => void;
   /** Debounce interval in ms. Default: 500. */
@@ -83,7 +85,7 @@ export class DiagnosticManager {
   private readonly documents: TextDocuments<TextDocument>;
   private readonly connection: Connection;
   private index: WorkspaceIndex;
-  private readonly pikeCache: { get(key: string): PikeCacheEntry | undefined };
+  private readonly pikeCache: { get(key: string): PikeCacheEntry | undefined; delete(key: string): boolean };
   private readonly cacheSet: (uri: string, entry: PikeCacheEntry) => void;
   private debounceMs: number;
   private readonly staleMs: number;
@@ -189,6 +191,7 @@ export class DiagnosticManager {
 
     state.version = doc.version;
     state.contentHash = computeContentHash(doc.getText());
+    state.propagationChain = null; // a real edit starts a new wave
 
     state.timer = setTimeout(() => {
       state.timer = null;
@@ -267,24 +270,6 @@ export class DiagnosticManager {
     this.runDiagnose(uri);
   }
 
-  private buildStaleDiagnostic(): Diagnostic {
-    return {
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-      severity: DiagnosticSeverity.Information,
-      source: "pike-lsp",
-      message: "Diagnostics are being updated\u2026",
-    };
-  }
-
-  private buildTimeoutDiagnostic(): Diagnostic {
-    return {
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-      severity: DiagnosticSeverity.Warning,
-      source: "pike-lsp",
-      message: "Compilation timed out, will retry on next save.",
-    };
-  }
-
   private publishParseAndLintDiagnostics(uri: string, source: string, doc: { version: number }, pikeDiagnostics: PikeDiagnostic[] = []): void {
     const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
     const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
@@ -313,18 +298,23 @@ export class DiagnosticManager {
     state.lastDiagnostics = [];
 
     state.staleTimer = setTimeout(() => {
-      this.publishDiagnostics(uri, [...state.lastDiagnostics, this.buildStaleDiagnostic()], doc.version);
+      this.publishDiagnostics(uri, [...state.lastDiagnostics, buildStaleDiagnostic()], doc.version);
     }, this.staleMs);
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
       const filepath = uriToPath(uri);
-      const result = await this.worker.diagnose(source, filepath);
+      const result = await this.worker.diagnose(source, filepath, {
+        modulePaths: this.index.pikePaths.modulePaths,
+        includePaths: this.index.pikePaths.includePaths,
+        programPaths: this.index.pikePaths.programPaths,
+        dependencies: collectDependencyOverlays(uri, this.index, this.documents),
+      });
       this.clearStaleTimer(state);
 
       if (result.timedOut) {
         const { diagnostics: parseDiags } = this.safeParse(source, uri);
-        this.publishDiagnostics(uri, [...parseDiags, this.buildTimeoutDiagnostic()], doc.version);
+        this.publishDiagnostics(uri, [...parseDiags, buildTimeoutDiagnostic()], doc.version);
         return;
       }
 
@@ -342,6 +332,7 @@ export class DiagnosticManager {
       this.publishParseAndLintDiagnostics(uri, source, doc);
     } finally {
       state.inFlight = false;
+      state.propagationChain = null;
     }
   }
 
@@ -361,6 +352,7 @@ export class DiagnosticManager {
       getOrCreateState: this.getOrCreateState.bind(this),
       clearDebounceTimer: this.clearDebounceTimer.bind(this),
       dispatchDiagnose: this.dispatchDiagnose.bind(this),
+      invalidatePikeCache: (uri) => { this.pikeCache.delete(uri); },
     }, this.fileStates);
   }
 
@@ -378,6 +370,7 @@ export class DiagnosticManager {
         inFlight: false,
         staleTimer: null,
         lastDiagnostics: [],
+        propagationChain: null,
       };
       this.fileStates.set(uri, state);
     }
