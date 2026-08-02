@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.58] — 2026-08-02
+
 ### Fixed
 
 - **A client that disconnected mid-edit was reported to the user as an error.** Disposal is wired only to the `shutdown` request, so a session that ends any other way — a crash, a kill, an editor dropping the transport — leaves the server live with nothing to tell it otherwise. An edit still in flight then reached `sendDiagnostics` on a dead connection, and the failure was logged through the error path that feeds the status bar's error count, blaming the file being edited for an ordinary end of session. The first failed write now records that the session is over; every publish path already stops on that, so an in-flight edit no longer retries against a dead socket either. It showed up as 56 error entries in a full test run, attributed to whichever file happened to be running when an earlier file's teardown raced its in-flight edit — 0.8.54 produced none, because the open-document repair added awaits to the `didChange` path and widened the window between receiving a notification and publishing for it.
