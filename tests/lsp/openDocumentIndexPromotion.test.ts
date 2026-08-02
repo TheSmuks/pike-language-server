@@ -108,6 +108,24 @@ describe("workspace index after opening a file with an on-disk dependency", () =
     index.upsertFile = (...args: unknown[]) => { upserts++; return realUpsert(...args); };
 
     try {
+      // `waitForIndexed` means the entries exist, not that the open has
+      // settled: didOpen walks the dependency closure fire-and-forget and
+      // schedules its repair only when that finishes. Wait for the index to go
+      // quiet first, or the open's own repair lands in the window below and
+      // reads as work the keystroke caused.
+      let quietFrom = Date.now();
+      let last = upserts;
+      const settleBy = Date.now() + 5000;
+      while (Date.now() - quietFrom < 200) {
+        if (Date.now() > settleBy) throw new Error(`index never settled after open (${upserts} upserts)`);
+        await new Promise((r) => setTimeout(r, 20));
+        if (upserts !== last) {
+          last = upserts;
+          quietFrom = Date.now();
+        }
+      }
+
+      upserts = 0;
       editServer.client.sendNotification("textDocument/didChange", {
         textDocument: { uri: uri("base.pike"), version: 99 },
         contentChanges: [{ text: "void baseMember() { }\nvoid addedMember() { }\n" }],
