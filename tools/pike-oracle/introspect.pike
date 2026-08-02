@@ -104,26 +104,55 @@ int main(int argc, array(string) argv) {
   // Extract AutoDoc (best-effort via pike -x extract_autodoc)
   mixed autodoc = Val.null;
   mixed ad_err = catch {
-    string rel = filepath;
-    string cwd = getcwd();
-    if (has_prefix(filepath, cwd + "/")) {
-      rel = filepath[sizeof(cwd) + 1..];
+    // Compare the *physical* file path against the *physical* cwd, not the
+    // raw strings. getcwd() trusts $PWD when it names the same inode as
+    // ".", so under a symlinked cwd (e.g. /vault/tank -> /tank) it echoes
+    // the shell's alias rather than resolving it. System.resolvepath
+    // ignores $PWD and resolves physically, so both sides land on the same
+    // string regardless of which alias reached this directory. Verified
+    // against the real pike binary (8.0.1116).
+    string cwd = System.resolvepath(".");
+    string canon_filepath = System.resolvepath(filepath);
+    string rel;
+    if (has_prefix(canon_filepath, cwd + "/")) {
+      rel = canon_filepath[sizeof(cwd) + 1..];
     }
-    string xml_path = "./" + rel + ".xml";
-    string stamp_path = "./" + rel + ".xml.stamp";
-    // Clean up any stale artifacts
-    rm(xml_path);
-    rm(stamp_path);
-    Process.run(({pike_binary, "-x", "extract_autodoc", rel}));
-    if (file_stat(xml_path)) {
-      string raw = Stdio.read_file(xml_path);
-      if (raw && sizeof(String.trim_all_whites(raw)) > 0) {
-        autodoc = raw;
-      }
+    if (!rel) {
+      // Genuinely outside the cwd tree (not just an alias mismatch) -
+      // extract_autodoc needs a cwd-relative argument, so autodoc can't be
+      // extracted. This is a lookup failure, not "no autodoc exists" for
+      // this symbol, so it must not vanish into the catch silently.
+      werror("introspect: autodoc lookup skipped for %O - not under cwd %O (resolved %O)\n",
+             filepath, cwd, canon_filepath);
+    } else {
+      string xml_path = "./" + rel + ".xml";
+      string stamp_path = "./" + rel + ".xml.stamp";
+      // Clean up any stale artifacts
       rm(xml_path);
       rm(stamp_path);
+      mapping run_result = Process.run(({pike_binary, "-x", "extract_autodoc", rel}));
+      if (file_stat(xml_path)) {
+        string raw = Stdio.read_file(xml_path);
+        if (raw && sizeof(String.trim_all_whites(raw)) > 0) {
+          autodoc = raw;
+        }
+        rm(xml_path);
+        rm(stamp_path);
+      } else if (run_result && run_result->exitcode) {
+        // extract_autodoc exited non-zero rather than simply finding no
+        // //! comments to document (that case exits 0 with no xml file) -
+        // a real extraction failure, surface it instead of a silent null.
+        werror("introspect: extract_autodoc failed for %O (exit %d): %s\n",
+               rel, run_result->exitcode, run_result->stderr || "");
+      }
     }
   };
+  if (ad_err) {
+    // Best-effort autodoc extraction threw. "Best-effort" covers symbols
+    // that legitimately have no autodoc; it must not also cover thrown
+    // errors, or failures like the alias bug above go unnoticed.
+    werror("introspect: autodoc extraction error for %O: %s\n", filepath, describe_error(ad_err));
+  }
 
   // Build diagnostics
   array diagnostics = Common()->normalize_diagnostics(handler->errors, handler->warnings);
