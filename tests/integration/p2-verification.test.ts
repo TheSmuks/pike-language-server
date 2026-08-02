@@ -347,7 +347,16 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     // Wait for the in-flight diagnose to complete so we don't leak state
     await diagnosePublished;
 
-    const ratio = avgDuring / avgIdle;
+    // The first request of each series pays one-off warm-up, and every sample
+    // here is a fraction of a millisecond, so a single scheduling hiccup on a
+    // busy machine moves the mean by two orders of magnitude while saying
+    // nothing about queueing. Compare the steady-state medians instead: hover
+    // queued behind diagnose would be slow on every sample, not just the first.
+    const steady = (xs: number[]) => {
+      const rest = xs.slice(1).sort((a, b) => a - b);
+      return rest[Math.floor(rest.length / 2)] ?? xs[0]!;
+    };
+    const ratio = steady(duringLatencies) / Math.max(steady(idleLatencies), 0.05);
 
     console.log("──────────────────────────────────────────────");
     console.log(`S2 RESULT: Hover latency measurement`);
@@ -355,7 +364,7 @@ describe("S2: Hover Latency During In-Flight Diagnose", () => {
     console.log(`  Idle avg:                ${avgIdle.toFixed(1)} ms`);
     console.log(`  During-diag latencies:   ${duringLatencies.map(l => l.toFixed(1)).join(", ")} ms`);
     console.log(`  During-diag avg:         ${avgDuring.toFixed(1)} ms`);
-    console.log(`  Ratio (during/idle):     ${ratio.toFixed(2)}x`);
+    console.log(`  Ratio (steady median):   ${ratio.toFixed(2)}x`);
     console.log(`  Diagnose calls fired:    ${ctx.diagnoseCallCount}`);
     console.log("");
     console.log(`  ARCHITECTURAL NOTE:`);
@@ -654,11 +663,34 @@ describe("S3: Cross-File Propagation Correctness", () => {
         console.log(`  lib.pmod dependents: ${[...libDeps].map(u => u.split("/").pop()).join(", ") || "(none)"}`);
         expect(libDeps.has(consumerUri)).toBe(true);
 
+        // Editing a file publishes twice for its importer: an immediate
+        // parse-only pass that carries forward the last compiler verdict, then
+        // the compiler's own. Taking the first publish reads the previous
+        // state — clean right after a breaking edit, still broken right after a
+        // revert — so wait for the verdict being asserted rather than for the
+        // next notification to arrive.
+        const settleTo = async (
+            uri: string, want: "clean" | "broken", timeoutMs: number,
+        ) => {
+          const deadline = Date.now() + timeoutMs;
+          let last = await ctx.waitForPublish(uri, timeoutMs);
+          for (;;) {
+            const errs = errorsOf(last);
+            const satisfied = want === "clean" ? errs.length === 0 : errs.length > 0;
+            if (satisfied || Date.now() >= deadline) return last;
+            try {
+              last = await ctx.waitForPublish(uri, Math.max(250, deadline - Date.now()));
+            } catch {
+              return last;
+            }
+          }
+        };
+
         // --- No-op edit: propagated re-diagnose must stay clean. ---
         ctx.resetPublishCount(consumerUri);
         ctx.changeDoc(libUri, libContent + "\n");
         await ctx.waitForPublish(libUri, 5000);
-        const afterNoop = await ctx.waitForPublish(consumerUri, 8000);
+        const afterNoop = await settleTo(consumerUri, "clean", 8000);
         expect(errorsOf(afterNoop)).toEqual([]);
 
         // --- Breaking edit (unsaved): the real error must propagate. ---
@@ -670,7 +702,7 @@ describe("S3: Cross-File Propagation Correctness", () => {
         const editStart = performance.now();
         ctx.changeDoc(libUri, editedLib);
         await ctx.waitForPublish(libUri, 5000);
-        const afterBreak = await ctx.waitForPublish(consumerUri, 8000);
+        const afterBreak = await settleTo(consumerUri, "broken", 8000);
         const totalMs = performance.now() - editStart;
         const breakErrors = errorsOf(afterBreak);
 
@@ -687,7 +719,7 @@ describe("S3: Cross-File Propagation Correctness", () => {
         ctx.resetPublishCount(consumerUri);
         ctx.changeDoc(libUri, libContent);
         await ctx.waitForPublish(libUri, 5000);
-        const afterRevert = await ctx.waitForPublish(consumerUri, 8000);
+        const afterRevert = await settleTo(consumerUri, "clean", 8000);
         expect(errorsOf(afterRevert)).toEqual([]);
       } finally {
         await ctx.teardown();
