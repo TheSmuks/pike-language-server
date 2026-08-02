@@ -19,7 +19,7 @@ import {
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
 
-import { PikeWorker, PikeUnavailableError } from "./pikeWorker.js";
+import { PikeWorker } from "./pikeWorker.js";
 import { isPikeUnavailable } from "./pikeWorkerTypes";
 import type { PikeDiagnostic } from "./pikeWorkerTypes.js";
 import { getParseDiagnostics } from "./diagnostics";
@@ -29,6 +29,7 @@ import { buildSymbolTable, type SymbolTable } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { logError, logInfo, ErrorCategory } from "../util/errorLog.js";
 import { uriToPath } from "../util/uri";
+import { isConnectionClosed } from "../util/connectionClosed";
 import {
   computeContentHash, mergeDiagnostics, buildTruncationNotice,
   buildStaleDiagnostic, buildTimeoutDiagnostic,
@@ -179,6 +180,12 @@ export class DiagnosticManager {
         });
       }
     } catch (err) {
+      // The session is over; every publish path already stops on `disposed`,
+      // so recording it keeps an in-flight edit from retrying a dead socket.
+      if (isConnectionClosed(err)) {
+        this.disposed = true;
+        return;
+      }
       // Parse failure — log but don't crash the manager
       logError(this.connection, ErrorCategory.Parse, `diagnosticManager.publishParseDiags(${uri})`, err);
     }
