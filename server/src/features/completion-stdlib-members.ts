@@ -1,8 +1,8 @@
 /**
- * Stdlib member completion for Pike LSP.
+ * Stdlib and module member completion for Pike LSP.
  *
- * Strategy 2 & 3b: resolve lhs as a stdlib module/class and collect its members.
- * Extracted from completion.ts.
+ * Strategies 1, 2 & 3b: resolve lhs as a module file or stdlib path and
+ * collect its members. Extracted from completion.ts.
  */
 
 import {
@@ -11,8 +11,65 @@ import {
   InsertTextFormat,
 } from "vscode-languageserver/node";
 import { getStdlibChildrenMap, isCompletableIdentifier } from "./completion-stdlib";
-import { padSortKey, extractParamsFromStdlibSignature } from "./completion-items";
+import { padSortKey, extractParamsFromStdlibSignature, declToCompletionItem } from "./completion-items";
+import { type Declaration, getDeclarationsInScope } from "./symbolTable";
 import type { CompletionContext } from "./completionTrigger";
+
+/** Strategy 1: Resolve lhs as a module file and collect its declarations. */
+export async function addWorkspaceModuleMembers(
+  lhsText: string,
+  ctx: CompletionContext,
+  items: CompletionItem[],
+  seenNames: Set<string>,
+): Promise<void> {
+  const resolved = await ctx.index.resolveModuleWithSource(lhsText, ctx.uri);
+  if (!resolved) return;
+
+  // For an installed stdlib module the bundled index is authoritative — it is
+  // reconciled against `indices()` on the real runtime at generation time and
+  // covers inherited C-module members the source file never names. Parsing
+  // the installed source instead leaks symbols Pike cannot index from outside
+  // (macros, protected declarations, inactive #ifdef blocks). The `reconciled.`
+  // marker is written only for modules the generation-host oracle actually
+  // answered for; a module it could not reconcile (absent or gutted on that
+  // host) falls through to the filtered source parse below — keying this on
+  // "children exist" instead used to miss modules whose children were all
+  // pruned and re-leak the source symbols.
+  if (
+    resolved.source === "system_module" &&
+    ctx.stdlibIndex["reconciled." + lhsText] !== undefined
+  ) {
+    return;
+  }
+
+  const targetTable = await ctx.index.getOrIndexSymbolTable(resolved.uri);
+  if (!targetTable) return;
+
+  const fileScope = targetTable.scopes.find(s => s.kind === "file");
+  if (!fileScope) return;
+
+  for (const decl of getDeclarationsInScope(targetTable, fileScope.id)) {
+    if (!isIndexableModuleMember(decl)) continue;
+    if (seenNames.has(decl.name)) continue;
+    seenNames.add(decl.name);
+    items.push(declToCompletionItem(decl, 0, targetTable));
+  }
+}
+
+/**
+ * Whether a file-scope declaration can be reached as `Module.name` from
+ * outside. Pike does not expose protected/private/static symbols through
+ * module indexing, and macros, imports and the inherit name itself are not
+ * members at all.
+ */
+function isIndexableModuleMember(decl: Declaration): boolean {
+  if (decl.kind === "macro" || decl.kind === "inherit" || decl.kind === "import" || decl.kind === "include") {
+    return false;
+  }
+  const mods = decl.modifiers;
+  if (!mods) return true;
+  return !mods.includes("protected") && !mods.includes("private") && !mods.includes("static");
+}
 
 /** Strategy 2: Resolve lhs as a stdlib module/class and collect its members. */
 export function addStdlibMembers(

@@ -20,6 +20,7 @@ import {
   type DeclKind,
   getSymbolsInScope,
   resolveTypeName,
+  findClassScopeAt,
   PRIMITIVE_TYPES,
 } from "./symbolTable";
 import { resolveType, collectClassMembers } from "./typeResolver";
@@ -201,22 +202,72 @@ export function findDeclarationForName(
 // ---------------------------------------------------------------------------
 
 /**
+ * Whether a class member is reachable from the cursor position.
+ *
+ * Oracle (pike 8.0.1116): indexing an object from outside its class hides
+ * protected and private members — `c->prot` is UNDEFINED and calling it
+ * throws, and indices(c) lists public members only. Code lexically inside
+ * the declaring class reaches everything, including through another instance
+ * of the same class; a subclass reaches inherited protected members but
+ * never private ones (`priv` is an undefined identifier there). `static` is
+ * Pike's legacy spelling of protected.
+ */
+function memberVisibleFrom(
+  member: Declaration,
+  ownerTable: SymbolTable,
+  table: SymbolTable,
+  line: number,
+  character: number,
+): boolean {
+  const mods = member.modifiers;
+  if (!mods) return true;
+  const isPrivate = mods.includes("private");
+  const isProtected = mods.includes("protected") || mods.includes("static");
+  if (!isPrivate && !isProtected) return true;
+  if (ownerTable.uri !== table.uri) return false;
+  let scopeId = findClassScopeAt(table, line, character);
+  while (scopeId !== null) {
+    if (scopeId === member.scopeId) return true;
+    const scope = table.scopeById.get(scopeId);
+    if (!scope) break;
+    if (!isPrivate && scope.inheritedScopes.includes(member.scopeId)) return true;
+    scopeId = scope.parentId;
+  }
+  return false;
+}
+
+/** Append the members of a class the cursor's context may index. */
+function addVisibleClassMembers(
+  items: CompletionItem[],
+  classDecl: Declaration,
+  ownerTable: SymbolTable,
+  table: SymbolTable,
+  line: number,
+  character: number,
+): void {
+  for (const cd of collectClassMembers(ownerTable, classDecl)) {
+    if (!memberVisibleFrom(cd, ownerTable, table, line, character)) continue;
+    items.push(declToCompletionItem(cd, 5, ownerTable));
+  }
+}
+
+/**
  * Try to resolve the members of a declared type.
- * For class types, find the class scope and enumerate its declarations.
+ * For class types, find the class scope and enumerate its declarations,
+ * filtered to what Pike lets the cursor's context index.
  */
 export async function resolveTypeMembers(
   decl: Declaration,
   table: SymbolTable,
   ctx: CompletionContext,
+  line: number,
+  character: number,
 ): Promise<CompletionItem[]> {
   const items: CompletionItem[] = [];
 
   // If the declaration is a class, collect its members
   if (decl.kind === "class") {
-    const memberDecls = collectClassMembers(table, decl);
-    for (const cd of memberDecls) {
-      items.push(declToCompletionItem(cd, 5, table));
-    }
+    addVisibleClassMembers(items, decl, table, table, line, character);
   }
 
   // If the declaration is a variable/parameter/function, resolve its type
@@ -247,11 +298,7 @@ export async function resolveTypeMembers(
       };
       const result = await resolveType(typeName, typeCtx);
       if (result?.decl.kind === "class") {
-        const ownerTable = result.table;
-        const memberDecls = collectClassMembers(ownerTable, result.decl);
-        for (const cd of memberDecls) {
-          items.push(declToCompletionItem(cd, 5, ownerTable));
-        }
+        addVisibleClassMembers(items, result.decl, result.table, table, line, character);
       }
     }
   }

@@ -22,6 +22,11 @@ import {
 import { join, extname, basename, dirname } from "node:path";
 import { renderAutodoc } from "../server/src/features/autodocRenderer";
 import { parseXml, type XmlNode } from "../server/src/features/xmlParser";
+import {
+  collectModuleParents,
+  runModuleOracle,
+  reconcileWithRuntime,
+} from "./stdlib-runtime-reconcile";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -255,6 +260,21 @@ function main(): void {
     console.log(`${symbols.length} symbols`);
   }
 
+  console.log("\nReconciling module members against the pike runtime...");
+  const oracle = runModuleOracle(collectModuleParents(index));
+  const { added, removed, skipped, unavailable } = reconcileWithRuntime(index, oracle);
+  const reconciledCount = Object.keys(index).filter((k) => k.startsWith("reconciled.")).length;
+  console.log(
+    `Reconciled ${reconciledCount} modules: ` +
+    `+${added.length} runtime members, -${removed.length} non-indexable symbols.`,
+  );
+  if (skipped.length > 0) {
+    console.log(`Host-degraded, left as harvested (${skipped.length}): ${skipped.join(", ")}`);
+  }
+  if (unavailable.length > 0) {
+    console.log(`Unavailable on this host, left as harvested (${unavailable.length}): ${unavailable.join(", ")}`);
+  }
+
   // Refuse to silently shrink the index.
   //
   // This script once dropped every doc-only symbol (335 of them) because
@@ -266,7 +286,10 @@ function main(): void {
   const force = process.argv.includes("--force");
   if (existsSync(OUTPUT_PATH)) {
     const previous = JSON.parse(readFileSync(OUTPUT_PATH, "utf-8")) as Record<string, unknown>;
-    const lost = Object.keys(previous).filter((fqn) => !(fqn in index));
+    const removedSet = new Set(removed);
+    const lost = Object.keys(previous).filter(
+      (fqn) => !(fqn in index) && !removedSet.has(fqn),
+    );
     if (lost.length > 0) {
       console.error(
         `\nrefusing to write: ${lost.length} symbol(s) present in the existing ` +
@@ -280,8 +303,12 @@ function main(): void {
     }
   }
 
-  // Write JSON
-  const json = JSON.stringify(index, null, 2);
+  // Write JSON with sorted keys, so re-running the generator on unchanged
+  // input produces a byte-identical file: harvest and reconciliation order
+  // are incidental, and an insertion-ordered dump made every regen a diff.
+  const sorted: typeof index = {};
+  for (const key of Object.keys(index).sort()) sorted[key] = index[key];
+  const json = JSON.stringify(sorted, null, 2);
   writeFileSync(OUTPUT_PATH, json, "utf-8");
 
   const jsonSize = Buffer.byteLength(json, "utf-8");
