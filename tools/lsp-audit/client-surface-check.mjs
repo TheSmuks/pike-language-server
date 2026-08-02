@@ -2,58 +2,73 @@
 /**
  * Surface 3 (extension/client) checks that do not need a VSCode extension host.
  *
- * Two of the three client-surface questions are answerable statically or via
- * the language server alone, and answering them here makes them repeatable:
- *
- *   settings  — is every contributed setting actually read by shipped code?
- *               A setting declared in the manifest and never read is the same
- *               defect class as audit iteration 6's `builtinFunction` token
- *               type: advertised, never emitted.
+ *   settings  — is every contributed setting actually read by shipped code,
+ *               AND is every setting shipped code reads actually declared
+ *               in the manifest? Both directions matter: a setting declared
+ *               and never read is dead surface (audit iteration 6's
+ *               `builtinFunction` token defect class); a setting read but
+ *               never declared is invisible in Settings UI and silently
+ *               falls back to `config.get`'s default forever.
+ *   commands  — is every contributed command actually registered, AND is
+ *               every registered `pike.*` command either declared or an
+ *               acknowledged internal command (invoked programmatically,
+ *               e.g. from a server code lens, never from the palette)?
  *   tokens    — does any semantic token land inside a comment or a string?
- *               Disagreement between the TextMate layer and the semantic layer
- *               is what produces visibly wrong colours in the editor.
+ *               Disagreement between the TextMate layer and the semantic
+ *               layer is what produces visibly wrong colours in the editor.
  *
- * The third question — activation on a real Roxen module — needs the extension
- * host and is covered by tests/integration, not here.
+ * The fourth question — activation on a real Roxen module — needs the
+ * extension host and is covered by tests/integration, not here.
  *
- * Usage: node tools/lsp-audit/client-surface-check.mjs [settings|tokens|all]
+ * Matching is on the FULL dotted setting key (or, for the legacy grep path
+ * inside checkTokens' violations, full identifiers) — never a last-segment
+ * degradation like "path" or "enabled", which nearly everything matches and
+ * so proves nothing. See client-surface-lib.mjs for the extraction.
+ *
+ * Usage: node tools/lsp-audit/client-surface-check.mjs [settings|commands|tokens|all]
  */
 
 import { readFileSync, readdirSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  readManifest,
+  collectReadSettingKeys,
+  collectRegisteredCommands,
+  INTERNAL_COMMAND_ALLOWLIST,
+} from "./client-surface-lib.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
-/** Roots that ship to users. A setting read only by tests is still unread. */
-const SHIPPED = ["server", "client", "standalone"];
+export function checkSettings(root = ROOT) {
+  const { settingsKeys } = readManifest(root);
+  const readKeys = collectReadSettingKeys(root);
 
-function checkSettings() {
-  const manifest = JSON.parse(readFileSync(join(ROOT, "extension.package.json"), "utf8"));
-  const keys = Object.keys(manifest.contributes?.configuration?.properties ?? {});
-  const unread = [];
+  const unread = [...settingsKeys].filter((k) => !readKeys.has(k)).sort();
+  const undeclared = [...readKeys]
+    .filter((k) => k.startsWith("pike.") && !settingsKeys.has(k))
+    .sort();
 
-  for (const key of keys) {
-    // The client reads settings by their section-relative tail (e.g.
-    // config.get("log.redactPaths")), not by the full dotted key, so try
-    // several suffixes before concluding nothing reads it.
-    const candidates = [key, key.replace(/^pike\./, ""), key.split(".").slice(-2).join("."), key.split(".").pop()];
-    let hits = 0;
-    for (const pattern of candidates) {
-      const cmd = `grep -rlF ${JSON.stringify(pattern)} ${SHIPPED.join(" ")} --include=*.ts --include=*.mjs 2>/dev/null | grep -v node_modules | grep -v /dist/ | wc -l`;
-      try {
-        hits += Number(execSync(cmd, { cwd: ROOT, encoding: "utf8" }).trim());
-      } catch {
-        // grep exits non-zero when nothing matches; that is a zero, not an error.
-      }
-    }
-    if (hits === 0) unread.push(key);
-  }
+  console.log(`settings: ${settingsKeys.size} declared, ${readKeys.size} read, ${unread.length} unread, ${undeclared.length} undeclared`);
+  for (const key of unread) console.log(`  UNREAD       ${key}`);
+  for (const key of undeclared) console.log(`  UNDECLARED   ${key}`);
+  return unread.length + undeclared.length;
+}
 
-  console.log(`settings: ${keys.length} contributed, ${unread.length} unread`);
-  for (const key of unread) console.log(`  UNREAD  ${key}`);
-  return unread.length;
+export function checkCommands(root = ROOT) {
+  const { commands } = readManifest(root);
+  const registered = collectRegisteredCommands(root);
+
+  const unregistered = [...commands].filter((c) => !registered.has(c)).sort();
+  const undeclared = [...registered]
+    .filter((c) => !commands.has(c) && !INTERNAL_COMMAND_ALLOWLIST.has(c))
+    .sort();
+
+  console.log(`commands: ${commands.size} declared, ${registered.size} registered, ${unregistered.length} unregistered, ${undeclared.length} undeclared`);
+  for (const c of unregistered) console.log(`  UNREGISTERED ${c}`);
+  for (const c of undeclared) console.log(`  UNDECLARED   ${c}`);
+  return unregistered.length + undeclared.length;
 }
 
 /** Mark every offset inside a comment or a string literal. */
@@ -90,23 +105,34 @@ function offsetOf(text, line, column) {
   return offset + column;
 }
 
-function checkTokens(limit = 25) {
-  const dir = join(ROOT, "corpus", "files");
+/** Run the token probe for one file. Returns { out } on success or throws —
+ *  a probe crash is a check failure, never a silently-skipped file. */
+function runTokenProbe(root, file) {
+  const out = execSync(`bun run scripts/lsp-probe.ts tokens corpus/files/${file} 2>&1`, {
+    cwd: root,
+    encoding: "utf8",
+    timeout: 120000,
+  });
+  return out;
+}
+
+export function checkTokens(limit = 25, root = ROOT) {
+  const dir = join(root, "corpus", "files");
   const files = readdirSync(dir).filter((f) => f.endsWith(".pike")).slice(0, limit);
   let checked = 0;
   const violations = [];
+  const probeFailures = [];
 
   for (const file of files) {
     const text = readFileSync(join(dir, file), "utf8");
     const marked = mask(text);
-    let out = "";
+    let out;
     try {
-      out = execSync(`bun run scripts/lsp-probe.ts tokens corpus/files/${file} 2>/dev/null`, {
-        cwd: ROOT,
-        encoding: "utf8",
-        timeout: 120000,
-      });
-    } catch {
+      out = runTokenProbe(root, file);
+    } catch (err) {
+      // A probe crash must not read as "nothing to report" — it's a
+      // counted failure with a message, not a silent skip.
+      probeFailures.push(`${file}: probe failed — ${err.message.split("\n")[0]}`);
       continue;
     }
     for (const line of out.split("\n")) {
@@ -118,13 +144,23 @@ function checkTokens(limit = 25) {
     }
   }
 
-  console.log(`tokens: ${checked} checked across ${files.length} files, ${violations.length} inside comments/strings`);
-  for (const v of violations) console.log(`  IN-LITERAL  ${v}`);
-  return violations.length;
+  console.log(`tokens: ${checked} checked across ${files.length} files, ${violations.length} inside comments/strings, ${probeFailures.length} probe failures`);
+  for (const v of violations) console.log(`  IN-LITERAL    ${v}`);
+  for (const f of probeFailures) console.log(`  PROBE-FAILED  ${f}`);
+  return violations.length + probeFailures.length;
 }
 
-const mode = process.argv[2] ?? "all";
-let problems = 0;
-if (mode === "settings" || mode === "all") problems += checkSettings();
-if (mode === "tokens" || mode === "all") problems += checkTokens();
-process.exit(problems > 0 ? 1 : 0);
+// Only run the CLI when this file is executed directly (`node
+// client-surface-check.mjs`), not when it's imported for its exported
+// check functions (e.g. by a scratch-copy verification harness) — an
+// unconditional process.exit() here would kill the importing process
+// before it ever got control back.
+const isMain = import.meta.url === `file://${resolve(process.argv[1] ?? "")}`;
+if (isMain) {
+  const mode = process.argv[2] ?? "all";
+  let problems = 0;
+  if (mode === "settings" || mode === "all") problems += checkSettings();
+  if (mode === "commands" || mode === "all") problems += checkCommands();
+  if (mode === "tokens" || mode === "all") problems += checkTokens();
+  process.exit(problems > 0 ? 1 : 0);
+}
