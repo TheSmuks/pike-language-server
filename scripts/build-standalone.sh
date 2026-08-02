@@ -21,6 +21,10 @@ if [ -z "$ESBUILD" ]; then
   exit 1
 fi
 
+# .template-version is the canonical release version; package.json's version
+# is deliberately stale (see bump-version.sh) and must never be stamped here.
+VERSION="$(tr -d '[:space:]' < "$ROOT/.template-version")"
+
 echo "Building standalone server to $OUT_DIR..."
 
 rm -rf "$OUT_DIR"
@@ -47,6 +51,7 @@ mkdir -p "$OUT_DIR"
   --format=esm \
   --sourcemap \
   --external:vscode \
+  --define:__PIKE_LSP_VERSION__="\"$VERSION\"" \
   --banner:js="// Pike Language Server — standalone build
 import{createRequire as __pikeCreateRequire}from'node:module';const require=__pikeCreateRequire(import.meta.url);"
 

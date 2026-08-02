@@ -17,10 +17,44 @@
 
 import { resolve, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const serverPath = resolve(here, "..", "standalone", "server.js");
+
+// build-npm-package.sh sed-replaces this token with the .template-version
+// contents when it stages bin/ into dist-npm — a staged package carries no
+// repo checkout to read the version from at runtime. Left untouched (dev
+// layout, running straight out of a clone), fall back to reading
+// .template-version next to the repo, and to "dev" if even that is gone.
+const VERSION_TOKEN = "__PIKE_LSP_VERSION__";
+
+function resolveVersion() {
+  if (/^\d+\.\d+\.\d+/.test(VERSION_TOKEN)) return VERSION_TOKEN;
+  const devVersionPath = resolve(here, "..", ".template-version");
+  if (existsSync(devVersionPath)) {
+    return readFileSync(devVersionPath, "utf8").trim();
+  }
+  return "dev";
+}
+
+const USAGE = `pike-language-server — Tier-3 LSP implementation for Pike
+
+Usage:
+  pike-language-server [--stdio]   Start the server (stdio transport; default)
+  pike-language-server --version   Print the version and exit
+  pike-language-server --help      Print this message and exit
+`;
+
+const preArgs = process.argv.slice(2);
+if (preArgs.includes("--version") || preArgs.includes("-v")) {
+  process.stdout.write(`pike-language-server ${resolveVersion()}\n`);
+  process.exit(0);
+}
+if (preArgs.includes("--help") || preArgs.includes("-h")) {
+  process.stdout.write(USAGE);
+  process.exit(0);
+}
 
 if (!existsSync(serverPath)) {
   process.stderr.write(
