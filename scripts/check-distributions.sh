@@ -198,8 +198,10 @@ PROBE
 mask_command() {
   if unshare -rm true >/dev/null 2>&1; then
     echo "unshare -rm"
-  elif sudo -n unshare -rm true >/dev/null 2>&1; then
-    echo "sudo -n unshare -rm"
+  elif sudo -n unshare -m true >/dev/null 2>&1; then
+    # No -r under sudo: we are already root, and the extra user namespace it
+    # would create is what makes the tmpfs mount fail on GitHub runners.
+    echo "sudo -n unshare -m"
   fi
 }
 
