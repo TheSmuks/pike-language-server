@@ -10,6 +10,7 @@ import {
   type Location as LspLocation,
 } from "vscode-languageserver/node";
 import type { NavigationContext } from "./navigationHandler";
+import { restoreEmptyLiveEntries } from "./restoreLiveEntries";
 import type { ResolutionContext } from "./accessResolver";
 import { parse, withBorrowedTree } from "../parser";
 import {
@@ -323,6 +324,9 @@ async function handleReferences(
   token: CancellationToken,
 ): Promise<LspLocation[]> {
   if (token.isCancellationRequested) return [];
+  // A reference the sweep skips because its entry is momentarily empty is a
+  // reference missing from a rename, not merely a slower answer.
+  await restoreEmptyLiveEntries(ctx.index);
   const table = await ctx.getSymbolTable(params.textDocument.uri);
   if (!table) return [];
 
@@ -464,6 +468,7 @@ async function handleImplementation(
   if (token.isCancellationRequested) return [];
 
   // Implementations span the whole workspace — ensure complete results.
+  await restoreEmptyLiveEntries(ctx.index);
   await prepareGlobalQuery({
     connection, index: ctx.index,
     workspaceRoot: ctx.index.workspaceRoot, cancellationToken: token,

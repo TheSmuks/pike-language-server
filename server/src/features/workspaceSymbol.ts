@@ -12,6 +12,7 @@ import type {
   SymbolInformation,
 } from "vscode-languageserver/node";
 import type { WorkspaceIndex, FileEntry } from "./workspaceIndex";
+import { restoreEmptyLiveEntries } from "./restoreLiveEntries";
 import type { Declaration, DeclKind } from "./symbolTable";
 import type { Connection } from "vscode-languageserver/node";
 import type { CancellationToken } from "vscode-jsonrpc";
@@ -166,6 +167,7 @@ export async function searchWorkspaceSymbolsLazy(
       if (cancellationToken?.isCancellationRequested) return [];
     }
 
+    await restoreEmptyLiveEntries(index);
     return searchWorkspaceSymbols(query, index);
   } finally {
     // `end` must be sent even when preparation throws (e.g. degraded mode),

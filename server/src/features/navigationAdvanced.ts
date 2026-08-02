@@ -22,6 +22,7 @@ import type {
   TypeHierarchyItem,
 } from "vscode-languageserver-protocol";
 import type { NavigationContext } from "./navigationHandler";
+import { restoreEmptyLiveEntries } from "./restoreLiveEntries";
 import { parse, withBorrowedTree } from "../parser";
 import { isPikeUnavailable } from "./pikeWorkerTypes";
 import {
@@ -83,6 +84,7 @@ async function handleIncomingCalls(
   ctx: NavigationContext,
 ): Promise<CallHierarchyIncomingCall[]> {
   if (token.isCancellationRequested) return [];
+  await restoreEmptyLiveEntries(ctx.index);
   if (!ctx.index) return [];
   await prepareGlobalQuery({
     connection, index: ctx.index,
@@ -99,6 +101,7 @@ async function handleOutgoingCalls(
   ctx: NavigationContext,
 ): Promise<CallHierarchyOutgoingCall[]> {
   if (token.isCancellationRequested) return [];
+  await restoreEmptyLiveEntries(ctx.index);
   const item = params.item;
   const uri = item.uri;
   const table = await ctx.getSymbolTable(uri);
@@ -142,6 +145,7 @@ async function handleSupertypes(
   ctx: NavigationContext,
 ): Promise<TypeHierarchyItem[]> {
   if (token.isCancellationRequested) return [];
+  await restoreEmptyLiveEntries(ctx.index);
   if (!ctx.index) return [];
   const table = await ctx.getSymbolTable(params.item.uri);
   if (!table) return [];
@@ -160,6 +164,7 @@ async function handleSubtypes(
   ctx: NavigationContext,
 ): Promise<TypeHierarchyItem[]> {
   if (token.isCancellationRequested) return [];
+  await restoreEmptyLiveEntries(ctx.index);
   if (!ctx.index) return [];
   await prepareGlobalQuery({
     connection, index: ctx.index,
