@@ -8,7 +8,41 @@ permissions:
   contents: write
 
 jobs:
+  # Single gate for every artifact job below. Lineage and tag verification
+  # used to live inline in build-vsix, with the other jobs either duplicating
+  # it, partially duplicating it, or (build-tarball) missing it entirely — and
+  # nothing enforced a check-before-build order via `needs:` at all.
+  #
+  # This job owns that check exclusively; build-vsix, build-binaries,
+  # build-tarball, and publish-npm all `needs: verify-release` and none of
+  # them depend on each other, so a Marketplace outage or an expired
+  # VSCODE_MARKETPLACE_TOKEN inside build-vsix's publish step can no longer
+  # block the other three unrelated artifacts — only a genuinely bad release
+  # ref (wrong tag, or a ref that isn't main's own history) does.
+  verify-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify release lineage
+        run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
+
+      - name: Verify tag matches version manifest
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          expected="v$(tr -d '[:space:]' < .template-version)"
+          if [ "$tag" != "$expected" ]; then
+            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
+            echo "every artifact job depends on this one; refusing to let any of them build" >&2
+            exit 1
+          fi
+          echo "release tag matches .template-version: $tag"
+
   build-vsix:
+    needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -28,20 +62,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Verify release lineage
-        run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
-
-      - name: Verify tag matches version manifest
-        run: |
-          tag="${{ github.event.release.tag_name }}"
-          expected="v$(tr -d '[:space:]' < .template-version)"
-          if [ "$tag" != "$expected" ]; then
-            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
-            echo "the packaged VSIX would be mislabelled; refusing to build" >&2
-            exit 1
-          fi
-          echo "release tag matches .template-version: $tag"
 
       - name: Build extension
         run: bun run build:extension
@@ -81,21 +101,13 @@ jobs:
   # Cross-compiled from one runner; `bun build --compile --target=` emits every
   # platform, so this needs no per-OS matrix.
   build-binaries:
+    needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-
-      - name: Verify tag matches version manifest
-        run: |
-          tag="${{ github.event.release.tag_name }}"
-          expected="v$(tr -d '[:space:]' < .template-version)"
-          if [ "$tag" != "$expected" ]; then
-            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
-            exit 1
-          fi
 
       - name: Build binaries for every target
         run: bash scripts/build-binary.sh --all
@@ -112,16 +124,38 @@ jobs:
           gh release upload "${{ github.event.release.tag_name }}" dist-binary/* --clobber
 
   # Standalone tarball — no build, but needs Node or Bun on the user's box.
+  #
+  # Gated on verify-release, and verifies again itself: a job that only
+  # trusted `needs:` and skipped its own check would still ship a mislabelled
+  # tarball if it were ever re-run independently of verify-release (a future
+  # workflow_dispatch path, a rerun of just this job, etc.).
   build-tarball:
+    needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: bun install --frozen-lockfile
+
+      - name: Verify release lineage
+        run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
+
+      - name: Verify tag matches version manifest
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          expected="v$(tr -d '[:space:]' < .template-version)"
+          if [ "$tag" != "$expected" ]; then
+            echo "release tag '$tag' does not match .template-version ('$expected')" >&2
+            echo "the packaged tarball would be mislabelled; refusing to build" >&2
+            exit 1
+          fi
+          echo "release tag matches .template-version: $tag"
 
       - name: Build standalone bundle and tarball
         run: |
@@ -143,6 +177,7 @@ jobs:
   # it this job fails loudly rather than skipping, so a release never silently
   # ships without the npm artifact.
   publish-npm:
+    needs: verify-release
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

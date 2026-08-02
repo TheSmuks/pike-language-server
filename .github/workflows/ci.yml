@@ -137,7 +137,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        artifact: [tarball, npm, binary]
+        artifact: [tarball, npm, binary, vsix]
     steps:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
@@ -152,6 +152,11 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      # Only the vsix target packages with vsce (scripts/build-vsix.sh shells
+      # out to it); the other three artifacts never touch it.
+      - name: Install VSCE
+        if: matrix.artifact == 'vsix'
+        run: bun add -g @vscode/vsce
       - name: ${{ matrix.artifact }} serves LSP
         run: bash scripts/check-distributions.sh ${{ matrix.artifact }}
 
@@ -203,6 +208,41 @@ jobs:
         run: |
           echo "PIKE_BINARY=$HOME/.pike/pike/$PIKE_VERSION/bin/pike" >> "$GITHUB_ENV"
           "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
+
+      # A cache hit restores whatever was built the first time this key was
+      # used, including a silently crippled build: Pike's per-module autoconf
+      # probes can fail for reasons unrelated to the library (e.g. Gz against
+      # zlib 1.3+) and swap in a stub .so with no warning at build OR run time.
+      # Probe every run, cached or not, so a crippled Pike fails loudly here
+      # instead of degrading hover/completion for the modules it silently lost.
+      - name: Assert Pike has the modules the suite depends on
+        run: |
+          for module in Gz Image Parser.HTML; do
+            if ! "$PIKE_BINARY" -e "if (!master()->resolv(\"$module\")) exit(1); exit(0);"; then
+              echo "Pike is missing module '$module' — the build silently dropped it." >&2
+              echo "(Mysql is intentionally excluded via --without-mysql and is not checked.)" >&2
+              exit 1
+            fi
+            echo "Pike has module: $module"
+          done
+
+      # Must precede the test run. `pmp install` puts the introspect module at
+      # `modules/pike_introspect` (gitignored, absent on a bare checkout).
+      # Without it INTROSPECT_PATH never resolves, the worker starts with no
+      # `-M`, and every C-module symbol (Image, Parser.HTML — reachable only
+      # through the runtime resolver) hovers as nothing instead of failing the
+      # test. The `test` job below hit exactly this gap; this job builds the
+      # same Pike but was never given the same module, so its integration
+      # tests ran the degraded path unnoticed.
+      - name: Install pmp
+        run: curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
+
+      - name: Install Pike dependencies
+        run: ~/.pmp/bin/pmp install
+
+      - name: Verify the module the runtime resolver needs is installed
+        run: test -d modules/pike_introspect/src || test -d modules/Introspect/src
+
       - run: bash scripts/test-vscode.sh
 
   test:
@@ -250,6 +290,23 @@ jobs:
         run: |
           echo "PIKE_BINARY=$HOME/.pike/pike/$PIKE_VERSION/bin/pike" >> "$GITHUB_ENV"
           "$HOME/.pike/pike/$PIKE_VERSION/bin/pike" --version
+
+      # A cache hit restores whatever was built the first time this key was
+      # used, including a silently crippled build: Pike's per-module autoconf
+      # probes can fail for reasons unrelated to the library (e.g. Gz against
+      # zlib 1.3+) and swap in a stub .so with no warning at build OR run time.
+      # Probe every run, cached or not, so a crippled Pike fails loudly here
+      # instead of degrading hover/completion for the modules it silently lost.
+      - name: Assert Pike has the modules the suite depends on
+        run: |
+          for module in Gz Image Parser.HTML; do
+            if ! "$PIKE_BINARY" -e "if (!master()->resolv(\"$module\")) exit(1); exit(0);"; then
+              echo "Pike is missing module '$module' — the build silently dropped it." >&2
+              echo "(Mysql is intentionally excluded via --without-mysql and is not checked.)" >&2
+              exit 1
+            fi
+            echo "Pike has module: $module"
+          done
 
       # Must precede the test run. The server shells out to `pike` from PATH
       # (initializationOptions.pikeBinaryPath defaults to "pike") to read
