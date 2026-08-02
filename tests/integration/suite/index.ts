@@ -290,7 +290,7 @@ describe("Pike Language Server — Runtime E2E Features", function () {
 
 describe("Pike Language Server — Parser/Oracle Edge Cases", function () {
   it("handles aggregates, operator identifiers, Unicode identifiers, and CRLF-sensitive positions", async function () {
-    const doc = await openWorkspaceDocument("edge-cases.pike", edgeFixture.replace(/\n/g, "\r\n"));
+    const doc = await openScratchDocument("edge-cases.pike", edgeFixture.replace(/\n/g, "\r\n"));
     const symbols = await waitForDocumentSymbols(doc.uri, (items) => items.some((item) => item.name === "`+"));
     assert.ok(symbols.some((item) => item.name === "`+"), symbolNames(symbols));
 
@@ -348,6 +348,19 @@ async function openWorkspaceDocument(name: string, content: string): Promise<vsc
   assert.ok(folder, "integration tests require a workspace folder");
   const uri = vscode.Uri.joinPath(folder.uri, ".integration-fixtures", name);
   await vscode.workspace.fs.createDirectory(vscode.Uri.joinPath(folder.uri, ".integration-fixtures"));
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
+  const doc = await vscode.workspace.openTextDocument(uri);
+  await vscode.window.showTextDocument(doc, { preview: false });
+  return doc;
+}
+
+// Unlike openWorkspaceDocument, this writes outside the workspace folder
+// (into the OS temp dir) so tests that mutate fixture content — e.g. the
+// CRLF-sensitivity test below — never dirty the committed corpus tree.
+async function openScratchDocument(name: string, content: string): Promise<vscode.TextDocument> {
+  const scratchDir = path.join(os.tmpdir(), "pike-lsp-integration-scratch");
+  const uri = vscode.Uri.file(path.join(scratchDir, name));
+  await vscode.workspace.fs.createDirectory(vscode.Uri.file(scratchDir));
   await vscode.workspace.fs.writeFile(uri, Buffer.from(content, "utf8"));
   const doc = await vscode.workspace.openTextDocument(uri);
   await vscode.window.showTextDocument(doc, { preview: false });

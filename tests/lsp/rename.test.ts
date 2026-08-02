@@ -24,6 +24,7 @@ import {
   prepareRename,
 } from "../../server/src/features/rename";
 import { WorkspaceIndex, ModificationSource } from "../../server/src/features/workspaceIndex";
+import { protectedNames as derivedProtectedNames } from "../../server/src/features/navigationRefactoring";
 
 /** What textDocument/prepareRename returns over the wire. */
 interface PrepareRenameResult {
@@ -808,6 +809,39 @@ describe("prepareRename — stdlib/predef rejection", () => {
     const result = prepareRename(table, 0, 5);
     expect(result).not.toBeNull();
     expect(result!.name).toBe("write");
+  });
+
+  // The server's real derived guard set must contain only names reachable
+  // *bare*: predef builtins and top-level module names. A dotted member's
+  // last segment (predef.Math.e → `e`, predef.Cache.cache → `cache`,
+  // predef.Array.diff → `diff`) shadows nothing at file scope; deriving the
+  // set from every member tail once made those ordinary names refuse rename.
+  describe("derived protected-name set", () => {
+    test("file-scope names colliding only with member tails stay renameable", () => {
+      const src = `int e = 2;\nint cache;\nint diff;`;
+      const tree = parse(src);
+      const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+
+      for (const [line, name] of [[0, "e"], [1, "cache"], [2, "diff"]] as const) {
+        const result = prepareRename(table, line, 4, derivedProtectedNames);
+        expect(result).not.toBeNull();
+        expect(result!.name).toBe(name);
+      }
+    });
+
+    test("a genuine bare global is still guarded", () => {
+      const src = `void write(string msg) {}`;
+      const tree = parse(src);
+      const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+      expect(prepareRename(table, 0, 5, derivedProtectedNames)).toBeNull();
+    });
+
+    test("a top-level module name is still guarded", () => {
+      const src = `int Stdio;`;
+      const tree = parse(src);
+      const table = buildSymbolTable(tree, "file:///test.pike", 1, undefined, src);
+      expect(prepareRename(table, 0, 4, derivedProtectedNames)).toBeNull();
+    });
   });
 
   // Protection applies to file-scope declarations only. These names collide

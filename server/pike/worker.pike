@@ -23,6 +23,50 @@ object make_handler() {
 }
 
 // ---------------------------------------------------------------------------
+// Dependency freshness
+//
+// The worker is a long-lived process and Pike's master caches every module it
+// resolves — programs[] (compiled programs), fc[] (resolved module values),
+// and the per-directory dirnode caches. Without eviction an importer keeps
+// compiling against the first version of a workspace module the master ever
+// saw, no matter what is on disk or in the editor by now.
+// ---------------------------------------------------------------------------
+
+//! Evict every master cache layer that can pin a stale version of `path`.
+void invalidate_module_caches(string path) {
+  object m = master();
+  mixed prog = m->programs[path];
+  if (programp(prog)) catch { m->unregister(prog); };
+  m_delete(m->programs, path);
+  m_delete(m->fc, path);
+
+  string dir = dirname(path);
+  object dn = m->fc[dir];
+  if (objectp(dn) && dn->is_resolv_dirnode)
+    catch { dn->cache = ([]); };
+  if (has_value(m->pike_module_path, dir)) {
+    // Rebuild the dirnode entirely so its file listing is fresh too.
+    catch {
+      m->remove_module_path(dir);
+      m_delete(m->fc, dir);
+      m->add_module_path(dir);
+    };
+  }
+}
+
+//! Register the live editor buffer of a dependency: the master consults
+//! programs[] before reading disk, so a compile of the importer then sees
+//! unsaved content. Compile errors here belong to the dependency's own
+//! diagnose run, so the handler is a throwaway; on failure the on-disk
+//! version stays authoritative.
+void register_dependency_overlay(string path, string source) {
+  object handler = make_handler();
+  program prog;
+  catch { prog = compile_string(source, path, handler); };
+  if (programp(prog)) master()->programs[path] = prog;
+}
+
+// ---------------------------------------------------------------------------
 // Method: diagnose
 // ---------------------------------------------------------------------------
 
@@ -31,20 +75,33 @@ mapping handle_diagnose(mapping params) {
   string filepath = params["file"] || "<buffer>";
   int strict = params["strict"] || 0;
 
-  // Add module paths if provided
+  // Add module paths if provided. Reversed so the first listed path ends up
+  // frontmost in the search order, matching `pike -M` semantics.
   if (params["module_paths"]) {
-    foreach(params["module_paths"], string mp) {
+    foreach(reverse(params["module_paths"]), string mp) {
       add_module_path(mp);
     }
   }
   if (params["include_paths"]) {
-    foreach(params["include_paths"], string ip) {
+    foreach(reverse(params["include_paths"]), string ip) {
       add_include_path(ip);
     }
   }
   if (params["program_paths"]) {
-    foreach(params["program_paths"], string pp) {
+    foreach(reverse(params["program_paths"]), string pp) {
       add_program_path(pp);
+    }
+  }
+
+  // Refresh workspace dependencies, leaf-first: an overlay compiles at
+  // registration time, so its own imports must already be fresh.
+  if (arrayp(params["dependencies"])) {
+    foreach(params["dependencies"], mixed dep) {
+      if (!mappingp(dep) || !stringp(dep["file"]) || !sizeof(dep["file"]))
+        continue;
+      invalidate_module_caches(dep["file"]);
+      if (stringp(dep["source"]))
+        register_dependency_overlay(dep["file"], dep["source"]);
     }
   }
 

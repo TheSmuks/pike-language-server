@@ -18,6 +18,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$SCRIPT_DIR")"
 OUT_DIR="$ROOT/dist-binary"
 ENTRY="$ROOT/server/src/compileEntry.ts"
+# .template-version is the canonical release version; package.json's version
+# is deliberately stale (see bump-version.sh) and must never be stamped here.
+VERSION="$(tr -d '[:space:]' < "$ROOT/.template-version")"
 
 # Bun compile target -> released artifact suffix.
 ALL_TARGETS=(
@@ -50,7 +53,7 @@ build_one() {
   local suffix="${1##*:}"
   local out="$OUT_DIR/pike-language-server-$suffix"
   echo "  building $target -> $(basename "$out")"
-  bun build --compile --target="$target" "$ENTRY" --outfile "$out"
+  bun build --compile --target="$target" --define __PIKE_LSP_VERSION__="\"$VERSION\"" "$ENTRY" --outfile "$out"
   # Bun appends .exe for windows targets; keep the name we advertise.
   if [ "$target" = "bun-windows-x64" ] && [ -f "$out.exe" ]; then
     mv "$out.exe" "$out"

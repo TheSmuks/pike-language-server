@@ -21,6 +21,7 @@ import { parseResourceConfig, type RawResourceSettings } from "./features/resour
 import { getRoxenPaths } from "./features/roxenDetection.js";
 import { DEFAULT_ROXEN_MODE, isRoxenMode, type RoxenMode } from "./features/roxenActivation.js";
 import type { ResourceConfiguration } from "./features/resourceTypes";
+import { SERVER_VERSION } from "./version.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -114,7 +115,10 @@ async function handleInitialize(
   applyDebugOptions(ctx, initOpts);
   applyResourceConfig(ctx, initOpts);
 
-  return buildServerCapabilities();
+  return {
+    ...buildServerCapabilities(),
+    serverInfo: { name: "pike-language-server", version: SERVER_VERSION },
+  };
 }
 
 // ---------------------------------------------------------------------------

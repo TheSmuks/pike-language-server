@@ -249,3 +249,33 @@ export async function waitForIndexed(
     await new Promise((r) => setTimeout(r, 10));
   }
 }
+
+/**
+ * Wait until the workspace index holds a *file entry* for each given URI —
+ * a weaker condition than waitForIndexed's "has a symbol table".
+ *
+ * `index.getFile(uri)` becomes non-undefined as soon as discovery or
+ * dependency-closure indexing reaches a file, which is earlier than
+ * `getSymbolTable(uri)` returns non-null: a file can be present as a stub or
+ * a stale entry awaiting rebuild. Use this when the assertion under test only
+ * needs the file to be *known* to the index (e.g. dependency-closure
+ * discovery), not a populated symbol table. Prefer `waitForIndexed` whenever
+ * the assertion actually reads symbols.
+ */
+export async function waitForFileEntry(
+  server: TestServer,
+  uris: string[],
+  timeoutMs = 5000,
+): Promise<void> {
+  const missing = () => uris.filter((u) => !server.server.index.getFile(u));
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (missing().length === 0) return;
+    if (Date.now() >= deadline) {
+      throw new Error(
+        `waitForFileEntry: timed out after ${timeoutMs}ms; not present: ${missing().join(", ")}`,
+      );
+    }
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}

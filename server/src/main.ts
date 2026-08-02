@@ -25,6 +25,18 @@ if (shouldListen()) {
   // and then exit(1) — see serverLifecycle.ts for details.
   installFailFastHandlers();
 
+  // createConnection() needs a transport flag in argv regardless of which
+  // signal got us here — PIKE_LSP_STDIO=1 alone otherwise throws a fatal
+  // "Connection input stream is not set" before the server ever listens.
+  // Every in-repo caller also passes --stdio, which is why this stayed
+  // latent; the env var is documented as sufficient on its own.
+  const hasTransportFlag = process.argv.some(
+    (a) => a === "--stdio" || a === "--node-ipc" || a.startsWith("--socket="),
+  );
+  if (!hasTransportFlag) {
+    process.argv.push("--stdio");
+  }
+
   const connection = createConnection(ProposedFeatures.all);
 
   const server = createPikeServer(connection);

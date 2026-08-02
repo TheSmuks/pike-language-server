@@ -16,7 +16,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 
 interface HoverResult {
   contents: { kind: string; value: string };
@@ -92,7 +92,7 @@ beforeAll(async () => {
   server.openDoc(undocumentedUri, ROXEN_UNDOCUMENTED);
   server.openDoc(plainUri, PLAIN_PIKE);
   // didOpen is a notification; give the server a turn to index both documents.
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  await waitForFileEntry(server, [roxenUri, undocumentedUri, plainUri]);
 });
 
 afterAll(async () => {

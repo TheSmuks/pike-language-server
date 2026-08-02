@@ -19,7 +19,7 @@ import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createTestServer, type TestServer } from "./helpers";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 
 const BASE_SRC = [
   "class Base {",
@@ -69,7 +69,7 @@ describe("T046: full mode — cross-file definition via background indexing (US2
 
     ws.openDoc(childUri, CHILD_SRC);
     // Allow background indexing to complete.
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await waitForFileEntry(ws, [childUri, baseUri]);
   });
 
   afterAll(async () => {

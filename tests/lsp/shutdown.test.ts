@@ -25,7 +25,7 @@
 
 import { describe, test, expect, afterAll, beforeAll } from "bun:test";
 import { PikeWorker } from "../../server/src/features/pikeWorker";
-import { createTestServer, createSilentStream, type TestServer } from "./helpers";
+import { createTestServer, createSilentStream, waitForIndexed, type TestServer } from "./helpers";
 import { pikeAvailable } from "../helpers/pikeAvailable";
 import {
   StreamMessageReader,
@@ -108,8 +108,14 @@ describe.skipIf(!pikeAvailable)("PikeWorker stop: SIGKILL escalation", () => {
     // The SIGKILL timer fires after 3s as a safety net.
     worker.stop();
 
-    // Pike should die from SIGTERM well before the 3s SIGKILL timer.
-    await new Promise((r) => setTimeout(r, 500));
+    // Poll rather than sleep a fixed interval: SIGTERM death is a race
+    // against machine load, and a blind 500ms sleep either wastes time on a
+    // fast machine or flakes on a slow one. Pike must die well before the 3s
+    // SIGKILL timer, so give it that same budget here.
+    const deadline = Date.now() + 2_500;
+    while (worker.isAlive && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
     expect(worker.isAlive).toBe(false);
   });
 
@@ -280,7 +286,7 @@ describe("Server onShutdown: full LSP shutdown sequence", () => {
 
     // Open a document to populate the index.
     ts.openDoc("file:///test/shutdown-full.pike", "int x = 1;");
-    await new Promise((r) => setTimeout(r, 100));
+    await waitForIndexed(ts, ["file:///test/shutdown-full.pike"]);
 
     indexSizeBefore = ts.server.index.size;
 

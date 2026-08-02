@@ -539,7 +539,14 @@ def check_markers():
 def skip_has_reason(line: str) -> bool:
     lowered = line.lower()
     reason_words = ["because", "reason", "requires", "needs", "absent", "missing", "runtime", "external", "flaky"]
-    return "—" in line or "//" in line and any(word in lowered for word in reason_words) or any(word in lowered for word in reason_words)
+    # `and` binds tighter than `or` in Python, so the un-parenthesized form
+    # `A or B and C or D` is `A or (B and C) or D` — with D itself being
+    # `any(reason word anywhere in the 2-line window)`, that trailing clause
+    # subsumed everything before it. A skip's own name/description need only
+    # contain an incidental word like "runtime" or "missing" to count as
+    # "documented", with no actual explanation required. The intent is: an
+    # em-dash aside, or a `//` comment that itself carries a reason word.
+    return "—" in line or ("//" in line and any(word in lowered for word in reason_words))
 
 
 def check_skips():

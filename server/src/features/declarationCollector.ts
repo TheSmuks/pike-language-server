@@ -23,6 +23,7 @@ import {
   collectSwitchStatement,
   collectCatchExpr,
   collectSimpleDecl,
+  collectModifiers,
 } from './declarationBlockCollectors';
 import { collectPreprocDefine, collectPreprocInclude } from './preprocMacros';
 
@@ -226,6 +227,7 @@ function collectClassDecl(node: Node, state: BuildState): void {
     nameRange: toRange(nameNode),
     range: toRange(node),
     scopeId,
+    modifiers: collectModifiers(node),
   });
 
   // Enter class scope
@@ -312,6 +314,7 @@ function collectFunctionDecl(node: Node, state: BuildState): void {
       declaredType: property && returnType?.text === 'void'
         ? firstParameterType(node)
         : returnType?.text,
+      modifiers: collectModifiers(node),
     });
   }
 
