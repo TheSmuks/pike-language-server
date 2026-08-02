@@ -27,6 +27,26 @@ export function buildTruncationNotice(total: number, maxProblems: number): Diagn
   };
 }
 
+/** Placeholder shown while a slow diagnose is still running. */
+export function buildStaleDiagnostic(): Diagnostic {
+  return {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    severity: DiagnosticSeverity.Information,
+    source: "pike-lsp",
+    message: "Diagnostics are being updated…",
+  };
+}
+
+/** Shown when the Pike worker timed out compiling the file. */
+export function buildTimeoutDiagnostic(): Diagnostic {
+  return {
+    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+    severity: DiagnosticSeverity.Warning,
+    source: "pike-lsp",
+    message: "Compilation timed out, will retry on next save.",
+  };
+}
+
 import type { PikeDiagnostic } from "./pikeWorker";
 import type { Tree } from "../parser";
 
@@ -72,30 +92,38 @@ export function mergeDiagnostics(
   });
 
   const result: Diagnostic[] = [...suppressedParseDiags, ...suppressedLintDiags];
-
-  for (const pd of pikeDiags) {
-    const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
-    const character = tree ? messageAwareColumn(tree, pd.line, pd.message, lines) : 0;
-
-    let message = pd.message;
-    if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
-    if (pd.actual_type) message += `\nGot: ${pd.actual_type}`;
-
-    result.push({
-      range: {
-        start: { line, character },
-        end: { line, character },
-      },
-      severity: pd.severity === "error"
-        ? DiagnosticSeverity.Error
-        : DiagnosticSeverity.Warning,
-      source: "pike",
-      message,
-      code: pd.code ?? `P2${String(pd.line).padStart(4, '0')}`,
-    });
-  }
-
+  for (const pd of pikeDiags) result.push(buildPikeDiagnostic(pd, tree, lines));
   return result;
+}
+
+/** Build one LSP Diagnostic from a raw Pike compiler diagnostic. */
+function buildPikeDiagnostic(pd: PikeDiagnostic, tree?: Tree, lines?: string[]): Diagnostic {
+  const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
+  // NOTE: messageAwareRange/lineToColumn expect an already-0-based line.
+  // Passing the raw (1-based) pd.line here would look up the wrong source
+  // line entirely — a real off-by-one that was masked in earlier tests
+  // because the wrong line often happened to share the same indentation
+  // (and thus the same fallback column) as the right one.
+  const { start, end } = tree
+    ? messageAwareRange(tree, line, pd.message, lines)
+    : { start: 0, end: 0 };
+
+  let message = pd.message;
+  if (pd.expected_type) message += `\nExpected: ${pd.expected_type}`;
+  if (pd.actual_type) message += `\nGot: ${pd.actual_type}`;
+
+  return {
+    range: {
+      start: { line, character: start },
+      end: { line, character: end },
+    },
+    severity: pd.severity === "error"
+      ? DiagnosticSeverity.Error
+      : DiagnosticSeverity.Warning,
+    source: "pike",
+    message,
+    code: pd.code ?? `P2${String(pd.line).padStart(4, '0')}`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -113,60 +141,93 @@ export function computeContentHash(source: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// messageAwareColumn
+// messageAwareRange
 // ---------------------------------------------------------------------------
 
 /**
  * Common Pike error message patterns that embed identifier names.
  * Each pattern captures a specific identifier that the diagnostic refers to.
  * Ordered from most specific to least specific.
+ *
+ * These are verified against a live Pike 8.0 compiler (per the
+ * pike-is-the-oracle rule) rather than guessed from documentation — several
+ * previously-guessed shapes here ("Class not found: 'X'.", "Cannot call
+ * non-function in X.", "No such index: 'X'.") never match real Pike output
+ * and have been replaced with the actual wording.
  */
 const PIKE_MSG_PATTERNS: Array<{ re: RegExp; group: number }> = [
-  // "Undefined identifier: bark."
-  { re: /Undefined identifier:\s+(\w+)/, group: 1 },
-  // "Too few arguments to bark."
+  // "Undefined identifier compute_greeting." — the common case.
+  // Also matches the quoted form used in DiagnosticsTests.pike fixtures:
+  // "Undefined identifier 'x'."
+  { re: /Undefined identifier:?\s+'?(\w+)'?/, group: 1 },
+  // "Index 'NoSuchThing' not present in module Stdio."
+  { re: /Index '(\w+)' not present/, group: 1 },
+  // "No such variable (nosuchmember) in object."
+  { re: /No such variable \((\w+)\)/, group: 1 },
+  // "Attempt to call a non function value gvar." (no identifier is present
+  // when the callee is a bare local, e.g. "...value local variable." — the
+  // trailing `\.` anchor rejects that two-word case since "local" isn't
+  // immediately followed by a period).
+  { re: /Attempt to call a non function value (\w+)\./, group: 1 },
+  // "Too few arguments to bark (got 1)." / "Too many arguments to bark."
   { re: /Too (?:few|many) arguments to (\w+)/, group: 1 },
-  // "Bad argument 1 to bark()."
+  // "Bad argument 1 to bark."
   { re: /Bad argument \d+ to (\w+)/, group: 1 },
-  // "Cannot call non-function in foo()."
-  { re: /Cannot call non-function in (\w+)/, group: 1 },
-  // "Class not found: 'MissingClass'."
-  { re: /Class not found:\s+'(\w+)'/, group: 1 },
-  // "No such index: 'bark'."
-  { re: /No such (?:index|member):\s+'(\w+)'/, group: 1 },
-  // "No such symbol: bark."
-  { re: /No such symbol:\s+(\w+)/, group: 1 },
-  // "Cannot index TYPE with..." — no useful identifier for column
-  // Generic fallback: capture the last quoted or backtick'd word
+  // Generic fallback: capture the last quoted or backtick'd word.
   { re: /'(\w+)'/, group: 1 },
 ];
 
+/** A half-open [start, end) column range on a single diagnostic line. */
+export interface ColumnRange {
+  start: number;
+  end: number;
+}
+
 /**
- * Find the column of the specific token referenced in a Pike error message.
+ * Find the range of the specific token referenced in a Pike error message.
  *
  * Pike diagnostics only report line numbers. When a parse tree is available,
  * this function extracts the identifier from the message text and locates it
- * on the diagnostic line using tree-sitter, providing column-level precision.
+ * on the diagnostic line, spanning the full identifier (not a zero-width
+ * point) so the client can underline the actual symbol Pike is complaining
+ * about.
  *
- * Falls back to `lineToColumn` (first meaningful token on the line) when the
- * message doesn't contain an identifiable token or the token isn't found on
- * the line.
+ * The tree-sitter whole-node match is tried first: it compares a node's
+ * *entire* text against the identifier, so "foo" can never match inside
+ * "foobar" the way a plain substring search could. The text search is only
+ * a fallback for tokens that don't correspond to a single tree-sitter leaf
+ * (e.g. inside an ERROR recovery region) — and even then it is identifier
+ * -boundary-aware for the same reason.
+ *
+ * Falls back to a zero-width range at `lineToColumn` (first meaningful token
+ * on the line) when the message doesn't contain an identifiable token or the
+ * token isn't found on the line at all.
  */
-export function messageAwareColumn(
+export function messageAwareRange(
   tree: Tree,
   line: number,
   message: string,
   lines?: string[],
-): number {
+): ColumnRange {
   const lspLine = Math.max(0, line);
   const identifier = extractIdentifier(message);
-  if (!identifier) return lineToColumn(tree, line, lines);
+  if (!identifier) {
+    const col = lineToColumn(tree, line, lines);
+    return { start: col, end: col };
+  }
 
-  const idx = lines?.[lspLine]?.indexOf(identifier);
-  if (idx !== undefined && idx >= 0) return idx;
+  const found = findIdentifierColumn(tree, lspLine, identifier);
+  if (found >= 0) {
+    return { start: found, end: found + identifier.length };
+  }
 
-  const result = findIdentifierColumn(tree, lspLine, identifier);
-  return result >= 0 ? result : lineToColumn(tree, line, lines);
+  const idx = lines?.[lspLine] !== undefined ? indexOfWholeIdentifier(lines[lspLine], identifier) : -1;
+  if (idx >= 0) {
+    return { start: idx, end: idx + identifier.length };
+  }
+
+  const col = lineToColumn(tree, line, lines);
+  return { start: col, end: col };
 }
 
 function extractIdentifier(message: string): string | null {
@@ -175,6 +236,18 @@ function extractIdentifier(message: string): string | null {
     if (match && match[group]) return match[group];
   }
   return null;
+}
+
+/**
+ * Find `identifier` in `text` at an identifier boundary — not preceded or
+ * followed by another Pike identifier character ([A-Za-z0-9_]). Without
+ * this, searching for "foo" on a line containing "foobar" before the real
+ * "foo" would highlight the wrong (inner) substring.
+ */
+function indexOfWholeIdentifier(text: string, identifier: string): number {
+  const escaped = identifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`\\b${escaped}\\b`).exec(text);
+  return match ? match.index : -1;
 }
 
 function findIdentifierColumn(tree: Tree, lspLine: number, identifier: string): number {
