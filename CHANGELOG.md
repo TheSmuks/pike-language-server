@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The test pinning editing to one index write per keystroke could fail on a loaded machine.** It installed its counter as soon as the files reported indexed, but that means the index entries exist, not that the open has finished: `didOpen` walks the dependency closure fire-and-forget and schedules its repair only once that walk completes, which under contention lands after the measurement had already begun. What the counter caught was the open's own work, attributed to the keystroke that happened to follow it — the repair itself is open-only, both of its schedule sites gated on the open event, so the behaviour being asserted was never actually broken. The test now waits for the index to go quiet before measuring; the assertion is unchanged. Pinning the suite to 2 of 16 cores reproduced the failure on the first run, where an unloaded machine had hidden it for six.
+
 ## [0.8.58] — 2026-08-02
 
 ### Fixed
