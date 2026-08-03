@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.64] — 2026-08-03
+
+### Fixed
+
+- **The absorbed-statement recovery leaked a parse tree on every keystroke.** It parses the absorbed slice without a uri, deliberately, so it cannot disturb the file's incremental-parse cache — which also means the cache never owns the resulting tree. web-tree-sitter trees hold WASM memory that must be released explicitly (the cache does it in `onEvict`, `withBorrowedTree` does it by hand), and this one never was. It now owns its tree and frees it.
+- **Verified in a real editor session, not just in tests.** The recovery is now driven end-to-end over stdio the way an editor drives it — open a file, send a `didChange` that deletes a `;`, then query the line below. On the previous build go-to-definition answered nothing, completion did not offer the declaration and hover was empty; it now answers the declaration, offers it, and reports `int bravo = 2`. Protocol-level regression tests cover all three, because the symbol-table tests alone would pass even if the recovery never reached a request handler.
+
 ## [0.8.63] — 2026-08-03
 
 ### Fixed
