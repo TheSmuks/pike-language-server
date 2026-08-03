@@ -18,6 +18,7 @@ import {
   TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { namesRoxenRuntime } from "./roxenActivation";
 
 import { PikeWorker } from "./pikeWorker.js";
 import { isPikeUnavailable } from "./pikeWorkerTypes";
@@ -325,7 +326,11 @@ export class DiagnosticManager {
     // the code: one 709-line module produced 75 of them, led by "Undefined
     // identifier Roxen." Parse and lint diagnostics still run, so a genuine
     // syntax error is still reported.
-    if (this.isRoxenDocument?.(uri)) {
+    // Either a Roxen file by activation, or any file naming Roxen's runtime:
+    // both are files the stock binary cannot check. The second is a weaker
+    // claim on purpose — it decides nothing about hover or completion, only
+    // that asking the compiler is pointless.
+    if (this.isRoxenDocument?.(uri) || namesRoxenRuntime(source)) {
       this.publishParseAndLintDiagnostics(uri, source, doc);
       return;
     }
