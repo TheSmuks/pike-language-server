@@ -349,6 +349,9 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
     if (child.type === 'parameter') {
       const nameNode = child.childForFieldName('name');
       if (nameNode) {
+        // Variadic parameters parse as `parameter -> [type, ..., identifier]`;
+        // the marker is a child node, not part of the type.
+        const varargs = child.children.some(c => c.type === '...');
         addDeclaration(state, {
           name: nameNode.text,
           kind: 'parameter',
@@ -356,9 +359,9 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
           range: toRange(child),
           scopeId,
           declaredType: extractTypeText(child),
+          ...(varargs ? { varargs: true } : {}),
         });
       }
     }
-    // Variadic parameters: `string ... parts` — the name is also in a parameter node
   }
 }

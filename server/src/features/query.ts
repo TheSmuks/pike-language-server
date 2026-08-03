@@ -151,7 +151,7 @@ function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declarati
  * Find a declaration by name that is visible at the given line.
  * Searches scopes from innermost to outermost.
  */
-function findDeclInScopeAt(
+export function findDeclInScopeAt(
   table: SymbolTable,
   name: string,
   line: number,
