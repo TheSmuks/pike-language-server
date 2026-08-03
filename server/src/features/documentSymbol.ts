@@ -184,6 +184,12 @@ function symbolsFromTypedefDecl(node: Node): DocumentSymbol[] {
 
 type DeclHandler = (node: Node, parentKind?: string) => DocumentSymbol[];
 
+// No `preproc_define` handler, deliberately. Macros are gone by compile time,
+// so Pike's own introspection does not report them as file symbols, and the
+// oracle cross-check in tests/lsp/documentSymbol.test.ts asserts that every
+// top-level LSP symbol exists in the Pike snapshot. `#define LOG` can also
+// appear once per `#ifdef` branch, which would put duplicate siblings in the
+// outline. Completeness sweeps will flag macros as "missing" — they are not.
 const DECL_HANDLERS: Record<string, DeclHandler> = {
   class_decl: symbolsFromClassDecl,
   function_decl: symbolsFromFunctionDecl,
@@ -196,6 +202,22 @@ const DECL_HANDLERS: Record<string, DeclHandler> = {
   inherit_decl: symbolsFromInheritDecl,
   typedef_decl: symbolsFromTypedefDecl,
 };
+
+/**
+ * The declaration inside a `declaration` wrapper, skipping leading modifiers.
+ *
+ * Returns null when the wrapper holds nothing this module knows how to emit,
+ * so the caller's existing "unknown types are silently ignored" behaviour is
+ * unchanged for genuinely unknown shapes.
+ */
+function declNodeOf(wrapper: Node): Node | null {
+  for (const child of wrapper.children) {
+    if (child.isError || child.isMissing) continue;
+    if (child.type === 'modifier' || child.type === 'modifiers') continue;
+    return child;
+  }
+  return null;
+}
 
 /**
  * Walk children of a container node (program, class_body, etc.) and collect
@@ -213,9 +235,24 @@ function collectSymbols(container: Node, parentKind: string | undefined): Docume
     // Skip ERROR / missing nodes
     if (child.isError || child.isMissing) continue;
 
-    // Unwrap `declaration` wrapper if present
-    const decl = child.type === 'declaration' ? child.firstChild : child;
+    // Unwrap the `declaration` wrapper if present.
+    //
+    // Taking firstChild is not enough: modifiers are siblings inside the
+    // wrapper, so `protected int f()` parses as
+    // `declaration -> [modifier, function_decl]` and firstChild is the
+    // modifier. No handler matched it, so EVERY `protected`, `private`,
+    // `static` or `public` declaration was silently dropped from the outline —
+    // which in idiomatic Pike is most of the file.
+    const decl = child.type === 'declaration' ? declNodeOf(child) : child;
     if (!decl || decl.isError || decl.isMissing) continue;
+
+    // `private { ... }` applies one modifier to a whole group. The block is not
+    // a declaration itself — its children are — so flatten it into the same
+    // level rather than dropping every declaration inside it.
+    if (decl.type === 'modifier_block') {
+      symbols.push(...collectSymbols(decl, parentKind));
+      continue;
+    }
 
     const handler = DECL_HANDLERS[decl.type];
     if (handler) {

@@ -37,6 +37,11 @@ export const DECL_KIND_MAP: Record<string, DeclKind> = {
   local_function_decl: 'function',
   variable_decl: 'variable',
   local_declaration: 'variable',
+  // `if (int last_ts = seen[hash])` — Pike lets a condition declare a variable
+  // that is in scope for the body. The block collectors already open a scope
+  // for it; without this the scope stayed empty, so the name resolved to
+  // nothing from its own declaration and from every use in the body.
+  cond_decl: 'variable',
   constant_decl: 'constant',
   enum_decl: 'enum',
   enum_member: 'enum_member',
