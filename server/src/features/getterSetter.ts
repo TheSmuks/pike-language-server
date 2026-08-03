@@ -14,7 +14,7 @@
 
 import type { CodeAction, CodeActionParams, TextEdit } from "vscode-languageserver/node";
 import { parse, isParserReady } from "../parser";
-import { buildSymbolTable, type Declaration, type SymbolTable } from "./symbolTable";
+import { buildSymbolTable, isWrittenInFile, type Declaration, type SymbolTable } from "./symbolTable";
 import { CodeActionKindRefactorRewrite } from "../util/codeActionKinds.js";
 
 // ---------------------------------------------------------------------------
@@ -176,6 +176,9 @@ function findVariableAtPosition(
 ): Declaration | null {
   for (const decl of table.declarations) {
     if (decl.kind !== "variable") continue;
+    // Clones from an inherited or #include'd file carry that file's
+    // coordinates and cannot answer a position query about this one.
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.nameRange.start.line === line &&
         decl.nameRange.start.character <= character &&
         decl.nameRange.end.character > character) {
@@ -201,7 +204,10 @@ function findParentClass(table: SymbolTable, varDecl: Declaration): Declaration 
   // Class declarations live in the file scope, class members live in the class scope.
   // The class declaration's range *encloses* the class scope's range (decl starts at
   // "class" keyword, scope starts at the body), so we check d.range contains varScope.range.
-  return table.declarations.find(d => d.kind === "class" && containsRange(d.range, varScope.range)) ?? null;
+  return table.declarations.find(
+    d => d.kind === "class" && isWrittenInFile(table, d) &&
+      containsRange(d.range, varScope.range),
+  ) ?? null;
 }
 
 function generateGetter(varName: string, varType: string, indent: string): string {

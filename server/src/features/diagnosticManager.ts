@@ -18,6 +18,7 @@ import {
   TextDocuments,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
+import { namesRoxenRuntime } from "./roxenActivation";
 
 import { PikeWorker } from "./pikeWorker.js";
 import { isPikeUnavailable } from "./pikeWorkerTypes";
@@ -44,38 +45,8 @@ export {
   lineToColumn,
 } from "./diagnosticUtils";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type DiagnosticMode = "realtime" | "saveOnly" | "off";
-
-export interface DiagnosticManagerOptions {
-  worker: PikeWorker;
-  documents: TextDocuments<TextDocument>;
-  connection: Connection;
-  index: WorkspaceIndex;
-  /** Pike cache (shared with server.ts for LRU eviction). */
-  pikeCache: { get(key: string): PikeCacheEntry | undefined; delete(key: string): boolean };
-  /** Function to update the LRU cache. */
-  cacheSet: (uri: string, entry: PikeCacheEntry) => void;
-  /** Debounce interval in ms. Default: 500. */
-  debounceMs?: number;
-  /** Time before staleness warning in ms. Default: 2000. */
-  staleMs?: number;
-  /** Diagnostic mode. Default: "realtime". */
-  mode?: DiagnosticMode;
-  /** Maximum number of diagnostics to publish per file. Default: 100. */
-  maxNumberOfProblems?: number;
-  /** Enables verbose internal telemetry logs for race/staleness debugging. */
-  debugTelemetry?: boolean;
-}
-
-export interface PikeCacheEntry {
-  contentHash: string;
-  diagnostics: PikeDiagnostic[];
-  timestamp: number;
-}
+export type { DiagnosticMode, DiagnosticManagerOptions, PikeCacheEntry } from "./diagnosticManagerTypes";
+import type { DiagnosticMode, DiagnosticManagerOptions, PikeCacheEntry } from "./diagnosticManagerTypes";
 
 // --------------------------------------------------------------------------
 // DiagnosticManager
@@ -93,6 +64,7 @@ export class DiagnosticManager {
   private mode: DiagnosticMode;
   private maxProblems: number;
   private debugTelemetry: boolean;
+  private readonly isRoxenDocument?: (uri: string) => boolean;
   private disposed = false;
 
   private readonly fileStates = new Map<string, FileDiagnosticState>();
@@ -109,6 +81,7 @@ export class DiagnosticManager {
     this.mode = options.mode ?? "realtime";
     this.maxProblems = options.maxNumberOfProblems ?? 100;
     this.debugTelemetry = options.debugTelemetry ?? false;
+    this.isRoxenDocument = options.isRoxenDocument;
   }
 
   setDebugTelemetry(enabled: boolean): void {
@@ -311,6 +284,22 @@ export class DiagnosticManager {
       return;
     }
 
+    // A Roxen file cannot be compiled by the stock pike binary: Roxen's
+    // runtime — `Roxen`, `RXML`, `Variable`, `inherit "module"` — exists only
+    // inside a running Roxen server, and Roxen 6.1 does not even run on Pike
+    // 8.0. Every resulting error is noise about the environment rather than
+    // the code: one 709-line module produced 75 of them, led by "Undefined
+    // identifier Roxen." Parse and lint diagnostics still run, so a genuine
+    // syntax error is still reported.
+    // Either a Roxen file by activation, or any file naming Roxen's runtime:
+    // both are files the stock binary cannot check. The second is a weaker
+    // claim on purpose — it decides nothing about hover or completion, only
+    // that asking the compiler is pointless.
+    if (this.isRoxenDocument?.(uri) || namesRoxenRuntime(source)) {
+      this.publishParseAndLintDiagnostics(uri, source, doc);
+      return;
+    }
+
     const state = this.getOrCreateState(uri);
     state.inFlight = true;
     state.lastDiagnostics = [];
@@ -321,19 +310,7 @@ export class DiagnosticManager {
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
-      const result = await this.requestDiagnose(uri, source);
-      this.clearStaleTimer(state);
-
-      if (result.timedOut) {
-        const { diagnostics: parseDiags } = this.safeParse(source, uri);
-        this.publishDiagnostics(uri, [...parseDiags, buildTimeoutDiagnostic()], doc.version);
-        return;
-      }
-
-      this.cacheSet(uri, { contentHash, diagnostics: result.diagnostics, timestamp: Date.now() });
-      this.publishParseAndLintDiagnostics(uri, source, doc, result.diagnostics);
-      this.propagateToDependents(uri);
-
+      await this.diagnoseWithPike(uri, source, doc, contentHash, state);
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
@@ -346,6 +323,28 @@ export class DiagnosticManager {
       state.inFlight = false;
       state.propagationChain = null;
     }
+  }
+
+  /** Ask the worker, then publish — the body of a non-Roxen diagnose. */
+  private async diagnoseWithPike(
+    uri: string,
+    source: string,
+    doc: { version: number },
+    contentHash: string,
+    state: FileDiagnosticState,
+  ): Promise<void> {
+    const result = await this.requestDiagnose(uri, source);
+    this.clearStaleTimer(state);
+
+    if (result.timedOut) {
+      const { diagnostics: parseDiags } = this.safeParse(source, uri);
+      this.publishDiagnostics(uri, [...parseDiags, buildTimeoutDiagnostic()], doc.version);
+      return;
+    }
+
+    this.cacheSet(uri, { contentHash, diagnostics: result.diagnostics, timestamp: Date.now() });
+    this.publishParseAndLintDiagnostics(uri, source, doc, result.diagnostics);
+    this.propagateToDependents(uri);
   }
 
   // -----------------------------------------------------------------------

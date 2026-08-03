@@ -76,6 +76,14 @@ function symbolsFromFunctionDecl(node: Node, parentKind?: string): DocumentSymbo
 function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
+
+  // `object handler = class { ... }();` — a class written as an expression.
+  // Its members belong to the variable that holds it, not to the file, and
+  // without this the outline showed only `handler` and nothing inside it.
+  // Only meaningful when the declaration names one thing.
+  const anonBody = names.length === 1 ? findAnonClassBody(node) : null;
+  const children = anonBody ? collectSymbols(anonBody, 'class') : [];
+
   return names.map((nameNode) =>
     DocumentSymbol.create(
       nameNode.text,
@@ -83,8 +91,33 @@ function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbo
       parentKind === 'class' ? SymbolKind.Field : SymbolKind.Variable,
       toRange(node),
       toRange(nameNode),
+      children.length > 0 ? children : undefined,
     ),
   );
+}
+
+/**
+ * The `class_body` of an `anon_class` initialising this declaration, if any.
+ *
+ * The initializer sits under a cascade of expression nodes, so this searches
+ * rather than indexes — but it stops at the first `anon_class` and never enters
+ * a nested one, so a class inside a class inside an initializer is described by
+ * its own outer entry rather than flattened into this one.
+ */
+function findAnonClassBody(node: Node): Node | null {
+  const stack: Node[] = [...node.children];
+  // Bounded: the subtree is finite and every node is pushed at most once.
+  while (stack.length > 0) {
+    const current = stack.shift();
+    if (!current) break;
+    if (current.type === 'anon_class') {
+      return current.childForFieldName('body')
+        ?? current.children.find(c => c.type === 'class_body')
+        ?? null;
+    }
+    stack.push(...current.children);
+  }
+  return null;
 }
 
 function symbolsFromConstantDecl(node: Node): DocumentSymbol[] {
@@ -184,6 +217,12 @@ function symbolsFromTypedefDecl(node: Node): DocumentSymbol[] {
 
 type DeclHandler = (node: Node, parentKind?: string) => DocumentSymbol[];
 
+// No `preproc_define` handler, deliberately. Macros are gone by compile time,
+// so Pike's own introspection does not report them as file symbols, and the
+// oracle cross-check in tests/lsp/documentSymbol.test.ts asserts that every
+// top-level LSP symbol exists in the Pike snapshot. `#define LOG` can also
+// appear once per `#ifdef` branch, which would put duplicate siblings in the
+// outline. Completeness sweeps will flag macros as "missing" — they are not.
 const DECL_HANDLERS: Record<string, DeclHandler> = {
   class_decl: symbolsFromClassDecl,
   function_decl: symbolsFromFunctionDecl,
@@ -196,6 +235,22 @@ const DECL_HANDLERS: Record<string, DeclHandler> = {
   inherit_decl: symbolsFromInheritDecl,
   typedef_decl: symbolsFromTypedefDecl,
 };
+
+/**
+ * The declaration inside a `declaration` wrapper, skipping leading modifiers.
+ *
+ * Returns null when the wrapper holds nothing this module knows how to emit,
+ * so the caller's existing "unknown types are silently ignored" behaviour is
+ * unchanged for genuinely unknown shapes.
+ */
+function declNodeOf(wrapper: Node): Node | null {
+  for (const child of wrapper.children) {
+    if (child.isError || child.isMissing) continue;
+    if (child.type === 'modifier' || child.type === 'modifiers') continue;
+    return child;
+  }
+  return null;
+}
 
 /**
  * Walk children of a container node (program, class_body, etc.) and collect
@@ -213,9 +268,24 @@ function collectSymbols(container: Node, parentKind: string | undefined): Docume
     // Skip ERROR / missing nodes
     if (child.isError || child.isMissing) continue;
 
-    // Unwrap `declaration` wrapper if present
-    const decl = child.type === 'declaration' ? child.firstChild : child;
+    // Unwrap the `declaration` wrapper if present.
+    //
+    // Taking firstChild is not enough: modifiers are siblings inside the
+    // wrapper, so `protected int f()` parses as
+    // `declaration -> [modifier, function_decl]` and firstChild is the
+    // modifier. No handler matched it, so EVERY `protected`, `private`,
+    // `static` or `public` declaration was silently dropped from the outline —
+    // which in idiomatic Pike is most of the file.
+    const decl = child.type === 'declaration' ? declNodeOf(child) : child;
     if (!decl || decl.isError || decl.isMissing) continue;
+
+    // `private { ... }` applies one modifier to a whole group. The block is not
+    // a declaration itself — its children are — so flatten it into the same
+    // level rather than dropping every declaration inside it.
+    if (decl.type === 'modifier_block') {
+      symbols.push(...collectSymbols(decl, parentKind));
+      continue;
+    }
 
     const handler = DECL_HANDLERS[decl.type];
     if (handler) {

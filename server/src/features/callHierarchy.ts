@@ -22,6 +22,7 @@ import type {
   CallHierarchyOutgoingCall,
 } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration, Reference } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 // ---------------------------------------------------------------------------
@@ -53,9 +54,12 @@ function findEnclosingFunction(
   line: number,
   character: number,
 ): Declaration | null {
-  // First check if cursor is directly on a function/method declaration name
+  // First check if cursor is directly on a function/method declaration name.
+  // Declarations cloned from an inherited or #include'd file carry that file's
+  // coordinates, so they can never answer a position query about this one.
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.nameRange.start.line <= line &&
         decl.nameRange.end.line >= line &&
         decl.nameRange.start.character <= character &&
@@ -77,6 +81,7 @@ function findEnclosingFunction(
 
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
+    if (!isWrittenInFile(table, decl)) continue;
     const startLine = decl.range.start.line;
     const endLine = decl.range.end.line;
     if (startLine <= line && endLine >= line) {
@@ -223,7 +228,15 @@ function collectCallExpressions(
     if (child.endPosition.row < startLine) continue;
     if (child.startPosition.row > endLine) break;
 
-    if (child.type === "postfix_expr" && isCallPostfixExpr(child)) {
+    // Overlap is not containment. A call that STARTS before the function and
+    // ENDS after it is a call the function is nested inside — an anonymous
+    // class or lambda passed as an argument — not a call the function makes.
+    // Reporting it put the enclosing expression in the callee list.
+    const containedInFunction =
+      child.startPosition.row >= startLine && child.endPosition.row <= endLine;
+
+    if (containedInFunction &&
+        child.type === "postfix_expr" && isCallPostfixExpr(child)) {
       tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen);
     }
 
@@ -411,8 +424,12 @@ function resolveCallee(
   fromLine: number,
   workspaceIndex: WorkspaceIndex,
 ): { item: CallHierarchyItem; decl: Declaration; uri: string } | null {
-  // Search in local scope first
+  // Search in local scope first. A clone from an inherited or #include'd file
+  // matches by name but its ranges belong to that file — pairing them with
+  // `uri` would point the call hierarchy at an arbitrary line here. The
+  // cross-file sweep below finds the real declaration in its own file.
   for (const decl of table.declarations) {
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
       return {
         item: declToCallHierarchyItem(decl, uri),
@@ -422,15 +439,22 @@ function resolveCallee(
     }
   }
 
-  // Search cross-file via workspace index
+  // Search cross-file via workspace index.
+  //
+  // A table also holds clones merged from the files it inherits and includes,
+  // and a clone's ranges are coordinates in the file it came FROM. Pairing one
+  // with entry.uri pointed the item at whatever text happens to sit at those
+  // coordinates in the wrong file. `decl.sourceUri` names the real home; the
+  // local loop above already guards this way.
   for (const entry of workspaceIndex.getAllEntries()) {
     if (!entry.symbolTable) continue;
     for (const decl of entry.symbolTable.declarations) {
       if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
+        const declUri = decl.sourceUri ?? entry.uri;
         return {
-          item: declToCallHierarchyItem(decl, entry.uri),
+          item: declToCallHierarchyItem(decl, declUri),
           decl,
-          uri: entry.uri,
+          uri: declUri,
         };
       }
     }

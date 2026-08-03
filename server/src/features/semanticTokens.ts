@@ -16,6 +16,8 @@
  */
 
 import type { Declaration, SymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
+import { identifierPrefixLength, dropDuplicateSpans } from "./semanticTokenSpans";
 
 // ---------------------------------------------------------------------------
 // Token type legend
@@ -219,6 +221,10 @@ export function produceSemanticTokens(
 
   // --- Declarations ---
   for (const decl of table.declarations) {
+    // Declarations cloned from an inherited or #include'd file carry that
+    // file's coordinates; painting them here colours arbitrary text, and can
+    // name a line this document does not have.
+    if (!isWrittenInFile(table, decl)) continue;
     const typeId = resolveDeclTokenType(decl, table);
     if (typeId === undefined) continue;
 
@@ -233,8 +239,11 @@ export function produceSemanticTokens(
       isClassScope: isInClassScope(decl, table) && decl.kind !== 'class',
     });
 
-    // Name length from nameRange
-    const length = decl.nameRange.end.character - decl.nameRange.start.character;
+    // Name length from nameRange, clamped to the identifier: a dotted inherit
+    // path (`inherit RXML.TagSet;`) has a nameRange spanning the `.`, and one
+    // token over a whole path repaints the separator as part of a name.
+    const rangeLength = decl.nameRange.end.character - decl.nameRange.start.character;
+    const length = Math.min(rangeLength, identifierPrefixLength(decl.name) || rangeLength);
     if (length <= 0) continue;
 
     tokens.push({
@@ -248,6 +257,13 @@ export function produceSemanticTokens(
 
   // --- References ---
   for (const ref of table.references) {
+    // One length for every branch below: the span of the identifier this
+    // reference is written as. `this_object()` is recorded with its call
+    // parentheses and a dotted path with its separator; neither belongs in a
+    // token, and semantic tokens override TextMate scopes in VSCode.
+    const nameLength = identifierPrefixLength(ref.name);
+    if (nameLength <= 0) continue;
+
     if (ref.resolvesTo !== null) {
       const decl = table.declById.get(ref.resolvesTo);
       if (!decl) continue;
@@ -255,12 +271,10 @@ export function produceSemanticTokens(
       const typeId = resolveDeclTokenType(decl, table);
       if (typeId === undefined) continue;
 
-      if (ref.name.length <= 0) continue;
-
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId,
         modifiers: tokenModifiersForReference(decl),
       });
@@ -275,7 +289,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: METHOD_TYPE_ID,
         modifiers: 0,
       });
@@ -290,7 +304,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: 7, // 'type'
         modifiers: 0,
       });
@@ -301,7 +315,7 @@ export function produceSemanticTokens(
     // Predef builtins get `builtinFunction`, stdlib modules get `namespace`, and
     // unresolved call targets stay function-shaped instead of being erased into
     // variables. Unknown non-call references fall back to `variable`.
-    if (ref.name.length > 0) {
+    {
       let refTypeId: TokenTypeId = 5; // 'variable'
       if (externalLookup) {
         if (externalLookup.predefBuiltins?.has(ref.name)) {
@@ -316,7 +330,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: refTypeId,
         modifiers: 0,
       });
@@ -329,7 +343,7 @@ export function produceSemanticTokens(
     return a.character - b.character;
   });
 
-  return tokens;
+  return dropDuplicateSpans(tokens);
 }
 
 /**

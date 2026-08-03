@@ -11,7 +11,7 @@
 
 import type { CodeAction, CodeActionParams, TextEdit } from "vscode-languageserver/node";
 import { parse, isParserReady } from "../parser";
-import { buildSymbolTable, type Declaration, type SymbolTable } from "./symbolTable";
+import { buildSymbolTable, isWrittenInFile, type Declaration, type SymbolTable } from "./symbolTable";
 import { CodeActionKindRefactorRewrite } from "../util/codeActionKinds.js";
 
 // ---------------------------------------------------------------------------
@@ -94,6 +94,9 @@ function tryBuildAutodocAction(
  */
 export function findDocumentableDeclAtLine(table: SymbolTable, line: number): Declaration | null {
   for (const decl of table.declarations) {
+    // Clones from an inherited or #include'd file carry that file's line
+    // numbers — a skeleton anchored to them would be written at the wrong line.
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.range.start.line === line) {
       if (decl.kind === "function" || decl.kind === "method" || decl.kind === "class" || decl.kind === "variable") {
         return decl;

@@ -33,6 +33,11 @@ export type OracleData = Record<string, OracleModule>;
 // Two stdin modes:
 //   {"mode":"modules","paths":[…]} — classify each path and list a module's
 //     indices() with per-member types.
+//   {"mode":"roots"} — the runtime's own top-level module names. The
+//     filesystem walk cannot see a module that is compiled into the pike
+//     binary: there is no Image.pmod on disk at all, only _Image_* helpers,
+//     so `Image` never entered the index and reconciliation — which only ever
+//     asks about modules the index ALREADY names — could never rescue it.
 //   {"mode":"probe","paths":[…]} — for each dotted path, report whether
 //     master()->resolv() answers. This matches what compiling `Path;` does
 //     (verified on Stdio._Stdio, Crypto.None, String.low_fuzzymatch), and is
@@ -61,6 +66,10 @@ int main() {
   string mode = request->mode;
   array(string) paths = request->paths;
   mapping out = ([]);
+  if (mode == "roots") {
+    write("%s", Standards.JSON.encode(indices(master()->root_module)));
+    return 0;
+  }
   foreach (paths, string path) {
     mixed val;
     int threw = !!catch { val = master()->resolv(path); };
@@ -77,6 +86,17 @@ int main() {
 }
 `;
 
+/**
+ * Top-level module names according to the running pike.
+ *
+ * Seeds the reconciliation list so that C-implemented modules — which have no
+ * file under lib/modules for the AutoDoc walk to find — are still asked about.
+ */
+export function runRootModuleOracle(): string[] {
+  const roots = runOracle("roots", []);
+  return Array.isArray(roots) ? (roots as string[]).filter(r => typeof r === "string") : [];
+}
+
 /** Every dotted prefix (sans "predef.") the index claims members under. */
 export function collectModuleParents(index: Record<string, unknown>): string[] {
   const parents = new Set<string>();
@@ -91,7 +111,7 @@ export function collectModuleParents(index: Record<string, unknown>): string[] {
 }
 
 /** One oracle invocation. See ORACLE_PIKE_SCRIPT for the two modes. */
-function runOracle(mode: "modules" | "probe", paths: string[]): unknown {
+function runOracle(mode: "modules" | "probe" | "roots", paths: string[]): unknown {
   const dir = mkdtempSync(join(tmpdir(), "stdlib-oracle-"));
   const scriptPath = join(dir, "module-oracle.pike");
   try {

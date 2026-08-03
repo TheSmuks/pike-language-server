@@ -18,6 +18,7 @@ import {
   declOccurrenceRangeAt,
   getDefinitionAt,
   getReferencesTo,
+  isWrittenInFile,
 } from "./symbolTable";
 import { resolveAccessDefinition, modulePathAtPosition } from "./accessResolver";
 import { existsSync } from "node:fs";
@@ -26,6 +27,8 @@ import { resolveType, type TypeResolutionContext } from "./typeResolver";
 import { findImplementations } from "./implementation";
 import { resolveIncludeTarget } from "./navigationInclude";
 import { prepareGlobalQuery } from "./workspaceResolution";
+import { declToLspLocation } from "./navigationLocation";
+import { resolveModulePathTarget } from "./navigationModuleTarget";
 import { logInfo } from "../util/errorLog.js";
 
 /**
@@ -193,63 +196,6 @@ async function handleDefinition(
   return declToLspLocation(table.uri, occurrence ? { nameRange: occurrence } : local);
 }
 
-/**
- * Last-resort definition targets the earlier tiers cannot see:
- * - an inherit alias (`base` in `base::create()`) → the inherit declaration;
- * - a module/type path segment (`Util` in `.Util.double_it`, `Stdio` in
- *   `Stdio.File`) → the module's file;
- * - a stdlib class path (`String.Buffer`) → the source location the Pike
- *   worker's runtime resolve reports.
- */
-async function resolveModulePathTarget(
-  ctx: NavigationContext,
-  table: import("./symbolTable").SymbolTable,
-  doc: { getText(): string } | undefined,
-  params: { textDocument: { uri: string }; position: { line: number; character: number } },
-): Promise<LspLocation | null> {
-  if (!doc) return null;
-  const lines = doc.getText().split('\n');
-  const path = modulePathAtPosition(lines, params.position.line, params.position.character);
-  if (!path) return null;
-
-  // Inherit alias: jump to the inherit declaration that binds it.
-  if (!path.includes(".")) {
-    const aliasDecl = table.declarations.find(
-      d => d.kind === "inherit" && d.alias === path,
-    );
-    if (aliasDecl) return declToLspLocation(table.uri, aliasDecl);
-  }
-
-  const moduleUri = await ctx.index.resolveModule(path, params.textDocument.uri);
-  // Directory modules without a module.pmod resolve to the directory itself,
-  // which an editor cannot open — skip those.
-  if (moduleUri && !moduleUri.endsWith("/")) {
-    return {
-      uri: moduleUri,
-      range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-    };
-  }
-
-  // Stdlib class the filesystem walk cannot reach (a class inside a file
-  // module, e.g. String.Buffer): the worker's introspection knows its source.
-  // C-implemented symbols report the path Pike was BUILT from (a foreign
-  // machine), so only offer the target when the file exists here.
-  if (!path.startsWith(".") && path.includes(".") && ctx.worker) {
-    try {
-      const resolved = await ctx.worker.resolve(path);
-      if (resolved.resolved && resolved.source_file && existsSync(resolved.source_file)) {
-        const line = Math.max(0, (resolved.source_line ?? 1) - 1);
-        return {
-          uri: pathToFileURL(resolved.source_file).href,
-          range: { start: { line, character: 0 }, end: { line, character: 0 } },
-        };
-      }
-    } catch { /* Worker unavailable — no target */ }
-  }
-
-  return null;
-}
-
 /** Resolve a local declaration to its LSP location(s). */
 function resolveDeclLocation(
   decl: import("./symbolTable").Declaration,
@@ -275,17 +221,6 @@ function resolveDeclLocation(
   }
 
   return declToLspLocation(decl.sourceUri ?? table.uri, decl);
-}
-
-/** Convert a declaration to an LSP Location. */
-function declToLspLocation(uri: string, decl: { nameRange: { start: { line: number; character: number }; end: { line: number; character: number } } }): LspLocation {
-  return {
-    uri,
-    range: {
-      start: { line: decl.nameRange.start.line, character: decl.nameRange.start.character },
-      end: { line: decl.nameRange.end.line, character: decl.nameRange.end.character },
-    },
-  };
 }
 
 /** Try arrow/dot access resolution for go-to-definition. */
