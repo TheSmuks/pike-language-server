@@ -161,6 +161,13 @@ export interface BuildState {
   scopeStack: number[]; // stack of scope IDs (innermost last)
   /** Scopes sorted by (startLine, startChar) after declaration pass, for binary search. */
   sortedScopes: Scope[];
+  /**
+   * The file's text, for recovering statements the parser folded into their
+   * predecessor when a `;` was missing. See recoverAbsorbedStatements.
+   */
+  sourceText: string;
+  /** Depth of absorbed-statement recovery, so the walk cannot recurse forever. */
+  recoveryDepth: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -234,7 +241,7 @@ export function buildSymbolTable(tree: Tree, uri: string, version: number, optio
 
     bump("symbolTablesBuilt");
     assertSourceCoversTree(sourceText, root, uri);
-    const state = initBuildState();
+    const state = initBuildState(sourceText);
 
     startSpan("declarationPass");
     runDeclarationPass(root, state);
@@ -315,7 +322,7 @@ function emptySymbolTable(uri: string, version: number): SymbolTable {
 }
 
 /** Initialize fresh builder state. */
-function initBuildState(): BuildState {
+function initBuildState(sourceText: string, recoveryDepth = 0): BuildState {
   return {
     nextId: 0,
     declarations: [],
@@ -325,8 +332,11 @@ function initBuildState(): BuildState {
     declMap: new Map(),
     scopeStack: [],
     sortedScopes: [],
+    sourceText,
+    recoveryDepth,
   };
 }
+
 
 /** Pass 1: collect declarations and build scope tree. */
 function runDeclarationPass(root: any, state: BuildState): void {

@@ -332,6 +332,35 @@ export function collectSimpleDecl(node: Node, state: BuildState): void {
  * (Pike allows `int a, b, c;`), falling back to the `name` field when the
  * grammar exposes no name list.
  */
+/**
+ * A declaration's range, stopping before any statement it absorbed.
+ *
+ * When a statement is missing its `;`, tree-sitter opens an ERROR node instead
+ * of inserting one, and the declaration swallows what follows: `int x = 1` with
+ * `int y = 2;` under it yields a local_declaration spanning both lines. That
+ * range is what inlay hints, code lenses, the outline and the enclosing-function
+ * lookup all read, so each lands a line away from what it annotates — on every
+ * keystroke until the `;` is typed.
+ *
+ * Clamped to the ERROR's start, which is where the declaration as WRITTEN ends.
+ * A declaration that legitimately spans lines has no ERROR child and is
+ * untouched. The grammar cannot be made to insert the missing `;` here; see
+ * docs/superpowers/plans/2026-08-03-grammar-expression-cascade.md.
+ */
+function rangeWithoutAbsorbedStatement(decl: Node): ReturnType<typeof toRange> {
+  const full = toRange(decl);
+  const firstError = decl.children.find(child => child.isError);
+  if (!firstError) return full;
+  // Only clamp when the ERROR actually reaches past this line; an ERROR wholly
+  // inside the declaration's own line means something else went wrong and the
+  // written extent is still the full node.
+  if (firstError.endPosition.row <= full.start.line) return full;
+  return {
+    start: full.start,
+    end: { line: firstError.startPosition.row, character: firstError.startPosition.column },
+  };
+}
+
 function collectNamedDecl(decl: Node, actualKind: DeclKind, state: BuildState, scopeId: number): void {
   const nameNodes = getNameNodes(decl);
   const typeText = extractTypeText(decl);
@@ -345,7 +374,7 @@ function collectNamedDecl(decl: Node, actualKind: DeclKind, state: BuildState, s
     addDeclaration(state, {
       name: nameNode.text, kind: actualKind,
       nameRange: toRange(nameNode),
-      range: toRange(decl),
+      range: rangeWithoutAbsorbedStatement(decl),
       scopeId, declaredType: typeText, assignedType, modifiers,
     });
   }
