@@ -228,7 +228,15 @@ function collectCallExpressions(
     if (child.endPosition.row < startLine) continue;
     if (child.startPosition.row > endLine) break;
 
-    if (child.type === "postfix_expr" && isCallPostfixExpr(child)) {
+    // Overlap is not containment. A call that STARTS before the function and
+    // ENDS after it is a call the function is nested inside — an anonymous
+    // class or lambda passed as an argument — not a call the function makes.
+    // Reporting it put the enclosing expression in the callee list.
+    const containedInFunction =
+      child.startPosition.row >= startLine && child.endPosition.row <= endLine;
+
+    if (containedInFunction &&
+        child.type === "postfix_expr" && isCallPostfixExpr(child)) {
       tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen);
     }
 
@@ -431,15 +439,22 @@ function resolveCallee(
     }
   }
 
-  // Search cross-file via workspace index
+  // Search cross-file via workspace index.
+  //
+  // A table also holds clones merged from the files it inherits and includes,
+  // and a clone's ranges are coordinates in the file it came FROM. Pairing one
+  // with entry.uri pointed the item at whatever text happens to sit at those
+  // coordinates in the wrong file. `decl.sourceUri` names the real home; the
+  // local loop above already guards this way.
   for (const entry of workspaceIndex.getAllEntries()) {
     if (!entry.symbolTable) continue;
     for (const decl of entry.symbolTable.declarations) {
       if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
+        const declUri = decl.sourceUri ?? entry.uri;
         return {
-          item: declToCallHierarchyItem(decl, entry.uri),
+          item: declToCallHierarchyItem(decl, declUri),
           decl,
-          uri: entry.uri,
+          uri: declUri,
         };
       }
     }
