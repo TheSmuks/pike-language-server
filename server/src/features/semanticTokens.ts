@@ -209,6 +209,42 @@ function isInClassScope(decl: Declaration, table: SymbolTable): boolean {
  *   module references get the `namespace` token type instead of the
  *   generic `variable` fallback.
  */
+/**
+ * How many leading characters of `name` form a bare identifier.
+ *
+ * A semantic token must span an identifier. Two names in the symbol table are
+ * not one: a `this_ref` is recorded as `this_object()`, parentheses included,
+ * and a dotted inherit path as `RXML.TagSet`. Painting the whole string made
+ * the token swallow the call operator and the `.` separator — and because
+ * semantic tokens win over TextMate scopes in VSCode, that repaints
+ * punctuation as part of a name. Returns 0 when the name does not start with
+ * an identifier at all, so the caller can drop the token instead of colouring
+ * something arbitrary.
+ */
+function identifierPrefixLength(name: string): number {
+  const match = /^[A-Za-z_][A-Za-z0-9_]*/.exec(name);
+  return match ? match[0].length : 0;
+}
+
+/**
+ * Drop tokens that repeat a span already emitted.
+ *
+ * The client advertises overlappingTokenSupport=false, and several producers
+ * can record the same symbol twice (an enum member reached both as a
+ * declaration and as a reference), which put two identical tuples on the wire.
+ */
+function dropDuplicateSpans(tokens: SemanticToken[]): SemanticToken[] {
+  const seen = new Set<string>();
+  const out: SemanticToken[] = [];
+  for (const token of tokens) {
+    const key = `${token.line}:${token.character}:${token.length}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(token);
+  }
+  return out;
+}
+
 export function produceSemanticTokens(
   table: SymbolTable,
   externalLookup?: {
@@ -238,8 +274,11 @@ export function produceSemanticTokens(
       isClassScope: isInClassScope(decl, table) && decl.kind !== 'class',
     });
 
-    // Name length from nameRange
-    const length = decl.nameRange.end.character - decl.nameRange.start.character;
+    // Name length from nameRange, clamped to the identifier: a dotted inherit
+    // path (`inherit RXML.TagSet;`) has a nameRange spanning the `.`, and one
+    // token over a whole path repaints the separator as part of a name.
+    const rangeLength = decl.nameRange.end.character - decl.nameRange.start.character;
+    const length = Math.min(rangeLength, identifierPrefixLength(decl.name) || rangeLength);
     if (length <= 0) continue;
 
     tokens.push({
@@ -253,6 +292,13 @@ export function produceSemanticTokens(
 
   // --- References ---
   for (const ref of table.references) {
+    // One length for every branch below: the span of the identifier this
+    // reference is written as. `this_object()` is recorded with its call
+    // parentheses and a dotted path with its separator; neither belongs in a
+    // token, and semantic tokens override TextMate scopes in VSCode.
+    const nameLength = identifierPrefixLength(ref.name);
+    if (nameLength <= 0) continue;
+
     if (ref.resolvesTo !== null) {
       const decl = table.declById.get(ref.resolvesTo);
       if (!decl) continue;
@@ -260,12 +306,10 @@ export function produceSemanticTokens(
       const typeId = resolveDeclTokenType(decl, table);
       if (typeId === undefined) continue;
 
-      if (ref.name.length <= 0) continue;
-
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId,
         modifiers: tokenModifiersForReference(decl),
       });
@@ -280,7 +324,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: METHOD_TYPE_ID,
         modifiers: 0,
       });
@@ -295,7 +339,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: 7, // 'type'
         modifiers: 0,
       });
@@ -306,7 +350,7 @@ export function produceSemanticTokens(
     // Predef builtins get `builtinFunction`, stdlib modules get `namespace`, and
     // unresolved call targets stay function-shaped instead of being erased into
     // variables. Unknown non-call references fall back to `variable`.
-    if (ref.name.length > 0) {
+    {
       let refTypeId: TokenTypeId = 5; // 'variable'
       if (externalLookup) {
         if (externalLookup.predefBuiltins?.has(ref.name)) {
@@ -321,7 +365,7 @@ export function produceSemanticTokens(
       tokens.push({
         line: ref.loc.line,
         character: ref.loc.character,
-        length: ref.name.length,
+        length: nameLength,
         typeId: refTypeId,
         modifiers: 0,
       });
@@ -334,7 +378,7 @@ export function produceSemanticTokens(
     return a.character - b.character;
   });
 
-  return tokens;
+  return dropDuplicateSpans(tokens);
 }
 
 /**
