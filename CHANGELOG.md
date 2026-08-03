@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.62] — 2026-08-03
+
+### Fixed
+
+- **`Image.` offered 27 of its children and was missing `JPEG`, `GIF`, `TTF`, `SVG` and `WebP`.** `Image` implements its own `` `[] ``, so it resolves children on demand and `indices(Image)` can never list them — it reports 28 names while a dozen more resolve perfectly well. Enumeration cannot find those; only asking for them by name can. Pike exposes a top-level `_Image_JPEG` module as `Image.JPEG`, and those files *are* on the module path, so the underscore-joined naming convention supplies the candidates enumeration misses. Each is a candidate only — every one is confirmed against the running Pike before it enters the index, so a name the convention suggests but Pike does not resolve is dropped, and an existing AutoDoc entry is never overwritten by a synthesized one. The bundled index goes from 9,949 to 9,962 keys with none lost, and `Image.` now offers 40. `Image.PNG` remains absent and cannot be recovered this way: it is compiled into `Image.so` with no `_Image_PNG` file, so nothing on disk, in `indices()`, or in the shipped autodoc names it.
+
 ## [0.8.61] — 2026-08-03
 
 ### Fixed
