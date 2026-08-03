@@ -26,7 +26,7 @@
  * of a recovery, which would be guesswork.
  */
 
-import type { Node } from "web-tree-sitter";
+import type { Node, Tree } from "web-tree-sitter";
 import { parse } from "../parser";
 import type { BuildState, Declaration } from "./symbolTable";
 import { toRange } from "./scope-helpers";
@@ -116,40 +116,57 @@ export function recoverAbsorbedStatements(decl: Node, state: BuildState): void {
   mergeAt(declared, resume, state);
 }
 
-/** Top-level declarations of a standalone slice of source. */
+/**
+ * Top-level declarations of a standalone slice of source.
+ *
+ * The slice is parsed WITHOUT a uri, deliberately, so it cannot disturb the
+ * file's incremental-parse cache. That also means the cache never owns the
+ * resulting tree — and web-tree-sitter trees hold WASM memory that has to be
+ * released explicitly, which is why the cache frees them in `onEvict` and
+ * `withBorrowedTree` frees its copy by hand. So this owns its tree and frees
+ * it; otherwise every keystroke on an unfinished statement leaks one.
+ *
+ * The declarations returned are plain objects with plain ranges, so they stay
+ * valid after the tree is gone.
+ */
 function declarationsOf(slice: string, recoveryDepth: number): Declaration[] {
-  let subRoot: Node | null;
+  let subTree: Tree;
   try {
-    // No uri: this must not disturb the incremental-parse cache for the file.
-    subRoot = parse(slice).rootNode;
+    subTree = parse(slice);
   } catch {
     return [];
   }
-  if (!subRoot) return [];
 
-  // Built here rather than exported from symbolTable: that module is at its
-  // 20-export limit, and nothing else needs a recovery state.
-  const subState: BuildState = {
-    nextId: 0,
-    declarations: [],
-    references: [],
-    scopes: [],
-    scopeMap: new Map(),
-    declMap: new Map(),
-    scopeStack: [],
-    sortedScopes: [],
-    sourceText: slice,
-    recoveryDepth,
-  };
-  pushScope(subState, "file", toRange(subRoot));
-  const fileScopeId = currentScopeId(subState);
-  collectSubtree(subRoot, subState);
-  popScope(subState);
+  try {
+    const subRoot = subTree.rootNode;
+    if (!subRoot) return [];
 
-  // Only what the absorbed statements declare at their own top level. A nested
-  // scope's contents belong to a scope this merge does not recreate, and
-  // hoisting them here would put them in the wrong one.
-  return subState.declarations.filter(d => d.scopeId === fileScopeId);
+    // Built here rather than exported from symbolTable: that module is at its
+    // 20-export limit, and nothing else needs a recovery state.
+    const subState: BuildState = {
+      nextId: 0,
+      declarations: [],
+      references: [],
+      scopes: [],
+      scopeMap: new Map(),
+      declMap: new Map(),
+      scopeStack: [],
+      sortedScopes: [],
+      sourceText: slice,
+      recoveryDepth,
+    };
+    pushScope(subState, "file", toRange(subRoot));
+    const fileScopeId = currentScopeId(subState);
+    collectSubtree(subRoot, subState);
+    popScope(subState);
+
+    // Only what the absorbed statements declare at their own top level. A
+    // nested scope's contents belong to a scope this merge does not recreate,
+    // and hoisting them here would put them in the wrong one.
+    return subState.declarations.filter(d => d.scopeId === fileScopeId);
+  } finally {
+    subTree.delete();
+  }
 }
 
 /** Add slice-local declarations to `state` at their true file positions. */
