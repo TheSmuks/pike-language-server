@@ -287,8 +287,13 @@ function findDeclIdAtPosition(
   line: number,
   character: number,
 ): number | null {
-  // Check declarations first
+  // Check declarations first. Clones from an inherited or #include'd file carry
+  // that file's coordinates, so matching a position against them anchored the
+  // whole reference set to another document's geometry — document highlight
+  // painted a 6-character range onto a blank line, and rename offered to write
+  // there.
   for (const decl of table.declarations) {
+    if (!isWrittenInFile(table, decl)) continue;
     if (declOccurrenceRangeAt(decl, line, character)) return decl.id;
   }
 
@@ -310,6 +315,14 @@ function collectResolvedReferences(table: SymbolTable, targetDeclId: number): Re
   const results: Reference[] = [];
   const seenLocs = new Set<string>();
   for (const ref of table.references) {
+    // `this`, `this_object()` and `this_program` bind to the enclosing class so
+    // that go-to-definition on them lands there — which is correct, and stays
+    // correct: that path reads table.references directly. They are NOT written
+    // occurrences of the class name, and everything downstream of here rewrites
+    // or paints what it is handed. Renaming `Builder` to `Maker` turned
+    // `return this;` into `return Maker;`, which returns the program instead of
+    // the instance; the corpus fixture stopped running.
+    if (ref.kind === 'this_ref') continue;
     if (ref.resolvesTo === targetDeclId) {
       const locKey = `${ref.loc.line}:${ref.loc.character}`;
       if (!seenLocs.has(locKey)) {
