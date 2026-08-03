@@ -26,6 +26,10 @@ import {
   collectModifiers,
 } from './declarationBlockCollectors';
 import { collectPreprocDefine, collectPreprocInclude } from './preprocMacros';
+import {
+  recoverAbsorbedStatements,
+  setAbsorbedStatementCollector,
+} from './absorbedStatements';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -207,6 +211,9 @@ function dispatchCollectDeclarations(node: Node, state: BuildState): void {
   if (DECL_KIND_MAP[node.type]) {
     collectSimpleDecl(node, state);
     descendForDeclarations(node, state);
+    // A statement the parser folded into this one, because its `;` is not
+    // typed yet, declares names that would otherwise be invisible.
+    recoverAbsorbedStatements(node, state);
     return;
   }
 
@@ -389,3 +396,7 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
     }
   }
 }
+
+// Break the import cycle: this module calls into absorbedStatements, and the
+// recovery there needs to run this collector over the re-parsed slice.
+setAbsorbedStatementCollector(collectDeclarations);
