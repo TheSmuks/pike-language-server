@@ -15,6 +15,7 @@ import type {
   CodeLens,
 } from "vscode-languageserver/node";
 import type { SymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,9 @@ export function produceCodeLenses(
 
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
+    // A declaration cloned from an inherited or #include'd file carries that
+    // file's coordinates — a lens built from them lands on an arbitrary line.
+    if (!isWrittenInFile(table, decl)) continue;
 
     lenses.push({
       range: {

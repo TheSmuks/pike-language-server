@@ -22,6 +22,7 @@ import type {
   CallHierarchyOutgoingCall,
 } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration, Reference } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 // ---------------------------------------------------------------------------
@@ -53,9 +54,12 @@ function findEnclosingFunction(
   line: number,
   character: number,
 ): Declaration | null {
-  // First check if cursor is directly on a function/method declaration name
+  // First check if cursor is directly on a function/method declaration name.
+  // Declarations cloned from an inherited or #include'd file carry that file's
+  // coordinates, so they can never answer a position query about this one.
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.nameRange.start.line <= line &&
         decl.nameRange.end.line >= line &&
         decl.nameRange.start.character <= character &&
@@ -77,6 +81,7 @@ function findEnclosingFunction(
 
   for (const decl of table.declarations) {
     if (decl.kind !== "function" && decl.kind !== "method") continue;
+    if (!isWrittenInFile(table, decl)) continue;
     const startLine = decl.range.start.line;
     const endLine = decl.range.end.line;
     if (startLine <= line && endLine >= line) {
@@ -411,8 +416,12 @@ function resolveCallee(
   fromLine: number,
   workspaceIndex: WorkspaceIndex,
 ): { item: CallHierarchyItem; decl: Declaration; uri: string } | null {
-  // Search in local scope first
+  // Search in local scope first. A clone from an inherited or #include'd file
+  // matches by name but its ranges belong to that file — pairing them with
+  // `uri` would point the call hierarchy at an arbitrary line here. The
+  // cross-file sweep below finds the real declaration in its own file.
   for (const decl of table.declarations) {
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
       return {
         item: declToCallHierarchyItem(decl, uri),

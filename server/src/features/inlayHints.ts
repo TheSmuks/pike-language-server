@@ -19,6 +19,7 @@
 
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
 import type { Position } from "vscode-languageserver-types";
 import { InlayHint, InlayHintKind } from "vscode-languageserver-types";
 
@@ -65,6 +66,9 @@ export function produceInlayHints(ctx: InlayHintContext): InlayHint[] {
   // G1: Type hints for untyped variable declarations
   for (const decl of table.declarations) {
     if (decl.kind !== "variable" && decl.kind !== "parameter") continue;
+    // Clones from an inherited or #include'd file carry that file's
+    // coordinates; a hint placed at them annotates unrelated text.
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.range.start.line < rangeStartLine || decl.range.start.line > rangeEndLine) continue;
 
     const typeName = resolveTypeForHint(decl);

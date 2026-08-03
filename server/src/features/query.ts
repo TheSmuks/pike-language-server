@@ -6,6 +6,23 @@ import { resolveTypeName } from './scope-helpers';
 // ---------------------------------------------------------------------------
 
 /**
+ * True when a declaration's ranges are coordinates in this table's own file.
+ *
+ * `wireInheritance` and `wireIncludes` clone declarations out of inherited and
+ * `#include`d files into this table so references can resolve to them. A clone
+ * keeps the *other* file's line and character numbers and records where it came
+ * from in `sourceUri`. Matching a cursor position against those coordinates
+ * compares two different files' geometry: that is how CTRL+CLICK on a call
+ * answered an unrelated line of an included header.
+ *
+ * Resolution by name or by reference is unaffected — only queries that ask
+ * "what is written at this position" must exclude clones.
+ */
+export function isWrittenInFile(table: SymbolTable, decl: Declaration): boolean {
+  return decl.sourceUri === undefined || decl.sourceUri === table.uri;
+}
+
+/**
  * Find the declaration at a given position (for go-to-definition).
  */
 export function getDefinitionAt(
@@ -30,6 +47,7 @@ export function getDefinitionAt(
 
   // Also check if the position is on a declaration name itself
   for (const decl of table.declarations) {
+    if (!isWrittenInFile(table, decl)) continue;
     const nr = decl.nameRange;
     if (nr.start.line === line && nr.end.line === line &&
         character >= nr.start.character && character < nr.end.character) {
@@ -73,6 +91,7 @@ export function getLocalDeclarationAt(
   character: number,
 ): Declaration | null {
   for (const decl of table.declarations) {
+    if (!isWrittenInFile(table, decl)) continue;
     if (declOccurrenceRangeAt(decl, line, character)) return decl;
   }
   return null;

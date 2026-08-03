@@ -387,7 +387,7 @@ function runReferencePass(rootNode: any, state: BuildState, table: SymbolTable):
 // Public query API (delegated)
 // ---------------------------------------------------------------------------
 
-export { getDefinitionAt, getLocalDeclarationAt, declOccurrenceRangeAt, getReferencesTo } from './query';
+export { getDefinitionAt, getLocalDeclarationAt, declOccurrenceRangeAt, getReferencesTo, isWrittenInFile } from './query';
 
 /**
  * Sort scopes by (startLine, startChar) for binary search in findScopeForNode.

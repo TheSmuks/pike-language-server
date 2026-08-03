@@ -16,6 +16,7 @@
  */
 
 import type { Declaration, SymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
 
 // ---------------------------------------------------------------------------
 // Token type legend
@@ -219,6 +220,10 @@ export function produceSemanticTokens(
 
   // --- Declarations ---
   for (const decl of table.declarations) {
+    // Declarations cloned from an inherited or #include'd file carry that
+    // file's coordinates; painting them here colours arbitrary text, and can
+    // name a line this document does not have.
+    if (!isWrittenInFile(table, decl)) continue;
     const typeId = resolveDeclTokenType(decl, table);
     if (typeId === undefined) continue;
 
