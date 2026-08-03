@@ -69,7 +69,7 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.1.2",
     "@types/vscode": "^1.118.0",
     "esbuild": "^0.28.0",
     "typescript": "^6.0.3",
