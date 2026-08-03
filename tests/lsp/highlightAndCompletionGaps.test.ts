@@ -163,3 +163,26 @@ describe("completion while a member name is being typed", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Modules that live only in the pike binary
+// ---------------------------------------------------------------------------
+
+/**
+ * `Image` has no file under lib/modules — it is compiled into pike, and only
+ * `_Image_*` helpers exist on disk. The AutoDoc walk therefore contributed no
+ * `predef.Image.*` key, and runtime reconciliation only ever asked about
+ * modules the index ALREADY named, so it could never rescue it: `Image.`
+ * offered nothing at all. The reconciliation list is now seeded with the
+ * runtime's own top-level modules.
+ */
+describe("the bundled stdlib index covers C-implemented modules", () => {
+  test("Image has members", async () => {
+    const index = (await import("../../server/src/data/stdlib-autodoc.json")).default as Record<string, unknown>;
+    const imageKeys = Object.keys(index).filter(k => k.startsWith("predef.Image."));
+    expect(imageKeys.length).toBeGreaterThan(20);
+    for (const name of ["Color", "Layer", "Font", "Image"]) {
+      expect(imageKeys, name).toContain(`predef.Image.${name}`);
+    }
+  });
+});
