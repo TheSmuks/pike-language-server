@@ -85,6 +85,22 @@ const INHERIT_MARKER = /^[ \t]*inherit[ \t]+"module"[ \t]*;/m;
 const MODULE_TYPE_MARKER = /^[ \t]*constant[ \t]+module_type[ \t]*=[^;]*\bMODULE_[A-Z_]+/m;
 
 /**
+ * A reference to one of Roxen's own runtime modules.
+ *
+ * Weaker evidence than the markers above — a file can name `Roxen.foo` without
+ * being a Roxen module — so this counts ONLY when an installation was actually
+ * detected. With one present, a file naming Roxen's runtime is Roxen code being
+ * edited outside the tree; without one, `Undefined identifier Roxen.` is a true
+ * and useful error and must not be hidden.
+ *
+ * `Roxen`, `RXML` and `Variable` are the three the stock pike binary chokes on;
+ * `Variable` is omitted because the name is generic enough for a plain Pike
+ * project to own, and Roxen code that uses it invariably names one of the other
+ * two as well.
+ */
+const RUNTIME_REFERENCE_MARKER = /(?<![A-Za-z0-9_.])(?:Roxen|RXML)\s*\.\s*[A-Za-z_]/;
+
+/**
  * True when the source carries one of the measured Roxen markers.
  *
  * Matching is line-anchored but not comment-aware. A commented-out
@@ -228,6 +244,13 @@ export async function isRoxenFile(
   // Anything inside a detected installation is Roxen code by definition, and
   // this is checked before the directory walk because it needs no I/O.
   if (ctx.roxenHome && isInside(ctx.roxenHome, filePath)) return true;
+
+  // A file that names Roxen's runtime, on a machine that has Roxen. The stock
+  // pike binary cannot resolve `Roxen` — Roxen.pmod does not even compile under
+  // Pike 8.0 — so every such reference became an error about the environment.
+  // Gated on an installation being present: with no Roxen to speak of, that
+  // error is the truth and stays.
+  if (ctx.roxenHome && RUNTIME_REFERENCE_MARKER.test(text)) return true;
 
   return inheritsFromDirectory(filePath, ctx.workspaceRoot);
 }
