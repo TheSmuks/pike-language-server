@@ -181,21 +181,45 @@ function collectCrossFileSupertypes(
     .map(id => table.declById.get(id))
     .filter(d => d?.kind === "inherit");
 
+  // `inherit Animal;` names ONE class: the one this file can actually see.
+  // Pushing every indexed class of that name reported an unrelated `Animal`
+  // from a file this one never mentions as a parent, and the hierarchy view
+  // has no way to tell the user which is real.
+  //
+  // Candidates are ranked: the file itself, then a file it depends on, then
+  // anything else. Dependency information is not always available (the index
+  // may be a stub), so an unranked candidate is still accepted rather than
+  // dropping a real supertype — but only one per inherit clause, and only the
+  // best-ranked one.
+  const ownEntry = typeof index.getFile === "function" ? index.getFile(uri) : undefined;
+  const rank = (candidateUri: string): number => {
+    if (candidateUri === uri) return 0;
+    if (ownEntry?.dependencies.has(candidateUri)) return 1;
+    return 2;
+  };
+
   for (const inheritDecl of inheritDecls) {
     if (!inheritDecl) continue;
 
-    // Try to find the class in any indexed file
+    let best: { uri: string; decl: Declaration; rank: number } | null = null;
     for (const entry of index.getAllEntries()) {
       if (!entry.symbolTable) continue;
-      for (const decl of entry.symbolTable.declarations) {
-        if (decl.kind !== "class") continue;
-        if (decl.name !== inheritDecl.name) continue;
-        const key = `${entry.uri}:${decl.nameRange.start.line}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        results.push(declToTypeHierarchyItem(decl, entry.uri));
-      }
+      const match = entry.symbolTable.declarations.find(
+        d => d.kind === "class" && d.name === inheritDecl.name,
+      );
+      if (!match) continue;
+      const r = rank(entry.uri);
+      // With dependencies known, a file this one does not reach is not a parent.
+      if (r === 2 && ownEntry) continue;
+      if (!best || r < best.rank) best = { uri: entry.uri, decl: match, rank: r };
+      if (r === 0) break;
     }
+    if (!best) continue;
+
+    const key = `${best.uri}:${best.decl.nameRange.start.line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    results.push(declToTypeHierarchyItem(best.decl, best.uri));
   }
 }
 
@@ -218,10 +242,9 @@ export function getSubtypes(
 
   for (const entry of index.getAllEntries()) {
     if (!entry.symbolTable) continue;
-    const childItem = findSubtypeInTable(
+    results.push(...findSubtypesInTable(
       entry.symbolTable, entry.uri, targetName, uri, seen,
-    );
-    if (childItem) results.push(childItem);
+    ));
   }
 
   return results;
@@ -243,27 +266,26 @@ function checkInheritedScopesForTarget(
     const inheritedScope = table.scopeById.get(inheritedScopeId);
     if (!inheritedScope) continue;
 
-    const parentScope = inheritedScope.parentId !== null
-      ? table.scopeById.get(inheritedScope.parentId)
-      : null;
-    if (!parentScope) continue;
+    // The supertype is the class that OWNS the inherited scope. This used to
+    // scan the inherited scope's PARENT for any class with the target name —
+    // and for a file-scope class that parent is the file scope, so every class
+    // in the file matched. `Dog` came back as its own subtype, and `GuideDog`
+    // reported its supertype `Dog` as a subtype.
+    const parentDecl = findClassDeclForScope(table, inheritedScope);
+    if (!parentDecl || parentDecl.name !== targetName) continue;
 
-    for (const declId of parentScope.declarations) {
-      const decl = table.declById.get(declId);
-      if (!decl || decl.kind !== "class") continue;
-      if (decl.name !== targetName) continue;
+    const declUri = parentDecl.sourceUri ?? tableUri;
+    if (declUri !== targetUri && tableUri !== targetUri) continue;
 
-      const declUri = decl.sourceUri ?? tableUri;
-      if (declUri !== targetUri && tableUri !== targetUri) continue;
+    const childDecl = findClassDeclForScope(table, scope);
+    if (!childDecl) continue;
+    // A class does not inherit itself.
+    if (childDecl.id === parentDecl.id) continue;
 
-      const childDecl = findClassDeclForScope(table, scope);
-      if (!childDecl) continue;
-
-      const key = `${tableUri}:${childDecl.nameRange.start.line}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      return declToTypeHierarchyItem(childDecl, tableUri);
-    }
+    const key = `${tableUri}:${childDecl.nameRange.start.line}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    return declToTypeHierarchyItem(childDecl, tableUri);
   }
   return null;
 }
@@ -300,28 +322,33 @@ function checkInheritDeclarationsForTarget(
 /**
  * Search a single symbol table for classes inheriting from the target.
  */
-function findSubtypeInTable(
+function findSubtypesInTable(
   table: SymbolTable,
   tableUri: string,
   targetName: string,
   targetUri: string,
   seen: Set<string>,
-): TypeHierarchyItem | null {
+): TypeHierarchyItem[] {
+  // Every class scope in the file, not the first that matches: one file
+  // routinely declares several direct subclasses of the same base — Roxen's
+  // Variable.pmod/module.pmod has six of `String` — and returning after the
+  // first hid all the others.
+  const found: TypeHierarchyItem[] = [];
   for (const scope of table.scopes) {
     if (scope.kind !== "class") continue;
 
-    let result = checkInheritedScopesForTarget(
+    const viaScopes = checkInheritedScopesForTarget(
       table, tableUri, targetName, targetUri, seen, scope,
     );
-    if (result) return result;
+    if (viaScopes) { found.push(viaScopes); continue; }
 
-    result = checkInheritDeclarationsForTarget(
+    const viaDecls = checkInheritDeclarationsForTarget(
       table, tableUri, targetName, seen, scope,
     );
-    if (result) return result;
+    if (viaDecls) found.push(viaDecls);
   }
 
-  return null;
+  return found;
 }
 
 /**

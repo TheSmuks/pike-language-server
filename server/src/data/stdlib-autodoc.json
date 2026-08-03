@@ -939,6 +939,10 @@
     "signature": "object(this_program) put_var_uint_array(array(int) data, int item_size, int len)",
     "markdown": "```pike\nobject(this_program) put_var_uint_array(array(int) data, int item_size, int len)\n```\n\nAppends an array of unsigned integers of width item_size\n to the buffer, preceded with an unsigned integer len declaring\n the size of the array in bytes."
   },
+  "predef.Apple.Keychain": {
+    "signature": "class Keychain",
+    "markdown": "```pike\nclass Keychain\n```"
+  },
   "predef.Arg.LowOptions": {
     "signature": "function(array(string),mapping(string:string) | void:object(is Arg.LowOptions)) LowOptions",
     "markdown": "```pike\nfunction(array(string),mapping(string:string) | void:object(is Arg.LowOptions)) LowOptions\n```"
@@ -1314,6 +1318,462 @@
   "predef.Audio.Format.vbuffer": {
     "signature": "class vbuffer",
     "markdown": "```pike\nclass vbuffer\n```"
+  },
+  "predef.Builtin.Backend": {
+    "signature": "class Backend",
+    "markdown": "```pike\nclass Backend\n```"
+  },
+  "predef.Builtin.BadArgumentError": {
+    "signature": "class BadArgumentError",
+    "markdown": "```pike\nclass BadArgumentError\n```"
+  },
+  "predef.Builtin.Buffer": {
+    "signature": "class Buffer",
+    "markdown": "```pike\nclass Buffer\n```"
+  },
+  "predef.Builtin.CompilationError": {
+    "signature": "class CompilationError",
+    "markdown": "```pike\nclass CompilationError\n```"
+  },
+  "predef.Builtin.CppError": {
+    "signature": "class CppError",
+    "markdown": "```pike\nclass CppError\n```"
+  },
+  "predef.Builtin.DESTRUCT_CLEANUP": {
+    "signature": "constant DESTRUCT_CLEANUP",
+    "markdown": "```pike\nconstant DESTRUCT_CLEANUP\n```"
+  },
+  "predef.Builtin.DESTRUCT_EXPLICIT": {
+    "signature": "constant DESTRUCT_EXPLICIT",
+    "markdown": "```pike\nconstant DESTRUCT_EXPLICIT\n```"
+  },
+  "predef.Builtin.DESTRUCT_GC": {
+    "signature": "constant DESTRUCT_GC",
+    "markdown": "```pike\nconstant DESTRUCT_GC\n```"
+  },
+  "predef.Builtin.DESTRUCT_NO_REFS": {
+    "signature": "constant DESTRUCT_NO_REFS",
+    "markdown": "```pike\nconstant DESTRUCT_NO_REFS\n```"
+  },
+  "predef.Builtin.DecodeError": {
+    "signature": "class DecodeError",
+    "markdown": "```pike\nclass DecodeError\n```"
+  },
+  "predef.Builtin.DefaultBackendClass": {
+    "signature": "class DefaultBackendClass",
+    "markdown": "```pike\nclass DefaultBackendClass\n```"
+  },
+  "predef.Builtin.DestructImmediate": {
+    "signature": "class DestructImmediate",
+    "markdown": "```pike\nclass DestructImmediate\n```"
+  },
+  "predef.Builtin.FLOAT_DIGITS_10": {
+    "signature": "constant FLOAT_DIGITS_10",
+    "markdown": "```pike\nconstant FLOAT_DIGITS_10\n```"
+  },
+  "predef.Builtin.FLOAT_EPSILON": {
+    "signature": "constant FLOAT_EPSILON",
+    "markdown": "```pike\nconstant FLOAT_EPSILON\n```"
+  },
+  "predef.Builtin.FLOAT_MAX": {
+    "signature": "constant FLOAT_MAX",
+    "markdown": "```pike\nconstant FLOAT_MAX\n```"
+  },
+  "predef.Builtin.FLOAT_MAX_10_EXP": {
+    "signature": "constant FLOAT_MAX_10_EXP",
+    "markdown": "```pike\nconstant FLOAT_MAX_10_EXP\n```"
+  },
+  "predef.Builtin.FLOAT_MIN": {
+    "signature": "constant FLOAT_MIN",
+    "markdown": "```pike\nconstant FLOAT_MIN\n```"
+  },
+  "predef.Builtin.FLOAT_MIN_10_EXP": {
+    "signature": "constant FLOAT_MIN_10_EXP",
+    "markdown": "```pike\nconstant FLOAT_MIN_10_EXP\n```"
+  },
+  "predef.Builtin.FakeObject": {
+    "signature": "class FakeObject",
+    "markdown": "```pike\nclass FakeObject\n```"
+  },
+  "predef.Builtin.GenericError": {
+    "signature": "class GenericError",
+    "markdown": "```pike\nclass GenericError\n```"
+  },
+  "predef.Builtin.INDEX_FROM_BEG": {
+    "signature": "constant INDEX_FROM_BEG",
+    "markdown": "```pike\nconstant INDEX_FROM_BEG\n```"
+  },
+  "predef.Builtin.INDEX_FROM_END": {
+    "signature": "constant INDEX_FROM_END",
+    "markdown": "```pike\nconstant INDEX_FROM_END\n```"
+  },
+  "predef.Builtin.IndexError": {
+    "signature": "class IndexError",
+    "markdown": "```pike\nclass IndexError\n```"
+  },
+  "predef.Builtin.Iterator": {
+    "signature": "class Iterator",
+    "markdown": "```pike\nclass Iterator\n```"
+  },
+  "predef.Builtin.LOWEST_COMPAT_MAJOR": {
+    "signature": "constant LOWEST_COMPAT_MAJOR",
+    "markdown": "```pike\nconstant LOWEST_COMPAT_MAJOR\n```"
+  },
+  "predef.Builtin.LOWEST_COMPAT_MINOR": {
+    "signature": "constant LOWEST_COMPAT_MINOR",
+    "markdown": "```pike\nconstant LOWEST_COMPAT_MINOR\n```"
+  },
+  "predef.Builtin.List": {
+    "signature": "class List",
+    "markdown": "```pike\nclass List\n```"
+  },
+  "predef.Builtin.MasterLoadError": {
+    "signature": "class MasterLoadError",
+    "markdown": "```pike\nclass MasterLoadError\n```"
+  },
+  "predef.Builtin.MathError": {
+    "signature": "class MathError",
+    "markdown": "```pike\nclass MathError\n```"
+  },
+  "predef.Builtin.ModuleLoadError": {
+    "signature": "class ModuleLoadError",
+    "markdown": "```pike\nclass ModuleLoadError\n```"
+  },
+  "predef.Builtin.NATIVE_INT_MAX": {
+    "signature": "constant NATIVE_INT_MAX",
+    "markdown": "```pike\nconstant NATIVE_INT_MAX\n```"
+  },
+  "predef.Builtin.NATIVE_INT_MIN": {
+    "signature": "constant NATIVE_INT_MIN",
+    "markdown": "```pike\nconstant NATIVE_INT_MIN\n```"
+  },
+  "predef.Builtin.Null": {
+    "signature": "class Null",
+    "markdown": "```pike\nclass Null\n```"
+  },
+  "predef.Builtin.OPEN_BOUND": {
+    "signature": "constant OPEN_BOUND",
+    "markdown": "```pike\nconstant OPEN_BOUND\n```"
+  },
+  "predef.Builtin.PIKE_WEAK_INDICES": {
+    "signature": "constant PIKE_WEAK_INDICES",
+    "markdown": "```pike\nconstant PIKE_WEAK_INDICES\n```"
+  },
+  "predef.Builtin.PIKE_WEAK_VALUES": {
+    "signature": "constant PIKE_WEAK_VALUES",
+    "markdown": "```pike\nconstant PIKE_WEAK_VALUES\n```"
+  },
+  "predef.Builtin.PermissionError": {
+    "signature": "class PermissionError",
+    "markdown": "```pike\nclass PermissionError\n```"
+  },
+  "predef.Builtin.PollBackend": {
+    "signature": "class PollBackend",
+    "markdown": "```pike\nclass PollBackend\n```"
+  },
+  "predef.Builtin.PollDeviceBackend": {
+    "signature": "class PollDeviceBackend",
+    "markdown": "```pike\nclass PollDeviceBackend\n```"
+  },
+  "predef.Builtin.ResourceError": {
+    "signature": "class ResourceError",
+    "markdown": "```pike\nclass ResourceError\n```"
+  },
+  "predef.Builtin.Serializable": {
+    "signature": "class Serializable",
+    "markdown": "```pike\nclass Serializable\n```"
+  },
+  "predef.Builtin.Setter": {
+    "signature": "class Setter",
+    "markdown": "```pike\nclass Setter\n```"
+  },
+  "predef.Builtin.THREAD_ABORTED": {
+    "signature": "constant THREAD_ABORTED",
+    "markdown": "```pike\nconstant THREAD_ABORTED\n```"
+  },
+  "predef.Builtin.THREAD_EXITED": {
+    "signature": "constant THREAD_EXITED",
+    "markdown": "```pike\nconstant THREAD_EXITED\n```"
+  },
+  "predef.Builtin.THREAD_NOT_STARTED": {
+    "signature": "constant THREAD_NOT_STARTED",
+    "markdown": "```pike\nconstant THREAD_NOT_STARTED\n```"
+  },
+  "predef.Builtin.THREAD_RUNNING": {
+    "signature": "constant THREAD_RUNNING",
+    "markdown": "```pike\nconstant THREAD_RUNNING\n```"
+  },
+  "predef.Builtin.TM": {
+    "signature": "class TM",
+    "markdown": "```pike\nclass TM\n```"
+  },
+  "predef.Builtin.Time": {
+    "signature": "class Time",
+    "markdown": "```pike\nclass Time\n```"
+  },
+  "predef.Builtin.Timer": {
+    "signature": "class Timer",
+    "markdown": "```pike\nclass Timer\n```"
+  },
+  "predef.Builtin.TraceProcess": {
+    "signature": "class TraceProcess",
+    "markdown": "```pike\nclass TraceProcess\n```"
+  },
+  "predef.Builtin.__Backtrace_Tester__": {
+    "signature": "class __Backtrace_Tester__",
+    "markdown": "```pike\nclass __Backtrace_Tester__\n```"
+  },
+  "predef.Builtin.__DOUBLE_PRECISION_FLOAT__": {
+    "signature": "constant __DOUBLE_PRECISION_FLOAT__",
+    "markdown": "```pike\nconstant __DOUBLE_PRECISION_FLOAT__\n```"
+  },
+  "predef.Builtin.__HAVE_CPP_PREFIX_SUPPORT__": {
+    "signature": "constant __HAVE_CPP_PREFIX_SUPPORT__",
+    "markdown": "```pike\nconstant __HAVE_CPP_PREFIX_SUPPORT__\n```"
+  },
+  "predef.Builtin.__backend": {
+    "signature": "object __backend",
+    "markdown": "```pike\nobject __backend\n```"
+  },
+  "predef.Builtin.__master": {
+    "signature": "class __master",
+    "markdown": "```pike\nclass __master\n```"
+  },
+  "predef.Builtin._get_setter": {
+    "signature": "function(object, string : function(mixed : void)) _get_setter",
+    "markdown": "```pike\nfunction(object, string : function(mixed : void)) _get_setter\n```"
+  },
+  "predef.Builtin._getenv": {
+    "signature": "scope(0,function(string : string) | function(void : mapping(string:string))) _getenv",
+    "markdown": "```pike\nscope(0,function(string : string) | function(void : mapping(string:string))) _getenv\n```"
+  },
+  "predef.Builtin._putenv": {
+    "signature": "function(string,string | void:void) _putenv",
+    "markdown": "```pike\nfunction(string,string | void:void) _putenv\n```"
+  },
+  "predef.Builtin._take_over_initial_predefines": {
+    "signature": "function(void : mapping(string:string)) _take_over_initial_predefines",
+    "markdown": "```pike\nfunction(void : mapping(string:string)) _take_over_initial_predefines\n```"
+  },
+  "predef.Builtin.array_iterator": {
+    "signature": "class array_iterator",
+    "markdown": "```pike\nclass array_iterator\n```"
+  },
+  "predef.Builtin.automap_marker": {
+    "signature": "class automap_marker",
+    "markdown": "```pike\nclass automap_marker\n```"
+  },
+  "predef.Builtin.backtrace_frame": {
+    "signature": "class backtrace_frame",
+    "markdown": "```pike\nclass backtrace_frame\n```"
+  },
+  "predef.Builtin.bootstring": {
+    "signature": "class bootstring",
+    "markdown": "```pike\nclass bootstring\n```"
+  },
+  "predef.Builtin.condition": {
+    "signature": "class condition",
+    "markdown": "```pike\nclass condition\n```"
+  },
+  "predef.Builtin.count_memory": {
+    "signature": "function(int | mapping(string:int),array | int | mapping | multiset | object | program | string | type(mixed) ...:int) count_memory",
+    "markdown": "```pike\nfunction(int | mapping(string:int),array | int | mapping | multiset | object | program | string | type(mixed) ...:int) count_memory\n```"
+  },
+  "predef.Builtin.create_process": {
+    "signature": "class create_process",
+    "markdown": "```pike\nclass create_process\n```"
+  },
+  "predef.Builtin.deserialize": {
+    "signature": "function(object, function(function(mixed : void), string, type(mixed) : void) : void) deserialize",
+    "markdown": "```pike\nfunction(object, function(function(mixed : void), string, type(mixed) : void) : void) deserialize\n```"
+  },
+  "predef.Builtin.diff": {
+    "signature": "scope(0,function(array((0=mixed)),array((1=mixed)):array(array(array(0 | 1))))) diff",
+    "markdown": "```pike\nscope(0,function(array((0=mixed)),array((1=mixed)):array(array(array(0 | 1))))) diff\n```"
+  },
+  "predef.Builtin.diff_compare_table": {
+    "signature": "function(array, array : array(array(int))) diff_compare_table",
+    "markdown": "```pike\nfunction(array, array : array(array(int))) diff_compare_table\n```"
+  },
+  "predef.Builtin.diff_dyn_longest_sequence": {
+    "signature": "function(array, array : array(int)) diff_dyn_longest_sequence",
+    "markdown": "```pike\nfunction(array, array : array(int)) diff_dyn_longest_sequence\n```"
+  },
+  "predef.Builtin.diff_longest_sequence": {
+    "signature": "function(array, array : array(int)) diff_longest_sequence",
+    "markdown": "```pike\nfunction(array, array : array(int)) diff_longest_sequence\n```"
+  },
+  "predef.Builtin.everynth": {
+    "signature": "scope(0,function(array((0=mixed)),int | void,int | void:array(0))) everynth",
+    "markdown": "```pike\nscope(0,function(array((0=mixed)),int | void,int | void:array(0))) everynth\n```"
+  },
+  "predef.Builtin.file_line_iterator": {
+    "signature": "class file_line_iterator",
+    "markdown": "```pike\nclass file_line_iterator\n```"
+  },
+  "predef.Builtin.function_defined": {
+    "signature": "function(function : string) function_defined",
+    "markdown": "```pike\nfunction(function : string) function_defined\n```"
+  },
+  "predef.Builtin.gc_parameters": {
+    "signature": "function(mapping(string:mixed) | void:mapping(string:mixed)) gc_parameters",
+    "markdown": "```pike\nfunction(mapping(string:mixed) | void:mapping(string:mixed)) gc_parameters\n```"
+  },
+  "predef.Builtin.get_runtime_info": {
+    "signature": "function(:mapping(string:int | string)) get_runtime_info",
+    "markdown": "```pike\nfunction(:mapping(string:int | string)) get_runtime_info\n```"
+  },
+  "predef.Builtin.hex2string": {
+    "signature": "function(string : string(8bit)) hex2string",
+    "markdown": "```pike\nfunction(string : string(8bit)) hex2string\n```"
+  },
+  "predef.Builtin.identify_cycle": {
+    "signature": "function(array | mapping | multiset | object | program | string | type(mixed):array(array | mapping | multiset | object | program | string | type(mixed))) identify_cycle",
+    "markdown": "```pike\nfunction(array | mapping | multiset | object | program | string | type(mixed):array(array | mapping | multiset | object | program | string | type(mixed))) identify_cycle\n```"
+  },
+  "predef.Builtin.implicit_gc_real_time": {
+    "signature": "function(int | void:int) implicit_gc_real_time",
+    "markdown": "```pike\nfunction(int | void:int) implicit_gc_real_time\n```"
+  },
+  "predef.Builtin.inherit_list": {
+    "signature": "function(object | program:array(program)) inherit_list",
+    "markdown": "```pike\nfunction(object | program:array(program)) inherit_list\n```"
+  },
+  "predef.Builtin.interleave_array": {
+    "signature": "function(array(mapping(int:mixed)) : array(int)) interleave_array",
+    "markdown": "```pike\nfunction(array(mapping(int:mixed)) : array(int)) interleave_array\n```"
+  },
+  "predef.Builtin.levenshtein_distance": {
+    "signature": "function(string, string : int) levenshtein_distance",
+    "markdown": "```pike\nfunction(string, string : int) levenshtein_distance\n```"
+  },
+  "predef.Builtin.longest_ordered_sequence": {
+    "signature": "function(array : array(int)) longest_ordered_sequence",
+    "markdown": "```pike\nfunction(array : array(int)) longest_ordered_sequence\n```"
+  },
+  "predef.Builtin.mapping_iterator": {
+    "signature": "class mapping_iterator",
+    "markdown": "```pike\nclass mapping_iterator\n```"
+  },
+  "predef.Builtin.multi_string_replace": {
+    "signature": "class multi_string_replace",
+    "markdown": "```pike\nclass multi_string_replace\n```"
+  },
+  "predef.Builtin.multiset_iterator": {
+    "signature": "class multiset_iterator",
+    "markdown": "```pike\nclass multiset_iterator\n```"
+  },
+  "predef.Builtin.mutex": {
+    "signature": "class mutex",
+    "markdown": "```pike\nclass mutex\n```"
+  },
+  "predef.Builtin.mutex_compat_7_4": {
+    "signature": "class mutex_compat_7_4",
+    "markdown": "```pike\nclass mutex_compat_7_4\n```"
+  },
+  "predef.Builtin.mutex_key": {
+    "signature": "class mutex_key",
+    "markdown": "```pike\nclass mutex_key\n```"
+  },
+  "predef.Builtin.object_secure": {
+    "signature": "scope(0,function((0=object) : 0)) object_secure",
+    "markdown": "```pike\nscope(0,function((0=object) : 0)) object_secure\n```"
+  },
+  "predef.Builtin.permute": {
+    "signature": "function(array, int(0..2147483647) : array) permute",
+    "markdown": "```pike\nfunction(array, int(0..2147483647) : array) permute\n```"
+  },
+  "predef.Builtin.program_defined": {
+    "signature": "function(program : string) program_defined",
+    "markdown": "```pike\nfunction(program : string) program_defined\n```"
+  },
+  "predef.Builtin.program_identifier_defined": {
+    "signature": "function(object | program,string:string) program_identifier_defined",
+    "markdown": "```pike\nfunction(object | program,string:string) program_identifier_defined\n```"
+  },
+  "predef.Builtin.program_implements": {
+    "signature": "function(program, program : int) program_implements",
+    "markdown": "```pike\nfunction(program, program : int) program_implements\n```"
+  },
+  "predef.Builtin.program_inherits": {
+    "signature": "function(object | program,program:int) program_inherits",
+    "markdown": "```pike\nfunction(object | program,program:int) program_inherits\n```"
+  },
+  "predef.Builtin.serialize": {
+    "signature": "function(object, function(mixed, string, type(mixed) : void) : void) serialize",
+    "markdown": "```pike\nfunction(object, function(mixed, string, type(mixed) : void) : void) serialize\n```"
+  },
+  "predef.Builtin.single_string_replace": {
+    "signature": "class single_string_replace",
+    "markdown": "```pike\nclass single_string_replace\n```"
+  },
+  "predef.Builtin.splice": {
+    "signature": "scope(0,function(array((0=mixed)) ... : array(0))) splice",
+    "markdown": "```pike\nscope(0,function(array((0=mixed)) ... : array(0))) splice\n```"
+  },
+  "predef.Builtin.string2hex": {
+    "signature": "function(string : string(8bit)) string2hex",
+    "markdown": "```pike\nfunction(string : string(8bit)) string2hex\n```"
+  },
+  "predef.Builtin.string_count": {
+    "signature": "function(string, string : int) string_count",
+    "markdown": "```pike\nfunction(string, string : int) string_count\n```"
+  },
+  "predef.Builtin.string_iterator": {
+    "signature": "class string_iterator",
+    "markdown": "```pike\nclass string_iterator\n```"
+  },
+  "predef.Builtin.string_normalize_space": {
+    "signature": "function(string,string | void:string) string_normalize_space",
+    "markdown": "```pike\nfunction(string,string | void:string) string_normalize_space\n```"
+  },
+  "predef.Builtin.string_range": {
+    "signature": "function(string : array(int)) string_range",
+    "markdown": "```pike\nfunction(string : array(int)) string_range\n```"
+  },
+  "predef.Builtin.string_secure": {
+    "signature": "scope(0,function((0=string) : 0)) string_secure",
+    "markdown": "```pike\nscope(0,function((0=string) : 0)) string_secure\n```"
+  },
+  "predef.Builtin.string_split_iterator": {
+    "signature": "class string_split_iterator",
+    "markdown": "```pike\nclass string_split_iterator\n```"
+  },
+  "predef.Builtin.string_status": {
+    "signature": "function(int : string) string_status",
+    "markdown": "```pike\nfunction(int : string) string_status\n```"
+  },
+  "predef.Builtin.string_trim_all_whites": {
+    "signature": "function(string : string) string_trim_all_whites",
+    "markdown": "```pike\nfunction(string : string) string_trim_all_whites\n```"
+  },
+  "predef.Builtin.string_trim_whites": {
+    "signature": "function(string : string) string_trim_whites",
+    "markdown": "```pike\nfunction(string : string) string_trim_whites\n```"
+  },
+  "predef.Builtin.string_width": {
+    "signature": "function(string:int(16..16) | int(32..32) | int(8..8)) string_width",
+    "markdown": "```pike\nfunction(string:int(16..16) | int(32..32) | int(8..8)) string_width\n```"
+  },
+  "predef.Builtin.thread_id": {
+    "signature": "class thread_id",
+    "markdown": "```pike\nclass thread_id\n```"
+  },
+  "predef.Builtin.thread_local": {
+    "signature": "class thread_local",
+    "markdown": "```pike\nclass thread_local\n```"
+  },
+  "predef.Builtin.threads_disabled": {
+    "signature": "class threads_disabled",
+    "markdown": "```pike\nclass threads_disabled\n```"
+  },
+  "predef.Builtin.transpose": {
+    "signature": "scope(0,function(array((0=mixed)) : array(0))) transpose",
+    "markdown": "```pike\nscope(0,function(array((0=mixed)) : array(0))) transpose\n```"
+  },
+  "predef.Builtin.uniq_array": {
+    "signature": "scope(0,function(array((0=mixed)) : array(0))) uniq_array",
+    "markdown": "```pike\nscope(0,function(array((0=mixed)) : array(0))) uniq_array\n```"
   },
   "predef.Bz2.Bz2": {
     "signature": "inherit Bz2",
@@ -3115,6 +3575,10 @@
     "signature": "array(int(0..255)) rgb_to_hsv(array(int(0..255)) rgb)",
     "markdown": "```pike\narray(int(0..255)) rgb_to_hsv(array(int(0..255)) rgb)\narray(int(0..255)) rgb_to_hsv(int(0..255) r, int(0..255) g, int(0..255) b)\n```\n\nThis function returns the HSV value of the color\n described by the provided RGB value. It is essentially\n calling Image.Color.rgb(r,g,b)->hsv().\n**See also:** Colors.hsv_to_rgb()\n Image.Color.Color.hsv()"
   },
+  "predef.CommonLog.read": {
+    "signature": "function(function(array(int | string),int | void:void),object | string,int | void:int) read",
+    "markdown": "```pike\nfunction(function(array(int | string),int | void:void),object | string,int | void:int) read\n```"
+  },
   "predef.Concurrent.AggregateState": {
     "signature": "function({ Promise = object(implements Concurrent.Promise) } : object(is Concurrent.AggregateState)) AggregateState",
     "markdown": "```pike\nfunction({ Promise = object(implements Concurrent.Promise) } : object(is Concurrent.AggregateState)) AggregateState\n```"
@@ -4434,6 +4898,66 @@
   "predef.Crypto.verify_crypt_md5": {
     "signature": "object(bool) verify_crypt_md5(string password, string hash)",
     "markdown": "```pike\nobject(bool) verify_crypt_md5(string password, string hash)\n```\n\nVerifies the password against the crypt_md5 hash.\n**Throws:** May throw an exception if the hash value is bad.\n**See also:** make_crypt_md5"
+  },
+  "predef.DVB.Audio": {
+    "signature": "class Audio",
+    "markdown": "```pike\nclass Audio\n```"
+  },
+  "predef.DVB.CA_SYSTEM_BETA": {
+    "signature": "constant CA_SYSTEM_BETA",
+    "markdown": "```pike\nconstant CA_SYSTEM_BETA\n```"
+  },
+  "predef.DVB.CA_SYSTEM_IRDETO": {
+    "signature": "constant CA_SYSTEM_IRDETO",
+    "markdown": "```pike\nconstant CA_SYSTEM_IRDETO\n```"
+  },
+  "predef.DVB.CA_SYSTEM_NAGRA": {
+    "signature": "constant CA_SYSTEM_NAGRA",
+    "markdown": "```pike\nconstant CA_SYSTEM_NAGRA\n```"
+  },
+  "predef.DVB.CA_SYSTEM_SECA": {
+    "signature": "constant CA_SYSTEM_SECA",
+    "markdown": "```pike\nconstant CA_SYSTEM_SECA\n```"
+  },
+  "predef.DVB.CA_SYSTEM_VIACCESS": {
+    "signature": "constant CA_SYSTEM_VIACCESS",
+    "markdown": "```pike\nconstant CA_SYSTEM_VIACCESS\n```"
+  },
+  "predef.DVB.MUX_AUDIO": {
+    "signature": "constant MUX_AUDIO",
+    "markdown": "```pike\nconstant MUX_AUDIO\n```"
+  },
+  "predef.DVB.MUX_OTHER": {
+    "signature": "constant MUX_OTHER",
+    "markdown": "```pike\nconstant MUX_OTHER\n```"
+  },
+  "predef.DVB.MUX_PCR": {
+    "signature": "constant MUX_PCR",
+    "markdown": "```pike\nconstant MUX_PCR\n```"
+  },
+  "predef.DVB.MUX_SUBTITLE": {
+    "signature": "constant MUX_SUBTITLE",
+    "markdown": "```pike\nconstant MUX_SUBTITLE\n```"
+  },
+  "predef.DVB.MUX_TELETEXT": {
+    "signature": "constant MUX_TELETEXT",
+    "markdown": "```pike\nconstant MUX_TELETEXT\n```"
+  },
+  "predef.DVB.MUX_VIDEO": {
+    "signature": "constant MUX_VIDEO",
+    "markdown": "```pike\nconstant MUX_VIDEO\n```"
+  },
+  "predef.DVB.MUX__RDS": {
+    "signature": "constant MUX__RDS",
+    "markdown": "```pike\nconstant MUX__RDS\n```"
+  },
+  "predef.DVB.Stream": {
+    "signature": "class Stream",
+    "markdown": "```pike\nclass Stream\n```"
+  },
+  "predef.DVB.dvb": {
+    "signature": "class dvb",
+    "markdown": "```pike\nclass dvb\n```"
   },
   "predef.Debug.Inspect": {
     "signature": "class Inspect",
@@ -6687,6 +7211,62 @@
     "signature": "array(string) get_args(array(string) argv, void|int(-1..1) posix_me_harder, void|int throw_errors)",
     "markdown": "```pike\narray(string) get_args(array(string) argv, void|int(-1..1) posix_me_harder, void|int throw_errors)\n```\n\nThis function returns the remaining command line arguments after\n you have run find_option() or find_all_options() to find\n all the options in the argument list. If there are any options\n left not handled by find_option() or find_all_options()\n this function will fail.\nIf throw_errors has been specified get_args() will throw errors\n on failure. If it has been left out, or is `0` (zero), it will\n instead print an error message on Stdio.stderr and exit the\n program with result code 1 on failure.\n**Returns:** On success a new argv array without the parsed options is\n returned.\n**See also:** Getopt.find_option(), Getopt.find_all_options()"
   },
+  "predef.Gettext.LC_ALL": {
+    "signature": "constant LC_ALL",
+    "markdown": "```pike\nconstant LC_ALL\n```"
+  },
+  "predef.Gettext.LC_COLLATE": {
+    "signature": "constant LC_COLLATE",
+    "markdown": "```pike\nconstant LC_COLLATE\n```"
+  },
+  "predef.Gettext.LC_CTYPE": {
+    "signature": "constant LC_CTYPE",
+    "markdown": "```pike\nconstant LC_CTYPE\n```"
+  },
+  "predef.Gettext.LC_MESSAGES": {
+    "signature": "constant LC_MESSAGES",
+    "markdown": "```pike\nconstant LC_MESSAGES\n```"
+  },
+  "predef.Gettext.LC_MONETARY": {
+    "signature": "constant LC_MONETARY",
+    "markdown": "```pike\nconstant LC_MONETARY\n```"
+  },
+  "predef.Gettext.LC_NUMERIC": {
+    "signature": "constant LC_NUMERIC",
+    "markdown": "```pike\nconstant LC_NUMERIC\n```"
+  },
+  "predef.Gettext.LC_TIME": {
+    "signature": "constant LC_TIME",
+    "markdown": "```pike\nconstant LC_TIME\n```"
+  },
+  "predef.Gettext.bindtextdomain": {
+    "signature": "function(string | void,string | void:string | void) bindtextdomain",
+    "markdown": "```pike\nfunction(string | void,string | void:string | void) bindtextdomain\n```"
+  },
+  "predef.Gettext.dcgettext": {
+    "signature": "function(string, string, int : string) dcgettext",
+    "markdown": "```pike\nfunction(string, string, int : string) dcgettext\n```"
+  },
+  "predef.Gettext.dgettext": {
+    "signature": "function(string, string : string) dgettext",
+    "markdown": "```pike\nfunction(string, string : string) dgettext\n```"
+  },
+  "predef.Gettext.gettext": {
+    "signature": "function(string,string | void,int | void:string) gettext",
+    "markdown": "```pike\nfunction(string,string | void,int | void:string) gettext\n```"
+  },
+  "predef.Gettext.localeconv": {
+    "signature": "function(void : mapping) localeconv",
+    "markdown": "```pike\nfunction(void : mapping) localeconv\n```"
+  },
+  "predef.Gettext.setlocale": {
+    "signature": "function(int, string : int) setlocale",
+    "markdown": "```pike\nfunction(int, string : int) setlocale\n```"
+  },
+  "predef.Gettext.textdomain": {
+    "signature": "function(string | void:string) textdomain",
+    "markdown": "```pike\nfunction(string | void:string) textdomain\n```"
+  },
   "predef.Git.Export": {
     "signature": "class Export",
     "markdown": "```pike\nclass Export\n```"
@@ -6814,6 +7394,26 @@
   "predef.Git.module": {
     "signature": "object module",
     "markdown": "```pike\nobject module\n```"
+  },
+  "predef.Gmp.bignum": {
+    "signature": "class bignum",
+    "markdown": "```pike\nclass bignum\n```"
+  },
+  "predef.Gmp.fac": {
+    "signature": "function(int : object) fac",
+    "markdown": "```pike\nfunction(int : object) fac\n```"
+  },
+  "predef.Gmp.mpf": {
+    "signature": "class mpf",
+    "markdown": "```pike\nclass mpf\n```"
+  },
+  "predef.Gmp.mpq": {
+    "signature": "class mpq",
+    "markdown": "```pike\nclass mpq\n```"
+  },
+  "predef.Gmp.mpz": {
+    "signature": "class mpz",
+    "markdown": "```pike\nclass mpz\n```"
   },
   "predef.Gnome.GTK1": {
     "signature": "",
@@ -6950,6 +7550,130 @@
   "predef.Gz._file.write": {
     "signature": "int write(string data)",
     "markdown": "```pike\nint write(string data)\n```\n\nWrites the data to the file.\n**Returns:** the number of bytes written to the file."
+  },
+  "predef.HTTPAccept.LogEntry": {
+    "signature": "class LogEntry",
+    "markdown": "```pike\nclass LogEntry\n```"
+  },
+  "predef.HTTPAccept.Loop": {
+    "signature": "class Loop",
+    "markdown": "```pike\nclass Loop\n```"
+  },
+  "predef.HTTPAccept.RequestProgram": {
+    "signature": "class RequestProgram",
+    "markdown": "```pike\nclass RequestProgram\n```"
+  },
+  "predef.HTTPAccept.prog": {
+    "signature": "class prog",
+    "markdown": "```pike\nclass prog\n```"
+  },
+  "predef.Image.ANY": {
+    "signature": "object ANY",
+    "markdown": "```pike\nobject ANY\n```"
+  },
+  "predef.Image.AVS": {
+    "signature": "object AVS",
+    "markdown": "```pike\nobject AVS\n```"
+  },
+  "predef.Image.BMP": {
+    "signature": "object BMP",
+    "markdown": "```pike\nobject BMP\n```"
+  },
+  "predef.Image.Color": {
+    "signature": "object Color",
+    "markdown": "```pike\nobject Color\n```"
+  },
+  "predef.Image.Colortable": {
+    "signature": "class Colortable",
+    "markdown": "```pike\nclass Colortable\n```"
+  },
+  "predef.Image.DSI": {
+    "signature": "object DSI",
+    "markdown": "```pike\nobject DSI\n```"
+  },
+  "predef.Image.Font": {
+    "signature": "class Font",
+    "markdown": "```pike\nclass Font\n```"
+  },
+  "predef.Image.HRZ": {
+    "signature": "object HRZ",
+    "markdown": "```pike\nobject HRZ\n```"
+  },
+  "predef.Image.ILBM": {
+    "signature": "object ILBM",
+    "markdown": "```pike\nobject ILBM\n```"
+  },
+  "predef.Image.Image": {
+    "signature": "class Image",
+    "markdown": "```pike\nclass Image\n```"
+  },
+  "predef.Image.Layer": {
+    "signature": "class Layer",
+    "markdown": "```pike\nclass Layer\n```"
+  },
+  "predef.Image.NEO": {
+    "signature": "object NEO",
+    "markdown": "```pike\nobject NEO\n```"
+  },
+  "predef.Image.PCX": {
+    "signature": "object PCX",
+    "markdown": "```pike\nobject PCX\n```"
+  },
+  "predef.Image.PNM": {
+    "signature": "object PNM",
+    "markdown": "```pike\nobject PNM\n```"
+  },
+  "predef.Image.PVR": {
+    "signature": "object PVR",
+    "markdown": "```pike\nobject PVR\n```"
+  },
+  "predef.Image.RAS": {
+    "signature": "object RAS",
+    "markdown": "```pike\nobject RAS\n```"
+  },
+  "predef.Image.TGA": {
+    "signature": "object TGA",
+    "markdown": "```pike\nobject TGA\n```"
+  },
+  "predef.Image.TIM": {
+    "signature": "object TIM",
+    "markdown": "```pike\nobject TIM\n```"
+  },
+  "predef.Image.WBF": {
+    "signature": "object WBF",
+    "markdown": "```pike\nobject WBF\n```"
+  },
+  "predef.Image.WBMP": {
+    "signature": "object WBMP",
+    "markdown": "```pike\nobject WBMP\n```"
+  },
+  "predef.Image.X": {
+    "signature": "object X",
+    "markdown": "```pike\nobject X\n```"
+  },
+  "predef.Image.XBM": {
+    "signature": "object XBM",
+    "markdown": "```pike\nobject XBM\n```"
+  },
+  "predef.Image.XWD": {
+    "signature": "object XWD",
+    "markdown": "```pike\nobject XWD\n```"
+  },
+  "predef.Image._PSD": {
+    "signature": "object _PSD",
+    "markdown": "```pike\nobject _PSD\n```"
+  },
+  "predef.Image._XCF": {
+    "signature": "object _XCF",
+    "markdown": "```pike\nobject _XCF\n```"
+  },
+  "predef.Image._XPM": {
+    "signature": "object _XPM",
+    "markdown": "```pike\nobject _XPM\n```"
+  },
+  "predef.Image.lay": {
+    "signature": "scope(0,function(array(mapping(string:array(int) | float | int | object | string) | object),int,int,int,int:object) | function(array(mapping(string:array(int) |… lay",
+    "markdown": "```pike\nscope(0,function(array(mapping(string:array(int) | float | int | object | string) | object),int,int,int,int:object) | function(array(mapping(string:array(int) |… lay\n```"
   },
   "predef.Int.Inf": {
     "signature": "",
@@ -9443,6 +10167,10 @@
     "signature": "constant str_turn",
     "markdown": "```pike\nconstant str_turn\n```"
   },
+  "predef.Multiset.Iterator": {
+    "signature": "class Iterator",
+    "markdown": "```pike\nclass Iterator\n```"
+  },
   "predef.Mysql.SqlTable.Result": {
     "signature": "",
     "markdown": "\nResult object returned by e.g. select. This is similar in\n function to an Sql.sql_result object. It also implements the\n iterator interface and can therefore be used directly in e.g.\n `foreach`."
@@ -9903,9 +10631,261 @@
     "signature": "object(bool) valid_domain_name(string hostname)",
     "markdown": "```pike\nobject(bool) valid_domain_name(string hostname)\n```\n\nPerform a basic sanity check on hostname based on total and\n subdomain label length. Does not test for invalid chars.\n- `hostname` — Domain name string to test.\n**Returns:** True if hostname looks like a valid domain name"
   },
+  "predef.Nettle.AEAD": {
+    "signature": "class AEAD",
+    "markdown": "```pike\nclass AEAD\n```"
+  },
+  "predef.Nettle.AES": {
+    "signature": "class AES",
+    "markdown": "```pike\nclass AES\n```"
+  },
+  "predef.Nettle.ARCFOUR": {
+    "signature": "class ARCFOUR",
+    "markdown": "```pike\nclass ARCFOUR\n```"
+  },
+  "predef.Nettle.BLOWFISH": {
+    "signature": "class BLOWFISH",
+    "markdown": "```pike\nclass BLOWFISH\n```"
+  },
+  "predef.Nettle.BlockCipher": {
+    "signature": "class BlockCipher",
+    "markdown": "```pike\nclass BlockCipher\n```"
+  },
+  "predef.Nettle.BlockCipher16": {
+    "signature": "class BlockCipher16",
+    "markdown": "```pike\nclass BlockCipher16\n```"
+  },
+  "predef.Nettle.BufferedCipher": {
+    "signature": "class BufferedCipher",
+    "markdown": "```pike\nclass BufferedCipher\n```"
+  },
+  "predef.Nettle.CAMELLIA": {
+    "signature": "class CAMELLIA",
+    "markdown": "```pike\nclass CAMELLIA\n```"
+  },
+  "predef.Nettle.CAST128": {
+    "signature": "class CAST128",
+    "markdown": "```pike\nclass CAST128\n```"
+  },
+  "predef.Nettle.CHACHA": {
+    "signature": "class CHACHA",
+    "markdown": "```pike\nclass CHACHA\n```"
+  },
+  "predef.Nettle.CHACHA_POLY1305": {
+    "signature": "class CHACHA_POLY1305",
+    "markdown": "```pike\nclass CHACHA_POLY1305\n```"
+  },
+  "predef.Nettle.Cipher": {
+    "signature": "class Cipher",
+    "markdown": "```pike\nclass Cipher\n```"
+  },
+  "predef.Nettle.DES": {
+    "signature": "class DES",
+    "markdown": "```pike\nclass DES\n```"
+  },
+  "predef.Nettle.DES3": {
+    "signature": "class DES3",
+    "markdown": "```pike\nclass DES3\n```"
+  },
+  "predef.Nettle.DH_Params": {
+    "signature": "class DH_Params",
+    "markdown": "```pike\nclass DH_Params\n```"
+  },
+  "predef.Nettle.ECC_Curve": {
+    "signature": "class ECC_Curve",
+    "markdown": "```pike\nclass ECC_Curve\n```"
+  },
+  "predef.Nettle.Fortuna": {
+    "signature": "class Fortuna",
+    "markdown": "```pike\nclass Fortuna\n```"
+  },
+  "predef.Nettle.GOST94": {
+    "signature": "class GOST94",
+    "markdown": "```pike\nclass GOST94\n```"
+  },
+  "predef.Nettle.Hash": {
+    "signature": "class Hash",
+    "markdown": "```pike\nclass Hash\n```"
+  },
+  "predef.Nettle.IDEA": {
+    "signature": "class IDEA",
+    "markdown": "```pike\nclass IDEA\n```"
+  },
+  "predef.Nettle.MAC": {
+    "signature": "class MAC",
+    "markdown": "```pike\nclass MAC\n```"
+  },
+  "predef.Nettle.MD2": {
+    "signature": "class MD2",
+    "markdown": "```pike\nclass MD2\n```"
+  },
+  "predef.Nettle.MD4": {
+    "signature": "class MD4",
+    "markdown": "```pike\nclass MD4\n```"
+  },
+  "predef.Nettle.MD5": {
+    "signature": "class MD5",
+    "markdown": "```pike\nclass MD5\n```"
+  },
+  "predef.Nettle.PAD_ANSI_X923": {
+    "signature": "constant PAD_ANSI_X923",
+    "markdown": "```pike\nconstant PAD_ANSI_X923\n```"
+  },
+  "predef.Nettle.PAD_ISO_10126": {
+    "signature": "constant PAD_ISO_10126",
+    "markdown": "```pike\nconstant PAD_ISO_10126\n```"
+  },
+  "predef.Nettle.PAD_PKCS7": {
+    "signature": "constant PAD_PKCS7",
+    "markdown": "```pike\nconstant PAD_PKCS7\n```"
+  },
+  "predef.Nettle.PAD_SSL": {
+    "signature": "constant PAD_SSL",
+    "markdown": "```pike\nconstant PAD_SSL\n```"
+  },
+  "predef.Nettle.PAD_TLS": {
+    "signature": "constant PAD_TLS",
+    "markdown": "```pike\nconstant PAD_TLS\n```"
+  },
+  "predef.Nettle.PAD_ZERO": {
+    "signature": "constant PAD_ZERO",
+    "markdown": "```pike\nconstant PAD_ZERO\n```"
+  },
+  "predef.Nettle.RIPEMD160": {
+    "signature": "class RIPEMD160",
+    "markdown": "```pike\nclass RIPEMD160\n```"
+  },
+  "predef.Nettle.SALSA20": {
+    "signature": "class SALSA20",
+    "markdown": "```pike\nclass SALSA20\n```"
+  },
+  "predef.Nettle.SALSA20R12": {
+    "signature": "class SALSA20R12",
+    "markdown": "```pike\nclass SALSA20R12\n```"
+  },
+  "predef.Nettle.SECP256R1": {
+    "signature": "constant SECP256R1",
+    "markdown": "```pike\nconstant SECP256R1\n```"
+  },
+  "predef.Nettle.SECP384R1": {
+    "signature": "constant SECP384R1",
+    "markdown": "```pike\nconstant SECP384R1\n```"
+  },
+  "predef.Nettle.SECP521R1": {
+    "signature": "constant SECP521R1",
+    "markdown": "```pike\nconstant SECP521R1\n```"
+  },
+  "predef.Nettle.SERPENT": {
+    "signature": "class SERPENT",
+    "markdown": "```pike\nclass SERPENT\n```"
+  },
+  "predef.Nettle.SHA1": {
+    "signature": "class SHA1",
+    "markdown": "```pike\nclass SHA1\n```"
+  },
+  "predef.Nettle.SHA224": {
+    "signature": "class SHA224",
+    "markdown": "```pike\nclass SHA224\n```"
+  },
+  "predef.Nettle.SHA256": {
+    "signature": "class SHA256",
+    "markdown": "```pike\nclass SHA256\n```"
+  },
+  "predef.Nettle.SHA384": {
+    "signature": "class SHA384",
+    "markdown": "```pike\nclass SHA384\n```"
+  },
+  "predef.Nettle.SHA3_224": {
+    "signature": "class SHA3_224",
+    "markdown": "```pike\nclass SHA3_224\n```"
+  },
+  "predef.Nettle.SHA3_256": {
+    "signature": "class SHA3_256",
+    "markdown": "```pike\nclass SHA3_256\n```"
+  },
+  "predef.Nettle.SHA3_384": {
+    "signature": "class SHA3_384",
+    "markdown": "```pike\nclass SHA3_384\n```"
+  },
+  "predef.Nettle.SHA3_512": {
+    "signature": "class SHA3_512",
+    "markdown": "```pike\nclass SHA3_512\n```"
+  },
+  "predef.Nettle.SHA512": {
+    "signature": "class SHA512",
+    "markdown": "```pike\nclass SHA512\n```"
+  },
+  "predef.Nettle.Twofish": {
+    "signature": "class Twofish",
+    "markdown": "```pike\nclass Twofish\n```"
+  },
+  "predef.Nettle.UMAC128_AES": {
+    "signature": "class UMAC128_AES",
+    "markdown": "```pike\nclass UMAC128_AES\n```"
+  },
+  "predef.Nettle.UMAC32_AES": {
+    "signature": "class UMAC32_AES",
+    "markdown": "```pike\nclass UMAC32_AES\n```"
+  },
+  "predef.Nettle.UMAC64_AES": {
+    "signature": "class UMAC64_AES",
+    "markdown": "```pike\nclass UMAC64_AES\n```"
+  },
+  "predef.Nettle.UMAC96_AES": {
+    "signature": "class UMAC96_AES",
+    "markdown": "```pike\nclass UMAC96_AES\n```"
+  },
+  "predef.Nettle.Yarrow": {
+    "signature": "class Yarrow",
+    "markdown": "```pike\nclass Yarrow\n```"
+  },
+  "predef.Nettle.crypt_md5": {
+    "signature": "function(string(8bit),string(8bit),string(8bit) | void:string(7bit)) crypt_md5",
+    "markdown": "```pike\nfunction(string(8bit),string(8bit),string(8bit) | void:string(7bit)) crypt_md5\n```"
+  },
+  "predef.Nettle.dsa_generate_keypair": {
+    "signature": "function(int, int, function(int(0..2147483647) : string(8bit)) : array({ Gmp.mpz = object(implements _static_modules.Gmp()->mpz) })) dsa_generate_keypair",
+    "markdown": "```pike\nfunction(int, int, function(int(0..2147483647) : string(8bit)) : array({ Gmp.mpz = object(implements _static_modules.Gmp()->mpz) })) dsa_generate_keypair\n```"
+  },
+  "predef.Nettle.rsa_generate_keypair": {
+    "signature": "function(int, int, function(int(0..2147483647) : string(8bit)) : array({ Gmp.mpz = object(implements _static_modules.Gmp()->mpz) })) rsa_generate_keypair",
+    "markdown": "```pike\nfunction(int, int, function(int(0..2147483647) : string(8bit)) : array({ Gmp.mpz = object(implements _static_modules.Gmp()->mpz) })) rsa_generate_keypair\n```"
+  },
+  "predef.Nettle.rsa_unpad": {
+    "signature": "function(string(8bit), int : int) rsa_unpad",
+    "markdown": "```pike\nfunction(string(8bit), int : int) rsa_unpad\n```"
+  },
+  "predef.Nettle.version": {
+    "signature": "function( : string) version",
+    "markdown": "```pike\nfunction( : string) version\n```"
+  },
+  "predef.Object.DESTRUCT_CLEANUP": {
+    "signature": "constant DESTRUCT_CLEANUP",
+    "markdown": "```pike\nconstant DESTRUCT_CLEANUP\n```"
+  },
+  "predef.Object.DESTRUCT_EXPLICIT": {
+    "signature": "constant DESTRUCT_EXPLICIT",
+    "markdown": "```pike\nconstant DESTRUCT_EXPLICIT\n```"
+  },
+  "predef.Object.DESTRUCT_GC": {
+    "signature": "constant DESTRUCT_GC",
+    "markdown": "```pike\nconstant DESTRUCT_GC\n```"
+  },
+  "predef.Object.DESTRUCT_NO_REFS": {
+    "signature": "constant DESTRUCT_NO_REFS",
+    "markdown": "```pike\nconstant DESTRUCT_NO_REFS\n```"
+  },
+  "predef.Object.secure": {
+    "signature": "scope(0,function((0=object) : 0)) secure",
+    "markdown": "```pike\nscope(0,function((0=object) : 0)) secure\n```"
+  },
   "predef.Oracle.M": {
     "signature": "inherit M",
     "markdown": "```pike\ninherit M\n```"
+  },
+  "predef.PDF.PDFlib": {
+    "signature": "class PDFlib",
+    "markdown": "```pike\nclass PDFlib\n```"
   },
   "predef.Parser.C": {
     "signature": "object C",
@@ -11938,6 +12918,30 @@
   "predef.Pike.soft_cast": {
     "signature": "scope(0,function((0=type(mixed)), (1=type(mixed)) : 0 & 1)) soft_cast",
     "markdown": "```pike\nscope(0,function((0=type(mixed)), (1=type(mixed)) : 0 & 1)) soft_cast\n```"
+  },
+  "predef.Pipe.__output": {
+    "signature": "class __output",
+    "markdown": "```pike\nclass __output\n```"
+  },
+  "predef.Pipe._pipe_debug": {
+    "signature": "function( : array) _pipe_debug",
+    "markdown": "```pike\nfunction( : array) _pipe_debug\n```"
+  },
+  "predef.Pipe.pipe": {
+    "signature": "class pipe",
+    "markdown": "```pike\nclass pipe\n```"
+  },
+  "predef.Postgres.postgres": {
+    "signature": "class postgres",
+    "markdown": "```pike\nclass postgres\n```"
+  },
+  "predef.Postgres.postgres_result": {
+    "signature": "class postgres_result",
+    "markdown": "```pike\nclass postgres_result\n```"
+  },
+  "predef.Postgres.version": {
+    "signature": "constant version",
+    "markdown": "```pike\nconstant version\n```"
   },
   "predef.Process.ForkdDecoder": {
     "signature": "",
@@ -19051,6 +20055,10 @@
     "signature": "object module",
     "markdown": "```pike\nobject module\n```"
   },
+  "predef.SQLite.SQLite": {
+    "signature": "class SQLite",
+    "markdown": "```pike\nclass SQLite\n```"
+  },
   "predef.SSL.Alert": {
     "signature": "class Alert",
     "markdown": "```pike\nclass Alert\n```"
@@ -23546,6 +24554,42 @@
   "predef.Serializer.serialize": {
     "signature": "function(object, function(mixed, string, type(mixed) : void) : void) serialize",
     "markdown": "```pike\nfunction(object, function(mixed, string, type(mixed) : void) : void) serialize\n```"
+  },
+  "predef.Shuffler.DONE": {
+    "signature": "constant DONE",
+    "markdown": "```pike\nconstant DONE\n```"
+  },
+  "predef.Shuffler.INITIAL": {
+    "signature": "constant INITIAL",
+    "markdown": "```pike\nconstant INITIAL\n```"
+  },
+  "predef.Shuffler.PAUSED": {
+    "signature": "constant PAUSED",
+    "markdown": "```pike\nconstant PAUSED\n```"
+  },
+  "predef.Shuffler.READ_ERROR": {
+    "signature": "constant READ_ERROR",
+    "markdown": "```pike\nconstant READ_ERROR\n```"
+  },
+  "predef.Shuffler.RUNNING": {
+    "signature": "constant RUNNING",
+    "markdown": "```pike\nconstant RUNNING\n```"
+  },
+  "predef.Shuffler.Shuffle": {
+    "signature": "class Shuffle",
+    "markdown": "```pike\nclass Shuffle\n```"
+  },
+  "predef.Shuffler.Shuffler": {
+    "signature": "class Shuffler",
+    "markdown": "```pike\nclass Shuffler\n```"
+  },
+  "predef.Shuffler.USER_ABORT": {
+    "signature": "constant USER_ABORT",
+    "markdown": "```pike\nconstant USER_ABORT\n```"
+  },
+  "predef.Shuffler.WRITE_ERROR": {
+    "signature": "constant WRITE_ERROR",
+    "markdown": "```pike\nconstant WRITE_ERROR\n```"
   },
   "predef.Sql.NULL": {
     "signature": "object(Val.Null) NULL",
@@ -31895,6 +32939,34 @@
     "signature": "string|array `()(string|array(string) commands, string|array(string) data, void|int suppress)",
     "markdown": "```pike\nstring|array `()(string|array(string) commands, string|array(string) data, void|int suppress)\n```"
   },
+  "predef.Unicode.is_rtlchar": {
+    "signature": "function(int : int) is_rtlchar",
+    "markdown": "```pike\nfunction(int : int) is_rtlchar\n```"
+  },
+  "predef.Unicode.is_rtlstring": {
+    "signature": "function(string : int) is_rtlstring",
+    "markdown": "```pike\nfunction(string : int) is_rtlstring\n```"
+  },
+  "predef.Unicode.is_wordchar": {
+    "signature": "function(int : int) is_wordchar",
+    "markdown": "```pike\nfunction(int : int) is_wordchar\n```"
+  },
+  "predef.Unicode.normalize": {
+    "signature": "function(string, string : string) normalize",
+    "markdown": "```pike\nfunction(string, string : string) normalize\n```"
+  },
+  "predef.Unicode.split_words": {
+    "signature": "function(string : array(string)) split_words",
+    "markdown": "```pike\nfunction(string : array(string)) split_words\n```"
+  },
+  "predef.Unicode.split_words_and_normalize": {
+    "signature": "function(string : array(string)) split_words_and_normalize",
+    "markdown": "```pike\nfunction(string : array(string)) split_words_and_normalize\n```"
+  },
+  "predef.Unicode.version": {
+    "signature": "constant version",
+    "markdown": "```pike\nconstant version\n```"
+  },
   "predef.Val.Boolean": {
     "signature": "inherit Boolean",
     "markdown": "```pike\ninherit Boolean\n```"
@@ -34655,6 +35727,18 @@
     "signature": "string mapping_to_query(mapping(string : string) map)",
     "markdown": "```pike\nstring mapping_to_query(mapping(string : string) map)\n```\n\nConvert a mapping of query variables to a query string."
   },
+  "predef._ADT.CircularList": {
+    "signature": "class CircularList",
+    "markdown": "```pike\nclass CircularList\n```"
+  },
+  "predef._ADT.Sequence": {
+    "signature": "class Sequence",
+    "markdown": "```pike\nclass Sequence\n```"
+  },
+  "predef._Charset.rfc1345": {
+    "signature": "function(string,int | void,string | void,function(string : string) | void:object) rfc1345",
+    "markdown": "```pike\nfunction(string,int | void,string | void,function(string : string) | void:object) rfc1345\n```"
+  },
   "predef._Image.Dims": {
     "signature": "object Dims",
     "markdown": "```pike\nobject Dims\n```"
@@ -34822,6 +35906,162 @@
   "predef._Image_DWG.decode": {
     "signature": "object(Image.Image) decode(string data)",
     "markdown": "```pike\nobject(Image.Image) decode(string data)\n```\n\nReturns the first successfully decoded bitmap image.\n**Throws:** If no preview was stored, or no preview could be decoded an\n   error is thrown."
+  },
+  "predef._Image_FreeType.FACE_FLAG_FAST_GLYPHS": {
+    "signature": "constant FACE_FLAG_FAST_GLYPHS",
+    "markdown": "```pike\nconstant FACE_FLAG_FAST_GLYPHS\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_FIXED_WIDTH": {
+    "signature": "constant FACE_FLAG_FIXED_WIDTH",
+    "markdown": "```pike\nconstant FACE_FLAG_FIXED_WIDTH\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_GLYPH_NAMES": {
+    "signature": "constant FACE_FLAG_GLYPH_NAMES",
+    "markdown": "```pike\nconstant FACE_FLAG_GLYPH_NAMES\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_HORIZONTAL": {
+    "signature": "constant FACE_FLAG_HORIZONTAL",
+    "markdown": "```pike\nconstant FACE_FLAG_HORIZONTAL\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_KERNING": {
+    "signature": "constant FACE_FLAG_KERNING",
+    "markdown": "```pike\nconstant FACE_FLAG_KERNING\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_MULTIPLE_MASTERS": {
+    "signature": "constant FACE_FLAG_MULTIPLE_MASTERS",
+    "markdown": "```pike\nconstant FACE_FLAG_MULTIPLE_MASTERS\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_SCALABLE": {
+    "signature": "constant FACE_FLAG_SCALABLE",
+    "markdown": "```pike\nconstant FACE_FLAG_SCALABLE\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_SFNT": {
+    "signature": "constant FACE_FLAG_SFNT",
+    "markdown": "```pike\nconstant FACE_FLAG_SFNT\n```"
+  },
+  "predef._Image_FreeType.FACE_FLAG_VERTICAL": {
+    "signature": "constant FACE_FLAG_VERTICAL",
+    "markdown": "```pike\nconstant FACE_FLAG_VERTICAL\n```"
+  },
+  "predef._Image_FreeType.Face": {
+    "signature": "class Face",
+    "markdown": "```pike\nclass Face\n```"
+  },
+  "predef._Image_FreeType.STYLE_FLAG_BOLD": {
+    "signature": "constant STYLE_FLAG_BOLD",
+    "markdown": "```pike\nconstant STYLE_FLAG_BOLD\n```"
+  },
+  "predef._Image_FreeType.STYLE_FLAG_ITALIC": {
+    "signature": "constant STYLE_FLAG_ITALIC",
+    "markdown": "```pike\nconstant STYLE_FLAG_ITALIC\n```"
+  },
+  "predef._Image_GIF.ERROR_PREMATURE_EOD": {
+    "signature": "constant ERROR_PREMATURE_EOD",
+    "markdown": "```pike\nconstant ERROR_PREMATURE_EOD\n```"
+  },
+  "predef._Image_GIF.ERROR_TOO_MUCH_DATA": {
+    "signature": "constant ERROR_TOO_MUCH_DATA",
+    "markdown": "```pike\nconstant ERROR_TOO_MUCH_DATA\n```"
+  },
+  "predef._Image_GIF.ERROR_UNKNOWN_DATA": {
+    "signature": "constant ERROR_UNKNOWN_DATA",
+    "markdown": "```pike\nconstant ERROR_UNKNOWN_DATA\n```"
+  },
+  "predef._Image_GIF.EXTENSION": {
+    "signature": "constant EXTENSION",
+    "markdown": "```pike\nconstant EXTENSION\n```"
+  },
+  "predef._Image_GIF.LOOSE_GCE": {
+    "signature": "constant LOOSE_GCE",
+    "markdown": "```pike\nconstant LOOSE_GCE\n```"
+  },
+  "predef._Image_GIF.NETSCAPE_LOOP": {
+    "signature": "constant NETSCAPE_LOOP",
+    "markdown": "```pike\nconstant NETSCAPE_LOOP\n```"
+  },
+  "predef._Image_GIF.RENDER": {
+    "signature": "constant RENDER",
+    "markdown": "```pike\nconstant RENDER\n```"
+  },
+  "predef._Image_GIF.__decode": {
+    "signature": "function(string : array) __decode",
+    "markdown": "```pike\nfunction(string : array) __decode\n```"
+  },
+  "predef._Image_GIF._decode": {
+    "signature": "function(array | string:array) _decode",
+    "markdown": "```pike\nfunction(array | string:array) _decode\n```"
+  },
+  "predef._Image_GIF._encode": {
+    "signature": "function(array : string) _encode",
+    "markdown": "```pike\nfunction(array : string) _encode\n```"
+  },
+  "predef._Image_GIF._encode_extension": {
+    "signature": "function(array : string) _encode_extension",
+    "markdown": "```pike\nfunction(array : string) _encode_extension\n```"
+  },
+  "predef._Image_GIF._encode_render": {
+    "signature": "function(array : string) _encode_render",
+    "markdown": "```pike\nfunction(array : string) _encode_render\n```"
+  },
+  "predef._Image_GIF._gce_block": {
+    "signature": "function(int, int, int, int, int : string) _gce_block",
+    "markdown": "```pike\nfunction(int, int, int, int, int : string) _gce_block\n```"
+  },
+  "predef._Image_GIF._render_block": {
+    "signature": "function(int, int, int, int, int, string, string, int : string) _render_block",
+    "markdown": "```pike\nfunction(int, int, int, int, int, string, string, int : string) _render_block\n```"
+  },
+  "predef._Image_GIF.decode": {
+    "signature": "function(array | string:object) decode",
+    "markdown": "```pike\nfunction(array | string:object) decode\n```"
+  },
+  "predef._Image_GIF.decode_layer": {
+    "signature": "function(array | string:object) decode_layer",
+    "markdown": "```pike\nfunction(array | string:object) decode_layer\n```"
+  },
+  "predef._Image_GIF.decode_layers": {
+    "signature": "function(array | string:array(object)) decode_layers",
+    "markdown": "```pike\nfunction(array | string:array(object)) decode_layers\n```"
+  },
+  "predef._Image_GIF.decode_map": {
+    "signature": "function(array | string:mapping) decode_map",
+    "markdown": "```pike\nfunction(array | string:mapping) decode_map\n```"
+  },
+  "predef._Image_GIF.encode": {
+    "signature": "function(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode",
+    "markdown": "```pike\nfunction(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode\n```"
+  },
+  "predef._Image_GIF.encode_fs": {
+    "signature": "function(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode_fs",
+    "markdown": "```pike\nfunction(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode_fs\n```"
+  },
+  "predef._Image_GIF.encode_trans": {
+    "signature": "function(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode_trans",
+    "markdown": "```pike\nfunction(object,int | object | void,int | object | void,int | void,int | void,int | void:string) encode_trans\n```"
+  },
+  "predef._Image_GIF.end_block": {
+    "signature": "function( : string) end_block",
+    "markdown": "```pike\nfunction( : string) end_block\n```"
+  },
+  "predef._Image_GIF.header_block": {
+    "signature": "function(int,int,int | object,int | void,int | void,int | void,int | void,int | void,int | void,int | void:string) header_block",
+    "markdown": "```pike\nfunction(int,int,int | object,int | void,int | void,int | void,int | void,int | void,int | void,int | void:string) header_block\n```"
+  },
+  "predef._Image_GIF.lzw_decode": {
+    "signature": "function(string,int | void,int | void:string) lzw_decode",
+    "markdown": "```pike\nfunction(string,int | void,int | void:string) lzw_decode\n```"
+  },
+  "predef._Image_GIF.lzw_encode": {
+    "signature": "function(string,int | void,int | void:string) lzw_encode",
+    "markdown": "```pike\nfunction(string,int | void,int | void:string) lzw_encode\n```"
+  },
+  "predef._Image_GIF.netscape_loop_block": {
+    "signature": "function(int | void:string) netscape_loop_block",
+    "markdown": "```pike\nfunction(int | void:string) netscape_loop_block\n```"
+  },
+  "predef._Image_GIF.render_block": {
+    "signature": "function(object,object,int | void,int | void,int | void,int | object | void,int | void,int | void,int | void,int | void,int | void,int | void,int | void:string) render_block",
+    "markdown": "```pike\nfunction(object,object,int | void,int | void,int | void,int | object | void,int | void,int | void,int | void,int | void,int | void,int | void,int | void:string) render_block\n```"
   },
   "predef._Image_JPEG.DEFAULT": {
     "signature": "constant DEFAULT",
@@ -35098,6 +36338,58 @@
   "predef._Image_TIFF.encode": {
     "signature": "function(object,mapping | void:string) encode",
     "markdown": "```pike\nfunction(object,mapping | void:string) encode\n```"
+  },
+  "predef._Image_WebP.HINT_DEFAULT": {
+    "signature": "constant HINT_DEFAULT",
+    "markdown": "```pike\nconstant HINT_DEFAULT\n```"
+  },
+  "predef._Image_WebP.HINT_GRAPH": {
+    "signature": "constant HINT_GRAPH",
+    "markdown": "```pike\nconstant HINT_GRAPH\n```"
+  },
+  "predef._Image_WebP.HINT_PHOTO": {
+    "signature": "constant HINT_PHOTO",
+    "markdown": "```pike\nconstant HINT_PHOTO\n```"
+  },
+  "predef._Image_WebP.HINT_PICTURE": {
+    "signature": "constant HINT_PICTURE",
+    "markdown": "```pike\nconstant HINT_PICTURE\n```"
+  },
+  "predef._Image_WebP.PRESET_DEFAULT": {
+    "signature": "constant PRESET_DEFAULT",
+    "markdown": "```pike\nconstant PRESET_DEFAULT\n```"
+  },
+  "predef._Image_WebP.PRESET_DRAWING": {
+    "signature": "constant PRESET_DRAWING",
+    "markdown": "```pike\nconstant PRESET_DRAWING\n```"
+  },
+  "predef._Image_WebP.PRESET_ICON": {
+    "signature": "constant PRESET_ICON",
+    "markdown": "```pike\nconstant PRESET_ICON\n```"
+  },
+  "predef._Image_WebP.PRESET_PHOTO": {
+    "signature": "constant PRESET_PHOTO",
+    "markdown": "```pike\nconstant PRESET_PHOTO\n```"
+  },
+  "predef._Image_WebP.PRESET_PICTURE": {
+    "signature": "constant PRESET_PICTURE",
+    "markdown": "```pike\nconstant PRESET_PICTURE\n```"
+  },
+  "predef._Image_WebP.PRESET_TEXT": {
+    "signature": "constant PRESET_TEXT",
+    "markdown": "```pike\nconstant PRESET_TEXT\n```"
+  },
+  "predef._Image_WebP._decode": {
+    "signature": "function(string:mapping(string:string | { Image.Image = object(implements Image.Image) })) _decode",
+    "markdown": "```pike\nfunction(string:mapping(string:string | { Image.Image = object(implements Image.Image) })) _decode\n```"
+  },
+  "predef._Image_WebP.decode": {
+    "signature": "function(string : { Image.Image = object(implements Image.Image) }) decode",
+    "markdown": "```pike\nfunction(string : { Image.Image = object(implements Image.Image) }) decode\n```"
+  },
+  "predef._Image_WebP.encode": {
+    "signature": "function({ Image.Image = object(implements Image.Image) },mapping(string:float | int | { Image.Image = object(implements Image.Image) }) | void:string(8bit)) encode",
+    "markdown": "```pike\nfunction({ Image.Image = object(implements Image.Image) },mapping(string:float | int | { Image.Image = object(implements Image.Image) }) | void:string(8bit)) encode\n```"
   },
   "predef._Image_XCF.ADDITION_MODE": {
     "signature": "constant ADDITION_MODE",
@@ -35603,6 +36895,18 @@
     "signature": "string translate_mode(int mode)",
     "markdown": "```pike\nstring translate_mode(int mode)\n```\n\nConvert a GIMP layer mode to an Image.Layer layer mode"
   },
+  "predef._Image_XFace.decode": {
+    "signature": "function(string,mapping(string:int) | void:object) decode",
+    "markdown": "```pike\nfunction(string,mapping(string:int) | void:object) decode\n```"
+  },
+  "predef._Image_XFace.decode_header": {
+    "signature": "function(string,mapping(string:int) | void:object) decode_header",
+    "markdown": "```pike\nfunction(string,mapping(string:int) | void:object) decode_header\n```"
+  },
+  "predef._Image_XFace.encode": {
+    "signature": "function(object,mapping(string:int) | void:string) encode",
+    "markdown": "```pike\nfunction(object,mapping(string:int) | void:string) encode\n```"
+  },
   "predef._Image_XPM._decode": {
     "signature": "mapping _decode(string bytes, mapping|void options)",
     "markdown": "```pike\nmapping _decode(string bytes, mapping|void options)\n```\n\nDecode the given XPM image.\n**Mapping:**\n  - \"img\": object(Image.Image) — \n  - \"alpha\": object(Image.Image) — \n  - \"format\": string — \nNo options are currently supported."
@@ -35698,6 +37002,482 @@
   "predef._Regexp_PCRE.`()": {
     "signature": "object(StudiedWidestring) `()(string pattern, void|int options, void|object table)",
     "markdown": "```pike\nobject(StudiedWidestring) `()(string pattern, void|int options, void|object table)\n```\n\nConvenience function to create a suitable PCRE Regexp object;\n will create a StudiedWidestring from the arguments.\nThat means the result will be able to handle widestrings,\n and will produce fast matchings by studying the pattern, but the\n widestring wrapping will on the other hand add overhead.\nIf you need a faster regexp and doesn't use widestring,\n create a Regexp.PCRE.Studied instead.\nWidestring support will not be used if the linked libpcre\n lacks UTF8 support. This can be tested with\n checking that the Regexp.PCRE.Widestring class exist."
+  },
+  "predef._Roxen.HeaderParser": {
+    "signature": "class HeaderParser",
+    "markdown": "```pike\nclass HeaderParser\n```"
+  },
+  "predef._Roxen.html_encode_string": {
+    "signature": "function(mixed : string) html_encode_string",
+    "markdown": "```pike\nfunction(mixed : string) html_encode_string\n```"
+  },
+  "predef._Roxen.http_decode_string": {
+    "signature": "function(string : string) http_decode_string",
+    "markdown": "```pike\nfunction(string : string) http_decode_string\n```"
+  },
+  "predef._Roxen.make_http_headers": {
+    "signature": "function(mapping(string:array(string) | string),int(1bit) | void:string) make_http_headers",
+    "markdown": "```pike\nfunction(mapping(string:array(string) | string),int(1bit) | void:string) make_http_headers\n```"
+  },
+  "predef._Stdio.Buffer": {
+    "signature": "class Buffer",
+    "markdown": "```pike\nclass Buffer\n```"
+  },
+  "predef._Stdio.Fd": {
+    "signature": "class Fd",
+    "markdown": "```pike\nclass Fd\n```"
+  },
+  "predef._Stdio.Fd_ref": {
+    "signature": "class Fd_ref",
+    "markdown": "```pike\nclass Fd_ref\n```"
+  },
+  "predef._Stdio.IPPROTO": {
+    "signature": "object IPPROTO",
+    "markdown": "```pike\nobject IPPROTO\n```"
+  },
+  "predef._Stdio.PROP_BIDIRECTIONAL": {
+    "signature": "constant PROP_BIDIRECTIONAL",
+    "markdown": "```pike\nconstant PROP_BIDIRECTIONAL\n```"
+  },
+  "predef._Stdio.PROP_BUFFERED": {
+    "signature": "constant PROP_BUFFERED",
+    "markdown": "```pike\nconstant PROP_BUFFERED\n```"
+  },
+  "predef._Stdio.PROP_IPC": {
+    "signature": "constant PROP_IPC",
+    "markdown": "```pike\nconstant PROP_IPC\n```"
+  },
+  "predef._Stdio.PROP_IS_NONBLOCKING": {
+    "signature": "constant PROP_IS_NONBLOCKING",
+    "markdown": "```pike\nconstant PROP_IS_NONBLOCKING\n```"
+  },
+  "predef._Stdio.PROP_NONBLOCK": {
+    "signature": "constant PROP_NONBLOCK",
+    "markdown": "```pike\nconstant PROP_NONBLOCK\n```"
+  },
+  "predef._Stdio.PROP_REVERSE": {
+    "signature": "constant PROP_REVERSE",
+    "markdown": "```pike\nconstant PROP_REVERSE\n```"
+  },
+  "predef._Stdio.PROP_SEND_FD": {
+    "signature": "constant PROP_SEND_FD",
+    "markdown": "```pike\nconstant PROP_SEND_FD\n```"
+  },
+  "predef._Stdio.PROP_SHUTDOWN": {
+    "signature": "constant PROP_SHUTDOWN",
+    "markdown": "```pike\nconstant PROP_SHUTDOWN\n```"
+  },
+  "predef._Stdio.PROP_TTY": {
+    "signature": "constant PROP_TTY",
+    "markdown": "```pike\nconstant PROP_TTY\n```"
+  },
+  "predef._Stdio.SEEK_CUR": {
+    "signature": "constant SEEK_CUR",
+    "markdown": "```pike\nconstant SEEK_CUR\n```"
+  },
+  "predef._Stdio.SEEK_DATA": {
+    "signature": "constant SEEK_DATA",
+    "markdown": "```pike\nconstant SEEK_DATA\n```"
+  },
+  "predef._Stdio.SEEK_END": {
+    "signature": "constant SEEK_END",
+    "markdown": "```pike\nconstant SEEK_END\n```"
+  },
+  "predef._Stdio.SEEK_HOLE": {
+    "signature": "constant SEEK_HOLE",
+    "markdown": "```pike\nconstant SEEK_HOLE\n```"
+  },
+  "predef._Stdio.SEEK_SET": {
+    "signature": "constant SEEK_SET",
+    "markdown": "```pike\nconstant SEEK_SET\n```"
+  },
+  "predef._Stdio.SOCK": {
+    "signature": "object SOCK",
+    "markdown": "```pike\nobject SOCK\n```"
+  },
+  "predef._Stdio.Stat": {
+    "signature": "class Stat",
+    "markdown": "```pike\nclass Stat\n```"
+  },
+  "predef._Stdio.UDP": {
+    "signature": "class UDP",
+    "markdown": "```pike\nclass UDP\n```"
+  },
+  "predef._Stdio.XATTR_CREATE": {
+    "signature": "constant XATTR_CREATE",
+    "markdown": "```pike\nconstant XATTR_CREATE\n```"
+  },
+  "predef._Stdio.XATTR_REPLACE": {
+    "signature": "constant XATTR_REPLACE",
+    "markdown": "```pike\nconstant XATTR_REPLACE\n```"
+  },
+  "predef._Stdio.__HAVE_CONNECT_UNIX__": {
+    "signature": "constant __HAVE_CONNECT_UNIX__",
+    "markdown": "```pike\nconstant __HAVE_CONNECT_UNIX__\n```"
+  },
+  "predef._Stdio.__HAVE_FS_EVENTS__": {
+    "signature": "constant __HAVE_FS_EVENTS__",
+    "markdown": "```pike\nconstant __HAVE_FS_EVENTS__\n```"
+  },
+  "predef._Stdio.__HAVE_OOB__": {
+    "signature": "constant __HAVE_OOB__",
+    "markdown": "```pike\nconstant __HAVE_OOB__\n```"
+  },
+  "predef._Stdio.__HAVE_OPENAT__": {
+    "signature": "constant __HAVE_OPENAT__",
+    "markdown": "```pike\nconstant __HAVE_OPENAT__\n```"
+  },
+  "predef._Stdio.__HAVE_OPENPT__": {
+    "signature": "constant __HAVE_OPENPT__",
+    "markdown": "```pike\nconstant __HAVE_OPENPT__\n```"
+  },
+  "predef._Stdio.__HAVE_SEND_FD__": {
+    "signature": "constant __HAVE_SEND_FD__",
+    "markdown": "```pike\nconstant __HAVE_SEND_FD__\n```"
+  },
+  "predef._Stdio.__HAVE_STATAT__": {
+    "signature": "constant __HAVE_STATAT__",
+    "markdown": "```pike\nconstant __HAVE_STATAT__\n```"
+  },
+  "predef._Stdio.__OOB__": {
+    "signature": "constant __OOB__",
+    "markdown": "```pike\nconstant __OOB__\n```"
+  },
+  "predef._Stdio._port": {
+    "signature": "class _port",
+    "markdown": "```pike\nclass _port\n```"
+  },
+  "predef._Stdio._stderr": {
+    "signature": "Fd _stderr",
+    "markdown": "```pike\nFd _stderr\n```"
+  },
+  "predef._Stdio._stdin": {
+    "signature": "Fd _stdin",
+    "markdown": "```pike\nFd _stdin\n```"
+  },
+  "predef._Stdio._stdout": {
+    "signature": "Fd _stdout",
+    "markdown": "```pike\nFd _stdout\n```"
+  },
+  "predef._Stdio.get_all_active_fd": {
+    "signature": "function( : array(int)) get_all_active_fd",
+    "markdown": "```pike\nfunction( : array(int)) get_all_active_fd\n```"
+  },
+  "predef._Stdio.gethostip": {
+    "signature": "function( : mapping) gethostip",
+    "markdown": "```pike\nfunction( : mapping) gethostip\n```"
+  },
+  "predef._Stdio.sendfile": {
+    "signature": "class sendfile",
+    "markdown": "```pike\nclass sendfile\n```"
+  },
+  "predef._WhiteFish.Blob": {
+    "signature": "class Blob",
+    "markdown": "```pike\nclass Blob\n```"
+  },
+  "predef._WhiteFish.Blobs": {
+    "signature": "class Blobs",
+    "markdown": "```pike\nclass Blobs\n```"
+  },
+  "predef._WhiteFish.DateSet": {
+    "signature": "class DateSet",
+    "markdown": "```pike\nclass DateSet\n```"
+  },
+  "predef._WhiteFish.LinkFarm": {
+    "signature": "class LinkFarm",
+    "markdown": "```pike\nclass LinkFarm\n```"
+  },
+  "predef._WhiteFish.ResultSet": {
+    "signature": "class ResultSet",
+    "markdown": "```pike\nclass ResultSet\n```"
+  },
+  "predef._WhiteFish.do_query_and": {
+    "signature": "function(array(string), array(int), array(int), int, function(string, int, int : string) : object) do_query_and",
+    "markdown": "```pike\nfunction(array(string), array(int), array(int), int, function(string, int, int : string) : object) do_query_and\n```"
+  },
+  "predef._WhiteFish.do_query_or": {
+    "signature": "function(array(string), array(int), array(int), int, function(string, int, int : string) : object) do_query_or",
+    "markdown": "```pike\nfunction(array(string), array(int), array(int), int, function(string, int, int : string) : object) do_query_or\n```"
+  },
+  "predef._WhiteFish.do_query_phrase": {
+    "signature": "function(array(string), array(int), function(string, int, int : string) : object) do_query_phrase",
+    "markdown": "```pike\nfunction(array(string), array(int), function(string, int, int : string) : object) do_query_phrase\n```"
+  },
+  "predef.___Bz2.BZ_FINISH": {
+    "signature": "constant BZ_FINISH",
+    "markdown": "```pike\nconstant BZ_FINISH\n```"
+  },
+  "predef.___Bz2.BZ_FLUSH": {
+    "signature": "constant BZ_FLUSH",
+    "markdown": "```pike\nconstant BZ_FLUSH\n```"
+  },
+  "predef.___Bz2.BZ_RUN": {
+    "signature": "constant BZ_RUN",
+    "markdown": "```pike\nconstant BZ_RUN\n```"
+  },
+  "predef.___Bz2.Deflate": {
+    "signature": "class Deflate",
+    "markdown": "```pike\nclass Deflate\n```"
+  },
+  "predef.___Bz2.File": {
+    "signature": "class File",
+    "markdown": "```pike\nclass File\n```"
+  },
+  "predef.___Bz2.Inflate": {
+    "signature": "class Inflate",
+    "markdown": "```pike\nclass Inflate\n```"
+  },
+  "predef.___Fuse.FUSE_MAJOR_VERSION": {
+    "signature": "constant FUSE_MAJOR_VERSION",
+    "markdown": "```pike\nconstant FUSE_MAJOR_VERSION\n```"
+  },
+  "predef.___Fuse.FUSE_MINOR_VERSION": {
+    "signature": "constant FUSE_MINOR_VERSION",
+    "markdown": "```pike\nconstant FUSE_MINOR_VERSION\n```"
+  },
+  "predef.___Fuse.F_GETLK": {
+    "signature": "constant F_GETLK",
+    "markdown": "```pike\nconstant F_GETLK\n```"
+  },
+  "predef.___Fuse.F_RDLCK": {
+    "signature": "constant F_RDLCK",
+    "markdown": "```pike\nconstant F_RDLCK\n```"
+  },
+  "predef.___Fuse.F_SETLK": {
+    "signature": "constant F_SETLK",
+    "markdown": "```pike\nconstant F_SETLK\n```"
+  },
+  "predef.___Fuse.F_SETLKW": {
+    "signature": "constant F_SETLKW",
+    "markdown": "```pike\nconstant F_SETLKW\n```"
+  },
+  "predef.___Fuse.F_UNLCK": {
+    "signature": "constant F_UNLCK",
+    "markdown": "```pike\nconstant F_UNLCK\n```"
+  },
+  "predef.___Fuse.F_WRLCK": {
+    "signature": "constant F_WRLCK",
+    "markdown": "```pike\nconstant F_WRLCK\n```"
+  },
+  "predef.___Fuse.run": {
+    "signature": "function(object, array(string) : void) run",
+    "markdown": "```pike\nfunction(object, array(string) : void) run\n```"
+  },
+  "predef.___MIME.TOKENIZE_KEEP_ESCAPES": {
+    "signature": "constant TOKENIZE_KEEP_ESCAPES",
+    "markdown": "```pike\nconstant TOKENIZE_KEEP_ESCAPES\n```"
+  },
+  "predef.___MIME.decode_base64": {
+    "signature": "function(string : string(8bit)) decode_base64",
+    "markdown": "```pike\nfunction(string : string(8bit)) decode_base64\n```"
+  },
+  "predef.___MIME.decode_qp": {
+    "signature": "function(string : string) decode_qp",
+    "markdown": "```pike\nfunction(string : string) decode_qp\n```"
+  },
+  "predef.___MIME.decode_uue": {
+    "signature": "function(string : string) decode_uue",
+    "markdown": "```pike\nfunction(string : string) decode_uue\n```"
+  },
+  "predef.___MIME.encode_base64": {
+    "signature": "function(string,int | void:string(7bit)) encode_base64",
+    "markdown": "```pike\nfunction(string,int | void:string(7bit)) encode_base64\n```"
+  },
+  "predef.___MIME.encode_qp": {
+    "signature": "function(string,int | void:string(7bit)) encode_qp",
+    "markdown": "```pike\nfunction(string,int | void:string(7bit)) encode_qp\n```"
+  },
+  "predef.___MIME.encode_uue": {
+    "signature": "function(string,string | void:string(7bit)) encode_uue",
+    "markdown": "```pike\nfunction(string,string | void:string(7bit)) encode_uue\n```"
+  },
+  "predef.___MIME.quote": {
+    "signature": "function(array(int | string):string) quote",
+    "markdown": "```pike\nfunction(array(int | string):string) quote\n```"
+  },
+  "predef.___MIME.quote_labled": {
+    "signature": "function(array(array(int | string)):string) quote_labled",
+    "markdown": "```pike\nfunction(array(array(int | string)):string) quote_labled\n```"
+  },
+  "predef.___MIME.tokenize": {
+    "signature": "function(string,int | void:array(int | string)) tokenize",
+    "markdown": "```pike\nfunction(string,int | void:array(int | string)) tokenize\n```"
+  },
+  "predef.___MIME.tokenize_labled": {
+    "signature": "function(string,int | void:array(array(int | string))) tokenize_labled",
+    "markdown": "```pike\nfunction(string,int | void:array(array(int | string))) tokenize_labled\n```"
+  },
+  "predef.___Math.FMatrix": {
+    "signature": "class FMatrix",
+    "markdown": "```pike\nclass FMatrix\n```"
+  },
+  "predef.___Math.IMatrix": {
+    "signature": "class IMatrix",
+    "markdown": "```pike\nclass IMatrix\n```"
+  },
+  "predef.___Math.LMatrix": {
+    "signature": "class LMatrix",
+    "markdown": "```pike\nclass LMatrix\n```"
+  },
+  "predef.___Math.Matrix": {
+    "signature": "class Matrix",
+    "markdown": "```pike\nclass Matrix\n```"
+  },
+  "predef.___Math.SMatrix": {
+    "signature": "class SMatrix",
+    "markdown": "```pike\nclass SMatrix\n```"
+  },
+  "predef.___Math.Transforms": {
+    "signature": "class Transforms",
+    "markdown": "```pike\nclass Transforms\n```"
+  },
+  "predef.___Math.e": {
+    "signature": "constant e",
+    "markdown": "```pike\nconstant e\n```"
+  },
+  "predef.___Math.inf": {
+    "signature": "constant inf",
+    "markdown": "```pike\nconstant inf\n```"
+  },
+  "predef.___Math.nan": {
+    "signature": "constant nan",
+    "markdown": "```pike\nconstant nan\n```"
+  },
+  "predef.___Math.pi": {
+    "signature": "constant pi",
+    "markdown": "```pike\nconstant pi\n```"
+  },
+  "predef.___Regexp._SimpleRegexp": {
+    "signature": "class _SimpleRegexp",
+    "markdown": "```pike\nclass _SimpleRegexp\n```"
+  },
+  "predef.____Image_JPEG.DEFAULT": {
+    "signature": "constant DEFAULT",
+    "markdown": "```pike\nconstant DEFAULT\n```"
+  },
+  "predef.____Image_JPEG.FASTEST": {
+    "signature": "constant FASTEST",
+    "markdown": "```pike\nconstant FASTEST\n```"
+  },
+  "predef.____Image_JPEG.FLIP_H": {
+    "signature": "constant FLIP_H",
+    "markdown": "```pike\nconstant FLIP_H\n```"
+  },
+  "predef.____Image_JPEG.FLIP_V": {
+    "signature": "constant FLIP_V",
+    "markdown": "```pike\nconstant FLIP_V\n```"
+  },
+  "predef.____Image_JPEG.FLOAT": {
+    "signature": "constant FLOAT",
+    "markdown": "```pike\nconstant FLOAT\n```"
+  },
+  "predef.____Image_JPEG.IFAST": {
+    "signature": "constant IFAST",
+    "markdown": "```pike\nconstant IFAST\n```"
+  },
+  "predef.____Image_JPEG.ISLOW": {
+    "signature": "constant ISLOW",
+    "markdown": "```pike\nconstant ISLOW\n```"
+  },
+  "predef.____Image_JPEG.Marker": {
+    "signature": "object Marker",
+    "markdown": "```pike\nobject Marker\n```"
+  },
+  "predef.____Image_JPEG.NONE": {
+    "signature": "constant NONE",
+    "markdown": "```pike\nconstant NONE\n```"
+  },
+  "predef.____Image_JPEG.ROT_180": {
+    "signature": "constant ROT_180",
+    "markdown": "```pike\nconstant ROT_180\n```"
+  },
+  "predef.____Image_JPEG.ROT_270": {
+    "signature": "constant ROT_270",
+    "markdown": "```pike\nconstant ROT_270\n```"
+  },
+  "predef.____Image_JPEG.ROT_90": {
+    "signature": "constant ROT_90",
+    "markdown": "```pike\nconstant ROT_90\n```"
+  },
+  "predef.____Image_JPEG.TRANSPOSE": {
+    "signature": "constant TRANSPOSE",
+    "markdown": "```pike\nconstant TRANSPOSE\n```"
+  },
+  "predef.____Image_JPEG.TRANSVERSE": {
+    "signature": "constant TRANSVERSE",
+    "markdown": "```pike\nconstant TRANSVERSE\n```"
+  },
+  "predef.____Image_JPEG._decode": {
+    "signature": "function(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:mapping(string:mixed)) _decode",
+    "markdown": "```pike\nfunction(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:mapping(string:mixed)) _decode\n```"
+  },
+  "predef.____Image_JPEG.decode": {
+    "signature": "function(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:object) decode",
+    "markdown": "```pike\nfunction(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:object) decode\n```"
+  },
+  "predef.____Image_JPEG.decode_header": {
+    "signature": "function(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:mapping(string:float | int | mapping(int:string) | string)) decode_header",
+    "markdown": "```pike\nfunction(string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:mapping(string:float | int | mapping(int:string) | string)) decode_header\n```"
+  },
+  "predef.____Image_JPEG.encode": {
+    "signature": "function(object | string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:string) encode",
+    "markdown": "```pike\nfunction(object | string,mapping(string:int | mapping(int:array(array(int) | int) | string) | string) | void:string) encode\n```"
+  },
+  "predef.____Image_JPEG.quant_tables": {
+    "signature": "function(int | void:mapping(int:array(array(int)))) quant_tables",
+    "markdown": "```pike\nfunction(int | void:mapping(int:array(array(int)))) quant_tables\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_CCITTFAX3": {
+    "signature": "constant COMPRESSION_CCITTFAX3",
+    "markdown": "```pike\nconstant COMPRESSION_CCITTFAX3\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_CCITTFAX4": {
+    "signature": "constant COMPRESSION_CCITTFAX4",
+    "markdown": "```pike\nconstant COMPRESSION_CCITTFAX4\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_CCITTRLE": {
+    "signature": "constant COMPRESSION_CCITTRLE",
+    "markdown": "```pike\nconstant COMPRESSION_CCITTRLE\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_CCITTRLEW": {
+    "signature": "constant COMPRESSION_CCITTRLEW",
+    "markdown": "```pike\nconstant COMPRESSION_CCITTRLEW\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_JPEG": {
+    "signature": "constant COMPRESSION_JPEG",
+    "markdown": "```pike\nconstant COMPRESSION_JPEG\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_LZW": {
+    "signature": "constant COMPRESSION_LZW",
+    "markdown": "```pike\nconstant COMPRESSION_LZW\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_NEXT": {
+    "signature": "constant COMPRESSION_NEXT",
+    "markdown": "```pike\nconstant COMPRESSION_NEXT\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_NONE": {
+    "signature": "constant COMPRESSION_NONE",
+    "markdown": "```pike\nconstant COMPRESSION_NONE\n```"
+  },
+  "predef.____Image_TIFF.COMPRESSION_PACKBITS": {
+    "signature": "constant COMPRESSION_PACKBITS",
+    "markdown": "```pike\nconstant COMPRESSION_PACKBITS\n```"
+  },
+  "predef.____Image_TIFF._decode": {
+    "signature": "function(string : mapping) _decode",
+    "markdown": "```pike\nfunction(string : mapping) _decode\n```"
+  },
+  "predef.____Image_TIFF._encode": {
+    "signature": "function(object,mapping | void:string) _encode",
+    "markdown": "```pike\nfunction(object,mapping | void:string) _encode\n```"
+  },
+  "predef.____Image_TIFF.decode": {
+    "signature": "function(string : object) decode",
+    "markdown": "```pike\nfunction(string : object) decode\n```"
+  },
+  "predef.____Image_TIFF.encode": {
+    "signature": "function(object,mapping | void:string) encode",
+    "markdown": "```pike\nfunction(object,mapping | void:string) encode\n```"
   },
   "predef.__builtin.Builtin": {
     "signature": "inherit Builtin",
@@ -36063,6 +37843,826 @@
     "signature": "string name()",
     "markdown": "```pike\nstring name()\n```\n\nReturns a human readable name for the algorithm."
   },
+  "predef._system.CPU_TIME_IMPLEMENTATION": {
+    "signature": "constant CPU_TIME_IMPLEMENTATION",
+    "markdown": "```pike\nconstant CPU_TIME_IMPLEMENTATION\n```"
+  },
+  "predef._system.CPU_TIME_IS_THREAD_LOCAL": {
+    "signature": "constant CPU_TIME_IS_THREAD_LOCAL",
+    "markdown": "```pike\nconstant CPU_TIME_IS_THREAD_LOCAL\n```"
+  },
+  "predef._system.CPU_TIME_RESOLUTION": {
+    "signature": "constant CPU_TIME_RESOLUTION",
+    "markdown": "```pike\nconstant CPU_TIME_RESOLUTION\n```"
+  },
+  "predef._system.E2BIG": {
+    "signature": "constant E2BIG",
+    "markdown": "```pike\nconstant E2BIG\n```"
+  },
+  "predef._system.EACCES": {
+    "signature": "constant EACCES",
+    "markdown": "```pike\nconstant EACCES\n```"
+  },
+  "predef._system.EADDRINUSE": {
+    "signature": "constant EADDRINUSE",
+    "markdown": "```pike\nconstant EADDRINUSE\n```"
+  },
+  "predef._system.EADDRNOTAVAIL": {
+    "signature": "constant EADDRNOTAVAIL",
+    "markdown": "```pike\nconstant EADDRNOTAVAIL\n```"
+  },
+  "predef._system.EADV": {
+    "signature": "constant EADV",
+    "markdown": "```pike\nconstant EADV\n```"
+  },
+  "predef._system.EAFNOSUPPORT": {
+    "signature": "constant EAFNOSUPPORT",
+    "markdown": "```pike\nconstant EAFNOSUPPORT\n```"
+  },
+  "predef._system.EAGAIN": {
+    "signature": "constant EAGAIN",
+    "markdown": "```pike\nconstant EAGAIN\n```"
+  },
+  "predef._system.EALREADY": {
+    "signature": "constant EALREADY",
+    "markdown": "```pike\nconstant EALREADY\n```"
+  },
+  "predef._system.EBADE": {
+    "signature": "constant EBADE",
+    "markdown": "```pike\nconstant EBADE\n```"
+  },
+  "predef._system.EBADF": {
+    "signature": "constant EBADF",
+    "markdown": "```pike\nconstant EBADF\n```"
+  },
+  "predef._system.EBADFD": {
+    "signature": "constant EBADFD",
+    "markdown": "```pike\nconstant EBADFD\n```"
+  },
+  "predef._system.EBADMSG": {
+    "signature": "constant EBADMSG",
+    "markdown": "```pike\nconstant EBADMSG\n```"
+  },
+  "predef._system.EBADR": {
+    "signature": "constant EBADR",
+    "markdown": "```pike\nconstant EBADR\n```"
+  },
+  "predef._system.EBADRQC": {
+    "signature": "constant EBADRQC",
+    "markdown": "```pike\nconstant EBADRQC\n```"
+  },
+  "predef._system.EBADSLT": {
+    "signature": "constant EBADSLT",
+    "markdown": "```pike\nconstant EBADSLT\n```"
+  },
+  "predef._system.EBFONT": {
+    "signature": "constant EBFONT",
+    "markdown": "```pike\nconstant EBFONT\n```"
+  },
+  "predef._system.EBUSY": {
+    "signature": "constant EBUSY",
+    "markdown": "```pike\nconstant EBUSY\n```"
+  },
+  "predef._system.ECANCELED": {
+    "signature": "constant ECANCELED",
+    "markdown": "```pike\nconstant ECANCELED\n```"
+  },
+  "predef._system.ECHILD": {
+    "signature": "constant ECHILD",
+    "markdown": "```pike\nconstant ECHILD\n```"
+  },
+  "predef._system.ECHRNG": {
+    "signature": "constant ECHRNG",
+    "markdown": "```pike\nconstant ECHRNG\n```"
+  },
+  "predef._system.ECOMM": {
+    "signature": "constant ECOMM",
+    "markdown": "```pike\nconstant ECOMM\n```"
+  },
+  "predef._system.ECONNABORTED": {
+    "signature": "constant ECONNABORTED",
+    "markdown": "```pike\nconstant ECONNABORTED\n```"
+  },
+  "predef._system.ECONNREFUSED": {
+    "signature": "constant ECONNREFUSED",
+    "markdown": "```pike\nconstant ECONNREFUSED\n```"
+  },
+  "predef._system.ECONNRESET": {
+    "signature": "constant ECONNRESET",
+    "markdown": "```pike\nconstant ECONNRESET\n```"
+  },
+  "predef._system.EDEADLK": {
+    "signature": "constant EDEADLK",
+    "markdown": "```pike\nconstant EDEADLK\n```"
+  },
+  "predef._system.EDEADLOCK": {
+    "signature": "constant EDEADLOCK",
+    "markdown": "```pike\nconstant EDEADLOCK\n```"
+  },
+  "predef._system.EDESTADDRREQ": {
+    "signature": "constant EDESTADDRREQ",
+    "markdown": "```pike\nconstant EDESTADDRREQ\n```"
+  },
+  "predef._system.EDOM": {
+    "signature": "constant EDOM",
+    "markdown": "```pike\nconstant EDOM\n```"
+  },
+  "predef._system.EDOTDOT": {
+    "signature": "constant EDOTDOT",
+    "markdown": "```pike\nconstant EDOTDOT\n```"
+  },
+  "predef._system.EDQUOT": {
+    "signature": "constant EDQUOT",
+    "markdown": "```pike\nconstant EDQUOT\n```"
+  },
+  "predef._system.EEXIST": {
+    "signature": "constant EEXIST",
+    "markdown": "```pike\nconstant EEXIST\n```"
+  },
+  "predef._system.EFAULT": {
+    "signature": "constant EFAULT",
+    "markdown": "```pike\nconstant EFAULT\n```"
+  },
+  "predef._system.EFBIG": {
+    "signature": "constant EFBIG",
+    "markdown": "```pike\nconstant EFBIG\n```"
+  },
+  "predef._system.EHOSTDOWN": {
+    "signature": "constant EHOSTDOWN",
+    "markdown": "```pike\nconstant EHOSTDOWN\n```"
+  },
+  "predef._system.EHOSTUNREACH": {
+    "signature": "constant EHOSTUNREACH",
+    "markdown": "```pike\nconstant EHOSTUNREACH\n```"
+  },
+  "predef._system.EIDRM": {
+    "signature": "constant EIDRM",
+    "markdown": "```pike\nconstant EIDRM\n```"
+  },
+  "predef._system.EILSEQ": {
+    "signature": "constant EILSEQ",
+    "markdown": "```pike\nconstant EILSEQ\n```"
+  },
+  "predef._system.EINPROGRESS": {
+    "signature": "constant EINPROGRESS",
+    "markdown": "```pike\nconstant EINPROGRESS\n```"
+  },
+  "predef._system.EINTR": {
+    "signature": "constant EINTR",
+    "markdown": "```pike\nconstant EINTR\n```"
+  },
+  "predef._system.EINVAL": {
+    "signature": "constant EINVAL",
+    "markdown": "```pike\nconstant EINVAL\n```"
+  },
+  "predef._system.EIO": {
+    "signature": "constant EIO",
+    "markdown": "```pike\nconstant EIO\n```"
+  },
+  "predef._system.EISCONN": {
+    "signature": "constant EISCONN",
+    "markdown": "```pike\nconstant EISCONN\n```"
+  },
+  "predef._system.EISDIR": {
+    "signature": "constant EISDIR",
+    "markdown": "```pike\nconstant EISDIR\n```"
+  },
+  "predef._system.EISNAM": {
+    "signature": "constant EISNAM",
+    "markdown": "```pike\nconstant EISNAM\n```"
+  },
+  "predef._system.EL2HLT": {
+    "signature": "constant EL2HLT",
+    "markdown": "```pike\nconstant EL2HLT\n```"
+  },
+  "predef._system.EL2NSYNC": {
+    "signature": "constant EL2NSYNC",
+    "markdown": "```pike\nconstant EL2NSYNC\n```"
+  },
+  "predef._system.EL3HLT": {
+    "signature": "constant EL3HLT",
+    "markdown": "```pike\nconstant EL3HLT\n```"
+  },
+  "predef._system.EL3RST": {
+    "signature": "constant EL3RST",
+    "markdown": "```pike\nconstant EL3RST\n```"
+  },
+  "predef._system.ELIBACC": {
+    "signature": "constant ELIBACC",
+    "markdown": "```pike\nconstant ELIBACC\n```"
+  },
+  "predef._system.ELIBBAD": {
+    "signature": "constant ELIBBAD",
+    "markdown": "```pike\nconstant ELIBBAD\n```"
+  },
+  "predef._system.ELIBEXEC": {
+    "signature": "constant ELIBEXEC",
+    "markdown": "```pike\nconstant ELIBEXEC\n```"
+  },
+  "predef._system.ELIBMAX": {
+    "signature": "constant ELIBMAX",
+    "markdown": "```pike\nconstant ELIBMAX\n```"
+  },
+  "predef._system.ELIBSCN": {
+    "signature": "constant ELIBSCN",
+    "markdown": "```pike\nconstant ELIBSCN\n```"
+  },
+  "predef._system.ELNRNG": {
+    "signature": "constant ELNRNG",
+    "markdown": "```pike\nconstant ELNRNG\n```"
+  },
+  "predef._system.ELOOP": {
+    "signature": "constant ELOOP",
+    "markdown": "```pike\nconstant ELOOP\n```"
+  },
+  "predef._system.EMEDIUMTYPE": {
+    "signature": "constant EMEDIUMTYPE",
+    "markdown": "```pike\nconstant EMEDIUMTYPE\n```"
+  },
+  "predef._system.EMFILE": {
+    "signature": "constant EMFILE",
+    "markdown": "```pike\nconstant EMFILE\n```"
+  },
+  "predef._system.EMLINK": {
+    "signature": "constant EMLINK",
+    "markdown": "```pike\nconstant EMLINK\n```"
+  },
+  "predef._system.EMSGSIZE": {
+    "signature": "constant EMSGSIZE",
+    "markdown": "```pike\nconstant EMSGSIZE\n```"
+  },
+  "predef._system.EMULTIHOP": {
+    "signature": "constant EMULTIHOP",
+    "markdown": "```pike\nconstant EMULTIHOP\n```"
+  },
+  "predef._system.ENAMETOOLONG": {
+    "signature": "constant ENAMETOOLONG",
+    "markdown": "```pike\nconstant ENAMETOOLONG\n```"
+  },
+  "predef._system.ENAVAIL": {
+    "signature": "constant ENAVAIL",
+    "markdown": "```pike\nconstant ENAVAIL\n```"
+  },
+  "predef._system.ENETDOWN": {
+    "signature": "constant ENETDOWN",
+    "markdown": "```pike\nconstant ENETDOWN\n```"
+  },
+  "predef._system.ENETRESET": {
+    "signature": "constant ENETRESET",
+    "markdown": "```pike\nconstant ENETRESET\n```"
+  },
+  "predef._system.ENETUNREACH": {
+    "signature": "constant ENETUNREACH",
+    "markdown": "```pike\nconstant ENETUNREACH\n```"
+  },
+  "predef._system.ENFILE": {
+    "signature": "constant ENFILE",
+    "markdown": "```pike\nconstant ENFILE\n```"
+  },
+  "predef._system.ENOANO": {
+    "signature": "constant ENOANO",
+    "markdown": "```pike\nconstant ENOANO\n```"
+  },
+  "predef._system.ENOBUFS": {
+    "signature": "constant ENOBUFS",
+    "markdown": "```pike\nconstant ENOBUFS\n```"
+  },
+  "predef._system.ENOCSI": {
+    "signature": "constant ENOCSI",
+    "markdown": "```pike\nconstant ENOCSI\n```"
+  },
+  "predef._system.ENODATA": {
+    "signature": "constant ENODATA",
+    "markdown": "```pike\nconstant ENODATA\n```"
+  },
+  "predef._system.ENODEV": {
+    "signature": "constant ENODEV",
+    "markdown": "```pike\nconstant ENODEV\n```"
+  },
+  "predef._system.ENOENT": {
+    "signature": "constant ENOENT",
+    "markdown": "```pike\nconstant ENOENT\n```"
+  },
+  "predef._system.ENOEXEC": {
+    "signature": "constant ENOEXEC",
+    "markdown": "```pike\nconstant ENOEXEC\n```"
+  },
+  "predef._system.ENOLCK": {
+    "signature": "constant ENOLCK",
+    "markdown": "```pike\nconstant ENOLCK\n```"
+  },
+  "predef._system.ENOLINK": {
+    "signature": "constant ENOLINK",
+    "markdown": "```pike\nconstant ENOLINK\n```"
+  },
+  "predef._system.ENOMEDIUM": {
+    "signature": "constant ENOMEDIUM",
+    "markdown": "```pike\nconstant ENOMEDIUM\n```"
+  },
+  "predef._system.ENOMEM": {
+    "signature": "constant ENOMEM",
+    "markdown": "```pike\nconstant ENOMEM\n```"
+  },
+  "predef._system.ENOMSG": {
+    "signature": "constant ENOMSG",
+    "markdown": "```pike\nconstant ENOMSG\n```"
+  },
+  "predef._system.ENONET": {
+    "signature": "constant ENONET",
+    "markdown": "```pike\nconstant ENONET\n```"
+  },
+  "predef._system.ENOPKG": {
+    "signature": "constant ENOPKG",
+    "markdown": "```pike\nconstant ENOPKG\n```"
+  },
+  "predef._system.ENOPROTOOPT": {
+    "signature": "constant ENOPROTOOPT",
+    "markdown": "```pike\nconstant ENOPROTOOPT\n```"
+  },
+  "predef._system.ENOSPC": {
+    "signature": "constant ENOSPC",
+    "markdown": "```pike\nconstant ENOSPC\n```"
+  },
+  "predef._system.ENOSR": {
+    "signature": "constant ENOSR",
+    "markdown": "```pike\nconstant ENOSR\n```"
+  },
+  "predef._system.ENOSTR": {
+    "signature": "constant ENOSTR",
+    "markdown": "```pike\nconstant ENOSTR\n```"
+  },
+  "predef._system.ENOSYS": {
+    "signature": "constant ENOSYS",
+    "markdown": "```pike\nconstant ENOSYS\n```"
+  },
+  "predef._system.ENOTBLK": {
+    "signature": "constant ENOTBLK",
+    "markdown": "```pike\nconstant ENOTBLK\n```"
+  },
+  "predef._system.ENOTCONN": {
+    "signature": "constant ENOTCONN",
+    "markdown": "```pike\nconstant ENOTCONN\n```"
+  },
+  "predef._system.ENOTDIR": {
+    "signature": "constant ENOTDIR",
+    "markdown": "```pike\nconstant ENOTDIR\n```"
+  },
+  "predef._system.ENOTEMPTY": {
+    "signature": "constant ENOTEMPTY",
+    "markdown": "```pike\nconstant ENOTEMPTY\n```"
+  },
+  "predef._system.ENOTNAM": {
+    "signature": "constant ENOTNAM",
+    "markdown": "```pike\nconstant ENOTNAM\n```"
+  },
+  "predef._system.ENOTSOCK": {
+    "signature": "constant ENOTSOCK",
+    "markdown": "```pike\nconstant ENOTSOCK\n```"
+  },
+  "predef._system.ENOTSUP": {
+    "signature": "constant ENOTSUP",
+    "markdown": "```pike\nconstant ENOTSUP\n```"
+  },
+  "predef._system.ENOTTY": {
+    "signature": "constant ENOTTY",
+    "markdown": "```pike\nconstant ENOTTY\n```"
+  },
+  "predef._system.ENOTUNIQ": {
+    "signature": "constant ENOTUNIQ",
+    "markdown": "```pike\nconstant ENOTUNIQ\n```"
+  },
+  "predef._system.ENXIO": {
+    "signature": "constant ENXIO",
+    "markdown": "```pike\nconstant ENXIO\n```"
+  },
+  "predef._system.EOPNOTSUPP": {
+    "signature": "constant EOPNOTSUPP",
+    "markdown": "```pike\nconstant EOPNOTSUPP\n```"
+  },
+  "predef._system.EOVERFLOW": {
+    "signature": "constant EOVERFLOW",
+    "markdown": "```pike\nconstant EOVERFLOW\n```"
+  },
+  "predef._system.EPERM": {
+    "signature": "constant EPERM",
+    "markdown": "```pike\nconstant EPERM\n```"
+  },
+  "predef._system.EPFNOSUPPORT": {
+    "signature": "constant EPFNOSUPPORT",
+    "markdown": "```pike\nconstant EPFNOSUPPORT\n```"
+  },
+  "predef._system.EPIPE": {
+    "signature": "constant EPIPE",
+    "markdown": "```pike\nconstant EPIPE\n```"
+  },
+  "predef._system.EPROTO": {
+    "signature": "constant EPROTO",
+    "markdown": "```pike\nconstant EPROTO\n```"
+  },
+  "predef._system.EPROTONOSUPPORT": {
+    "signature": "constant EPROTONOSUPPORT",
+    "markdown": "```pike\nconstant EPROTONOSUPPORT\n```"
+  },
+  "predef._system.EPROTOTYPE": {
+    "signature": "constant EPROTOTYPE",
+    "markdown": "```pike\nconstant EPROTOTYPE\n```"
+  },
+  "predef._system.ERANGE": {
+    "signature": "constant ERANGE",
+    "markdown": "```pike\nconstant ERANGE\n```"
+  },
+  "predef._system.EREMCHG": {
+    "signature": "constant EREMCHG",
+    "markdown": "```pike\nconstant EREMCHG\n```"
+  },
+  "predef._system.EREMOTE": {
+    "signature": "constant EREMOTE",
+    "markdown": "```pike\nconstant EREMOTE\n```"
+  },
+  "predef._system.EREMOTEIO": {
+    "signature": "constant EREMOTEIO",
+    "markdown": "```pike\nconstant EREMOTEIO\n```"
+  },
+  "predef._system.ERESTART": {
+    "signature": "constant ERESTART",
+    "markdown": "```pike\nconstant ERESTART\n```"
+  },
+  "predef._system.EROFS": {
+    "signature": "constant EROFS",
+    "markdown": "```pike\nconstant EROFS\n```"
+  },
+  "predef._system.ESHUTDOWN": {
+    "signature": "constant ESHUTDOWN",
+    "markdown": "```pike\nconstant ESHUTDOWN\n```"
+  },
+  "predef._system.ESOCKTNOSUPPORT": {
+    "signature": "constant ESOCKTNOSUPPORT",
+    "markdown": "```pike\nconstant ESOCKTNOSUPPORT\n```"
+  },
+  "predef._system.ESPIPE": {
+    "signature": "constant ESPIPE",
+    "markdown": "```pike\nconstant ESPIPE\n```"
+  },
+  "predef._system.ESRCH": {
+    "signature": "constant ESRCH",
+    "markdown": "```pike\nconstant ESRCH\n```"
+  },
+  "predef._system.ESRMNT": {
+    "signature": "constant ESRMNT",
+    "markdown": "```pike\nconstant ESRMNT\n```"
+  },
+  "predef._system.ESTALE": {
+    "signature": "constant ESTALE",
+    "markdown": "```pike\nconstant ESTALE\n```"
+  },
+  "predef._system.ESTRPIPE": {
+    "signature": "constant ESTRPIPE",
+    "markdown": "```pike\nconstant ESTRPIPE\n```"
+  },
+  "predef._system.ETIME": {
+    "signature": "constant ETIME",
+    "markdown": "```pike\nconstant ETIME\n```"
+  },
+  "predef._system.ETIMEDOUT": {
+    "signature": "constant ETIMEDOUT",
+    "markdown": "```pike\nconstant ETIMEDOUT\n```"
+  },
+  "predef._system.ETOOMANYREFS": {
+    "signature": "constant ETOOMANYREFS",
+    "markdown": "```pike\nconstant ETOOMANYREFS\n```"
+  },
+  "predef._system.ETXTBSY": {
+    "signature": "constant ETXTBSY",
+    "markdown": "```pike\nconstant ETXTBSY\n```"
+  },
+  "predef._system.EUCLEAN": {
+    "signature": "constant EUCLEAN",
+    "markdown": "```pike\nconstant EUCLEAN\n```"
+  },
+  "predef._system.EUNATCH": {
+    "signature": "constant EUNATCH",
+    "markdown": "```pike\nconstant EUNATCH\n```"
+  },
+  "predef._system.EUSERS": {
+    "signature": "constant EUSERS",
+    "markdown": "```pike\nconstant EUSERS\n```"
+  },
+  "predef._system.EWOULDBLOCK": {
+    "signature": "constant EWOULDBLOCK",
+    "markdown": "```pike\nconstant EWOULDBLOCK\n```"
+  },
+  "predef._system.EXDEV": {
+    "signature": "constant EXDEV",
+    "markdown": "```pike\nconstant EXDEV\n```"
+  },
+  "predef._system.EXFULL": {
+    "signature": "constant EXFULL",
+    "markdown": "```pike\nconstant EXFULL\n```"
+  },
+  "predef._system.ITIMER_PROF": {
+    "signature": "constant ITIMER_PROF",
+    "markdown": "```pike\nconstant ITIMER_PROF\n```"
+  },
+  "predef._system.ITIMER_REAL": {
+    "signature": "constant ITIMER_REAL",
+    "markdown": "```pike\nconstant ITIMER_REAL\n```"
+  },
+  "predef._system.ITIMER_VIRTUAL": {
+    "signature": "constant ITIMER_VIRTUAL",
+    "markdown": "```pike\nconstant ITIMER_VIRTUAL\n```"
+  },
+  "predef._system.Memory": {
+    "signature": "class Memory",
+    "markdown": "```pike\nclass Memory\n```"
+  },
+  "predef._system.REAL_TIME_IMPLEMENTATION": {
+    "signature": "constant REAL_TIME_IMPLEMENTATION",
+    "markdown": "```pike\nconstant REAL_TIME_IMPLEMENTATION\n```"
+  },
+  "predef._system.REAL_TIME_IS_MONOTONIC": {
+    "signature": "constant REAL_TIME_IS_MONOTONIC",
+    "markdown": "```pike\nconstant REAL_TIME_IS_MONOTONIC\n```"
+  },
+  "predef._system.REAL_TIME_RESOLUTION": {
+    "signature": "constant REAL_TIME_RESOLUTION",
+    "markdown": "```pike\nconstant REAL_TIME_RESOLUTION\n```"
+  },
+  "predef._system.__MMAP__": {
+    "signature": "constant __MMAP__",
+    "markdown": "```pike\nconstant __MMAP__\n```"
+  },
+  "predef._system.chmod": {
+    "signature": "function(string, int : void) chmod",
+    "markdown": "```pike\nfunction(string, int : void) chmod\n```"
+  },
+  "predef._system.chown": {
+    "signature": "function(string,int,int,int | void:void) chown",
+    "markdown": "```pike\nfunction(string,int,int,int | void:void) chown\n```"
+  },
+  "predef._system.chroot": {
+    "signature": "function(object | string:int) chroot",
+    "markdown": "```pike\nfunction(object | string:int) chroot\n```"
+  },
+  "predef._system.cleargroups": {
+    "signature": "function( : void) cleargroups",
+    "markdown": "```pike\nfunction( : void) cleargroups\n```"
+  },
+  "predef._system.closelog": {
+    "signature": "function( : void) closelog",
+    "markdown": "```pike\nfunction( : void) closelog\n```"
+  },
+  "predef._system.daemon": {
+    "signature": "function(int, int : int) daemon",
+    "markdown": "```pike\nfunction(int, int : int) daemon\n```"
+  },
+  "predef._system.dumpable": {
+    "signature": "function(int(1bit) | void:int(1bit)) dumpable",
+    "markdown": "```pike\nfunction(int(1bit) | void:int(1bit)) dumpable\n```"
+  },
+  "predef._system.endgrent": {
+    "signature": "function(void : int) endgrent",
+    "markdown": "```pike\nfunction(void : int) endgrent\n```"
+  },
+  "predef._system.endpwent": {
+    "signature": "function(void : int) endpwent",
+    "markdown": "```pike\nfunction(void : int) endpwent\n```"
+  },
+  "predef._system.getegid": {
+    "signature": "function( : int) getegid",
+    "markdown": "```pike\nfunction( : int) getegid\n```"
+  },
+  "predef._system.geteuid": {
+    "signature": "function( : int) geteuid",
+    "markdown": "```pike\nfunction( : int) geteuid\n```"
+  },
+  "predef._system.getgid": {
+    "signature": "function( : int) getgid",
+    "markdown": "```pike\nfunction( : int) getgid\n```"
+  },
+  "predef._system.getgrent": {
+    "signature": "function(void:array(array(string) | int | string)) getgrent",
+    "markdown": "```pike\nfunction(void:array(array(string) | int | string)) getgrent\n```"
+  },
+  "predef._system.getgroups": {
+    "signature": "function( : array(int)) getgroups",
+    "markdown": "```pike\nfunction( : array(int)) getgroups\n```"
+  },
+  "predef._system.gethostbyaddr": {
+    "signature": "function(string : array) gethostbyaddr",
+    "markdown": "```pike\nfunction(string : array) gethostbyaddr\n```"
+  },
+  "predef._system.gethostbyname": {
+    "signature": "function(string : array) gethostbyname",
+    "markdown": "```pike\nfunction(string : array) gethostbyname\n```"
+  },
+  "predef._system.gethostname": {
+    "signature": "function( : string) gethostname",
+    "markdown": "```pike\nfunction( : string) gethostname\n```"
+  },
+  "predef._system.getitimer": {
+    "signature": "function(int(0..2) : array(float)) getitimer",
+    "markdown": "```pike\nfunction(int(0..2) : array(float)) getitimer\n```"
+  },
+  "predef._system.getloadavg": {
+    "signature": "function( : array(float)) getloadavg",
+    "markdown": "```pike\nfunction( : array(float)) getloadavg\n```"
+  },
+  "predef._system.getpgrp": {
+    "signature": "function(int | void:int) getpgrp",
+    "markdown": "```pike\nfunction(int | void:int) getpgrp\n```"
+  },
+  "predef._system.getpid": {
+    "signature": "function( : int) getpid",
+    "markdown": "```pike\nfunction( : int) getpid\n```"
+  },
+  "predef._system.getppid": {
+    "signature": "function( : int) getppid",
+    "markdown": "```pike\nfunction( : int) getppid\n```"
+  },
+  "predef._system.getpwent": {
+    "signature": "function(void:array(int | string)) getpwent",
+    "markdown": "```pike\nfunction(void:array(int | string)) getpwent\n```"
+  },
+  "predef._system.getrlimit": {
+    "signature": "function(string : array(int)) getrlimit",
+    "markdown": "```pike\nfunction(string : array(int)) getrlimit\n```"
+  },
+  "predef._system.getrlimits": {
+    "signature": "function( : mapping(string:array(int))) getrlimits",
+    "markdown": "```pike\nfunction( : mapping(string:array(int))) getrlimits\n```"
+  },
+  "predef._system.getrusage": {
+    "signature": "function( : mapping(string:int)) getrusage",
+    "markdown": "```pike\nfunction( : mapping(string:int)) getrusage\n```"
+  },
+  "predef._system.getsid": {
+    "signature": "function(int | void:int) getsid",
+    "markdown": "```pike\nfunction(int | void:int) getsid\n```"
+  },
+  "predef._system.gettimeofday": {
+    "signature": "function( : array(int)) gettimeofday",
+    "markdown": "```pike\nfunction( : array(int)) gettimeofday\n```"
+  },
+  "predef._system.getuid": {
+    "signature": "function( : int) getuid",
+    "markdown": "```pike\nfunction( : int) getuid\n```"
+  },
+  "predef._system.hardlink": {
+    "signature": "function(string, string : void) hardlink",
+    "markdown": "```pike\nfunction(string, string : void) hardlink\n```"
+  },
+  "predef._system.initgroups": {
+    "signature": "function(string, int : void) initgroups",
+    "markdown": "```pike\nfunction(string, int : void) initgroups\n```"
+  },
+  "predef._system.innetgr": {
+    "signature": "function(string,string | void,string | void,string | void:int) innetgr",
+    "markdown": "```pike\nfunction(string,string | void,string | void,string | void:int) innetgr\n```"
+  },
+  "predef._system.nanosleep": {
+    "signature": "function(float | int:float) nanosleep",
+    "markdown": "```pike\nfunction(float | int:float) nanosleep\n```"
+  },
+  "predef._system.openlog": {
+    "signature": "function(string, int, int : void) openlog",
+    "markdown": "```pike\nfunction(string, int, int : void) openlog\n```"
+  },
+  "predef._system.rdtsc": {
+    "signature": "function( : int) rdtsc",
+    "markdown": "```pike\nfunction( : int) rdtsc\n```"
+  },
+  "predef._system.readlink": {
+    "signature": "function(string : string) readlink",
+    "markdown": "```pike\nfunction(string : string) readlink\n```"
+  },
+  "predef._system.resolvepath": {
+    "signature": "function(string : string) resolvepath",
+    "markdown": "```pike\nfunction(string : string) resolvepath\n```"
+  },
+  "predef._system.setegid": {
+    "signature": "function(int : int) setegid",
+    "markdown": "```pike\nfunction(int : int) setegid\n```"
+  },
+  "predef._system.seteuid": {
+    "signature": "function(int : int) seteuid",
+    "markdown": "```pike\nfunction(int : int) seteuid\n```"
+  },
+  "predef._system.setgid": {
+    "signature": "function(int : int) setgid",
+    "markdown": "```pike\nfunction(int : int) setgid\n```"
+  },
+  "predef._system.setgrent": {
+    "signature": "function(void : int) setgrent",
+    "markdown": "```pike\nfunction(void : int) setgrent\n```"
+  },
+  "predef._system.setgroups": {
+    "signature": "function(array(int) : void) setgroups",
+    "markdown": "```pike\nfunction(array(int) : void) setgroups\n```"
+  },
+  "predef._system.setitimer": {
+    "signature": "function(int(0..2),float | int(0..2147483647):float) setitimer",
+    "markdown": "```pike\nfunction(int(0..2),float | int(0..2147483647):float) setitimer\n```"
+  },
+  "predef._system.setpgrp": {
+    "signature": "function( : int) setpgrp",
+    "markdown": "```pike\nfunction( : int) setpgrp\n```"
+  },
+  "predef._system.setpwent": {
+    "signature": "function(void : int) setpwent",
+    "markdown": "```pike\nfunction(void : int) setpwent\n```"
+  },
+  "predef._system.setresgid": {
+    "signature": "function(int, int, int : int) setresgid",
+    "markdown": "```pike\nfunction(int, int, int : int) setresgid\n```"
+  },
+  "predef._system.setresuid": {
+    "signature": "function(int, int, int : int) setresuid",
+    "markdown": "```pike\nfunction(int, int, int : int) setresuid\n```"
+  },
+  "predef._system.setrlimit": {
+    "signature": "function(string, int, int : int(1bit)) setrlimit",
+    "markdown": "```pike\nfunction(string, int, int : int(1bit)) setrlimit\n```"
+  },
+  "predef._system.setsid": {
+    "signature": "function( : int) setsid",
+    "markdown": "```pike\nfunction( : int) setsid\n```"
+  },
+  "predef._system.setuid": {
+    "signature": "function(int : int) setuid",
+    "markdown": "```pike\nfunction(int : int) setuid\n```"
+  },
+  "predef._system.sleep": {
+    "signature": "function(int : int) sleep",
+    "markdown": "```pike\nfunction(int : int) sleep\n```"
+  },
+  "predef._system.symlink": {
+    "signature": "function(string, string : void) symlink",
+    "markdown": "```pike\nfunction(string, string : void) symlink\n```"
+  },
+  "predef._system.sync": {
+    "signature": "function( : void) sync",
+    "markdown": "```pike\nfunction( : void) sync\n```"
+  },
+  "predef._system.syslog": {
+    "signature": "function(int, string : void) syslog",
+    "markdown": "```pike\nfunction(int, string : void) syslog\n```"
+  },
+  "predef._system.umask": {
+    "signature": "function(int | void:int) umask",
+    "markdown": "```pike\nfunction(int | void:int) umask\n```"
+  },
+  "predef._system.uname": {
+    "signature": "function( : mapping) uname",
+    "markdown": "```pike\nfunction( : mapping) uname\n```"
+  },
+  "predef._system.usleep": {
+    "signature": "function(int : void) usleep",
+    "markdown": "```pike\nfunction(int : void) usleep\n```"
+  },
+  "predef._system.utime": {
+    "signature": "function(string,int,int,int | void:void) utime",
+    "markdown": "```pike\nfunction(string,int,int,int | void:void) utime\n```"
+  },
+  "predef.spider._dump_obj_table": {
+    "signature": "__deprecated__(function( : array(array))) _dump_obj_table",
+    "markdown": "```pike\n__deprecated__(function( : array(array))) _dump_obj_table\n```"
+  },
+  "predef.spider._low_program_name": {
+    "signature": "__deprecated__(function(program : string)) _low_program_name",
+    "markdown": "```pike\n__deprecated__(function(program : string)) _low_program_name\n```"
+  },
+  "predef.spider.discdate": {
+    "signature": "__deprecated__(function(int : array)) discdate",
+    "markdown": "```pike\n__deprecated__(function(int : array)) discdate\n```"
+  },
+  "predef.spider.fd_info": {
+    "signature": "__deprecated__(function(int : string)) fd_info",
+    "markdown": "```pike\n__deprecated__(function(int : string)) fd_info\n```"
+  },
+  "predef.spider.parse_accessed_database": {
+    "signature": "__deprecated__(function(string : array)) parse_accessed_database",
+    "markdown": "```pike\n__deprecated__(function(string : array)) parse_accessed_database\n```"
+  },
+  "predef.spider.parse_html": {
+    "signature": "__deprecated__(function(string,mapping(string:function(string | void,mapping(string:string) | void,mixed ...:array(string) | string) | string),mapping(string:fu… parse_html",
+    "markdown": "```pike\n__deprecated__(function(string,mapping(string:function(string | void,mapping(string:string) | void,mixed ...:array(string) | string) | string),mapping(string:fu… parse_html\n```"
+  },
+  "predef.spider.parse_html_lines": {
+    "signature": "__deprecated__(function(string,mapping(string:function(string | void,mapping(string:string) | void,int | void,mixed ...:array(string) | string) | string),mappin… parse_html_lines",
+    "markdown": "```pike\n__deprecated__(function(string,mapping(string:function(string | void,mapping(string:string) | void,int | void,mixed ...:array(string) | string) | string),mappin… parse_html_lines\n```"
+  },
+  "predef.spider.set_end_quote": {
+    "signature": "__deprecated__(function(int : int)) set_end_quote",
+    "markdown": "```pike\n__deprecated__(function(int : int)) set_end_quote\n```"
+  },
+  "predef.spider.set_start_quote": {
+    "signature": "__deprecated__(function(int : int)) set_start_quote",
+    "markdown": "```pike\n__deprecated__(function(int : int)) set_start_quote\n```"
+  },
+  "predef.spider.stardate": {
+    "signature": "__deprecated__(function(int, int : int)) stardate",
+    "markdown": "```pike\n__deprecated__(function(int, int : int)) stardate\n```"
+  },
   "reconciled.ADT": {
     "signature": "module",
     "markdown": ""
@@ -36079,6 +38679,10 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.Apple": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Arg": {
     "signature": "module",
     "markdown": ""
@@ -36092,6 +38696,14 @@
     "markdown": ""
   },
   "reconciled.Audio.Format": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Builtin": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.COM": {
     "signature": "module",
     "markdown": ""
   },
@@ -36151,6 +38763,10 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.CommonLog": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Concurrent": {
     "signature": "module",
     "markdown": ""
@@ -36195,6 +38811,10 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.DVB": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Debug": {
     "signature": "module",
     "markdown": ""
@@ -36227,11 +38847,23 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.GL": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.GLUE.Driver": {
     "signature": "module",
     "markdown": ""
   },
   "reconciled.GLUE.Events": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.GLUT": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.GSSAPI": {
     "signature": "module",
     "markdown": ""
   },
@@ -36255,7 +38887,15 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.Gettext": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Git": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Gmp": {
     "signature": "module",
     "markdown": ""
   },
@@ -36267,7 +38907,19 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.HTTPAccept": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Image": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Int": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Kerberos": {
     "signature": "module",
     "markdown": ""
   },
@@ -36379,7 +39031,23 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.Multiset": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.NetUtils": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Nettle": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Object": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.PDF": {
     "signature": "module",
     "markdown": ""
   },
@@ -36420,6 +39088,14 @@
     "markdown": ""
   },
   "reconciled.Pike": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Pipe": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Postgres": {
     "signature": "module",
     "markdown": ""
   },
@@ -36571,6 +39247,14 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.SDL": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.SQLite": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.SSL": {
     "signature": "module",
     "markdown": ""
@@ -36620,6 +39304,10 @@
     "markdown": ""
   },
   "reconciled.Serializer": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.Shuffler": {
     "signature": "module",
     "markdown": ""
   },
@@ -36847,6 +39535,14 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled.Unicode": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.VCDiff": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.Val": {
     "signature": "module",
     "markdown": ""
@@ -36927,6 +39623,18 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled._ADT": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Charset": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Ffmpeg": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled._Image": {
     "signature": "module",
     "markdown": ""
@@ -36943,6 +39651,14 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled._Image_FreeType": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Image_GIF": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled._Image_JPEG": {
     "signature": "module",
     "markdown": ""
@@ -36955,7 +39671,19 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled._Image_SVG": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled._Image_TIFF": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Image_TTF": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Image_WebP": {
     "signature": "module",
     "markdown": ""
   },
@@ -36963,11 +39691,107 @@
     "signature": "module",
     "markdown": ""
   },
+  "reconciled._Image_XFace": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled._Image_XPM": {
     "signature": "module",
     "markdown": ""
   },
+  "reconciled._Protocols_DNS_SD": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Roxen": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._Stdio": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._WhiteFish": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Bz2": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Fuse": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___GTK1": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___GTK2": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Java": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___MIME": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Math": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Oracle": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Regexp": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___Yp": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.___ZXID": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.____Image_JPEG": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.____Image_TIFF": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.____Regexp_PCRE": {
+    "signature": "module",
+    "markdown": ""
+  },
   "reconciled.__builtin.Nettle": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.__builtin_dirnode": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._math": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled._system": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.spider": {
+    "signature": "module",
+    "markdown": ""
+  },
+  "reconciled.sybase": {
     "signature": "module",
     "markdown": ""
   }

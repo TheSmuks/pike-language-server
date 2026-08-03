@@ -37,6 +37,11 @@ export const DECL_KIND_MAP: Record<string, DeclKind> = {
   local_function_decl: 'function',
   variable_decl: 'variable',
   local_declaration: 'variable',
+  // `if (int last_ts = seen[hash])` — Pike lets a condition declare a variable
+  // that is in scope for the body. The block collectors already open a scope
+  // for it; without this the scope stayed empty, so the name resolved to
+  // nothing from its own declaration and from every use in the body.
+  cond_decl: 'variable',
   constant_decl: 'constant',
   enum_decl: 'enum',
   enum_member: 'enum_member',
@@ -67,6 +72,7 @@ const DISPATCHED_DECL_TYPES = new Set<string>([
   'preproc_undef',
   'local_function_decl',
   'lambda_expr',
+  'anon_class',
   'for_statement',
   'foreach_statement',
   'if_statement',
@@ -192,6 +198,7 @@ function dispatchCollectDeclarations(node: Node, state: BuildState): void {
     collectFunctionDecl(node, state); return;
   }
   if (node.type === 'lambda_expr') { collectLambda(node, state); return; }
+  if (node.type === 'anon_class') { collectAnonClass(node, state); return; }
 
   // Handle block-scoped constructs
   if (dispatchBlockStatement(node, state)) return;
@@ -205,6 +212,28 @@ function dispatchCollectDeclarations(node: Node, state: BuildState): void {
 
   // Recurse into children
   descendForDeclarations(node, state);
+}
+
+/**
+ * `object handler = class { ... }();` — a class written as an expression.
+ *
+ * The grammar calls this `anon_class`, not `class_decl`, so nothing dispatched
+ * on it: the generic descent walked straight into its body and collected the
+ * members into whatever scope was current, which at top level is the FILE
+ * scope. `get_default_module` then looked like a file-scope function of the
+ * module — visible to completion and to name resolution across the whole file,
+ * and reported as a top-level symbol the outline was missing.
+ *
+ * A body scope is all this needs; there is no name to declare.
+ */
+function collectAnonClass(node: Node, state: BuildState): void {
+  const body = node.childForFieldName('body')
+    ?? node.children.find(c => c.type === 'class_body')
+    ?? null;
+  if (!body) return;
+  pushScope(state, 'class', toRange(node));
+  collectDeclarations(body, state);
+  popScope(state);
 }
 
 function collectClassDecl(node: Node, state: BuildState): void {
@@ -344,6 +373,9 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
     if (child.type === 'parameter') {
       const nameNode = child.childForFieldName('name');
       if (nameNode) {
+        // Variadic parameters parse as `parameter -> [type, ..., identifier]`;
+        // the marker is a child node, not part of the type.
+        const varargs = child.children.some(c => c.type === '...');
         addDeclaration(state, {
           name: nameNode.text,
           kind: 'parameter',
@@ -351,9 +383,9 @@ function collectParameters(paramsNode: Node, state: BuildState): void {
           range: toRange(child),
           scopeId,
           declaredType: extractTypeText(child),
+          ...(varargs ? { varargs: true } : {}),
         });
       }
     }
-    // Variadic parameters: `string ... parts` — the name is also in a parameter node
   }
 }

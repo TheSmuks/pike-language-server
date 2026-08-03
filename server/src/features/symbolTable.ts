@@ -42,6 +42,15 @@ export interface Declaration {
   functionLike?: boolean;
   /** Visibility/storage modifiers on the declaration, e.g. ['private'], ['protected','variant']. */
   modifiers?: string[];
+  /**
+   * For parameters: true when written `type ... name`.
+   *
+   * Signature help renders parameter labels from declaredType and name, and
+   * declaredType carries no marker — so a variadic function was displayed as
+   * fixed-arity, telling the user `join_strings` takes exactly two arguments
+   * when it takes one or more.
+   */
+  varargs?: boolean;
 }
 
 export type DeclKind =
@@ -387,7 +396,7 @@ function runReferencePass(rootNode: any, state: BuildState, table: SymbolTable):
 // Public query API (delegated)
 // ---------------------------------------------------------------------------
 
-export { getDefinitionAt, getLocalDeclarationAt, declOccurrenceRangeAt, getReferencesTo } from './query';
+export { getDefinitionAt, getLocalDeclarationAt, declOccurrenceRangeAt, getReferencesTo, isWrittenInFile } from './query';
 
 /**
  * Sort scopes by (startLine, startChar) for binary search in findScopeForNode.

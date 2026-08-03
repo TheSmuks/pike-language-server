@@ -26,6 +26,7 @@ import {
   collectModuleParents,
   runModuleOracle,
   reconcileWithRuntime,
+  runRootModuleOracle,
 } from "./stdlib-runtime-reconcile";
 
 // ---------------------------------------------------------------------------
@@ -261,7 +262,15 @@ function main(): void {
   }
 
   console.log("\nReconciling module members against the pike runtime...");
-  const oracle = runModuleOracle(collectModuleParents(index));
+  // Union the index's own prefixes with the runtime's top-level modules. The
+  // AutoDoc walk only sees files, so a module living entirely in the pike
+  // binary (Image) contributed no keys, was therefore never in the parent list,
+  // and reconciliation had nothing to attach its members to.
+  const parents = [...new Set([
+    ...collectModuleParents(index),
+    ...runRootModuleOracle(),
+  ])].sort();
+  const oracle = runModuleOracle(parents);
   const { added, removed, skipped, unavailable } = reconcileWithRuntime(index, oracle);
   const reconciledCount = Object.keys(index).filter((k) => k.startsWith("reconciled.")).length;
   console.log(

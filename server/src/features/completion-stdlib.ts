@@ -266,6 +266,31 @@ function buildNameReverseIndex(
  * Look up stdlib entries by unqualified name (O(1)).
  * Returns all matching entries or undefined if not found.
  */
+/**
+ * The one stdlib entry whose FQN ends in `name`, or null when several do.
+ *
+ * The reverse index is keyed on the LAST segment of an FQN, so `File` maps to
+ * Bz2.File.File, Stdio.File and six others, and `map` maps to Array.map and
+ * ADT.Relation.Binary.map. Callers that pick "the first with docs" pick by
+ * insertion order — alphabetically by FQN — and answer a confident wrong
+ * symbol: hover documented every `Stdio.File` as Bz2's inherit, and argument
+ * completion offered `Array.map` the parameters of a relation method.
+ *
+ * A bare name simply does not identify a stdlib symbol. When it is ambiguous
+ * the caller must fall through to something that knows the receiver or the
+ * qualified path; this returns null so it cannot silently guess.
+ */
+export function getUniqueStdlibEntryByName(
+  stdlibIndex: Record<string, StdlibEntry>,
+  name: string,
+): { fqn: string; entry: StdlibEntry } | null {
+  const matches = getStdlibEntriesByName(stdlibIndex, name);
+  if (!matches || matches.length === 0) return null;
+  const distinct = new Set(matches.map(m => m.fqn));
+  if (distinct.size > 1) return null;
+  return matches[0];
+}
+
 export function getStdlibEntriesByName(
   stdlibIndex: Record<string, StdlibEntry>,
   name: string,

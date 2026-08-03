@@ -350,15 +350,22 @@ export function buildWorkspaceEdit(
 // ---------------------------------------------------------------------------
 
 /**
- * An inherit/import declaration names a class it does not own.
+ * An inherit/import/include declaration names something it does not own.
  *
- * Renaming through one produces edits at the inherit clause but none at the
- * class declaration itself, leaving source that no longer compiles. Renaming
- * the class is legitimate — driven from the class, not from a clause that
- * merely references it.
+ * Renaming through one produces edits at the clause but none at the thing it
+ * names, leaving source that no longer compiles. Renaming the class is
+ * legitimate — driven from the class, not from a clause that merely
+ * references it.
+ *
+ * `include` belongs here for a sharper reason: its name is a quoted path, not
+ * an identifier. prepareRename offered `"nonexistent.pike"` (quotes included)
+ * as the placeholder, and accepting it rewrote `#include "nonexistent.pike"`
+ * to `#include newname`, which Pike rejects with "Expected file to include".
+ * The server was already self-inconsistent about it — the `inherit "..."` on
+ * the next line of the same fixture correctly declined.
  */
 function namesAnotherDeclaration(decl: Declaration): boolean {
-  return decl.kind === 'inherit' || decl.kind === 'import';
+  return decl.kind === 'inherit' || decl.kind === 'import' || decl.kind === 'include';
 }
 
 /**

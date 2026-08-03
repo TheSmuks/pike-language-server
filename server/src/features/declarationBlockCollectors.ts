@@ -167,19 +167,34 @@ function collectForeachLvalues(node: Node, state: BuildState): void {
   extractIdentifiersFromField('value');
 }
 
+/**
+ * The `cond_decl` a condition declares, or null.
+ *
+ * The grammar binds the `condition`/`value` field DIRECTLY to the cond_decl
+ * (`condition: choice($._expr, $.cond_decl)`), so the node in hand already is
+ * the declaration. Scanning its children for one — as this used to — looks one
+ * level too deep and never matched, which left the scope these collectors open
+ * permanently empty: `if (int last_ts = m[k])` declared nothing, so `last_ts`
+ * resolved to nothing from the body and from its own name. The child scan is
+ * kept as a fallback in case a future grammar wraps the condition.
+ */
+function condDeclOf(condition: Node | null): Node | null {
+  if (!condition) return null;
+  if (condition.type === 'cond_decl') return condition;
+  for (const child of condition.children) {
+    if (child.type === 'cond_decl') return child;
+  }
+  return null;
+}
+
 export function collectIfStatement(node: Node, state: BuildState): void {
   // cond_decl (declaration in condition) creates a scope for consequence + alternative
-  const condition = node.childForFieldName('condition');
+  const ifCondDecl = condDeclOf(node.childForFieldName('condition'));
   let pushedCondScope = false;
-  if (condition) {
-    for (const child of condition.children) {
-      if (child.type === 'cond_decl') {
-        pushScope(state, 'if_cond', toRange(node));
-        collectDeclarations(child, state);
-        pushedCondScope = true;
-        break;
-      }
-    }
+  if (ifCondDecl) {
+    pushScope(state, 'if_cond', toRange(node));
+    collectDeclarations(ifCondDecl, state);
+    pushedCondScope = true;
   }
 
   // Consequence gets its own block scope
@@ -205,17 +220,12 @@ export function collectIfStatement(node: Node, state: BuildState): void {
 
 export function collectWhileStatement(node: Node, state: BuildState): void {
   // cond_decl in condition creates a scope wrapping body
-  const condition = node.childForFieldName('condition');
+  const whileCondDecl = condDeclOf(node.childForFieldName('condition'));
   let pushedCondScope = false;
-  if (condition) {
-    for (const child of condition.children) {
-      if (child.type === 'cond_decl') {
-        pushScope(state, 'while', toRange(node));
-        collectDeclarations(child, state);
-        pushedCondScope = true;
-        break;
-      }
-    }
+  if (whileCondDecl) {
+    pushScope(state, 'while', toRange(node));
+    collectDeclarations(whileCondDecl, state);
+    pushedCondScope = true;
   }
 
   // Body gets its own block scope
@@ -243,19 +253,12 @@ export function collectDoWhileStatement(node: Node, state: BuildState): void {
 
 export function collectSwitchStatement(node: Node, state: BuildState): void {
   // cond_decl in value creates a scope wrapping body
-  const value = node.childForFieldName('value');
+  const switchCondDecl = condDeclOf(node.childForFieldName('value'));
   let pushedCondScope = false;
-  if (value) {
-    for (const child of value.children) {
-      if (child.type === 'cond_decl') {
-        pushScope(state, 'switch', toRange(node));
-        collectDeclarations(child, state);
-        pushedCondScope = true;
-        break;
-      }
-    }
-
-
+  if (switchCondDecl) {
+    pushScope(state, 'switch', toRange(node));
+    collectDeclarations(switchCondDecl, state);
+    pushedCondScope = true;
   }
 
   // switch_statement has 'body' and 'value' fields (tree-sitter-pike v1.1.1+)

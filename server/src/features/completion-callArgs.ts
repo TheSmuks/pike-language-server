@@ -20,7 +20,7 @@ import {
   extractParamsFromDecl,
 } from "./completion-items";
 import type { CompletionContext } from "./completionTrigger";
-import { getStdlibEntriesByName } from "./completion-stdlib";
+import { getUniqueStdlibEntryByName } from "./completion-stdlib";
 
 // ---------------------------------------------------------------------------
 // Call-args completion
@@ -59,16 +59,15 @@ export async function completeCallArgs(
   const importResult = await lookupImportedCallable(table, ctx, calleeName);
   if (importResult) return importResult;
 
-  // 5. Stdlib lookup — O(1) reverse index by unqualified name
-  const stdlibMatches = getStdlibEntriesByName(ctx.stdlibIndex, calleeName);
-  if (stdlibMatches) {
-    for (const { entry } of stdlibMatches) {
-      // Skip class/module entries (they have "inherit" signatures)
-      if (entry.signature.startsWith("inherit")) continue;
-      const params = extractParamsFromStdlibSignature(entry.signature);
-      if (params !== null) {
-        return [makeArgSnippet(calleeName, params, entry.signature)];
-      }
+  // 5. Stdlib lookup by unqualified name — only when the name identifies one
+  // symbol. Taking the first of several put a relation method's parameters on
+  // a call to `Array.map`; filling an argument list with the wrong parameters
+  // is a worse answer than offering none.
+  const stdlibMatch = getUniqueStdlibEntryByName(ctx.stdlibIndex, calleeName);
+  if (stdlibMatch && !stdlibMatch.entry.signature.startsWith("inherit")) {
+    const params = extractParamsFromStdlibSignature(stdlibMatch.entry.signature);
+    if (params !== null) {
+      return [makeArgSnippet(calleeName, params, stdlibMatch.entry.signature)];
     }
   }
 

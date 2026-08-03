@@ -92,7 +92,7 @@ export function produceSignatureHelp(
   const activeParam = countActiveParameter(argsNode, line, character);
 
   // Try to resolve to a local/workspace function
-  const sig = resolveSignature(calleeName, objectName, table, stdlibIndex, ctx);
+  const sig = resolveSignature(calleeName, objectName, table, stdlibIndex, ctx, line);
   if (sig) {
     return {
       signatures: [sig],
@@ -161,8 +161,13 @@ function isCursorInParenRange(
     return false;
   }
   if (closeParen) {
+    // `>` not `>=`: the close paren's own column is the caret position just
+    // BEFORE the `)`, which is still inside the argument list. Excluding it
+    // killed signature help at the one place a user most often sits — typing
+    // the last argument — and sent findEnclosingCall on up to answer with the
+    // enclosing call's signature instead.
     const closeStart = closeParen.startPosition;
-    if (line > closeStart.row || (line === closeStart.row && character >= closeStart.column)) {
+    if (line > closeStart.row || (line === closeStart.row && character > closeStart.column)) {
       return false;
     }
   }
@@ -344,8 +349,16 @@ function countCommasInNode(node: Node, line: number, character: number): number 
       if (pos.row < line || (pos.row === line && pos.column < character)) {
         count++;
       }
+      continue;
     }
-    if (child.childCount > 0) {
+    // Descend ONLY through the argument list's own separator chain. `a, b, c`
+    // parses as a left-nested comma_expr, so the separators are the `,`
+    // children at those levels. Every other child — an assign_expr, an array
+    // literal `({ a, b })`, a nested call `sprintf("%d", n)` — is one argument,
+    // and the commas inside it are not separators of this list. Counting them
+    // walked activeParameter past the end of the parameter list, at which
+    // point the client highlights nothing and the popup is open but useless.
+    if (child.type === "comma_expr") {
       count += countCommasInNode(child, line, character);
     }
   }

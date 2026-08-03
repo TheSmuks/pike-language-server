@@ -6,7 +6,10 @@ import type { SymbolTable, Declaration } from "./symbolTable";
 import type { SignatureContext, SignatureInfo, ParameterInfo } from "./signatureHelp";
 import { containsRange } from "./scopeBuilder";
 import { resolveTypeName } from "./symbolTable";
+import { findDeclInScopeAt } from "./query";
 import { stripScopeWrapper } from "../util/stripScope";
+import { positiveFunctionGroups } from "./predefTypeGroups";
+import { findClassScope } from "./typeResolver";
 
 // ---------------------------------------------------------------------------
 // Main resolution
@@ -27,21 +30,28 @@ export function resolveSignature(
   table: SymbolTable,
   stdlibIndex?: Record<string, { signature: string; markdown: string }>,
   ctx?: SignatureContext,
+  /** Line of the call site, so the receiver is resolved in ITS scope. */
+  callLine?: number,
 ): SignatureInfo | null {
-  // 1. Try local function/method declaration
+  // 1. Method on a resolved receiver: obj->method(
+  //
+  //    Ahead of the bare-name search, for the reason a qualified path goes
+  //    ahead of it everywhere else: `db->query` is that object's query, not
+  //    any `query` the file happens to declare. Searching by name first let a
+  //    module-private wrapper win over the method actually being called, with
+  //    the answer decided by declaration order rather than by scope.
+  if (objectName && ctx) {
+    const methodSig = resolveMethodOnType(objectName, calleeName, table, ctx, callLine);
+    if (methodSig) return methodSig;
+  }
+
+  // 2. Local function/method declaration, by bare name.
   const funcDecl = table.declarations.find(
     d => d.name === calleeName && d.kind === "function",
   );
 
   if (funcDecl) {
     return buildSignatureFromDecl(funcDecl, table);
-  }
-
-  // 2. Method on resolved type: obj->method(
-  //    Resolve obj's type, find method in that type's class scope.
-  if (objectName && ctx) {
-    const methodSig = resolveMethodOnType(objectName, calleeName, table, ctx);
-    if (methodSig) return methodSig;
   }
 
   // 3. Constructor: ClassName(
@@ -91,9 +101,10 @@ function resolveMethodOnType(
   methodName: string,
   table: SymbolTable,
   ctx: SignatureContext,
+  callLine?: number,
 ): SignatureInfo | null {
   // Find the object's declaration
-  const objDecl = findDeclarationForName(table, objectName);
+  const objDecl = findDeclarationForName(table, objectName, callLine);
   if (!objDecl) return null;
 
   // Resolve the object's type name
@@ -104,10 +115,15 @@ function resolveMethodOnType(
   const typeResult = resolveTypeSync(typeName, table, ctx);
   if (!typeResult) return null;
 
-  // Find the method in the class scope
-  const classScope = typeResult.table.scopes.find(
-    s => s.kind === "class" && s.declarations.includes(typeResult.decl.id),
-  );
+  // Find the class BODY scope.
+  //
+  // This used to look for a class scope whose declarations include the class
+  // declaration itself — but a class scope holds the class's MEMBERS, while the
+  // class declaration lives in the scope that encloses it (usually file scope).
+  // The lookup therefore never matched, resolveMethodOnType always returned
+  // null, and every `obj->method(` fell through to the bare-name search, which
+  // answered with whichever same-named function the file declared first.
+  const classScope = findClassScope(typeResult.table, typeResult.decl);
   if (!classScope) return null;
 
   // Look for the method in the class scope (and inherited scopes)
@@ -233,9 +249,27 @@ export function resolveConstructor(
   };
 }
 
-/** Find a declaration by name, preferring declarations in the closest scope. */
-export function findDeclarationForName(table: SymbolTable, name: string): Declaration | null {
-  // Find any declaration matching this name (function, variable, parameter, class)
+/**
+ * Find a declaration by name, preferring the one visible at `line`.
+ *
+ * The whole-file `find` this used to do ignored scope entirely, so the first
+ * declaration in document order won: a `string b` parameter inside an unrelated
+ * class method shadowed the local `Box b` at the call site, the receiver's type
+ * came back as `string`, and signature help fell through to whichever
+ * same-named function the file declared first.
+ *
+ * `line` is optional because not every caller has a position; without one the
+ * old whole-file behaviour is the only thing available.
+ */
+export function findDeclarationForName(
+  table: SymbolTable,
+  name: string,
+  line?: number,
+): Declaration | null {
+  if (line !== undefined) {
+    const inScope = findDeclInScopeAt(table, name, line);
+    if (inScope) return inScope;
+  }
   return table.declarations.find(d => d.name === name) ?? null;
 }
 
@@ -253,7 +287,12 @@ function collectParamLabels(table: SymbolTable, scopeId: number): ParameterInfo[
   for (const declId of scope.declarations) {
     const param = table.declById.get(declId);
     if (param && param.kind === "parameter") {
-      const label = param.declaredType ? `${param.declaredType} ${param.name}` : param.name;
+      // `string ... parts`, not `string parts` — the ellipsis is the difference
+      // between "takes exactly two arguments" and "takes one or more".
+      const spread = param.varargs ? "... " : "";
+      const label = param.declaredType
+        ? `${param.declaredType} ${spread}${param.name}`
+        : `${spread}${param.name}`;
       params.push({ label });
     }
   }
@@ -341,12 +380,9 @@ export function resolvePredefSignatures(
   const markdown = ctx?.predefAutodoc?.[calleeName]?.markdown;
   const signatures: SignatureInfo[] = [];
 
-  for (const alternative of stripScopeWrapper(raw).split(" | function")) {
-    let sig = alternative.trim();
-    if (sig.startsWith("function")) sig = sig.slice("function".length).trim();
-    if (!sig.startsWith("(") || !sig.endsWith(")")) continue;
-
-    const inner = stripAttributes(sig.slice(1, -1));
+  const seen = new Set<string>();
+  for (const group of positiveFunctionGroups(stripScopeWrapper(raw))) {
+    const inner = stripAttributes(group.slice(1, -1));
     // `params : returnType` — find the top-level colon separator.
     const colonIdx = topLevelIndexOf(inner, ":");
     const paramText = (colonIdx === -1 ? inner : inner.slice(0, colonIdx)).trim();
@@ -356,11 +392,13 @@ export function resolvePredefSignatures(
       ? []
       : splitParams(paramText).map(p => ({ label: p.trim() }));
 
-    signatures.push({
-      label: `${returnType} ${calleeName}(${params.map(p => p.label).join(", ")})`,
-      documentation: markdown,
-      parameters: params,
-    });
+    const label = `${returnType} ${calleeName}(${params.map(p => p.label).join(", ")})`;
+    // The soft-alternative form repeats the same call shape in several
+    // constraint branches; showing it three times helps nobody.
+    if (seen.has(label)) continue;
+    seen.add(label);
+
+    signatures.push({ label, documentation: markdown, parameters: params });
   }
 
   return signatures;

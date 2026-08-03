@@ -85,6 +85,40 @@ const INHERIT_MARKER = /^[ \t]*inherit[ \t]+"module"[ \t]*;/m;
 const MODULE_TYPE_MARKER = /^[ \t]*constant[ \t]+module_type[ \t]*=[^;]*\bMODULE_[A-Z_]+/m;
 
 /**
+ * A reference to one of Roxen's own runtime modules.
+ *
+ * NOT an activation marker. Naming `Roxen.foo` is not enough to make a file a
+ * Roxen module — `mixed truth() { return Roxen.True; }` is a plain Pike file
+ * that mentions Roxen, and Roxen hover and completion must not leak into it
+ * (tests/lsp/roxenEndToEnd.test.ts holds that line).
+ *
+ * It is enough to know the stock pike compiler cannot check the file, which is
+ * a narrower claim and the only one the diagnostic gate needs. See
+ * namesRoxenRuntime.
+ *
+ * `Variable` is left out: the name is generic enough for a plain Pike project
+ * to own, and Roxen code using it always names one of the other two too.
+ */
+const RUNTIME_REFERENCE_MARKER = /(?<![A-Za-z0-9_.])(?:Roxen|RXML)\s*\.\s*[A-Za-z_]/;
+
+/**
+ * True when the source names Roxen's runtime, so the stock pike binary cannot
+ * usefully compile it.
+ *
+ * Deliberately independent of activation, of any installation, and of any
+ * config file: `pike.json` carries no `roxen` key by convention, and
+ * auto-discovery only looks under `/usr/local/roxen*`, so a rule needing either
+ * would do nothing on the machines that actually hit this. `Roxen.pmod` does
+ * not compile under Pike 8.0 even with every path configured, so the compiler's
+ * verdict on `Roxen.foo` carries no information whether or not Roxen is
+ * installed — and "Undefined identifier Roxen." on every line is not something
+ * the author can act on by editing the file.
+ */
+export function namesRoxenRuntime(source: string): boolean {
+  return RUNTIME_REFERENCE_MARKER.test(source);
+}
+
+/**
  * True when the source carries one of the measured Roxen markers.
  *
  * Matching is line-anchored but not comment-aware. A commented-out

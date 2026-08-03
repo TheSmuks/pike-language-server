@@ -39,7 +39,8 @@ import {
   type PredefAutodocEntry,
   type HoverInfo,
 } from "./hoverContent";
-import { getStdlibEntriesByName } from "./completion-stdlib";
+import { getUniqueStdlibEntryByName } from "./completion-stdlib";
+import { pinHoverRange } from "./hoverRange";
 import { memberOfMemberlessReceiver } from "./receiverMembers";
 import { magicConstantHover } from "./pikeMagicConstants";
 import { hoverFromModulePath } from "./hoverModulePath";
@@ -190,9 +191,13 @@ async function handleHover(
   if (!table) return null;
 
   const decl = getDefinitionAt(table, params.position.line, params.position.character);
-  if (decl) return resolveHoverForDecl(decl, ctx, params);
+  const hover = decl
+    ? await resolveHoverForDecl(decl, ctx, params)
+    : await resolveHoverFallback(ctx, baseResolutionCtx, makeTypeInferrer, table, doc, params);
 
-  return resolveHoverFallback(ctx, baseResolutionCtx, makeTypeInferrer, table, doc, params);
+  // Every tier computes its own range from what it resolved; only this knows
+  // what the user actually hovered.
+  return pinHoverRange(hover, doc.getText(), params.position);
 }
 
 /** Resolve hover when a local declaration is found. */
@@ -256,10 +261,16 @@ async function hoverFromTree(
     params.position.line, params.position.character, hoverTree,
   );
   if (accessDecl) {
-    // Try stdlib hover with the resolved access FQN before falling through
-    // to declForHover which only checks unqualified names.
+    // Unambiguous stdlib names only — see hoverFromStdlibAccess.
     const stdlibHover = hoverFromStdlibAccess(accessDecl.decl, ctx);
     if (stdlibHover) return formatHover(stdlibHover);
+
+    // An ambiguous name must not be guessed from the bare index here. The
+    // qualified tier knows the receiver's type and can name the exact symbol.
+    const qualified = await hoverFromQualifiedStdlib(
+      ctx, hoverResolutionCtx, table, params, hoverTree,
+    );
+    if (qualified) return qualified;
 
     return formatHover(declForHover(accessDecl.decl, accessDecl.uri, ctx));
   }
@@ -323,41 +334,41 @@ async function hoverFromTree(
 }
 
 /**
- * Try to find stdlib hover info for a resolved access declaration.
+ * Stdlib hover for a resolved access declaration, ONLY when the name is unique.
  *
- * When hovering over `f->open()` where `f` is `Stdio.File`, the access
- * resolver returns the Declaration for `open` from a workspace class.
- * `declForHover` checks `predef.open` (wrong) — this function uses the
- * reverse index to find all stdlib entries with that name and returns
- * the first match with rich markdown documentation.
+ * When hovering `f->open()` where `f` is `Stdio.File`, the access resolver
+ * returns the Declaration for `open` from a workspace class, and `declForHover`
+ * would check `predef.open`, which does not exist. This tier consults the
+ * reverse index instead — but that index is keyed on the LAST segment of an
+ * FQN only, so a name carried by several modules has several entries.
+ *
+ * It used to answer with the first entry that had markdown, which is insertion
+ * order, i.e. alphabetical by FQN. `Bz2` sorts before `Stdio`, so `Stdio.File`
+ * was documented as Bz2's inherit; `ADT.Relation.Binary.map` beat `Array.map`,
+ * answering "Maps every entry in the relation" for a call that has nothing to
+ * do with relations. Both are confident wrong answers, and both had the right
+ * entry sitting in the same index.
+ *
+ * This is a bare-NAME tier, and the ordering rule stated throughout this file
+ * is that bare-name tiers must not pre-empt path-aware ones. So it now answers
+ * only when the name is unambiguous; anything else falls through to
+ * `hoverFromQualifiedStdlib`, which knows the receiver's type and builds the
+ * exact FQN.
  */
 function hoverFromStdlibAccess(
   decl: Declaration,
   ctx: HoverContext,
 ): HoverInfo | null {
-  const matches = getStdlibEntriesByName(ctx.stdlibIndex, decl.name);
-  if (!matches || matches.length === 0) return null;
+  // Ambiguous names return null here: which symbol is meant depends on the
+  // receiver, which this tier cannot see.
+  const match = getUniqueStdlibEntryByName(ctx.stdlibIndex, decl.name);
+  if (!match) return null;
 
-  // Use the first match that has markdown docs.
-  for (const { entry } of matches) {
-    if (entry.markdown && entry.markdown.length > 0) {
-      return {
-        name: decl.name,
-        signature: entry.signature,
-        documentation: entry.markdown,
-        line: decl.nameRange.start.line,
-        character: decl.nameRange.start.character,
-        isAutodoc: true,
-      };
-    }
-  }
-
-  // Fall back to first match even without docs.
-  const first = matches[0].entry;
+  const entry = match.entry;
   return {
     name: decl.name,
-    signature: first.signature,
-    documentation: first.markdown,
+    signature: entry.signature,
+    documentation: entry.markdown,
     line: decl.nameRange.start.line,
     character: decl.nameRange.start.character,
     isAutodoc: true,

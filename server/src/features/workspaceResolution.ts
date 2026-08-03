@@ -6,7 +6,7 @@
  */
 
 import { type ModuleResolver } from "./moduleResolver";
-import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
+import { getDefinitionAt, getReferencesTo, isWrittenInFile, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
@@ -69,6 +69,10 @@ export async function resolveCrossFileDefinition(
   const table = entry.symbolTable;
   // Check if the position is on an inherit declaration
   for (const decl of table.declarations) {
+    // A clone merged from another file carries that file's coordinates, so it
+    // cannot answer a position query about this one — and resolving its path
+    // relative to this file would resolve it against the wrong base.
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.kind === "inherit" || decl.kind === "import") {
       const nr = decl.nameRange;
       if (nr.start.line === line && nr.end.line === line &&
@@ -246,6 +250,21 @@ export function getCrossFileReferences(
 // Internal: cross-file resolution helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Pair a declaration with the file it is actually written in.
+ *
+ * A file's symbol table holds clones merged from the files it `#include`s and
+ * inherits (see includeWiring.ts / scopeBuilder.ts). A clone's ranges are
+ * coordinates in that *other* file, and `sourceUri` names it. Returning the
+ * searched file's URI alongside a clone's ranges points the editor at the wrong
+ * file and at a line that file may not even have — which is how CTRL+CLICK on a
+ * method reached through a directory `module.pmod` opened `module.pmod` itself
+ * at a line belonging to a header it includes.
+ */
+function locate(uri: string, decl: Declaration): { uri: string; decl: Declaration } {
+  return { uri: decl.sourceUri ?? uri, decl };
+}
+
 /** Synthesize a top-of-file class declaration for files with no explicit class. */
 function synthesizeFileClassDecl(name: string, uri: string): { uri: string; decl: Declaration } {
   return {
@@ -298,7 +317,7 @@ function findTargetDeclInFile(
   const inheritName = decl.alias ?? decl.name;
   for (const targetDecl of table.declarations) {
     if (targetDecl.name === inheritName) {
-      return { uri: targetUri, decl: targetDecl };
+      return locate(targetUri, targetDecl);
     }
   }
 
@@ -324,12 +343,12 @@ function findFirstClassOrSynthesize(
     const named = table.declarations.find(
       d => d.kind === "class" && d.name === tail,
     );
-    if (named) return { uri: targetUri, decl: named };
+    if (named) return locate(targetUri, named);
   }
 
   for (const targetDecl of table.declarations) {
     if (targetDecl.kind === "class") {
-      return { uri: targetUri, decl: targetDecl };
+      return locate(targetUri, targetDecl);
     }
   }
   return synthesizeFileClassDecl(name, targetUri);
@@ -404,7 +423,7 @@ function findDirectDeclaration(
   name: string,
 ): { uri: string; decl: Declaration } | null {
   for (const decl of table.declarations) {
-    if (decl.name === name) return { uri, decl };
+    if (decl.name === name) return locate(uri, decl);
   }
   return null;
 }
@@ -444,11 +463,19 @@ async function resolveUnresolvedReference(
   if (directoryModule) {
     const moduleEntry = getFile(ctx, directoryModule);
     if (moduleEntry?.symbolTable) {
-      for (const moduleDecl of moduleEntry.symbolTable.declarations) {
-        if (moduleDecl.name === ref.name) {
-          return { uri: directoryModule, decl: moduleDecl };
-        }
-      }
+      const direct = findDirectDeclaration(
+        moduleEntry.symbolTable, directoryModule, ref.name,
+      );
+      if (direct) return direct;
+
+      // What module.pmod itself inherits is visible to the whole directory
+      // too — Pike does not stop at the module file's own text. Recursing
+      // continues the search from module.pmod's position, so its inherit paths
+      // resolve against module.pmod rather than against the file that asked.
+      const viaModule = await resolveUnresolvedReference(
+        ctx, ref, moduleEntry.symbolTable, directoryModule, seen, currentDepth + 1,
+      );
+      if (viaModule) return viaModule;
     }
   }
 

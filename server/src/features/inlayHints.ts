@@ -19,6 +19,8 @@
 
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
+import { isWrittenInFile } from "./symbolTable";
+import { findDeclInScopeAt } from "./query";
 import type { Position } from "vscode-languageserver-types";
 import { InlayHint, InlayHintKind } from "vscode-languageserver-types";
 
@@ -65,6 +67,9 @@ export function produceInlayHints(ctx: InlayHintContext): InlayHint[] {
   // G1: Type hints for untyped variable declarations
   for (const decl of table.declarations) {
     if (decl.kind !== "variable" && decl.kind !== "parameter") continue;
+    // Clones from an inherited or #include'd file carry that file's
+    // coordinates; a hint placed at them annotates unrelated text.
+    if (!isWrittenInFile(table, decl)) continue;
     if (decl.range.start.line < rangeStartLine || decl.range.start.line > rangeEndLine) continue;
 
     const typeName = resolveTypeForHint(decl);
@@ -247,13 +252,21 @@ function findCalleeDeclaration(
   argListNode: Node,
   table: SymbolTable,
 ): Declaration | null {
-  // 1. Try resolved references first.
+  // 1. The reference at THIS call site.
+  //
+  // This used to take the first reference anywhere in the file with a matching
+  // name, so a call inside one class was labelled with the parameter names of a
+  // same-named function declared earlier elsewhere — the hints contradicted
+  // go-to-definition on the very same token. A call is bound by where it is
+  // written, so the reference at the call site is the only one that answers.
+  const callee = argListNode.previousSibling ?? argListNode;
+  const at = callee.startPosition;
   for (const ref of table.references) {
-    if (ref.name === calleeName && ref.resolvesTo !== null) {
-      const decl = table.declById.get(ref.resolvesTo);
-      if (decl && (decl.kind === "function" || decl.kind === "method")) {
-        return decl;
-      }
+    if (ref.name !== calleeName || ref.resolvesTo === null) continue;
+    if (ref.loc.line !== at.row) continue;
+    const decl = table.declById.get(ref.resolvesTo);
+    if (decl && (decl.kind === "function" || decl.kind === "method")) {
+      return decl;
     }
   }
 
@@ -264,11 +277,11 @@ function findCalleeDeclaration(
     if (methodDecl) return methodDecl;
   }
 
-  // 3. Fallback: search declarations for matching function/method name.
-  for (const decl of table.declarations) {
-    if (decl.name === calleeName && (decl.kind === "function" || decl.kind === "method")) {
-      return decl;
-    }
+  // 3. Fallback: the declaration visible at the call site, by name. Scope-aware
+  //    so a same-named function elsewhere in the file cannot win.
+  const inScope = findDeclInScopeAt(table, calleeName, at.row);
+  if (inScope && (inScope.kind === "function" || inScope.kind === "method")) {
+    return inScope;
   }
 
   return null;

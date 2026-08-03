@@ -8,6 +8,7 @@
  */
 
 import { Tree, Node } from "web-tree-sitter";
+import { resolveTriggerAtCaret } from "./completionCaret";
 import {
   CompletionItem,
   CompletionItemKind,
@@ -77,13 +78,16 @@ export async function getCompletions(
   const pos = { row: line, column: character };
 
   // Get the node at or immediately before the cursor position
-  let node = root.descendantForPosition(pos);
-  if (!node) {
+  const caretNode = root.descendantForPosition(pos);
+  if (!caretNode) {
     return { isIncomplete: false, items: [] };
   }
 
   // Determine completion context
-  const triggerContext = detectTriggerContext(node, line, character, tree, lines[line] ?? "");
+  const { node, context: triggerContext } = resolveTriggerAtCaret(
+    root, caretNode, line, character, tree, lines[line] ?? "",
+  );
+
   if (triggerContext.type === "none") return { isIncomplete: false, items: [] };
 
   const items = await completeForTrigger(triggerContext, table, tree, line, character, ctx, node);
