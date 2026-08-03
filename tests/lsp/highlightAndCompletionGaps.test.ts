@@ -185,4 +185,18 @@ describe("the bundled stdlib index covers C-implemented modules", () => {
       expect(imageKeys, name).toContain(`predef.Image.${name}`);
     }
   });
+
+  /**
+   * `Image` resolves children through its own `` `[] ``, so indices() cannot
+   * list them: it reports 28 names while `Image.JPEG` and a dozen more resolve
+   * perfectly well. They come from the underscore-joined module convention —
+   * a top-level `_Image_JPEG` file is exposed as `Image.JPEG` — and each is
+   * confirmed against the runtime before it enters the index.
+   */
+  test("dynamically-resolved image formats are present", async () => {
+    const index = (await import("../../server/src/data/stdlib-autodoc.json")).default as Record<string, unknown>;
+    for (const name of ["JPEG", "GIF", "TTF", "SVG", "WebP", "TIFF"]) {
+      expect(Object.keys(index), name).toContain(`predef.Image.${name}`);
+    }
+  });
 });
