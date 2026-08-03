@@ -69,6 +69,11 @@ export interface DiagnosticManagerOptions {
   maxNumberOfProblems?: number;
   /** Enables verbose internal telemetry logs for race/staleness debugging. */
   debugTelemetry?: boolean;
+  /**
+   * True when this document is a Roxen file, and the pike compile must be
+   * skipped for it. See runDiagnose.
+   */
+  isRoxenDocument?: (uri: string) => boolean;
 }
 
 export interface PikeCacheEntry {
@@ -93,6 +98,7 @@ export class DiagnosticManager {
   private mode: DiagnosticMode;
   private maxProblems: number;
   private debugTelemetry: boolean;
+  private readonly isRoxenDocument?: (uri: string) => boolean;
   private disposed = false;
 
   private readonly fileStates = new Map<string, FileDiagnosticState>();
@@ -109,6 +115,7 @@ export class DiagnosticManager {
     this.mode = options.mode ?? "realtime";
     this.maxProblems = options.maxNumberOfProblems ?? 100;
     this.debugTelemetry = options.debugTelemetry ?? false;
+    this.isRoxenDocument = options.isRoxenDocument;
   }
 
   setDebugTelemetry(enabled: boolean): void {
@@ -308,6 +315,18 @@ export class DiagnosticManager {
     const cached = this.pikeCache.get(uri);
     if (cached && cached.contentHash === contentHash) {
       this.publishParseAndLintDiagnostics(uri, source, doc, cached.diagnostics);
+      return;
+    }
+
+    // A Roxen file cannot be compiled by the stock pike binary: Roxen's
+    // runtime — `Roxen`, `RXML`, `Variable`, `inherit "module"` — exists only
+    // inside a running Roxen server, and Roxen 6.1 does not even run on Pike
+    // 8.0. Every resulting error is noise about the environment rather than
+    // the code: one 709-line module produced 75 of them, led by "Undefined
+    // identifier Roxen." Parse and lint diagnostics still run, so a genuine
+    // syntax error is still reported.
+    if (this.isRoxenDocument?.(uri)) {
+      this.publishParseAndLintDiagnostics(uri, source, doc);
       return;
     }
 

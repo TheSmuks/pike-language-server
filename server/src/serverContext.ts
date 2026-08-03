@@ -175,6 +175,7 @@ function createDiagnosticManager(
   connection: Connection,
   index: WorkspaceIndex,
   pikeCache: LRUCache<PikeCacheEntry>,
+  isRoxenDocument: (uri: string) => boolean,
 ): DiagnosticManager {
   const cacheSet = (uri: string, entry: PikeCacheEntry): void => {
     pikeCache.set(uri, entry);
@@ -187,6 +188,7 @@ function createDiagnosticManager(
     pikeCache,
     cacheSet,
     debugTelemetry: false,
+    isRoxenDocument,
   });
 }
 
@@ -298,8 +300,13 @@ export function createServerContext(
   // ref so everything built before then — the hibernation hooks below — follows
   // the swap instead of freezing onto `/tmp/unused`.
   const indexRef = { current: new WorkspaceIndex({ workspaceRoot: "/tmp/unused" }) };
+  // Created here rather than in the context literal below: the diagnostic
+  // manager needs to read it, and is built before that literal exists. Both
+  // hold the same Map, so the document handler's updates are visible here.
+  const roxenActive = new Map<string, boolean>();
   const diagnosticManager = createDiagnosticManager(
     worker, documents, connection, indexRef.current, pikeCache,
+    (uri) => roxenActive.get(uri) === true,
   );
   const { stdlibIndex, predefBuiltins, predefAutodoc, roxenIndex } = loadStaticIndices(connection);
 
@@ -330,7 +337,7 @@ export function createServerContext(
     roxenIndex,
     resourceState,
     hibernationManager,
-    ...mutableContextDefaults(),
+    ...mutableContextDefaults(roxenActive),
   };
 }
 
@@ -338,8 +345,12 @@ export function createServerContext(
  * The context fields that start at a fixed value and are rewritten later by
  * `initialize` or by request handlers. Fresh objects every call — sharing a
  * Map between connections would leak one workspace's state into another.
+ *
+ * `roxenActive` is passed in rather than created here, for the same reason: it
+ * is still one Map per connection, but the diagnostic manager is built before
+ * this runs and has to read the same instance.
  */
-function mutableContextDefaults() {
+function mutableContextDefaults(roxenActive: Map<string, boolean>) {
   return {
     upsertInFlight: new Map<string, Promise<any>>(),
     formattingConfig: { insertFinalNewline: true, operatorSpacing: false },
@@ -349,7 +360,7 @@ function mutableContextDefaults() {
     clientSupportsSemanticTokensRefresh: false,
     debugTelemetry: false,
     roxenMode: DEFAULT_ROXEN_MODE,
-    roxenActive: new Map<string, boolean>(),
+    roxenActive,
     pendingParserDocuments: new Map<string, TextDocument>(),
     justOpenedDocuments: new Set<string>(),
     indexRepair: { inFlight: null as Promise<void> | null, rerun: false, requestedAt: 0 },
