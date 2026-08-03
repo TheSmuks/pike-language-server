@@ -127,7 +127,7 @@ interface ParsedManifest {
  * subsequent table header "| # | File |" and parse rows until the next
  * section or end of file.
  */
-function parseManifestMd(content: string): ParsedManifest {
+export function parseManifestMd(content: string): ParsedManifest {
   const lines = content.split("\n");
   const committed = new Map<string, FileEntry>();
   const planned = new Map<string, { feature: string; priority: "P1" | "P2" }>();
@@ -166,7 +166,9 @@ function parseManifestMd(content: string): ParsedManifest {
       const feature = cols[2];
       const priority = cols[3] as "P0" | "P1" | "P2";
       const status = cols[4] as "Valid" | "Error" | "Valid*";
-      committed.set(filename, { filename, category: "", feature, priority, status, isNew: false, isPlanned: false });
+      // The heading is the only record of a file's category — nothing else in
+      // the row carries it — so a render that drops it cannot get it back.
+      committed.set(filename, { filename, category: section.title, feature, priority, status, isNew: false, isPlanned: false });
     }
   }
 
@@ -236,7 +238,10 @@ function buildEntries(
     const runnerOpts = corpusJson[filename];
 
     if (existing) {
-      return { ...existing, runnerOpts };
+      // An earlier sync wrote entries under an empty heading; classify those by
+      // filename rather than re-emitting a nameless section.
+      const category = existing.category || classifyFile(filename).category;
+      return { ...existing, category, runnerOpts };
     }
     const { category, feature, priority } = classifyFile(filename);
     return {
@@ -331,7 +336,7 @@ function renderCategorySection(info: CategorySection, startNum: number): { text:
 // Render the full updated manifest.md
 // ---------------------------------------------------------------------------
 
-function renderManifest(
+export function renderManifest(
   parsed: ParsedManifest,
   onDisk: string[],
   corpusJson: Record<string, RunnerOptions>,
@@ -403,10 +408,9 @@ function renderManifest(
   summaryLines.push(`| **Total**${totalPad} | **${entries.length}** | **${validCount}** | **${errorCount}** |`);
   summaryLines.push("");
 
-  const newFilesCount = entries.filter(e => e.isNew).length;
-  if (newFilesCount > 0) {
-    summaryLines.push(`> **Note:** ${newFilesCount} file(s) on disk not yet committed to the manifest. Run \`bun run scripts/manifest.ts --sync\` to add them.`);
-  }
+  // No "run --sync" note here: this renderer only runs on the write path, so
+  // the files it calls new are committed the moment the output lands on disk.
+  // The pre-sync warning is main()'s job, where it is still true.
 
   // Compose final output
   const parts: string[] = [
@@ -425,47 +429,58 @@ function renderManifest(
 // Main
 // ---------------------------------------------------------------------------
 
-const dryRun = process.argv.includes("--dry-run");
-const sync = process.argv.includes("--sync");
+/**
+ * Whether this invocation writes manifest.md.
+ *
+ * `--dry-run` is documented as "print what would change without writing
+ * anything", so it wins over `--sync` rather than being shadowed by it.
+ */
+export function shouldWrite(argv: string[]): boolean {
+  return argv.includes("--sync") && !argv.includes("--dry-run");
+}
 
-const onDisk = scanCorpusFiles();
-const corpusJson = loadCorpusJson();
-const manifestContent = readFileSync(MANIFEST_MD, "utf-8");
-const parsed = parseManifestMd(manifestContent);
+function main(): void {
+  const onDisk = scanCorpusFiles();
+  const corpusJson = loadCorpusJson();
+  const manifestContent = readFileSync(MANIFEST_MD, "utf-8");
+  const parsed = parseManifestMd(manifestContent);
 
-// Detect discrepancies
-const onDiskSet = new Set(onDisk);
-const manifestSet = new Set([...parsed.committed.keys(), ...parsed.planned.keys()]);
+  // Detect discrepancies
+  const onDiskSet = new Set(onDisk);
+  const manifestSet = new Set([...parsed.committed.keys(), ...parsed.planned.keys()]);
 
-const missing = onDisk.filter(f => !manifestSet.has(f));
-const vanished = [...manifestSet].filter(f => !onDiskSet.has(f));
+  const missing = onDisk.filter(f => !manifestSet.has(f));
+  const vanished = [...manifestSet].filter(f => !onDiskSet.has(f));
 
-if (missing.length > 0) {
-  console.log(`[WARN] Files on disk not in manifest (${missing.length}):`);
-  for (const f of missing) {
-    const { category, feature, priority } = classifyFile(f);
-    const wasPlanned = parsed.planned.has(f);
-    console.log(`  ${f}  → ${category} / ${priority} ${wasPlanned ? "(was planned)" : "(new)"}`);
+  if (missing.length > 0) {
+    console.log(`[WARN] Files on disk not in manifest (${missing.length}):`);
+    for (const f of missing) {
+      const { category, priority } = classifyFile(f);
+      const wasPlanned = parsed.planned.has(f);
+      console.log(`  ${f}  → ${category} / ${priority} ${wasPlanned ? "(was planned)" : "(new)"}`);
+    }
+  }
+
+  if (vanished.length > 0) {
+    console.log(`\n[WARN] Files in manifest but not on disk (${vanished.length}):`);
+    for (const f of vanished) {
+      const existing = parsed.committed.get(f);
+      const planned = parsed.planned.get(f);
+      console.log(`  ${f}  → ${existing ? existing.status : "planned:" + planned?.priority}`);
+    }
+  }
+
+  if (missing.length === 0 && vanished.length === 0) {
+    console.log("Manifest is up to date.");
+  }
+
+  if (shouldWrite(process.argv)) {
+    const updated = renderManifest(parsed, onDisk, corpusJson);
+    writeFileSync(MANIFEST_MD, updated, "utf-8");
+    console.log("\nManifest updated.");
+  } else if (missing.length > 0 || vanished.length > 0) {
+    console.log("\nRun `bun run scripts/manifest.ts --sync` to update manifest.md.");
   }
 }
 
-if (vanished.length > 0) {
-  console.log(`\n[WARN] Files in manifest but not on disk (${vanished.length}):`);
-  for (const f of vanished) {
-    const existing = parsed.committed.get(f);
-    const planned = parsed.planned.get(f);
-    console.log(`  ${f}  → ${existing ? existing.status : "planned:" + planned?.priority}`);
-  }
-}
-
-if (missing.length === 0 && vanished.length === 0) {
-  console.log("Manifest is up to date.");
-}
-
-if (sync) {
-  const updated = renderManifest(parsed, onDisk, corpusJson);
-  writeFileSync(MANIFEST_MD, updated, "utf-8");
-  console.log("\nManifest updated.");
-} else if (missing.length > 0 || vanished.length > 0) {
-  console.log("\nRun `bun run scripts/manifest.ts --sync` to update manifest.md.");
-}
+if (import.meta.main) main();

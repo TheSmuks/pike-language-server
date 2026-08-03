@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`scripts/manifest.ts --sync` destroyed the corpus manifest's category structure every time it ran.** A file's category lives in the `###` heading above its table and nowhere else — the row itself carries only the filename, feature, priority and status — but the parser recorded every committed entry with an empty category, so the renderer grouped all of them into one nameless bucket and wrote it back as a section headed `###` with nothing after it. The damage was already on disk: 70 of the 80 committed files sat under that empty heading, and the summary table had a blank category row to match. The parser now keeps the heading each row was read under, and an entry that comes back with an empty one is re-classified from its filename prefix, which restores the 16 sections a previous sync had flattened. `corpus/manifest.md` is regenerated accordingly and now also lists the three files that had drifted onto disk without an entry (`lint-unreachable.pike`, `lint-unused-var.pike`, `sig-help-classes.pike`).
+- **`--dry-run` wrote the file it promised not to.** The flag is documented as "print what would change without writing anything" and was parsed, but nothing ever read it: the write was gated on `--sync` alone, so `--sync --dry-run` rewrote `corpus/manifest.md`. `--dry-run` now suppresses the write.
+- **The synced manifest told the reader to run the sync that had just written it.** The "N file(s) on disk not yet committed — run `--sync` to add them" note was rendered into the output from the pre-sync view of what was new, so the file always shipped a warning about files it had already committed (the checked-in copy claimed 10). The note belongs to the pre-write check, where it is still true, and is no longer written into the document.
+
 ## [0.8.60] — 2026-08-02
 
 ### Fixed
