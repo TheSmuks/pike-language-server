@@ -239,6 +239,50 @@ rm -rf "$S/gate"
 
 ---
 
+---
+
+## Gate result — FAILED (2026-08-03)
+
+Task 1 was run. **Collapsing the expression spine does not change recovery.**
+
+The decisive evidence is a controlled A/B in a minimal standalone grammar where
+the spine shape was the *only* variable — one with Pike's unit-production
+cascade, one with a single flat `expression` rule and precedence by level:
+
+| input | cascade | flat |
+|---|---|---|
+| `int x = 1` + `return 0;` | `MISSING ";"` | `MISSING ";"` |
+| `x = 1` + `return 0;` | `ERROR` | `ERROR` |
+| `int x` + `return 0;` | `MISSING ";"` | `MISSING ";"` |
+| `f()` + `return 0;` | `ERROR` | `ERROR` |
+| `int x = 1;` + `return 0;` | clean | clean |
+
+**Identical on every input.** Combined with the earlier real-Pike experiment
+(ten binary levels flattened, recovery unchanged), the direction is disproven
+twice, in two independent settings.
+
+Two further facts, so nobody re-treads them:
+
+- Adding Pike's `commaSep1` declarator list to the minimal grammar — which
+  needs a GLR `conflicts` entry for `_expr`/`comma_expr`, exactly as the real
+  grammar has — still recovers. The declarator list is not the cause either.
+- In the real grammar, neither `_class_value` in the initializer choice nor
+  `preproc_conditional_expr` in `_expr` is the cause; removing each in turn
+  leaves the ERROR unchanged.
+
+So the minimal grammar cannot reproduce Pike's `int x = 1` failure at all,
+under any spine shape. Whatever is specific to Pike remains unidentified — and
+it does not matter, because the generic case (`x = 1`, no type) IS reproduced
+and is unaffected by the collapse.
+
+**Branch taken: A.** Branch B is off. The downstream fix shipped instead —
+`server/src/features/absorbedStatements.ts` re-parses the absorbed text and
+merges the declarations it yields, which fixes the actual user-visible defect
+(a declaration on the following line vanishing from the symbol table) rather
+than the range symptom alone. Task A2 as written is therefore superseded: it
+proposed clamping the range only, which would have left `y` lost.
+
+
 ## Branch A — the gate failed (expected outcome)
 
 Take this branch if Task 1 Step 4 still reported `(ERROR ...)`. It means no

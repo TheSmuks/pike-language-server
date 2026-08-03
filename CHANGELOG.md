@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.63] — 2026-08-03
+
+### Fixed
+
+- **A declaration on the line below the one being typed vanished from the symbol table.** While a `;` is still untyped, tree-sitter does not insert a `MISSING ";"` — it opens an ERROR node, and the unfinished declaration swallows what follows. `int x = 1` with `int y = 2;` beneath it parses as a single declaration spanning both lines, with `y` buried in the initializer as an expression rather than declared. Completion did not offer `y`, hover and go-to-definition failed on it, and references to it went unresolved — for as long as the line above was unfinished, which is most of the time while typing. The absorbed text is well-formed on its own, so it is now handed back to the parser as a slice and the declarations it yields are merged at their true positions; a run of unfinished statements recovers all of them. The declaration's own range is clamped to where it was written, too — that range is what inlay hints, code lenses, the outline and the enclosing-function lookup read, so each had been landing a line away from what it annotates on every keystroke. This is not a workaround for a grammar bug that could be fixed upstream: the grammar cannot be made to insert that `;`, and five approaches were tested and disproven, including collapsing the expression precedence cascade — a controlled A/B where the spine shape was the only variable produced identical recovery on every input. See `docs/superpowers/plans/2026-08-03-grammar-expression-cascade.md`.
+
 ## [0.8.62] — 2026-08-03
 
 ### Fixed
