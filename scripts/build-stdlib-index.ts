@@ -27,6 +27,7 @@ import {
   runModuleOracle,
   reconcileWithRuntime,
   runRootModuleOracle,
+  addProbedChildren,
 } from "./stdlib-runtime-reconcile";
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,41 @@ interface SourceFile {
   absPath: string;
   /** Module path derived from location under lib/modules (e.g. "Protocols.HTTP.Session"). */
   modulePath: string;
+}
+
+/**
+ * `parent.child` pairs implied by the underscore-joined module convention.
+ *
+ * Pike exposes a top-level `_Image_JPEG` module as `Image.JPEG`. Those files
+ * are on the module path and therefore enumerable, even though the parent's
+ * own indices() does not list the child. Names are split on the LAST underscore
+ * of the remainder so `_Image_XFace` yields `Image.XFace`, not `Image.X.Face`.
+ *
+ * Purely a source of candidates: every one is probed against the runtime before
+ * it reaches the index, so a name that this convention suggests but Pike does
+ * not actually resolve is dropped.
+ */
+function joinedModuleCandidates(rootDir: string): Array<{ parent: string; child: string }> {
+  const pairs: Array<{ parent: string; child: string }> = [];
+  let entries: string[];
+  try {
+    entries = readdirSync(rootDir);
+  } catch {
+    return pairs;
+  }
+  for (const entry of entries) {
+    const stem = basename(entry).replace(/\.(pmod|so|pike)$/, "");
+    if (!stem.startsWith("_")) continue;
+    const underscore = stem.indexOf("_", 1);
+    if (underscore < 0) continue;
+    const parent = stem.slice(1, underscore);
+    const child = stem.slice(underscore + 1);
+    if (parent.length === 0 || child.length === 0) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(parent)) continue;
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(child)) continue;
+    pairs.push({ parent, child });
+  }
+  return pairs;
 }
 
 function discoverFiles(rootDir: string): SourceFile[] {
@@ -272,6 +308,17 @@ function main(): void {
   ])].sort();
   const oracle = runModuleOracle(parents);
   const { added, removed, skipped, unavailable } = reconcileWithRuntime(index, oracle);
+
+  // Children a module resolves dynamically through its own `` `[] ``, which
+  // indices() can never list. Pike joins a top-level `_Image_JPEG` module into
+  // `Image.JPEG`, so the underscore-joined files on the module path name
+  // candidates that enumeration misses — verified against the binary:
+  // `indices(Image)` omits JPEG, GIF, TTF, SVG and WebP while all of them
+  // resolve. Each candidate is confirmed by the runtime before it is added.
+  const probed = addProbedChildren(index, joinedModuleCandidates(PIKE_LIB));
+  if (probed.length > 0) {
+    console.error(`Probed ${probed.length} dynamically-resolved member(s): ${probed.slice(0, 8).join(", ")}${probed.length > 8 ? ", …" : ""}`);
+  }
   const reconciledCount = Object.keys(index).filter((k) => k.startsWith("reconciled.")).length;
   console.log(
     `Reconciled ${reconciledCount} modules: ` +

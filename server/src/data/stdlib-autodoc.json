@@ -7591,9 +7591,21 @@
     "signature": "object DSI",
     "markdown": "```pike\nobject DSI\n```"
   },
+  "predef.Image.DWG": {
+    "signature": "module DWG",
+    "markdown": ""
+  },
   "predef.Image.Font": {
     "signature": "class Font",
     "markdown": "```pike\nclass Font\n```"
+  },
+  "predef.Image.FreeType": {
+    "signature": "module FreeType",
+    "markdown": ""
+  },
+  "predef.Image.GIF": {
+    "signature": "module GIF",
+    "markdown": ""
   },
   "predef.Image.HRZ": {
     "signature": "object HRZ",
@@ -7606,6 +7618,10 @@
   "predef.Image.Image": {
     "signature": "class Image",
     "markdown": "```pike\nclass Image\n```"
+  },
+  "predef.Image.JPEG": {
+    "signature": "module JPEG",
+    "markdown": ""
   },
   "predef.Image.Layer": {
     "signature": "class Layer",
@@ -7623,6 +7639,14 @@
     "signature": "object PNM",
     "markdown": "```pike\nobject PNM\n```"
   },
+  "predef.Image.PS": {
+    "signature": "module PS",
+    "markdown": ""
+  },
+  "predef.Image.PSD": {
+    "signature": "module PSD",
+    "markdown": ""
+  },
   "predef.Image.PVR": {
     "signature": "object PVR",
     "markdown": "```pike\nobject PVR\n```"
@@ -7631,13 +7655,25 @@
     "signature": "object RAS",
     "markdown": "```pike\nobject RAS\n```"
   },
+  "predef.Image.SVG": {
+    "signature": "module SVG",
+    "markdown": ""
+  },
   "predef.Image.TGA": {
     "signature": "object TGA",
     "markdown": "```pike\nobject TGA\n```"
   },
+  "predef.Image.TIFF": {
+    "signature": "module TIFF",
+    "markdown": ""
+  },
   "predef.Image.TIM": {
     "signature": "object TIM",
     "markdown": "```pike\nobject TIM\n```"
+  },
+  "predef.Image.TTF": {
+    "signature": "module TTF",
+    "markdown": ""
   },
   "predef.Image.WBF": {
     "signature": "object WBF",
@@ -7647,6 +7683,10 @@
     "signature": "object WBMP",
     "markdown": "```pike\nobject WBMP\n```"
   },
+  "predef.Image.WebP": {
+    "signature": "module WebP",
+    "markdown": ""
+  },
   "predef.Image.X": {
     "signature": "object X",
     "markdown": "```pike\nobject X\n```"
@@ -7654,6 +7694,18 @@
   "predef.Image.XBM": {
     "signature": "object XBM",
     "markdown": "```pike\nobject XBM\n```"
+  },
+  "predef.Image.XCF": {
+    "signature": "module XCF",
+    "markdown": ""
+  },
+  "predef.Image.XFace": {
+    "signature": "module XFace",
+    "markdown": ""
+  },
+  "predef.Image.XPM": {
+    "signature": "module XPM",
+    "markdown": ""
   },
   "predef.Image.XWD": {
     "signature": "object XWD",

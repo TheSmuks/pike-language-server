@@ -133,6 +133,20 @@ export function runModuleOracle(modulePaths: string[]): OracleData {
   return runOracle("modules", modulePaths) as OracleData;
 }
 
+/**
+ * The subset of `paths` that master()->resolv() DOES answer.
+ *
+ * A module with its own `` `[] `` resolves children dynamically, so indices()
+ * can never list them: `indices(Image)` reports 28 names while `Image.JPEG`,
+ * `Image.GIF` and a dozen more resolve perfectly well. They are unreachable by
+ * enumeration and reachable only by asking for them by name.
+ */
+export function probeResolvable(paths: string[]): Set<string> {
+  if (paths.length === 0) return new Set();
+  const results = runOracle("probe", paths) as Record<string, string>;
+  return new Set(paths.filter((p) => results[p] === "ok"));
+}
+
 /** The subset of dotted paths master()->resolv() cannot answer. */
 function probeNonIndexable(paths: string[]): Set<string> {
   if (paths.length === 0) return new Set();
@@ -312,6 +326,30 @@ export function reconcileWithRuntime(index: StdlibIndex, oracle: OracleData): Re
     removeSubtree(index, `predef.${modulePath}.${child}`, result.removed);
   }
   return result;
+}
+
+/**
+ * Add `parent.child` entries the runtime confirms but could not enumerate.
+ *
+ * Returns the FQNs actually added. Anything already in the index is left alone,
+ * so a real AutoDoc entry is never overwritten by a synthesized one.
+ */
+export function addProbedChildren(
+  index: StdlibIndex,
+  pairs: Array<{ parent: string; child: string }>,
+): string[] {
+  const resolvable = probeResolvable(
+    pairs.map((p) => `${p.parent}.${p.child}`),
+  );
+  const added: string[] = [];
+  for (const { parent, child } of pairs) {
+    if (!resolvable.has(`${parent}.${child}`)) continue;
+    const fqn = `predef.${parent}.${child}`;
+    if (fqn in index) continue;
+    index[fqn] = { signature: `module ${child}`, markdown: "" };
+    added.push(fqn);
+  }
+  return added;
 }
 
 /** Delete an FQN and every key beneath it, recording each removal. */
