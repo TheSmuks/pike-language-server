@@ -100,14 +100,19 @@ export function getSelectionRange(
   const ranges = collectRangesUp(node);
   if (ranges.length === 0) return makeRootRange(root);
 
-  // Build linked list from outermost to innermost.
-  // ranges[] is innermost-first; we need to chain parent → child.
-  for (let i = ranges.length - 1; i > 0; i--) {
-    ranges[i].parent = ranges[i - 1];
+  // LSP 3.17: SelectionRange.parent is "the parent selection range CONTAINING
+  // this range", and the response is the innermost range for the position.
+  // This chained the list the other way round and returned the outermost, so
+  // every parent was contained BY its child. VSCode's SelectionRange
+  // constructor throws on that (`parent must contain this range`), which takes
+  // out expand-selection entirely rather than merely reversing it.
+  //
+  // ranges[] is innermost-first, so each element's parent is the next one.
+  for (let i = 0; i < ranges.length - 1; i++) {
+    ranges[i].parent = ranges[i + 1];
   }
 
-  // Return the outermost range (last in the array, which is now the head of the chain)
-  return ranges[ranges.length - 1];
+  return ranges[0];
 }
 
 /**

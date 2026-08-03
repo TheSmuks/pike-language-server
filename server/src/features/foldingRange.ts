@@ -52,8 +52,12 @@ export function produceFoldingRanges(tree: Tree): FoldingRange[] {
   // Walk the tree for foldable block-like nodes and switch case groups
   walkForFoldables(root, ranges);
 
-  // Walk for comment groups
-  collectCommentGroups(root, ranges);
+  // Walk for comment groups, at EVERY level. This used to run on the root
+  // only, and collectCommentGroups iterates node.children without descending —
+  // so a `//!` AutoDoc block or a comment run inside a class or function was
+  // never folded. In Pike AutoDoc lives overwhelmingly on class members, so
+  // the advertised feature missed almost all of its targets.
+  collectCommentGroupsDeep(root, ranges);
 
   return ranges;
 }
@@ -168,21 +172,45 @@ function emitCaseGroup(
  * Groups are formed when two or more consecutive lines start with // or //!.
  * The group extends from the first comment to the last.
  */
+function collectCommentGroupsDeep(node: Node, ranges: FoldingRange[]): void {
+  collectCommentGroups(node, ranges);
+  for (const child of node.children) {
+    // A comment can only group with its siblings, so every node that HAS
+    // children is its own grouping context.
+    if (child.childCount > 0) collectCommentGroupsDeep(child, ranges);
+  }
+}
+
 function collectCommentGroups(node: Node, ranges: FoldingRange[]): void {
   const children = node.children;
   let groupStart: number | null = null;
+  let groupType: string | null = null;
+
+  // A run of `//!` AutoDoc and a run of `//` comments are separate groups, and
+  // both fold. Matching only `line_comment` meant the AutoDoc groups this
+  // module's own header advertises were never produced — and in Pike, `//!`
+  // is where nearly all documentation lives.
+  const isComment = (type: string): boolean =>
+    type === "line_comment" || type === "autodoc_comment";
 
   for (let i = 0; i < children.length; i++) {
     const child = children[i];
-    if (child.type === "line_comment") {
+    if (isComment(child.type) && (groupType === null || child.type === groupType)) {
       if (groupStart === null) {
         groupStart = i;
+        groupType = child.type;
       }
-    } else {
-      if (groupStart !== null) {
-        maybeAddCommentGroup(children, groupStart, i - 1, ranges);
-        groupStart = null;
-      }
+      continue;
+    }
+    if (groupStart !== null) {
+      maybeAddCommentGroup(children, groupStart, i - 1, ranges);
+      groupStart = null;
+      groupType = null;
+    }
+    // A comment of a different kind starts the next group immediately.
+    if (isComment(child.type)) {
+      groupStart = i;
+      groupType = child.type;
     }
   }
 
