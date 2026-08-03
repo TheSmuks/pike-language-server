@@ -168,3 +168,60 @@ int f() { return MAX; }
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Classes written as expressions
+// ---------------------------------------------------------------------------
+
+/**
+ * `object handler = class { ... }();` — the grammar calls this `anon_class`,
+ * not `class_decl`, so nothing dispatched on it. The generic descent walked
+ * into its body and collected the members into whatever scope was current,
+ * which at top level is the FILE scope: `get_default_module` looked like a
+ * file-scope function of the module, visible to completion and to name
+ * resolution across the whole file.
+ *
+ * Roxen has these — LazyImage.pmod's compile_handler, Roxen.pmod's lowest
+ * priority tag set — and they were the last three findings the integrity sweep
+ * reported.
+ */
+describe("a class written as an expression owns its members", () => {
+  beforeAll(async () => { await initParser(); });
+
+  const SRC = `protected object handler = class {
+  mapping get_default_module() { return ([]); }
+  mixed resolv(string id) { return 0; }
+}();
+
+int normal() { return 0; }
+`;
+
+  test("its members are not file-scope declarations", () => {
+    const table = buildSymbolTable(parse(SRC)!, "file:///a.pike", 1, undefined, SRC);
+    const fileScope = table.scopes.find(s => s.kind === "file")!;
+    const names = fileScope.declarations
+      .map(id => table.declById.get(id)!.name)
+      .sort();
+    expect(names).toEqual(["handler", "normal"]);
+  });
+
+  test("it gets a class scope of its own", () => {
+    const table = buildSymbolTable(parse(SRC)!, "file:///a.pike", 1, undefined, SRC);
+    const classScopes = table.scopes.filter(s => s.kind === "class");
+    expect(classScopes).toHaveLength(1);
+    const owned = classScopes[0].declarations
+      .map(id => table.declById.get(id)!.name)
+      .sort();
+    expect(owned).toEqual(["get_default_module", "resolv"]);
+  });
+
+  test("the outline nests its members under the variable holding it", () => {
+    const symbols = getDocumentSymbols(parse(SRC)!);
+    const handler = symbols.find(s => s.name === "handler");
+    expect(handler, "the variable itself").toBeDefined();
+    expect(names(handler!.children ?? []).sort())
+      .toEqual(["get_default_module", "resolv"]);
+    // And it must not have swallowed the file's own function.
+    expect(symbols.map(s => s.name)).toContain("normal");
+  });
+});

@@ -76,6 +76,14 @@ function symbolsFromFunctionDecl(node: Node, parentKind?: string): DocumentSymbo
 function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbol[] {
   const names = collectNames(node);
   if (names.length === 0) return [];
+
+  // `object handler = class { ... }();` — a class written as an expression.
+  // Its members belong to the variable that holds it, not to the file, and
+  // without this the outline showed only `handler` and nothing inside it.
+  // Only meaningful when the declaration names one thing.
+  const anonBody = names.length === 1 ? findAnonClassBody(node) : null;
+  const children = anonBody ? collectSymbols(anonBody, 'class') : [];
+
   return names.map((nameNode) =>
     DocumentSymbol.create(
       nameNode.text,
@@ -83,8 +91,31 @@ function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbo
       parentKind === 'class' ? SymbolKind.Field : SymbolKind.Variable,
       toRange(node),
       toRange(nameNode),
+      children.length > 0 ? children : undefined,
     ),
   );
+}
+
+/**
+ * The `class_body` of an `anon_class` initialising this declaration, if any.
+ *
+ * The initializer sits under a cascade of expression nodes, so this searches
+ * rather than indexes — but it stops at the first `anon_class` and never enters
+ * a nested one, so a class inside a class inside an initializer is described by
+ * its own outer entry rather than flattened into this one.
+ */
+function findAnonClassBody(node: Node): Node | null {
+  const stack: Node[] = [...node.children];
+  while (stack.length > 0) {
+    const current = stack.shift()!;
+    if (current.type === 'anon_class') {
+      return current.childForFieldName('body')
+        ?? current.children.find(c => c.type === 'class_body')
+        ?? null;
+    }
+    stack.push(...current.children);
+  }
+  return null;
 }
 
 function symbolsFromConstantDecl(node: Node): DocumentSymbol[] {
