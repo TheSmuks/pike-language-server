@@ -46,13 +46,21 @@ function makeTable(decls: Partial<Declaration>[]): SymbolTable {
 }
 
 /** Build a fake WorkspaceIndex that returns canned cross-file references. */
+/**
+ * The real getCrossFileReferences returns `{ uri, ref }` — the URI matters,
+ * because only a reference in the lens's OWN file can be the declaration's own
+ * occurrence. Entries default to the queried URI unless one is given.
+ */
 function makeWorkspaceIndex(
-  refsByUri: Record<string, { ref: { loc: { line: number; character: number } } }[]>,
+  refsByUri: Record<string, Array<{
+    uri?: string;
+    ref: { loc: { line: number; character: number } };
+  }>>,
 ) {
   return {
     getCrossFileReferences(uri: string, line: number, _character: number) {
       const key = `${uri}:${line}`;
-      return refsByUri[key] ?? [];
+      return (refsByUri[key] ?? []).map(entry => ({ uri: entry.uri ?? uri, ...entry }));
     },
   } as any;
 }
@@ -140,6 +148,21 @@ describe("resolveCodeLens", () => {
     });
     const [lens] = produceCodeLenses(table, "file:///a.pike");
     expect(resolveCodeLens(lens, index).command?.title).toBe("0 references");
+  });
+
+  test("counts a reference at the same position in a DIFFERENT file", () => {
+    const table = makeTable([
+      { kind: "function", name: "greet", nameRange: { start: { line: 4, character: 0 }, end: { line: 4, character: 5 } } },
+    ]);
+    const index = makeWorkspaceIndex({
+      // Same line and column as the declaration, but another file — a real
+      // call, not the declaration's own occurrence. The exclusion used to drop
+      // it because it never compared the URI, so the lens said the function
+      // was dead.
+      "file:///a.pike:4": [{ uri: "file:///b.pike", ref: { loc: { line: 4, character: 0 } } }],
+    });
+    const [lens] = produceCodeLenses(table, "file:///a.pike");
+    expect(resolveCodeLens(lens, index).command?.title).toBe("1 reference");
   });
 
   test("returns the lens unchanged when it carries no data payload", () => {

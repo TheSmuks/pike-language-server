@@ -118,10 +118,16 @@ function countReferences(
   let count = 0;
 
   const refs = workspaceIndex.getCrossFileReferences(uri, line, character);
-  for (const { ref } of refs) {
-    if (ref.loc.line !== line || ref.loc.character !== character) {
-      count++;
+  for (const { uri: refUri, ref } of refs) {
+    // Skip only the declaration's OWN occurrence, which by definition lives in
+    // the lens's file. Without the URI test, a reference that happens to sit at
+    // the same line and column in a DIFFERENT file was dropped too, so the lens
+    // said "0 references" for a function that is genuinely called — and the
+    // lens is the one-glance signal a developer uses to decide it is dead.
+    if (refUri === uri && ref.loc.line === line && ref.loc.character === character) {
+      continue;
     }
+    count++;
   }
 
   return count;
