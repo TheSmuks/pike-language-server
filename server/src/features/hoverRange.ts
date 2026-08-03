@@ -36,7 +36,9 @@ export function hoveredIdentifierRange(
   if (!isWord(line[start])) return null;
 
   let end = start;
+  // Bounded: `start` only decreases, and isWord(undefined) is false at index -1.
   while (isWord(line[start - 1])) start--;
+  // Bounded: `end` only increases, and isWord(undefined) is false past the end.
   while (isWord(line[end])) end++;
   return {
     start: { line: position.line, character: start },

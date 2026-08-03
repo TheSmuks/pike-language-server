@@ -106,8 +106,10 @@ function symbolsFromVariableDecl(node: Node, parentKind?: string): DocumentSymbo
  */
 function findAnonClassBody(node: Node): Node | null {
   const stack: Node[] = [...node.children];
+  // Bounded: the subtree is finite and every node is pushed at most once.
   while (stack.length > 0) {
-    const current = stack.shift()!;
+    const current = stack.shift();
+    if (!current) break;
     if (current.type === 'anon_class') {
       return current.childForFieldName('body')
         ?? current.children.find(c => c.type === 'class_body')

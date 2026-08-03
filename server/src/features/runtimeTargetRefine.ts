@@ -32,6 +32,8 @@ const SEARCH_RADIUS = 3;
 /** Position of `name` as a standalone word in `line`, or -1. */
 function wordColumn(line: string, name: string): number {
   let from = 0;
+  // Bounded: `from` strictly increases every iteration and indexOf returns -1
+  // once it passes the end, so this runs at most line.length times.
   for (;;) {
     const index = line.indexOf(name, from);
     if (index < 0) return -1;

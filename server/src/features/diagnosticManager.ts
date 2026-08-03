@@ -45,43 +45,8 @@ export {
   lineToColumn,
 } from "./diagnosticUtils";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export type DiagnosticMode = "realtime" | "saveOnly" | "off";
-
-export interface DiagnosticManagerOptions {
-  worker: PikeWorker;
-  documents: TextDocuments<TextDocument>;
-  connection: Connection;
-  index: WorkspaceIndex;
-  /** Pike cache (shared with server.ts for LRU eviction). */
-  pikeCache: { get(key: string): PikeCacheEntry | undefined; delete(key: string): boolean };
-  /** Function to update the LRU cache. */
-  cacheSet: (uri: string, entry: PikeCacheEntry) => void;
-  /** Debounce interval in ms. Default: 500. */
-  debounceMs?: number;
-  /** Time before staleness warning in ms. Default: 2000. */
-  staleMs?: number;
-  /** Diagnostic mode. Default: "realtime". */
-  mode?: DiagnosticMode;
-  /** Maximum number of diagnostics to publish per file. Default: 100. */
-  maxNumberOfProblems?: number;
-  /** Enables verbose internal telemetry logs for race/staleness debugging. */
-  debugTelemetry?: boolean;
-  /**
-   * True when this document is a Roxen file, and the pike compile must be
-   * skipped for it. See runDiagnose.
-   */
-  isRoxenDocument?: (uri: string) => boolean;
-}
-
-export interface PikeCacheEntry {
-  contentHash: string;
-  diagnostics: PikeDiagnostic[];
-  timestamp: number;
-}
+export type { DiagnosticMode, DiagnosticManagerOptions, PikeCacheEntry } from "./diagnosticManagerTypes";
+import type { DiagnosticMode, DiagnosticManagerOptions, PikeCacheEntry } from "./diagnosticManagerTypes";
 
 // --------------------------------------------------------------------------
 // DiagnosticManager
@@ -345,19 +310,7 @@ export class DiagnosticManager {
     if (state.staleTimer.unref) state.staleTimer.unref();
 
     try {
-      const result = await this.requestDiagnose(uri, source);
-      this.clearStaleTimer(state);
-
-      if (result.timedOut) {
-        const { diagnostics: parseDiags } = this.safeParse(source, uri);
-        this.publishDiagnostics(uri, [...parseDiags, buildTimeoutDiagnostic()], doc.version);
-        return;
-      }
-
-      this.cacheSet(uri, { contentHash, diagnostics: result.diagnostics, timestamp: Date.now() });
-      this.publishParseAndLintDiagnostics(uri, source, doc, result.diagnostics);
-      this.propagateToDependents(uri);
-
+      await this.diagnoseWithPike(uri, source, doc, contentHash, state);
     } catch (err) {
       this.clearStaleTimer(state);
       if (!this.disposed) {
@@ -370,6 +323,28 @@ export class DiagnosticManager {
       state.inFlight = false;
       state.propagationChain = null;
     }
+  }
+
+  /** Ask the worker, then publish — the body of a non-Roxen diagnose. */
+  private async diagnoseWithPike(
+    uri: string,
+    source: string,
+    doc: { version: number },
+    contentHash: string,
+    state: FileDiagnosticState,
+  ): Promise<void> {
+    const result = await this.requestDiagnose(uri, source);
+    this.clearStaleTimer(state);
+
+    if (result.timedOut) {
+      const { diagnostics: parseDiags } = this.safeParse(source, uri);
+      this.publishDiagnostics(uri, [...parseDiags, buildTimeoutDiagnostic()], doc.version);
+      return;
+    }
+
+    this.cacheSet(uri, { contentHash, diagnostics: result.diagnostics, timestamp: Date.now() });
+    this.publishParseAndLintDiagnostics(uri, source, doc, result.diagnostics);
+    this.propagateToDependents(uri);
   }
 
   // -----------------------------------------------------------------------

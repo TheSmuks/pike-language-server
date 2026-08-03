@@ -18,7 +18,8 @@
 
 import { describe, test, expect, beforeAll } from "bun:test";
 import { initParser, parse } from "../../server/src/parser";
-import { buildSymbolTable, findDeclInScopeAt } from "../../server/src/features/symbolTable";
+import { buildSymbolTable } from "../../server/src/features/symbolTable";
+import { findDeclInScopeAt } from "../../server/src/features/query";
 import { getDocumentSymbols, type DocumentSymbol } from "../../server/src/features/documentSymbol";
 
 function names(symbols: DocumentSymbol[]): string[] {
