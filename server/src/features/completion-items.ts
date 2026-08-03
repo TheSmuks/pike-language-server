@@ -333,7 +333,9 @@ export function findIdentifierPrefixRange(
 
   // If the cursor is at the end of an identifier, use its range.
   // If the cursor is inside an identifier, use from start to cursor.
-  if (node.type === "identifier") {
+  if (node.type === "identifier" &&
+      node.startPosition.row === line &&
+      node.startPosition.column <= character) {
     return {
       start: {
         line: node.startPosition.row,
@@ -347,18 +349,24 @@ export function findIdentifierPrefixRange(
   if (node.type === "ERROR") {
     for (let i = 0; i < node.childCount; i++) {
       const child = node.child(i);
-      if (child && child.type === "identifier") {
-        // Only use if the cursor is inside or at the end of this identifier
-        if (child.endPosition.row >= line && child.startPosition.column <= character) {
-          return {
-            start: {
-              line: child.startPosition.row,
-              character: child.startPosition.column,
-            },
-            end: { line, character },
-          };
-        }
-      }
+      if (!child || child.type !== "identifier") continue;
+      // The identifier must be the one the cursor is in or at the end of, ON
+      // the cursor's line. The old test — `endPosition.row >= line` with a
+      // column compared across lines — accepted an identifier from a LATER
+      // line: while a statement was unfinished, the ERROR node swallowed the
+      // next line too, and the `return` on it became the "prefix". Every
+      // completion item then carried a backwards two-line range, and accepting
+      // one deleted the line break and the start of the following line.
+      if (child.startPosition.row !== line || child.endPosition.row !== line) continue;
+      if (child.startPosition.column > character) continue;
+      if (child.endPosition.column < character) continue;
+      return {
+        start: {
+          line: child.startPosition.row,
+          character: child.startPosition.column,
+        },
+        end: { line, character },
+      };
     }
   }
 

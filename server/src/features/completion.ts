@@ -83,11 +83,37 @@ export async function getCompletions(
   }
 
   // Determine completion context
-  const triggerContext = detectTriggerContext(node, line, character, tree, lines[line] ?? "");
+  const lineText = lines[line] ?? "";
+  let triggerContext = detectTriggerContext(node, line, character, tree, lineText);
+
+  // The caret sits just PAST the last character typed, which is a token
+  // boundary. While a statement is unfinished, `s->na|` makes tree-sitter
+  // answer the ERROR node spanning the incomplete statement rather than `na` —
+  // so the member trigger was lost the moment a prefix was typed, and the whole
+  // global scope was offered instead, with the member being typed missing from
+  // it. Every item also inherited that node's multi-line span as its edit
+  // range. Re-ask one column back, where the token being typed is, and prefer a
+  // qualified answer.
+  if (!isQualifiedTrigger(triggerContext) && character > 0) {
+    const prevNode = root.descendantForPosition({ row: line, column: character - 1 });
+    if (prevNode) {
+      const prevContext = detectTriggerContext(prevNode, line, character - 1, tree, lineText);
+      if (isQualifiedTrigger(prevContext)) {
+        node = prevNode;
+        triggerContext = prevContext;
+      }
+    }
+  }
+
   if (triggerContext.type === "none") return { isIncomplete: false, items: [] };
 
   const items = await completeForTrigger(triggerContext, table, tree, line, character, ctx, node);
   return { isIncomplete: items.length > 50, items };
+}
+
+/** A trigger that names a receiver or scope, rather than "anything in scope". */
+function isQualifiedTrigger(context: TriggerContext): boolean {
+  return context.type === "dot" || context.type === "arrow" || context.type === "scope";
 }
 
 /** Dispatch to the provider the detected trigger calls for. */
