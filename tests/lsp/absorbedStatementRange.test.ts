@@ -13,7 +13,12 @@
  * result and the five disproven approaches.
  */
 
-import { describe, test, expect, beforeAll } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { pathToFileURL } from "node:url";
+import { createTestServer, waitForFileEntry, type TestServer } from "./helpers";
 import { initParser, parse } from "../../server/src/parser";
 import { buildSymbolTable } from "../../server/src/features/symbolTable";
 
@@ -106,5 +111,70 @@ describe("a statement absorbed by an unfinished one is still declared", () => {
   test("a multi-line initializer is not mistaken for an absorbed statement", () => {
     const src = `int main() {\n  mapping m = ([\n    "a": 1,\n  ]);\n  int z = 3;\n  return z;\n}\n`;
     expect(names(src)).toEqual(["m", "main", "z"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Through the LSP, not the symbol table
+// ---------------------------------------------------------------------------
+
+/**
+ * The symbol-table tests above would still pass if the recovery never reached a
+ * request handler. Verified against the real standalone server over stdio
+ * before this was written: on the pre-fix build, go-to-definition on the
+ * absorbed declaration answered NULL, completion did not offer it, and hover
+ * was empty.
+ */
+describe("the recovered declaration is live over the protocol", () => {
+  let server: TestServer;
+  let root: string;
+  let uri: string;
+
+  // The `;` on line 1 is not typed yet — the state a buffer is in for most of
+  // the time a statement is being written.
+  const TYPING = `int main() {\n  int alpha = 1\n  int bravo = 2;\n  return bravo;\n}\n`;
+  const lines = TYPING.split("\n");
+
+  beforeAll(async () => {
+    root = mkdtempSync(join(tmpdir(), "pike-absorbed-lsp-"));
+    const file = join(root, "typing.pike");
+    writeFileSync(file, TYPING);
+    uri = pathToFileURL(file).href;
+    server = await createTestServer({ rootUri: pathToFileURL(root).href });
+    server.openDoc(uri, TYPING);
+    await waitForFileEntry(server, [uri], 30000);
+  });
+
+  afterAll(async () => {
+    await server.teardown();
+    try { rmSync(root, { recursive: true, force: true }); } catch { /* ignore */ }
+  });
+
+  const bravoUse = { line: 3, character: lines[3].indexOf("bravo") + 2 };
+
+  test("go-to-definition reaches it", async () => {
+    const res = await server.client.sendRequest("textDocument/definition", {
+      textDocument: { uri }, position: bravoUse,
+    }) as { range: { start: { line: number } } } | Array<{ range: { start: { line: number } } }> | null;
+    const first = Array.isArray(res) ? res[0] : res;
+    expect(first, "definition on the absorbed declaration").not.toBeNull();
+    expect(first!.range.start.line).toBe(2);
+  });
+
+  test("hover knows its type", async () => {
+    const hover = await server.client.sendRequest("textDocument/hover", {
+      textDocument: { uri }, position: bravoUse,
+    }) as { contents: { value: string } } | null;
+    expect(hover, "hover on the absorbed declaration").not.toBeNull();
+    expect(hover!.contents.value).toMatch(/int\s+bravo/);
+  });
+
+  test("completion offers it", async () => {
+    const res = await server.client.sendRequest("textDocument/completion", {
+      textDocument: { uri },
+      position: { line: 3, character: lines[3].indexOf("return") + 7 },
+    }) as { items: Array<{ label: string }> } | Array<{ label: string }> | null;
+    const items = (Array.isArray(res) ? res : res?.items ?? []).map(i => i.label);
+    expect(items).toContain("bravo");
   });
 });
