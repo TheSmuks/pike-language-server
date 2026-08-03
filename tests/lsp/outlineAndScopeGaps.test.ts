@@ -18,7 +18,7 @@
 
 import { describe, test, expect, beforeAll } from "bun:test";
 import { initParser, parse } from "../../server/src/parser";
-import { buildSymbolTable } from "../../server/src/features/symbolTable";
+import { buildSymbolTable, findDeclInScopeAt } from "../../server/src/features/symbolTable";
 import { getDocumentSymbols, type DocumentSymbol } from "../../server/src/features/documentSymbol";
 
 function names(symbols: DocumentSymbol[]): string[] {
@@ -63,6 +63,38 @@ describe("declarations in a condition are in scope for the body", () => {
     const use = table.references.find(r => r.name === "last_ts" && r.loc.line === 4);
     expect(use).toBeDefined();
     expect(use!.resolvesTo).toBe(decl.id);
+  });
+
+  // Verified with the pike binary: `Box err = Box(); if (mixed err = "s") {...}`
+  // prints the inner err as a string inside the body and the outer Box after,
+  // so the condition's declaration really does shadow the outer one.
+  test("a condition declaration shadows an outer variable of the same name", () => {
+    const src = `class Box { int marker = 7; }
+
+int main()
+{
+  Box err = Box();
+  if (mixed err = "s") {
+    return sizeof(err);
+  }
+  return err->marker;
+}
+`;
+    const table = buildSymbolTable(parse(src)!, "file:///t.pike", 1, undefined, src);
+    const inner = table.declarations.find(d => d.name === "err" && d.declaredType === "mixed");
+    const outer = table.declarations.find(d => d.name === "err" && d.declaredType === "Box");
+    expect(inner, "the condition's own declaration").toBeDefined();
+    expect(outer, "the outer declaration").toBeDefined();
+
+    // Inside the body, `err` is the mixed one — which is why a member access on
+    // it can no longer be resolved to the outer type's members. Answering one
+    // was right only by being blind to this declaration.
+    const useLine = src.split("\n").findIndex(l => l.includes("sizeof(err)"));
+    expect(findDeclInScopeAt(table, "err", useLine)?.declaredType).toBe("mixed");
+
+    // After the if, the outer one is visible again.
+    const afterLine = src.split("\n").findIndex(l => l.includes("err->marker"));
+    expect(findDeclInScopeAt(table, "err", afterLine)?.declaredType).toBe("Box");
   });
 
   test("the same holds for while and switch", () => {
