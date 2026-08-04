@@ -72,6 +72,15 @@ describe("stdlib index: module member completion matches the Pike runtime", () =
     expect(labels).toContain("append_path");
   });
 
+  test("a Stdio.File receiver includes inherited runtime methods", async () => {
+    const src = ["void f(Stdio.File file) {", "  file->", "}"].join("\n");
+    const labels = await completeAfter(
+      server, "file:///test/stdlib-index-file.pike", src, 1, 8,
+    );
+    expect(labels).toContain("write");
+    expect(labels).toContain("seek");
+  });
+
   test("Stdio. excludes source-level symbols that are not indexable", async () => {
     const src = ["void f() {", "  Stdio.", "}"].join("\n");
     const labels = await completeAfter(

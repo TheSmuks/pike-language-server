@@ -54,6 +54,23 @@ describe("US-015: textDocument/documentHighlight", () => {
     expect(reads.length).toBeGreaterThanOrEqual(1);
   });
 
+  test("marks assignment targets as writes", async () => {
+    const src = [
+      "int main() {",
+      "  int value = 0;",
+      "  value = 1;",
+      "  return value;",
+      "}",
+    ].join("\n");
+    const uri = server.openDoc("file:///test/highlight-assignment.pike", src);
+    const result = await server.client.sendRequest("textDocument/documentHighlight", {
+      textDocument: { uri }, position: { line: 3, character: 9 },
+    }) as HighlightResult[];
+
+    const assignment = result.find(h => h.range.start.line === 2);
+    expect(assignment?.kind).toBe(3);
+  });
+
   test("highlights function calls and definition", async () => {
     const src = [
       "int add(int a, int b) { return a + b; }",

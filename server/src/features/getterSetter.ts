@@ -14,7 +14,8 @@
 
 import type { CodeAction, CodeActionParams, TextEdit } from "vscode-languageserver/node";
 import { parse, isParserReady } from "../parser";
-import { buildSymbolTable, isWrittenInFile, type Declaration, type SymbolTable } from "./symbolTable";
+import { buildSymbolTable, type Declaration, type SymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import { CodeActionKindRefactorRewrite } from "../util/codeActionKinds.js";
 
 // ---------------------------------------------------------------------------

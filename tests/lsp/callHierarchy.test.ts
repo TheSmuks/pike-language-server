@@ -323,7 +323,7 @@ describe("getIncomingCalls", () => {
 // ---------------------------------------------------------------------------
 
 describe("getOutgoingCalls", () => {
-  test("returns empty for function with no calls", () => {
+  test("returns empty for function with no calls", async () => {
     const src = [
       "int main() {",
       "  return 0;",
@@ -350,13 +350,13 @@ describe("getOutgoingCalls", () => {
 
     // parse() returns Tree | null; assert rather than deref a possible null.
     expect(tree).not.toBeNull();
-    const result = getOutgoingCalls(item, tree!, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree!, table, "file:///test/test.pike", index);
     expect(result).toEqual([]);
     tree!.delete();
   });
 
   // Outgoing calls now correctly resolve through postfix_expr nodes.
-  test("finds outgoing call to helper function", () => {
+  test("finds outgoing call to helper function", async () => {
     const src = [
       "void caller() {",
       "  helper();",
@@ -390,14 +390,14 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "helper", `Expected callee "helper", got "${result[0].to.name}"`);
     tree.delete();
   });
 
   // Deduplication: multiple calls to the same function produce one outgoing entry.
-  test("deduplicates multiple calls to the same function", () => {
+  test("deduplicates multiple calls to the same function", async () => {
     const src = [
       "void caller() {",
       "  helper();",
@@ -432,13 +432,13 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 deduplicated outgoing call, got ${result.length}`);
     tree.delete();
   });
 
   // Nested calls: foo(bar()) should produce two outgoing entries.
-  test("finds nested calls", () => {
+  test("finds nested calls", async () => {
     const src = [
       "void caller() {",
       "  foo(bar());",
@@ -479,7 +479,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     const names = result.map(r => r.to.name).sort();
     assert(names.length === 2, `Expected 2 outgoing calls, got ${names.length}: ${names}`);
     assert(names[0] === "bar", `Expected "bar", got "${names[0]}"`);
@@ -488,7 +488,7 @@ describe("getOutgoingCalls", () => {
   });
 
   // Unresolved callee: function not in the symbol table — should not produce an entry.
-  test("skips unresolved callees", () => {
+  test("skips unresolved callees", async () => {
     const src = [
       "void caller() {",
       "  unknown_func();",
@@ -515,13 +515,13 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 0, `Expected 0 outgoing calls for unresolved, got ${result.length}`);
     tree.delete();
   });
 
   // Method chain: obj->greet() should resolve to the "greet" method declaration.
-  test("finds outgoing call via method chain (obj->method())", () => {
+  test("finds outgoing call via method chain (obj->method())", async () => {
     const src = [
       "class Animal {",
       "  void greet() { }",
@@ -559,7 +559,7 @@ describe("getOutgoingCalls", () => {
       selectionRange: caller.nameRange,
     };
 
-    const result = getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
+    const result = await getOutgoingCalls(item, tree, table, "file:///test/test.pike", index);
     assert(result.length === 1, `Expected 1 outgoing call, got ${result.length}`);
     assert(result[0].to.name === "greet", `Expected callee "greet", got "${result[0].to.name}"`);
     assert(result[0].to.kind === 6, `Expected callee kind 6 (Method), got ${result[0].to.kind}`);

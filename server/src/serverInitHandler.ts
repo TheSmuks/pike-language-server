@@ -7,6 +7,7 @@
 
 import type { Connection } from "vscode-languageserver/node";
 import type { InitializeParams } from "vscode-languageserver/node";
+import { ResponseError, ErrorCodes } from "vscode-languageserver/node";
 import { buildServerCapabilities } from "./serverCapabilities";
 import { uriToPath } from "./util/uri";
 import { parse } from "./parser";
@@ -93,6 +94,15 @@ async function handleInitialize(
   ctx: ServerContext,
   params: InitializeParams,
 ) {
+  // LSP: the client sends `initialize` exactly once. A second one used to
+  // re-run the whole sequence — rebuilding the index, respawning the worker —
+  // against a server already serving requests.
+  if (ctx.lifecycleState !== "uninitialized") {
+    throw new ResponseError(
+      ErrorCodes.InvalidRequest,
+      "Server is already initialized",
+    );
+  }
   logInfo(ctx.connection, "[init] step 6: onInitialize — client connected");
 
   const rootUri = params.rootUri ?? params.rootPath ?? "";
@@ -114,6 +124,9 @@ async function handleInitialize(
   applyFormattingOptions(ctx, initOpts);
   applyDebugOptions(ctx, initOpts);
   applyResourceConfig(ctx, initOpts);
+
+  // Only now: a failure above must not leave the server claiming to be running.
+  ctx.lifecycleState = "running";
 
   return {
     ...buildServerCapabilities(),

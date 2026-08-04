@@ -7,7 +7,7 @@ import type { SignatureContext, SignatureInfo, ParameterInfo } from "./signature
 import { containsRange } from "./scopeBuilder";
 import { resolveTypeName } from "./symbolTable";
 import { findDeclInScopeAt } from "./query";
-import { stripScopeWrapper } from "../util/stripScope";
+import { stripScopeWrapper, stripAttributes } from "../util/stripScope";
 import { positiveFunctionGroups } from "./predefTypeGroups";
 import { findClassScope } from "./typeResolver";
 
@@ -402,22 +402,6 @@ export function resolvePredefSignatures(
   }
 
   return signatures;
-}
-
-/**
- * Replace `__attribute__("name", TYPE)` annotations with their bare TYPE.
- * Attribute types in the predef data are simple (string, mixed), so a
- * paren-free inner match suffices; unmatched text is left as-is (fail-soft).
- */
-function stripAttributes(text: string): string {
-  let out = text;
-  // Bounded: each pass removes one attribute; the data has at most a handful.
-  for (let i = 0; i < 16; i++) {
-    const next = out.replace(/__attribute__\("[^"]*",\s*([^()]*)\)/, "$1");
-    if (next === out) break;
-    out = next;
-  }
-  return out;
 }
 
 /** Index of the first occurrence of `ch` at paren/brace/bracket depth 0. */

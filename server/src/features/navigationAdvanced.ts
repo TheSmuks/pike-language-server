@@ -118,7 +118,9 @@ async function handleOutgoingCalls(
       workspaceRoot: index.workspaceRoot, cancellationToken: token,
     });
     if (token.isCancellationRequested) return [];
-    return getOutgoingCalls(item, tree, table, uri, index);
+    return await getOutgoingCalls(item, tree, table, uri, index, {
+      documents: ctx.documents, index, stdlibIndex: ctx.stdlibIndex,
+    });
   });
 }
 

@@ -22,8 +22,10 @@ import type {
   CallHierarchyOutgoingCall,
 } from "vscode-languageserver/node";
 import type { SymbolTable, Declaration, Reference } from "./symbolTable";
-import { isWrittenInFile } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import type { WorkspaceIndex } from "./workspaceIndex";
+import { type ResolutionContext } from "./accessResolver";
+import { declToCallHierarchyItem, resolveCallee } from "./callHierarchyResolution";
 
 // ---------------------------------------------------------------------------
 // Prepare call hierarchy
@@ -175,13 +177,15 @@ function addIncomingCallToGroup(
  * Get outgoing calls from a call hierarchy item.
  * Parses the function body and finds all call expressions.
  */
-export function getOutgoingCalls(
+export async function getOutgoingCalls(
   item: CallHierarchyItem,
   tree: Tree,
   table: SymbolTable,
   uri: string,
   workspaceIndex: WorkspaceIndex,
-): CallHierarchyOutgoingCall[] {
+  /** Lets a callee be resolved with the receiver's type, as navigation does. */
+  resolution?: ResolutionContext,
+): Promise<CallHierarchyOutgoingCall[]> {
   const startLine = item.range.start.line;
   const endLine = item.range.end.line;
 
@@ -190,7 +194,7 @@ export function getOutgoingCalls(
   const calls: CallHierarchyOutgoingCall[] = [];
   const seen = new Set<string>();
 
-  collectCallExpressions(
+  await collectCallExpressions(
     root,
     startLine,
     endLine,
@@ -199,6 +203,8 @@ export function getOutgoingCalls(
     workspaceIndex,
     calls,
     seen,
+    tree,
+    resolution,
   );
 
   return calls;
@@ -212,7 +218,7 @@ export function getOutgoingCalls(
  * is extracted from the first child of the `postfix_expr` (which may itself be
  * a nested `postfix_expr` for method chains like `obj->method(args)`).
  */
-function collectCallExpressions(
+async function collectCallExpressions(
   node: Node,
   startLine: number,
   endLine: number,
@@ -221,7 +227,9 @@ function collectCallExpressions(
   workspaceIndex: WorkspaceIndex,
   results: CallHierarchyOutgoingCall[],
   seen: Set<string>,
-): void {
+  tree: Tree,
+  resolution?: ResolutionContext,
+): Promise<void> {
   for (let i = 0; i < node.childCount; i++) {
     const child = node.child(i);
     if (!child) continue;
@@ -237,45 +245,64 @@ function collectCallExpressions(
 
     if (containedInFunction &&
         child.type === "postfix_expr" && isCallPostfixExpr(child)) {
-      tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen);
+      await tryPushOutgoingCall(child, table, uri, workspaceIndex, results, seen, tree, resolution);
     }
 
-    collectCallExpressions(
-      child, startLine, endLine, table, uri, workspaceIndex, results, seen,
+    await collectCallExpressions(
+      child, startLine, endLine, table, uri, workspaceIndex, results, seen, tree, resolution,
     );
   }
 }
 
-function tryPushOutgoingCall(
+async function tryPushOutgoingCall(
   node: Node,
   table: SymbolTable,
   uri: string,
   workspaceIndex: WorkspaceIndex,
   results: CallHierarchyOutgoingCall[],
   seen: Set<string>,
-): void {
+  tree: Tree,
+  resolution?: ResolutionContext,
+): Promise<void> {
   const calleeName = extractCalleeName(node);
   if (!calleeName) return;
-
-  const calleeDecl = resolveCallee(calleeName, table, uri, node.startPosition.row, workspaceIndex);
-  if (!calleeDecl) return;
-
-  const key = `${calleeDecl.uri}:${calleeDecl.decl.nameRange.start.line}`;
-  if (seen.has(key)) return;
-  seen.add(key);
 
   const calleeNode = findCalleeIdentifierNode(node);
   const fromLine = calleeNode?.startPosition.row ?? node.startPosition.row;
   const fromCol = calleeNode?.startPosition.column ?? node.startPosition.column;
   const nameLength = calleeNode?.text.length ?? calleeName.length;
 
-  results.push({
-    to: calleeDecl.item,
-    fromRanges: [{
-      start: { line: fromLine, character: fromCol },
-      end: { line: fromLine, character: fromCol + nameLength },
-    }],
-  });
+  const calleeDecl = await resolveCallee(
+    calleeName, table, uri, fromLine, fromCol, workspaceIndex, tree, resolution,
+  );
+  if (!calleeDecl) return;
+
+  // Dedup on the CALLSITE, not the callee. Keying on the callee discarded every
+  // call after the first that reached the same function — and, while the name
+  // sweep below was picking the wrong declaration, discarded genuinely
+  // different calls that merely collided on it.
+  const key = `${fromLine}:${fromCol}`;
+  if (seen.has(key)) return;
+  seen.add(key);
+
+  const range = {
+    start: { line: fromLine, character: fromCol },
+    end: { line: fromLine, character: fromCol + nameLength },
+  };
+
+  // Several callsites reaching one function belong in a single entry, which is
+  // what `fromRanges` is plural for.
+  const existing = results.find(
+    r => r.to.uri === calleeDecl.item.uri &&
+      r.to.selectionRange.start.line === calleeDecl.item.selectionRange.start.line &&
+      r.to.name === calleeDecl.item.name,
+  );
+  if (existing) {
+    existing.fromRanges.push(range);
+    return;
+  }
+
+  results.push({ to: calleeDecl.item, fromRanges: [range] });
 }
 
 /**
@@ -412,73 +439,4 @@ function findCalleeIdNodeInChain(node: Node): Node | null {
   }
 
   return null;
-}
-
-/**
- * Try to resolve a callee name to its declaration and CallHierarchyItem.
- */
-function resolveCallee(
-  name: string,
-  table: SymbolTable,
-  uri: string,
-  fromLine: number,
-  workspaceIndex: WorkspaceIndex,
-): { item: CallHierarchyItem; decl: Declaration; uri: string } | null {
-  // Search in local scope first. A clone from an inherited or #include'd file
-  // matches by name but its ranges belong to that file — pairing them with
-  // `uri` would point the call hierarchy at an arbitrary line here. The
-  // cross-file sweep below finds the real declaration in its own file.
-  for (const decl of table.declarations) {
-    if (!isWrittenInFile(table, decl)) continue;
-    if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
-      return {
-        item: declToCallHierarchyItem(decl, uri),
-        decl,
-        uri,
-      };
-    }
-  }
-
-  // Search cross-file via workspace index.
-  //
-  // A table also holds clones merged from the files it inherits and includes,
-  // and a clone's ranges are coordinates in the file it came FROM. Pairing one
-  // with entry.uri pointed the item at whatever text happens to sit at those
-  // coordinates in the wrong file. `decl.sourceUri` names the real home; the
-  // local loop above already guards this way.
-  for (const entry of workspaceIndex.getAllEntries()) {
-    if (!entry.symbolTable) continue;
-    for (const decl of entry.symbolTable.declarations) {
-      if (decl.name === name && (decl.kind === "function" || decl.kind === "method")) {
-        const declUri = decl.sourceUri ?? entry.uri;
-        return {
-          item: declToCallHierarchyItem(decl, declUri),
-          decl,
-          uri: declUri,
-        };
-      }
-    }
-  }
-
-  return null;
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function declToCallHierarchyItem(decl: Declaration, uri: string): CallHierarchyItem {
-  return {
-    name: decl.name,
-    kind: decl.kind === "method" ? 6 : 12, // Method = 6, Function = 12
-    uri,
-    range: {
-      start: { line: decl.range.start.line, character: decl.range.start.character },
-      end: { line: decl.range.end.line, character: decl.range.end.character },
-    },
-    selectionRange: {
-      start: { line: decl.nameRange.start.line, character: decl.nameRange.start.character },
-      end: { line: decl.nameRange.end.line, character: decl.nameRange.end.character },
-    },
-  };
 }

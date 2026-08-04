@@ -111,6 +111,14 @@ describe("signature help", () => {
       .toBe("string join_strings(string sep, string ... parts)");
   });
 
+  test("a later variadic argument keeps the trailing parameter active", async () => {
+    const line = lineOf('join_strings("-"');
+    const help = await sig(line, lines[line].lastIndexOf('"b"') + 1);
+
+    expect(help?.signatures?.[0]?.parameters).toHaveLength(2);
+    expect(help?.activeParameter).toBe(1);
+  });
+
   test("a call through a receiver resolves in the receiver's type", async () => {
     // Both a file-scope `query(mixed args)` and `Box::query(int, string)`
     // exist, and an unrelated `string b` parameter shadows the local `Box b`

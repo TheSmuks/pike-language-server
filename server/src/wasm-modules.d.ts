@@ -15,3 +15,12 @@ declare module "*.pike" {
   const path: string;
   export default path;
 }
+
+/**
+ * Pike MODULE sources (`.pmod`) the binary carries — the introspect module the
+ * worker resolves stdlib symbols through.
+ */
+declare module "*.pmod" {
+  const path: string;
+  export default path;
+}

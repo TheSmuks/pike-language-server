@@ -12,6 +12,8 @@
 
 import {
   createConnection,
+  ResponseError,
+  ErrorCodes,
   type Connection,
 } from "vscode-languageserver/node";
 import { TextDocument } from "vscode-languageserver-textdocument";
@@ -135,6 +137,15 @@ function registerFeatureHandlers(
     ctx.hibernationManager.recordActivity();
   };
   const beforeRequest = async (): Promise<void> => {
+    // LSP lifecycle, enforced before anything else touches server state: a
+    // request after `shutdown` used to be served normally, and serving it
+    // respawned the Pike worker that shutdown had just killed.
+    if (ctx.lifecycleState === "shutdown") {
+      throw new ResponseError(ErrorCodes.InvalidRequest, "Server is shutting down");
+    }
+    if (ctx.lifecycleState === "uninitialized") {
+      throw new ResponseError(ErrorCodes.ServerNotInitialized, "Server is not initialized");
+    }
     recordActivity();
     await ctx.hibernationManager.wakeGate();
   };
