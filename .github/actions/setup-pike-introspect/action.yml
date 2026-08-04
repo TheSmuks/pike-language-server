@@ -47,4 +47,7 @@ runs:
         "$pike_bin/pike" --version
         curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
         PATH="$pike_bin:$PATH" "$HOME/.pmp/bin/pmp" install
+        if [ -d modules/Introspect/src/Introspect.pmod ] && [ ! -e modules/pike_introspect ]; then
+          ln -s Introspect modules/pike_introspect
+        fi
         test -d modules/pike_introspect/src/Introspect.pmod
