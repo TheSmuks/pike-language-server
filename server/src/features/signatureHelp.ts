@@ -97,7 +97,7 @@ export function produceSignatureHelp(
     return {
       signatures: [sig],
       activeSignature: 0,
-      activeParameter: activeParam,
+      activeParameter: clampActiveParameter(sig, activeParam),
     };
   }
 
@@ -107,11 +107,23 @@ export function produceSignatureHelp(
   const predefSigs = resolvePredefSignatures(calleeName, ctx);
   if (predefSigs.length === 0) return null;
 
+  const activeSignature = pickActiveOverload(predefSigs, activeParam);
   return {
     signatures: predefSigs,
-    activeSignature: pickActiveOverload(predefSigs, activeParam),
-    activeParameter: activeParam,
+    activeSignature,
+    activeParameter: clampActiveParameter(predefSigs[activeSignature], activeParam),
   };
+}
+
+/** Keep LSP's active parameter within the selected signature's parameter list. */
+function clampActiveParameter(sig: SignatureInfo, activeParam: number): number {
+  const parameterCount = sig.parameters.length;
+  if (parameterCount === 0) return 0;
+  if (activeParam < parameterCount) return activeParam;
+
+  const trailingIndex = parameterCount - 1;
+  if (sig.parameters[trailingIndex].label.includes("...")) return trailingIndex;
+  return trailingIndex;
 }
 
 /**

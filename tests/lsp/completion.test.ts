@@ -849,7 +849,7 @@ describe("Completion ranking", () => {
       'int alpha = 1;',
       'void foo(int param) {',
       '  string local_var = "hi";',
-      '  // cursor',
+      '  local_var;',
       '}',
     ].join("\n");
     const tree = parse(src);

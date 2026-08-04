@@ -37,6 +37,17 @@ const COMMENT_TYPES = new Set([
   "autodoc_comment",
 ]);
 
+// Conditional-compilation branches are alternate source streams. A return in
+// one arm cannot make the next arm unreachable in the configuration being
+// analysed.
+const PREPROCESSOR_BOUNDARY_TYPES = new Set([
+  "preproc_if",
+  "preproc_ifdef",
+  "preproc_branch",
+  "preproc_else",
+  "preproc_endif",
+]);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -104,6 +115,10 @@ function checkBlock(
   for (const child of children) {
     // Comments are not executable code — never flag them.
     if (COMMENT_TYPES.has(child.type)) continue;
+    if (PREPROCESSOR_BOUNDARY_TYPES.has(child.type)) {
+      terminator = null;
+      continue;
+    }
 
     if (terminator) {
       diagnostics.push(makeUnreachableDiagnostic(child, terminator, uri));

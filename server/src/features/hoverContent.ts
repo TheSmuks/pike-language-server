@@ -14,7 +14,7 @@ import type { Node } from "web-tree-sitter";
 import type { Declaration } from "./symbolTable";
 import { renderAutodoc } from "./autodocRenderer";
 import type { LRUCache } from "../util/lruCache";
-import { stripScopeWrapper } from "../util/stripScope";
+import { stripScopeWrapper, stripAttributes } from "../util/stripScope";
 import { readFileSync } from "node:fs";
 import { uriToPath } from "../util/uri";
 import { decodeSource } from "../util/sourceDecoder.js";
@@ -66,8 +66,10 @@ export interface HoverContentContext {
  */
 export function renderPredefSignature(name: string, rawSig: string): string[] {
   let cleanSig = stripScopeWrapper(rawSig);
-  // Remove attribute annotations for cleaner display
-  cleanSig = cleanSig.replace(/__attribute__\("[^"]*",\s*/g, "");
+  // Keep the annotated TYPE, drop only the annotation. Deleting the opening
+  // `__attribute__("...",` and leaving its closing paren produced unbalanced
+  // garbage for every efun that carries one.
+  cleanSig = stripAttributes(cleanSig);
 
   const overloads = extractOverloads(cleanSig);
   if (overloads.length === 0) return [`${name}()`];
@@ -347,6 +349,17 @@ function hoverFromStdlib(
   // which do collide with things Pike and Roxen predefine. Answering one of
   // those with the builtin's documentation is a wrong answer.
   if (decl.kind === "macro_parameter") return null;
+
+  // A value the user DECLARED shadows the predef of the same name — Pike's
+  // scoping rule, not a heuristic. `int time = 5;` makes `time` that variable
+  // and `int fn(int max)` makes `max` that parameter, so answering either with
+  // the efun's documentation is a confident wrong answer, at the declaration
+  // and at every use. Functions and methods are excluded below for exactly this
+  // reason; variables, parameters and constants never were, and `time`, `max`,
+  // `mv`, `hash`, `error` and `filter` all collide with a builtin.
+  if (decl.kind === "variable" || decl.kind === "parameter" || decl.kind === "constant") {
+    return null;
+  }
 
   const entry = ctx.stdlibIndex[`predef.${decl.name}`];
   if (entry) {

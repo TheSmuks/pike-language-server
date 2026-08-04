@@ -49,8 +49,21 @@ export interface FormattingConfig {
   operatorSpacing: boolean;
 }
 
+/**
+ * Where the server is in the LSP lifecycle.
+ *
+ * The protocol requires a request before `initialize` to fail with
+ * ServerNotInitialized, a second `initialize` to fail with InvalidRequest, and
+ * any request after `shutdown` to fail with InvalidRequest. All three were
+ * answered normally instead — and answering after shutdown respawned the Pike
+ * worker that shutdown had just killed, leaving an orphan process behind.
+ */
+export type LifecycleState = "uninitialized" | "running" | "shutdown";
+
 export interface ServerContext {
   connection: Connection;
+  /** LSP lifecycle position — see LifecycleState. */
+  lifecycleState: LifecycleState;
   documents: TextDocuments<TextDocument>;
   worker: PikeWorker;
   autodocCache: LRUCache<AutodocEntry>;
@@ -352,6 +365,7 @@ export function createServerContext(
  */
 function mutableContextDefaults(roxenActive: Map<string, boolean>) {
   return {
+    lifecycleState: "uninitialized" as LifecycleState,
     upsertInFlight: new Map<string, Promise<any>>(),
     formattingConfig: { insertFinalNewline: true, operatorSpacing: false },
     backgroundIndexEnabled: true,

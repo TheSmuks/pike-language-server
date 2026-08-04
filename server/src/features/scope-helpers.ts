@@ -241,6 +241,17 @@ export function findEnclosingClassScopeId(node: Node, state: BuildState): number
   return null;
 }
 
+/**
+ * The class declaration that OWNS the scope enclosing `node`.
+ *
+ * The pairing test is the one scopeBuilder already uses to match an inherited
+ * class with its scope: a class scope encloses its own declaration's range.
+ * Matching on `kind === 'class'` alone is not enough — every class in a file is
+ * declared in the same parent scope, so the first match answered the first
+ * class in the file for every `this` in it, whichever class actually enclosed
+ * the cursor. Pike disagrees: inside `class Second`, `this_object()` is a
+ * `Second`.
+ */
 export function findEnclosingClassDecl(node: Node, state: BuildState): number | null {
   const classScopeId = findEnclosingClassScopeId(node, state);
   if (classScopeId === null) return null;
@@ -251,7 +262,7 @@ export function findEnclosingClassDecl(node: Node, state: BuildState): number | 
     if (!parentScope) return null;
     for (const declId of parentScope.declarations) {
       const decl = state.declMap.get(declId);
-      if (decl && decl.kind === 'class') {
+      if (decl && decl.kind === 'class' && containsRange(classScope.range, decl.range)) {
         return declId;
       }
     }

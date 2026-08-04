@@ -8,7 +8,7 @@
 
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, statSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, statSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { getEmbeddedAssets } from "../embeddedAssets.js";
 
@@ -114,7 +114,12 @@ export function materializeEmbeddedPikeRuntime(): string | undefined {
 
   const dir = mkdtempSync(join(tmpdir(), "pike-lsp-runtime-"));
   for (const [name, bytes] of Object.entries(sources)) {
-    writeFileSync(join(dir, name), bytes);
+    const target = join(dir, name);
+    // Keys may name a subdirectory: the introspect module ships as
+    // `Introspect.pmod/<member>.pmod`, and Pike resolves it as a module only
+    // when that directory structure survives materialisation.
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, bytes);
   }
   embeddedRuntimeDir = dir;
   return dir;

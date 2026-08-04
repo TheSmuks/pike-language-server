@@ -138,11 +138,27 @@ function resolveInheritToClass(decl: Declaration, table: SymbolTable): Declarati
     : null;
   if (!parentScope) return null;
 
-  for (const parentDeclId of parentScope.declarations) {
-    const parentDecl = table.declById.get(parentDeclId);
-    if (parentDecl && parentDecl.kind === 'class' && parentDecl.name === decl.name) {
-      return parentDecl;
-    }
+  return findInheritedClass(parentScope.id, decl.name, table, new Set<number>());
+}
+
+/** Find the named class in a scope or one of the scopes it inherits. */
+function findInheritedClass(
+  scopeId: number,
+  name: string,
+  table: SymbolTable,
+  seen: Set<number>,
+): Declaration | null {
+  if (seen.has(scopeId)) return null;
+  seen.add(scopeId);
+  const scope = table.scopeById.get(scopeId);
+  if (!scope) return null;
+  for (const declId of scope.declarations) {
+    const candidate = table.declById.get(declId);
+    if (candidate?.kind === 'class' && candidate.name === name) return candidate;
+  }
+  for (const inheritedScopeId of scope.inheritedScopes) {
+    const inherited = findInheritedClass(inheritedScopeId, name, table, seen);
+    if (inherited) return inherited;
   }
   return null;
 }
@@ -239,8 +255,22 @@ export function getReferencesTo(
   const targetDeclId = findDeclIdAtPosition(table, line, character);
   if (targetDeclId === null) return collectSiblingUnresolvedRefs(table, line, character);
 
-  const results = collectResolvedReferences(table, targetDeclId);
-  collectUnresolvedArrowDotRefs(table, targetDeclId, results);
+  return getReferencesToDecl(table, targetDeclId);
+}
+
+/**
+ * References in `table` that resolve to `declId`.
+ *
+ * The by-position variant above re-derives the declaration from a line and
+ * column. That is wrong for a declaration cloned from an #include'd or
+ * inherited file: it carries the coordinates it has in THAT file, which in this
+ * one address an unrelated symbol — so the lookup returned that symbol's
+ * references instead. A caller that already holds the declaration must not
+ * throw its identity away and ask for it back by position.
+ */
+export function getReferencesToDecl(table: SymbolTable, declId: number): Reference[] {
+  const results = collectResolvedReferences(table, declId);
+  collectUnresolvedArrowDotRefs(table, declId, results);
   return results;
 }
 

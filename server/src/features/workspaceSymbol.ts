@@ -107,13 +107,15 @@ export function searchWorkspaceSymbols(
   const lowerQuery = query.toLowerCase();
   const results: SymbolInformation[] = [];
   const liveUris = new Set<string>();
+  // Spans every entry: one declaration must not be listed once per includer.
+  const seen = new Set<string>();
 
   // Live entries (open / edited / hydrated) are authoritative — they reflect
   // unsaved edits that the resident snapshot cannot.
   for (const entry of index.getAllEntries()) {
     if (!entry.symbolTable) continue;
     liveUris.add(entry.uri);
-    collectMatchingSymbols(entry, entry.symbolTable.declarations, lowerQuery, results);
+    collectMatchingSymbols(entry, entry.symbolTable.declarations, lowerQuery, results, seen);
   }
 
   // Resident index covers cached-but-not-loaded (stub) files with zero
@@ -188,6 +190,7 @@ function collectMatchingSymbols(
   declarations: Declaration[],
   lowerQuery: string,
   results: SymbolInformation[],
+  seen: Set<string>,
 ): void {
   for (const decl of declarations) {
     if (!decl.name) continue;
@@ -204,11 +207,23 @@ function collectMatchingSymbols(
     const kind = DECL_KIND_TO_SYMBOL_KIND[decl.kind];
     if (kind === undefined) continue;
 
+    // A symbol table holds declarations CLONED from the files it #includes and
+    // inherits, and those carry the coordinates they have in THEIR file.
+    // Pairing them with this entry's URI pointed the result at whatever happens
+    // to sit at that line here — often a random line, sometimes past the end of
+    // the file. The declaration belongs to the file that actually contains it.
+    const uri = decl.sourceUri ?? entry.uri;
+    // Reporting the same declaration once per includer would list a header's
+    // symbols as many times as the workspace includes it.
+    const key = `${uri} ${decl.nameRange.start.line} ${decl.nameRange.start.character} ${decl.name}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
     results.push({
       name: decl.name,
       kind,
       location: {
-        uri: entry.uri,
+        uri,
         range: decl.nameRange,
       },
     });

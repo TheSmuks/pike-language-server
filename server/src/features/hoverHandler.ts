@@ -19,6 +19,7 @@ import { TextDocument } from "vscode-languageserver-textdocument";
 import { parse, withBorrowedTree } from "../parser";
 import type { Tree, Node } from "web-tree-sitter";
 import { getDefinitionAt, getLocalDeclarationAt, type SymbolTable, type Declaration } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import {
   resolveAccessDeclaration,
   resolveAccessQualifiedType,
@@ -261,8 +262,17 @@ async function hoverFromTree(
     params.position.line, params.position.character, hoverTree,
   );
   if (accessDecl) {
+    // A variable this file declares is not the predef that shares its name.
+    // Pike scoping shadows the efun, so in `int time = 5;` the name is that
+    // variable. The stdlib tier below keys on a bare NAME, so it documented a
+    // user's `time`, `max` or `mv` as the efun — at the declaration and at
+    // every use. Describe the declaration the resolver actually found.
+    const ownDeclaration = isWrittenInFile(table, accessDecl.decl) &&
+      (accessDecl.decl.kind === "variable" || accessDecl.decl.kind === "parameter" ||
+       accessDecl.decl.kind === "constant");
+
     // Unambiguous stdlib names only — see hoverFromStdlibAccess.
-    const stdlibHover = hoverFromStdlibAccess(accessDecl.decl, ctx);
+    const stdlibHover = ownDeclaration ? null : hoverFromStdlibAccess(accessDecl.decl, ctx);
     if (stdlibHover) return formatHover(stdlibHover);
 
     // An ambiguous name must not be guessed from the bare index here. The

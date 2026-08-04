@@ -48,7 +48,8 @@ if [ ! -d "$ROOT/standalone/pike" ]; then
   exit 1
 fi
 mkdir -p "$OUT_DIR/standalone/pike"
-cp "$ROOT/standalone/pike/"*.pike "$OUT_DIR/standalone/pike/"
+# Whole dir, not a *.pike glob — Introspect.pmod is a directory.
+cp -R "$ROOT/standalone/pike/." "$OUT_DIR/standalone/pike/"
 cp "$ROOT/LICENSE" "$OUT_DIR/"
 cp "$ROOT/docs/helix-installation.md" "$ROOT/docs/other-editors.md" "$OUT_DIR/docs/"
 

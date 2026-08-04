@@ -42,10 +42,10 @@ interface FileEvent {
   type: FileChangeType;
 }
 
-function handleWatchedFilesChange(
+async function handleWatchedFilesChange(
   ctx: ServerContext,
   changes: readonly FileEvent[],
-): void {
+): Promise<void> {
   // Watched-file events do NOT reset the idle timer when no documents are open.
   // They only count as activity if documents ARE open (the editor is in use).
   ctx.hibernationManager.onWatchedFileEvent();
@@ -55,7 +55,7 @@ function handleWatchedFilesChange(
     switch (event.type) {
       case FileChangeType.Created:
       case FileChangeType.Changed:
-        handleFileCreatedOrChanged(ctx, uri);
+        await handleFileCreatedOrChanged(ctx, uri);
         break;
       case FileChangeType.Deleted:
         handleFileDeleted(ctx, uri);
@@ -64,10 +64,10 @@ function handleWatchedFilesChange(
   }
 }
 
-function handleFileCreatedOrChanged(
+async function handleFileCreatedOrChanged(
   ctx: ServerContext,
   uri: string,
-): void {
+): Promise<void> {
   // Capture dependents BEFORE removing the file — removeFile clears the
   // reverse-dependency map entries, so getDependents would return empty after.
   const dependents = ctx.index.getDependents(uri);
@@ -82,9 +82,26 @@ function handleFileCreatedOrChanged(
   // keeps lazy indexing honest: the index reflects the actual workspace state.
   ctx.index.invalidateGlobalPrep();
 
-  // File not open in editor — the on-demand indexer will re-index it
-  // when cross-file queries need it (file watchers only provide URIs,
-  // not content). Open files are managed by the didChange handler.
+  // Put the file back in the index BEFORE refreshing its dependents.
+  //
+  // "The on-demand indexer will re-index it when cross-file queries need it"
+  // holds for `inherit`, whose resolver can await indexOnDemand. It does NOT
+  // hold for `#include`: the merge in includeWiring is synchronous and simply
+  // skips a target with no symbol table. So removing an included file here
+  // dropped every symbol it provides from all of its includers, permanently —
+  // definition, hover and completion for them stayed dead for the rest of the
+  // session, and editing the includer afterwards did not bring them back.
+  //
+  // Only when something depends on it: an open file is the didChange handler's
+  // business, and a file nobody includes costs nothing to leave unindexed.
+  if (dependents.size > 0) {
+    try {
+      await ctx.index.getOrIndexSymbolTable(uri);
+    } catch {
+      // Best effort — a file that vanished between the event and this read
+      // must not take the whole watch batch down.
+    }
+  }
 
   // Invalidate and refresh open dependents so they pick up the external change.
   propagateDependentInvalidation(ctx, dependents);

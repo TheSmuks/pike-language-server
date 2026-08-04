@@ -19,7 +19,7 @@
 
 import type { Tree, Node } from "web-tree-sitter";
 import type { SymbolTable, Declaration } from "./symbolTable";
-import { isWrittenInFile } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import { findDeclInScopeAt } from "./query";
 import type { Position } from "vscode-languageserver-types";
 import { InlayHint, InlayHintKind } from "vscode-languageserver-types";
