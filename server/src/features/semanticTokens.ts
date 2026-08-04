@@ -16,7 +16,7 @@
  */
 
 import type { Declaration, SymbolTable } from "./symbolTable";
-import { isWrittenInFile } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import { identifierPrefixLength, dropDuplicateSpans } from "./semanticTokenSpans";
 
 // ---------------------------------------------------------------------------

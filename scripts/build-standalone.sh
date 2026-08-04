@@ -72,6 +72,23 @@ mkdir -p "$OUT_DIR/pike"
 cp "$ROOT/server/pike/worker.pike" "$OUT_DIR/pike/"
 cp "$ROOT/server/pike/Common.pike" "$OUT_DIR/pike/"
 
+# The introspect module, which answers every `resolve` request — stdlib module
+# hover and runtime member completion are dead without it. It is pmp-installed
+# under modules/ (gitignored, and a symlink into the pmp store), so it only
+# exists in a developer checkout and shipped in NO distribution: the worker
+# answered {"resolved": false, "error": "Introspect module not available"} for
+# every user who did not build from a checkout. It goes INSIDE the runtime dir
+# because the worker is always spawned with `-M <runtime dir>`, so one copy
+# serves every layout without a second module-path entry.
+INTROSPECT_SRC="$ROOT/modules/pike_introspect/src/Introspect.pmod"
+if [ ! -d "$INTROSPECT_SRC" ]; then
+  echo "modules/pike_introspect missing — run 'pmp install' first" >&2
+  echo "(shipping without it silently disables resolve, hover on stdlib modules," >&2
+  echo " and runtime member completion)" >&2
+  exit 1
+fi
+cp -RL "$INTROSPECT_SRC" "$OUT_DIR/pike/"
+
 echo "Standalone build complete: $OUT_DIR/"
 echo "Run with: bun $OUT_DIR/server.js --stdio"
 ls -lh "$OUT_DIR/"

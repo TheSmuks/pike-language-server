@@ -53,6 +53,12 @@ export interface PikeDiagnostic {
   line: number;
   severity: "error" | "warning";
   message: string;
+  /**
+   * File the compiler raised this against. Differs from the document being
+   * compiled when the error is inside an #include'd file, in which case `line`
+   * is a line of THAT file and means nothing in this one.
+   */
+  file?: string;
   expected_type?: string;
   actual_type?: string;
   /** Optional error code from the Pike compiler. */

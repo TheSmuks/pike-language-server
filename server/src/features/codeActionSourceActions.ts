@@ -9,6 +9,8 @@ import type {
   CodeActionParams,
   TextEdit,
 } from "vscode-languageserver/node";
+import type { Tree } from "web-tree-sitter";
+import { parse } from "../parser";
 
 // ---------------------------------------------------------------------------
 // Source action: organize imports
@@ -52,17 +54,47 @@ export function organizeImports(text: string): TextEdit[] {
     return [];
   }
 
-  // Replace the import block
-  const edits: TextEdit[] = [
-    {
-      range: {
-        start: { line: firstImport, character: 0 },
-        end: { line: lastImport + 1, character: 0 },
-      },
-      newText: sorted.join("\n") + "\n",
-    },
-  ];
+  return rewriteImportLines(lines, importLines, sorted);
+}
 
+/**
+ * Write the sorted imports back onto the import lines themselves.
+ *
+ * Replacing the whole span from the first import to the last is what destroyed
+ * everything between them: an `inherit` clause, a comment, a blank line. Those
+ * lines are not imports and this action has no business touching them — losing
+ * an inherit stops the file compiling. Each import line is rewritten in place,
+ * and any line left over after deduplication is removed on its own.
+ */
+function rewriteImportLines(
+  lines: string[],
+  importLines: { line: number; text: string }[],
+  sorted: string[],
+): TextEdit[] {
+  const edits: TextEdit[] = [];
+  for (let i = 0; i < importLines.length; i++) {
+    const { line } = importLines[i];
+    if (i < sorted.length) {
+      const indent = lines[line].slice(0, lines[line].length - lines[line].trimStart().length);
+      edits.push({
+        range: { start: { line, character: 0 }, end: { line, character: lines[line].length } },
+        newText: indent + sorted[i],
+      });
+      continue;
+    }
+    // A duplicate: the line goes away entirely, newline included.
+    edits.push(
+      line + 1 < lines.length
+        ? { range: { start: { line, character: 0 }, end: { line: line + 1, character: 0 } }, newText: "" }
+        : {
+            range: {
+              start: { line: line - 1, character: lines[line - 1]?.length ?? 0 },
+              end: { line, character: lines[line].length },
+            },
+            newText: "",
+          },
+    );
+  }
   return edits;
 }
 
@@ -87,6 +119,11 @@ export function extractVariable(
   const varName = generateVarName(selectedText);
   const statementStart = findStatementStart(lineText, startChar);
   const indent = lineText.match(/^\s*/)?.[0] ?? "";
+
+  // Decline rather than emit code the compiler rejects.
+  if (!extractionParses(`${declKeyword(selectedText)} ${varName} = ${selectedText};`)) {
+    return null;
+  }
 
   const edits: TextEdit[] = [
     {
@@ -133,6 +170,36 @@ function validateExtractSelection(
   return { line, lineText, startChar, endChar, selectedText };
 }
 
+/**
+ * Would the refactoring produce parseable Pike?
+ *
+ * The textual checks above reject only the obvious shapes, so a selection that
+ * is not an expression sailed through: selecting `int x = 1` emitted
+ * `mixed extracted = int x = 1;`, and selecting `1, 2` emitted
+ * `mixed extracted = 1, 2;`. Both are rejected by the Pike compiler, from a
+ * refactoring the user accepted.
+ *
+ * Rather than enumerate what an expression is not, this parses the declaration
+ * that would actually be written. A refactoring that cannot produce parseable
+ * code must not be offered at all.
+ */
+function extractionParses(declarationLine: string): boolean {
+  // A declaration is only legal inside a program; wrap it in one.
+  const probe = `void __extract_probe() {\n${declarationLine}\n}\n`;
+  let tree: Tree | undefined;
+  try {
+    // No URI: this is a throwaway probe and must not enter the tree cache.
+    tree = parse(probe);
+    return !tree.rootNode.hasError;
+  } catch {
+    // A parser that is not up yet must not block the refactoring outright;
+    // the textual checks above still apply.
+    return true;
+  } finally {
+    tree?.delete();
+  }
+}
+
 function findStatementStart(lineText: string, startChar: number): number {
   let statementStart = startChar;
   for (let c = startChar - 1; c >= 0; c--) {
@@ -173,4 +240,30 @@ function generateVarName(expr: string): string {
 function declKeyword(_expr: string): string {
   // For now, always use mixed. Type inference could be added later.
   return "mixed";
+}
+
+/** Does `a` start before `b` ends and end after `b` starts? */
+function overlaps(a: TextEdit, b: TextEdit): boolean {
+  const before = (p: TextEdit["range"]["start"], q: TextEdit["range"]["start"]) =>
+    p.line < q.line || (p.line === q.line && p.character <= q.character);
+  return before(a.range.start, b.range.end) && before(b.range.start, a.range.end);
+}
+
+/**
+ * Keep the first of any group of overlapping edits, and drop exact duplicates.
+ *
+ * Order-independent: edits are considered in document order so the surviving
+ * set does not depend on which diagnostic happened to be produced first.
+ */
+export function withoutOverlaps(edits: TextEdit[]): TextEdit[] {
+  const ordered = [...edits].sort(
+    (a, b) => a.range.start.line - b.range.start.line ||
+      a.range.start.character - b.range.start.character,
+  );
+  const kept: TextEdit[] = [];
+  for (const edit of ordered) {
+    if (kept.some(k => overlaps(k, edit))) continue;
+    kept.push(edit);
+  }
+  return kept;
 }

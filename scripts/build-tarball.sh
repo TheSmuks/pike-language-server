@@ -47,7 +47,9 @@ if [ ! -d "$ROOT/standalone/pike" ]; then
   exit 1
 fi
 mkdir -p "$STAGE/pike"
-cp "$ROOT/standalone/pike/"*.pike "$STAGE/pike/"
+# Copy the whole runtime dir: it carries Introspect.pmod as a DIRECTORY
+# alongside the .pike files, and a *.pike glob silently drops it.
+cp -R "$ROOT/standalone/pike/." "$STAGE/pike/"
 
 cat > "$STAGE/README.md" <<EOF
 # Pike Language Server — standalone bundle $VERSION

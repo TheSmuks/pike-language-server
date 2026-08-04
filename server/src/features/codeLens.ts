@@ -15,7 +15,7 @@ import type {
   CodeLens,
 } from "vscode-languageserver/node";
 import type { SymbolTable } from "./symbolTable";
-import { isWrittenInFile } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import type { WorkspaceIndex } from "./workspaceIndex";
 
 // ---------------------------------------------------------------------------

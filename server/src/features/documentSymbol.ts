@@ -136,7 +136,6 @@ function symbolsFromConstantDecl(node: Node): DocumentSymbol[] {
 
 function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
   const nameNode = node.childForFieldName('name');
-  if (!nameNode) return []; // anonymous enum — skip
   const members: DocumentSymbol[] = [];
   for (const child of node.children) {
     if (child.type === 'enum_member') {
@@ -154,6 +153,9 @@ function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
       }
     }
   }
+  // An anonymous enum still declares program constants. There is no enum name
+  // to carry a parent symbol, so expose its members at the surrounding level.
+  if (!nameNode) return members;
   return [
     DocumentSymbol.create(
       nameNode.text,
@@ -164,6 +166,24 @@ function symbolsFromEnumDecl(node: Node): DocumentSymbol[] {
       members,
     ),
   ];
+}
+
+/** Extract members declared by an anonymous enum expression. */
+function symbolsFromAnonymousEnum(node: Node): DocumentSymbol[] {
+  const enumNode = findAnonymousEnum(node);
+  if (!enumNode) return [];
+  return symbolsFromEnumDecl(enumNode);
+}
+
+function findAnonymousEnum(node: Node): Node | null {
+  const stack: Node[] = [...node.children];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (!current) continue;
+    if (current.type === 'anon_enum') return current;
+    stack.push(...current.children);
+  }
+  return null;
 }
 
 function symbolsFromImportDecl(node: Node): DocumentSymbol[] {
@@ -290,7 +310,9 @@ function collectSymbols(container: Node, parentKind: string | undefined): Docume
     const handler = DECL_HANDLERS[decl.type];
     if (handler) {
       symbols.push(...handler(decl, parentKind));
+      continue;
     }
+    symbols.push(...symbolsFromAnonymousEnum(decl));
     // Unknown node types are silently ignored — not an error.
   }
   return symbols;

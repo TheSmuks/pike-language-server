@@ -73,6 +73,9 @@ export function mergeDiagnostics(
   tree?: Tree,
   lintDiags?: Diagnostic[],
   lines?: string[],
+  /** Path of the document being compiled — lets a diagnostic raised inside an
+   *  #include'd file be told apart from one raised here. */
+  documentPath?: string,
 ): Diagnostic[] {
   // Build set of line numbers that have Pike diagnostics.
   // Parse diagnostics on these lines will be suppressed (Pike is more precise).
@@ -92,13 +95,80 @@ export function mergeDiagnostics(
   });
 
   const result: Diagnostic[] = [...suppressedParseDiags, ...suppressedLintDiags];
-  for (const pd of pikeDiags) result.push(buildPikeDiagnostic(pd, tree, lines));
+  for (const pd of pikeDiags) result.push(buildPikeDiagnostic(pd, tree, lines, documentPath));
   return result;
 }
 
+/**
+ * Was this raised in a file other than the one being compiled?
+ *
+ * Unknown filenames count as local: the compiler omits `file` for most
+ * diagnostics, and treating those as foreign would move every ordinary error
+ * to the top of the document.
+ */
+function isForeignDiagnostic(pd: PikeDiagnostic, documentPath?: string): boolean {
+  if (!pd.file || !documentPath) return false;
+  return baseName(pd.file) !== baseName(documentPath);
+}
+
+/**
+ * Re-anchor a diagnostic from an included file onto the include directive,
+ * naming the real origin in the message so the user can find it.
+ */
+function foreignDiagnostic(pd: PikeDiagnostic, lines: string[]): Diagnostic {
+  const line = includeDirectiveLine(lines, pd.file!);
+  const text = lines[line] ?? "";
+  return {
+    range: {
+      start: { line, character: 0 },
+      end: { line, character: text.length },
+    },
+    severity: pd.severity === "error" ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+    source: "pike",
+    message: `${baseName(pd.file!)}:${pd.line}: ${pd.message}`,
+    code: pd.code ?? `P2${String(pd.line).padStart(4, "0")}`,
+  };
+}
+
+/** Base name of a path, for comparing a compiler filename with a document. */
+function baseName(path: string): string {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return cut >= 0 ? path.slice(cut + 1) : path;
+}
+
+/**
+ * Where to put a diagnostic the compiler raised in a DIFFERENT file.
+ *
+ * Its line number belongs to that file, so publishing it at the same line of
+ * the open document points at unrelated code — and at nothing at all when the
+ * open document is shorter, which is how ranges past the end of the file got
+ * out. The honest place is the `#include` directive that pulled the file in;
+ * failing that, the top of the document.
+ */
+function includeDirectiveLine(lines: string[], file: string): number {
+  const target = baseName(file);
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i];
+    if (!text.includes("#include")) continue;
+    if (text.includes(target)) return i;
+  }
+  return 0;
+}
+
 /** Build one LSP Diagnostic from a raw Pike compiler diagnostic. */
-function buildPikeDiagnostic(pd: PikeDiagnostic, tree?: Tree, lines?: string[]): Diagnostic {
-  const line = Math.max(0, pd.line - 1); // Pike: 1-based → LSP: 0-based
+function buildPikeDiagnostic(
+  pd: PikeDiagnostic,
+  tree?: Tree,
+  lines?: string[],
+  documentPath?: string,
+): Diagnostic {
+  const foreign = isForeignDiagnostic(pd, documentPath);
+  if (foreign && lines) return foreignDiagnostic(pd, lines);
+
+  // Pike: 1-based → LSP: 0-based, clamped into the document. A line past the
+  // end produces a range no client can render.
+  const lastLine = lines && lines.length > 0 ? lines.length - 1 : Number.MAX_SAFE_INTEGER;
+  const line = Math.min(Math.max(0, pd.line - 1), lastLine);
   // NOTE: messageAwareRange/lineToColumn expect an already-0-based line.
   // Passing the raw (1-based) pd.line here would look up the wrong source
   // line entirely — a real off-by-one that was masked in earlier tests

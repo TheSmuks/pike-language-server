@@ -24,6 +24,10 @@ export function registerShutdownHandler(
   ctx: ServerContext,
 ): void {
   connection.onShutdown(async () => {
+    // Before any teardown: a request arriving mid-shutdown must be refused
+    // rather than served, or it respawns the worker being killed below.
+    ctx.lifecycleState = "shutdown";
+
     // Cancel background indexing if still running.
     ctx.backgroundIndexCts?.cancel();
     ctx.backgroundIndexCts?.dispose();

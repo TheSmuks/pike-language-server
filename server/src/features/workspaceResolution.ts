@@ -6,7 +6,8 @@
  */
 
 import { type ModuleResolver } from "./moduleResolver";
-import { getDefinitionAt, getReferencesTo, isWrittenInFile, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
+import { getDefinitionAt, getReferencesTo, type SymbolTable, type Declaration, type Reference } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import type { FileEntry } from "./workspaceIndex";
 import { normalizeUri } from "../util/uri";
 import { resolveTypeName } from "./scope-helpers";
@@ -77,7 +78,8 @@ export async function resolveCrossFileDefinition(
       const nr = decl.nameRange;
       if (nr.start.line === line && nr.end.line === line &&
           character >= nr.start.character && character < nr.end.character) {
-        const result = await resolveInheritTarget(ctx, decl, uri);
+        const result = await resolveInheritTarget(ctx, decl, uri)
+          ?? await resolveInheritedClassTarget(ctx, table, decl, uri);
         // If the index was mutated while we yielded, the result may be stale.
         // Retry once — the mutation already updated the data.
         if (result && ctx.getGeneration() !== snapshotGen && maxRetries > 0) {
@@ -108,20 +110,30 @@ export async function resolveCrossFileDefinition(
   return null;
 }
 
-/**
- * Re-resolve after the index moved, but never trade a good answer for nothing.
- *
- * The generation check exists to catch a result computed against a table that
- * has since changed. The catch is that the change is usually *ours*: resolving
- * a cross-file symbol indexes the inherit target on demand, and upserting it
- * invalidates its dependents — which includes the file we are resolving from.
- * The retry then finds that file has no symbol table yet and returns null, and
- * a correct answer already in hand is discarded.
- *
- * That is why go-to-definition answered null on a cold index and correctly on
- * a warm one. It read as flakiness, and it skewed every audit sweep that
- * measured navigation.
- */
+async function resolveInheritedClassTarget(
+  ctx: ResolutionContext,
+  table: SymbolTable,
+  decl: Declaration,
+  uri: string,
+): Promise<{ uri: string; decl: Declaration } | null> {
+  for (const dependency of table.declarations) {
+    if (dependency.id === decl.id) continue;
+    if (dependency.kind !== "inherit" && dependency.kind !== "import") continue;
+    if (!isWrittenInFile(table, dependency)) continue;
+    const isString = dependency.name.startsWith('"') && dependency.name.endsWith('"');
+    const dependencyUri = await ctx.resolveInherit(dependency.name, isString, uri);
+    if (!dependencyUri) continue;
+    const dependencyTable = getFile(ctx, dependencyUri)?.symbolTable;
+    if (!dependencyTable) continue;
+    const target = dependencyTable.declarations.find(
+      candidate => candidate.kind === "class" && candidate.name === decl.name,
+    );
+    if (target) return locate(dependencyUri, target);
+  }
+  return null;
+}
+
+/** Re-resolve after the index moved without trading a good answer for nothing. */
 async function retryOrKeep(
   ctx: ResolutionContext,
   uri: string,
@@ -133,10 +145,6 @@ async function retryOrKeep(
   const retried = await resolveCrossFileDefinition(ctx, uri, line, character, maxRetries - 1);
   return retried ?? fallback;
 }
-
-// ---------------------------------------------------------------------------
-// Scope-aware cross-file filtering helpers
-// ---------------------------------------------------------------------------
 
 /**
  * Check whether a declaration is a class member (lives inside a class scope).
@@ -296,20 +304,20 @@ function findTargetDeclInFile(
   // For directory modules (.pmod/), the target brings all top-level symbols into scope.
   // Return the first class declaration as a representative target.
   if (targetUri.endsWith(".pmod")) {
-    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+    return findTargetClassOrProgram(table, decl.name, targetUri);
   }
 
   // For string literal inherits (file paths like "cross-inherit-simple-a.pike"):
   // return the first class found (the entire file's symbols are inherited).
   if (isStringLit) {
-    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+    return findTargetClassOrProgram(table, decl.name, targetUri);
   }
 
   // For dotted-path inherits to .pike files (e.g., "inherit Cache.Storage.Base"
   // resolving to Base.pike): the .pike file is an implicit class.
   const isDottedPath = decl.name.includes(".");
   if (isDottedPath && targetUri.endsWith(".pike")) {
-    return findFirstClassOrSynthesize(table, decl.name, targetUri);
+    return findTargetClassOrProgram(table, decl.name, targetUri);
   }
 
   // For identifier inherits/imports: look for a matching declaration first,
@@ -329,8 +337,19 @@ function findTargetDeclInFile(
   return null;
 }
 
-/** Find the first class declaration in the table, or synthesize a file-class decl. */
-function findFirstClassOrSynthesize(
+/**
+ * The class an inherit path names, or the target file itself as a program.
+ *
+ * `inherit "foo.pike";` and `inherit some_module;` inherit the PROGRAM compiled
+ * from that whole file, not any class inside it. Falling back to the first
+ * class declared in the file picked an arbitrary one: Roxen's
+ * `inherit "module";` landed on `class ModuleJSONLogger` 48 lines into
+ * module.pike, and `inherit cross_lib_module;` on `class Calculator`, one of
+ * four unrelated top-level symbols that module happens to declare. The file's
+ * own top is the honest answer, and it is already what this resolver returns
+ * when the file declares no class at all.
+ */
+function findTargetClassOrProgram(
   table: SymbolTable,
   name: string,
   targetUri: string,
@@ -346,11 +365,6 @@ function findFirstClassOrSynthesize(
     if (named) return locate(targetUri, named);
   }
 
-  for (const targetDecl of table.declarations) {
-    if (targetDecl.kind === "class") {
-      return locate(targetUri, targetDecl);
-    }
-  }
   return synthesizeFileClassDecl(name, targetUri);
 }
 

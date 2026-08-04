@@ -146,7 +146,7 @@ export class DiagnosticManager {
         const parseDiags = getParseDiagnostics(tree);
         const cached = this.pikeCache.get(uri);
         const pikeDiags = cached ? cached.diagnostics : [];
-        const merged = mergeDiagnostics(parseDiags, pikeDiags, tree, [], lines);
+        const merged = mergeDiagnostics(parseDiags, pikeDiags, tree, [], lines, uriToPath(uri));
         this.connection.sendDiagnostics({
           uri,
           diagnostics: merged,
@@ -253,7 +253,7 @@ export class DiagnosticManager {
   private publishParseAndLintDiagnostics(uri: string, source: string, doc: { version: number }, pikeDiagnostics: PikeDiagnostic[] = []): void {
     const { tree: parseTree, diagnostics: parseDiags, lines } = this.safeParse(source, uri);
     const lintDiags = this.safeLintDiagnostics(parseTree, uri, doc.version, source);
-    const lspDiagnostics = mergeDiagnostics(parseDiags, pikeDiagnostics, parseTree ?? undefined, lintDiags, lines);
+    const lspDiagnostics = mergeDiagnostics(parseDiags, pikeDiagnostics, parseTree ?? undefined, lintDiags, lines, uriToPath(uri));
     this.publishDiagnostics(uri, lspDiagnostics, doc.version);
   }
 

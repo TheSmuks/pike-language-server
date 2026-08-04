@@ -36,8 +36,19 @@ type Verdict =
   | { kind: "empty" }
   | { kind: "whole-file" }
   | { kind: "quoted-target"; got: string }
+  | { kind: "self-reference" }
   | { kind: "wrong-column"; reason: string; got: string }
   | { kind: "wrong"; reason: string; got: string };
+
+/**
+ * `this`, `this_object()` and `this_program` denote the enclosing class, so the
+ * right answer is that class's declaration and the target text is the class
+ * name — never the clicked text. The identity invariant below cannot hold for
+ * them, and reporting them as wrong buried the real defect: 461 of these were
+ * flagged, 371 of them genuinely pointing at the wrong class, and nobody could
+ * tell the two groups apart by reading the output.
+ */
+const SELF_REFERENCE = /^(this|this_program|this_object\s*\(\s*\))$/;
 
 function flag(name: string, fallback: string): string {
   const argv = process.argv;
@@ -73,6 +84,86 @@ function linesOf(uri: string): string[] | null {
   }
   lineCache.set(uri, value);
   return value;
+}
+
+/**
+ * The line (0-based) of the innermost class declaration still open at `line`.
+ *
+ * Deliberately textual rather than reusing buildSymbolTable: using the symbol
+ * table to check an answer the symbol table produced is circular, and the
+ * defect this catches lived in exactly that code. Comments and string literals
+ * are stripped first so braces inside them do not move the depth.
+ */
+function innermostEnclosingClass(lines: string[], line: number): number | null {
+  const stack: Array<{ line: number; depth: number }> = [];
+  let depth = 0;
+  let inBlockComment = false;
+  for (let i = 0; i < line && i < lines.length; i++) {
+    let text = lines[i];
+    if (inBlockComment) {
+      const end = text.indexOf("*/");
+      if (end < 0) continue;
+      text = text.slice(end + 2);
+      inBlockComment = false;
+    }
+    const open = text.indexOf("/*");
+    if (open >= 0 && text.indexOf("*/", open) < 0) {
+      inBlockComment = true;
+      text = text.slice(0, open);
+    }
+    text = text.replace(/\/\*.*?\*\//g, " ")
+      .replace(/\/\/.*$/, "")
+      .replace(/'(\\.|[^'\\])*'/g, "''")
+      .replace(/"(\\.|[^"\\])*"/g, '""');
+    if (/(^|[^A-Za-z0-9_])class\s+[A-Za-z_]/.test(text)) stack.push({ line: i, depth });
+    for (const ch of text) {
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        // A class pushed at depth d is open while depth > d, so its own closing
+        // brace — the one that brings depth back to d — retires it. Comparing
+        // against depth + 1 never retired anything, leaving closed classes on
+        // the stack and reporting the wrong innermost one.
+        while (stack.length > 0 && stack[stack.length - 1].depth >= depth) stack.pop();
+      }
+    }
+  }
+  return stack.length > 0 ? stack[stack.length - 1].line : null;
+}
+
+/**
+ * Judge a `this` / `this_object()` / `this_program` answer.
+ *
+ * The invariant that does bite: the class answered must be the innermost class
+ * enclosing the cursor, in the same file. `cache.pike:433` sits inside
+ * `class CacheManager` and answered `class CacheEntry`, which is wrong however
+ * plausible the target line looks on its own.
+ */
+function judgeSelfReference(
+  loc: LspLocation, uri: string, lines: string[], clickLine: number,
+): Verdict {
+  const r = loc.range;
+  const enclosing = innermostEnclosingClass(lines, clickLine);
+  if (enclosing === null) {
+    // No enclosing `class` block: the file itself is the program, and the
+    // whole-file answer is the honest one.
+    if (r.start.line === 0 && r.start.character === 0 && r.end.line === 0 && r.end.character === 0) {
+      return { kind: "whole-file" };
+    }
+    return { kind: "wrong", reason: "no enclosing class, but answered a position", got: `${loc.uri}:${r.start.line + 1}` };
+  }
+  if (loc.uri !== uri) {
+    return { kind: "wrong", reason: "enclosing class is in this file, answer is in another", got: loc.uri };
+  }
+  if (r.start.line !== enclosing) {
+    const got = lines[r.start.line]?.trim().slice(0, 60) ?? "<out of bounds>";
+    return {
+      kind: "wrong",
+      reason: `innermost enclosing class is declared on line ${enclosing + 1}, answer said ${r.start.line + 1}`,
+      got: `${JSON.stringify(got)}`,
+    };
+  }
+  return { kind: "self-reference" };
 }
 
 /**
@@ -164,6 +255,7 @@ async function main(): Promise<void> {
     const uri = pathToFileURL(path).href;
     let text: string;
     try { text = decodeSource(readFileSync(path)).text; } catch { continue; }
+    const sourceLines = text.split("\n");
     const tree = parse(text, uri);
     if (!tree) continue;
     const table = buildSymbolTable(tree, uri, 1, undefined, text);
@@ -192,7 +284,9 @@ async function main(): Promise<void> {
       // cursor sits on a declaration's own name; judge every entry.
       const locs = Array.isArray(result) ? result : [result];
       for (const loc of locs) {
-        const verdict = judge(ref.name, loc);
+        const verdict = SELF_REFERENCE.test(ref.name)
+          ? judgeSelfReference(loc, uri, sourceLines, ref.loc.line)
+          : judge(ref.name, loc);
         counts.set(verdict.kind, (counts.get(verdict.kind) ?? 0) + 1);
         all.push(
           `${key}\t${verdict.kind}\t${loc.uri.replace(pathToFileURL(root).href + "/", "")}` +

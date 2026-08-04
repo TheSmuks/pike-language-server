@@ -128,10 +128,39 @@ function shipsPikeWorker() {
     : { ok: false, why: `standalone/pike/ is missing ${missing.join(", ")}` };
 }
 
+/**
+ * The bundle must carry the introspect module the worker resolves through.
+ *
+ * It is pmp-installed under `modules/` — gitignored, and a symlink into the pmp
+ * store — so it exists only in a developer checkout. Every distribution shipped
+ * without it, and every `resolve` request answered
+ * `{"resolved": false, "error": "Introspect module not available"}`: no stdlib
+ * module hover, no runtime member completion, for every user who did not build
+ * from a checkout. It went unnoticed because on the build machine the checkout
+ * is still on disk, so the shipped artifact resolved the developer's copy.
+ *
+ * It lives INSIDE the runtime dir because the worker is always spawned with
+ * `-M <runtime dir>`.
+ */
+function shipsIntrospectModule() {
+  const dir = resolve(ROOT, "standalone", "pike", "Introspect.pmod");
+  const missing = ["module.pmod", "Discover.pmod", "Describe.pmod"]
+    .filter((f) => !existsSync(resolve(dir, f)));
+  return missing.length === 0
+    ? { ok: true }
+    : { ok: false, why: `standalone/pike/Introspect.pmod/ is missing ${missing.join(", ")}` };
+}
+
 let failed = false;
 const workerCheck = shipsPikeWorker();
 console.log(workerCheck.ok ? "  PASS  ships the Pike worker" : `  FAIL  ships the Pike worker — ${workerCheck.why}`);
 if (!workerCheck.ok) failed = true;
+
+const introspectCheck = shipsIntrospectModule();
+console.log(introspectCheck.ok
+  ? "  PASS  ships the introspect module"
+  : `  FAIL  ships the introspect module — ${introspectCheck.why}`);
+if (!introspectCheck.ok) failed = true;
 
 for (const c of CASES) {
   const { ok, why } = await initialize(c);

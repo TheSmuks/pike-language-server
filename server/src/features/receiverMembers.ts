@@ -7,7 +7,8 @@
  * what a mapping is.
  */
 
-import type { Reference, SymbolTable } from "./symbolTable";
+import type { Reference, SymbolTable, Declaration, Scope } from "./symbolTable";
+import { findClassScope } from "./typeResolver";
 
 /**
  * Receiver types for which `receiver->member` names no declaration at all.
@@ -60,6 +61,70 @@ export function receiverNamesNoMember(ref: Reference, table: SymbolTable): boole
 }
 
 /**
+ * Every member name a class scope provides, following its inherit chain.
+ */
+function memberNames(table: SymbolTable, scope: Scope, seen: Set<number>): Set<string> {
+  const names = new Set<string>();
+  if (seen.has(scope.id)) return names;
+  seen.add(scope.id);
+
+  for (const declId of scope.declarations) {
+    const decl = table.declById.get(declId);
+    if (decl?.name) names.add(decl.name);
+  }
+  for (const inheritedId of scope.inheritedScopes) {
+    const inherited = table.scopeById.get(inheritedId);
+    if (!inherited) continue;
+    for (const name of memberNames(table, inherited, seen)) names.add(name);
+  }
+  return names;
+}
+
+/**
+ * True when the receiver's class is known and simply has no such member.
+ *
+ * `Box b; b->write("x")` is not a call to Pike's `write` efun — it is a member
+ * access on a class that does not have one. The bare-name tiers below cannot
+ * see the receiver, so they answered with the efun and documented it as
+ * "Writes a string on stdout". Suppressing here keeps them from inventing an
+ * answer for a member that does not exist.
+ *
+ * Deliberately narrow: only when the receiver's class is declared in THIS file,
+ * so the member list is complete and synchronous. An unresolvable receiver
+ * still falls through, because "cannot tell" must not become "no member".
+ */
+function receiverClassLacksMember(ref: Reference, table: SymbolTable): boolean {
+  if (ref.kind !== "arrow_access" && ref.kind !== "dot_access") return false;
+  if (!ref.lhsName) return false;
+
+  const lhsDecl = table.declarations.find(
+    d => d.name === ref.lhsName && (d.kind === "variable" || d.kind === "parameter"),
+  );
+  if (!lhsDecl) return false;
+
+  const typeName = (lhsDecl.declaredType ?? lhsDecl.assignedType)?.trim();
+  if (!typeName || typeName.includes(".")) return false; // a module path is not ours to judge
+
+  const classDecl: Declaration | undefined = table.declarations.find(
+    d => d.kind === "class" && d.name === typeName,
+  );
+  if (!classDecl) return false;
+
+  const scope = findClassScope(table, classDecl);
+  if (!scope) return false;
+
+  // An inherit this file could not resolve leaves the member list incomplete,
+  // and an incomplete list must not be used to deny a member.
+  const hasUnresolvedInherit = scope.declarations.some(id => {
+    const decl = table.declById.get(id);
+    return decl?.kind === "inherit" && scope.inheritedScopes.length === 0;
+  });
+  if (hasUnresolvedInherit) return false;
+
+  return !memberNames(table, scope, new Set()).has(ref.name);
+}
+
+/**
  * True when the cursor sits on the member of a receiver that has none.
  *
  * The reference carries the receiver name; `receiverNamesNoMember` decides
@@ -75,5 +140,6 @@ export function memberOfMemberlessReceiver(
       params.position.character >= r.loc.character &&
       params.position.character < r.loc.character + r.name.length,
   );
-  return ref !== undefined && receiverNamesNoMember(ref, table);
+  if (ref === undefined) return false;
+  return receiverNamesNoMember(ref, table) || receiverClassLacksMember(ref, table);
 }

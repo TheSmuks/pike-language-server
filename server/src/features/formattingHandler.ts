@@ -65,6 +65,47 @@ function computeEdits(
 }
 
 /**
+ * Edits confined to `[startLine, endLine]`, as whole lines.
+ *
+ * Range formatting used to reformat the whole document and hand back one edit
+ * spanning it, so VSCode's Format Selection — and format-on-paste, which routes
+ * through the same request — silently rewrote every line of the file. The
+ * formatter still runs over the whole text, because indentation depends on
+ * enclosing context, but only the requested lines are written back.
+ *
+ * A formatter that changed the line COUNT cannot be mapped line-for-line, and
+ * guessing would put the wrong text on the wrong line. In that case the edit is
+ * dropped rather than widened back to the whole document.
+ */
+function editsForLineRange(
+  original: string,
+  formatted: string,
+  startLine: number,
+  endLine: number,
+): TextEdit[] {
+  if (original === formatted) return [];
+
+  const originalLines = original.split("\n");
+  const formattedLines = formatted.split("\n");
+  if (originalLines.length !== formattedLines.length) return [];
+
+  const first = Math.max(0, startLine);
+  const last = Math.min(endLine, originalLines.length - 1);
+  if (first > last) return [];
+
+  const replacement = formattedLines.slice(first, last + 1).join("\n");
+  if (replacement === originalLines.slice(first, last + 1).join("\n")) return [];
+
+  return [{
+    range: {
+      start: { line: first, character: 0 },
+      end: { line: last, character: originalLines[last].length },
+    },
+    newText: replacement,
+  }];
+}
+
+/**
  * Register the document formatting handler on the connection.
  *
  * Calls pike-fmt's format() function directly using the already-initialized
@@ -129,7 +170,12 @@ async function handleRangeFormatting(
       operatorSpacing: ctx.formattingConfig.operatorSpacing,
     }, parserInstance);
 
-    return computeEdits(source, formatted);
+    // LSP: a range-formatting edit must stay inside the requested range. The
+    // range is treated as whole lines, which is what clients send for Format
+    // Selection and what the formatter can meaningfully act on.
+    return editsForLineRange(
+      source, formatted, params.range.start.line, params.range.end.line,
+    );
   } catch (err) {
     logError(connection, ErrorCategory.System, "formattingHandler.handleRangeFormatting", err);
     return null;
