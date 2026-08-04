@@ -24,6 +24,17 @@ import grammarWasmPath from "../tree-sitter-pike.wasm" with { type: "file" };
 import runtimeWasmPath from "../../node_modules/web-tree-sitter/web-tree-sitter.wasm" with { type: "file" };
 import workerPikePath from "../pike/worker.pike" with { type: "file" };
 import commonPikePath from "../pike/Common.pike" with { type: "file" };
+// The introspect module answers every `resolve` request. It is pmp-installed
+// under modules/ and shipped in no distribution at all, so the binary reported
+// "Introspect module not available" for stdlib hover and member completion —
+// invisibly on the build machine, where the checkout's copy was still on disk.
+// Keys keep the `Introspect.pmod/` prefix so it materialises as a directory
+// inside the runtime dir, which is always on the worker's -M path.
+import introspectModulePath from "../../modules/pike_introspect/src/Introspect.pmod/module.pmod" with { type: "file" };
+import introspectDiscoverPath from "../../modules/pike_introspect/src/Introspect.pmod/Discover.pmod" with { type: "file" };
+import introspectDescribePath from "../../modules/pike_introspect/src/Introspect.pmod/Describe.pmod" with { type: "file" };
+import introspectJsonPath from "../../modules/pike_introspect/src/Introspect.pmod/Json.pmod" with { type: "file" };
+import introspectSearchPath from "../../modules/pike_introspect/src/Introspect.pmod/Search.pmod" with { type: "file" };
 import { setEmbeddedAssets } from "./embeddedAssets.js";
 
 const grammarWasm = new Uint8Array(await Bun.file(grammarWasmPath).arrayBuffer());
@@ -31,6 +42,11 @@ const runtimeWasm = await Bun.file(runtimeWasmPath).arrayBuffer();
 const pikeRuntime = {
   "worker.pike": new Uint8Array(await Bun.file(workerPikePath).arrayBuffer()),
   "Common.pike": new Uint8Array(await Bun.file(commonPikePath).arrayBuffer()),
+  "Introspect.pmod/module.pmod": new Uint8Array(await Bun.file(introspectModulePath).arrayBuffer()),
+  "Introspect.pmod/Discover.pmod": new Uint8Array(await Bun.file(introspectDiscoverPath).arrayBuffer()),
+  "Introspect.pmod/Describe.pmod": new Uint8Array(await Bun.file(introspectDescribePath).arrayBuffer()),
+  "Introspect.pmod/Json.pmod": new Uint8Array(await Bun.file(introspectJsonPath).arrayBuffer()),
+  "Introspect.pmod/Search.pmod": new Uint8Array(await Bun.file(introspectSearchPath).arrayBuffer()),
 };
 
 setEmbeddedAssets({ grammarWasm, runtimeWasm, pikeRuntime });

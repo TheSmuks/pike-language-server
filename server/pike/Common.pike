@@ -22,24 +22,51 @@ class DiagnosticHandler {
   }
 }
 
+//! Base name of a path, so a reported origin is machine-independent.
+protected string base_name(string path) {
+  if (!path) return 0;
+  array parts = path / "/";
+  return sizeof(parts) ? parts[-1] : path;
+}
+
+//! Origin filename, but ONLY when it differs from the file being compiled.
+//!
+//! A diagnostic raised inside an #include'd file carries THAT file's line
+//! number. Dropping the filename left the server to publish it at that line of
+//! the open document — unrelated code, or past the end of the file entirely.
+//! Local diagnostics carry no "file" key at all, which keeps the common case
+//! (and its golden snapshots) free of absolute, machine-specific paths.
+protected string foreign_origin(mixed raw, string compiled_file) {
+  string origin = base_name(raw["file"]);
+  if (!origin || !compiled_file) return 0;
+  return origin == base_name(compiled_file) ? 0 : origin;
+}
+
 //! Normalize raw diagnostics with category classification
-array normalize_diagnostics(array raw_errors, array raw_warnings) {
+array normalize_diagnostics(array raw_errors, array raw_warnings,
+                            string|void compiled_file) {
   array all = ({});
 
   foreach (raw_errors, mapping e) {
-    all += ({ ([
+    mapping d = ([
       "line": e["line"],
       "severity": "error",
       "message": e["message"]
-    ]) });
+    ]);
+    string origin = foreign_origin(e, compiled_file);
+    if (origin) d["file"] = origin;
+    all += ({ d });
   }
 
   foreach (raw_warnings, mapping w) {
-    all += ({ ([
+    mapping d = ([
       "line": w["line"],
       "severity": "warning",
       "message": w["message"]
-    ]) });
+    ]);
+    string origin = foreign_origin(w, compiled_file);
+    if (origin) d["file"] = origin;
+    all += ({ d });
   }
 
   sort(all->line, all);

@@ -18,8 +18,8 @@ import {
   declOccurrenceRangeAt,
   getDefinitionAt,
   getReferencesTo,
-  isWrittenInFile,
 } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import { resolveAccessDefinition, modulePathAtPosition } from "./accessResolver";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";

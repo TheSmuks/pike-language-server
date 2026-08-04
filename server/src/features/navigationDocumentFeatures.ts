@@ -24,7 +24,8 @@ import {
   getReferencesTo,
   type SymbolTable,
 } from "./symbolTable";
-import { buildSymbolTable, isWrittenInFile } from "./symbolTable";
+import { buildSymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import {
   produceSemanticTokens,
   deltaEncodeTokens,
@@ -319,6 +320,8 @@ async function handleDocumentHighlight(
   if (token.isCancellationRequested) return null;
   const table = await ctx.getSymbolTable(params.textDocument.uri);
   if (!table || token.isCancellationRequested) return null;
+  const source = ctx.documents.get(params.textDocument.uri)?.getText();
+  if (!source) return null;
 
   // No early return on an empty ref list: a declaration with no other uses is
   // still one occurrence, and LSP asks for every highlight at the position.
@@ -355,7 +358,7 @@ async function handleDocumentHighlight(
     ? declOccurrenceRangeAt(localDecl, params.position.line, params.position.character)
     : null;
 
-  return buildDocumentHighlights(declRange, refs, cursorRange);
+  return buildDocumentHighlights(declRange, refs, cursorRange, source);
 }
 
 /** Build DocumentHighlight[] from references and the declaration's own range. */
@@ -363,6 +366,7 @@ function buildDocumentHighlights(
   declRange: import("./symbolTable").Declaration["nameRange"] | null,
   refs: Array<{ loc: { line: number; character: number }; name: string }>,
   cursorRange?: import("./symbolTable").Declaration["nameRange"] | null,
+  source = "",
 ): DocumentHighlight[] | null {
   const highlights: DocumentHighlight[] = [];
   const emitted = new Set<string>();
@@ -383,6 +387,7 @@ function buildDocumentHighlights(
   if (declRange) pushWrite(declRange);
   if (cursorRange) pushWrite(cursorRange);
 
+  const lines = source.split("\n");
   for (const ref of refs) {
     if (emitted.has(`${ref.loc.line}:${ref.loc.character}`)) continue;
     highlights.push({
@@ -390,11 +395,22 @@ function buildDocumentHighlights(
         start: { line: ref.loc.line, character: ref.loc.character },
         end: { line: ref.loc.line, character: ref.loc.character + ref.name.length },
       },
-      kind: DocumentHighlightKind.Read,
+      kind: isAssignmentTarget(ref, lines) ? DocumentHighlightKind.Write : DocumentHighlightKind.Read,
     });
   }
 
   return highlights.length > 0 ? highlights : null;
+}
+
+/** An occurrence followed by a lone assignment operator is a write. */
+function isAssignmentTarget(
+  ref: { loc: { line: number; character: number }; name: string },
+  lines: string[],
+): boolean {
+  const line = lines[ref.loc.line];
+  if (!line) return false;
+  const afterName = line.slice(ref.loc.character + ref.name.length);
+  return /^\s*=(?!=)/.test(afterName);
 }
 
 /** Handle textDocument/foldingRange requests. */

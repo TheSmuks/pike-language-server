@@ -240,10 +240,19 @@ export function getSubtypes(
   const results: TypeHierarchyItem[] = [];
   const seen = new Set<string>();
 
+  // Files that actually depend on the target. The name-only fallback below
+  // cannot tell `Animal` in one file from `Animal` in another, so without this
+  // it reported a `Dog` that inherits a DIFFERENT `Animal` as a subtype of this
+  // one. Undefined when the index cannot answer, in which case the fallback
+  // keeps its old, permissive behaviour rather than losing real subtypes.
+  const dependents = typeof index.getDependents === "function"
+    ? index.getDependents(uri)
+    : undefined;
+
   for (const entry of index.getAllEntries()) {
     if (!entry.symbolTable) continue;
     results.push(...findSubtypesInTable(
-      entry.symbolTable, entry.uri, targetName, uri, seen,
+      entry.symbolTable, entry.uri, targetName, uri, seen, dependents,
     ));
   }
 
@@ -300,10 +309,20 @@ function checkInheritDeclarationsForTarget(
   targetName: string,
   seen: Set<string>,
   scope: Scope,
+  targetUri?: string,
+  dependents?: Set<string>,
 ): TypeHierarchyItem | null {
   const inheritDecls = scope.declarations
     .map(id => table.declById.get(id))
     .filter(d => d?.kind === "inherit");
+
+  // An inherit matched by NAME alone says nothing about which file it names.
+  // Unless this file is the target itself, it has to actually depend on the
+  // target — otherwise a `Dog` inheriting a same-named `Animal` from somewhere
+  // else was reported as a subtype of this one.
+  if (dependents && targetUri && tableUri !== targetUri && !dependents.has(tableUri)) {
+    return null;
+  }
 
   for (const inheritDecl of inheritDecls) {
     if (!inheritDecl || inheritDecl.name !== targetName) continue;
@@ -328,6 +347,7 @@ function findSubtypesInTable(
   targetName: string,
   targetUri: string,
   seen: Set<string>,
+  dependents?: Set<string>,
 ): TypeHierarchyItem[] {
   // Every class scope in the file, not the first that matches: one file
   // routinely declares several direct subclasses of the same base — Roxen's
@@ -343,7 +363,7 @@ function findSubtypesInTable(
     if (viaScopes) { found.push(viaScopes); continue; }
 
     const viaDecls = checkInheritDeclarationsForTarget(
-      table, tableUri, targetName, seen, scope,
+      table, tableUri, targetName, seen, scope, targetUri, dependents,
     );
     if (viaDecls) found.push(viaDecls);
   }

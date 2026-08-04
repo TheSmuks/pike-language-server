@@ -131,11 +131,15 @@ describe("textDocument/formatting", () => {
 // Range formatting
 //
 // pike-fmt re-derives indentation from the whole parse tree, so the handler
-// deliberately formats the entire document for a range request.
+// still FORMATS the whole document — but it writes back only the requested
+// lines. Returning whole-document edits violated the LSP contract and had a
+// concrete cost: VSCode routes Format Selection and format-on-paste through
+// this request, so pasting one line into a legacy Pike file silently
+// reformatted every line of it.
 // ---------------------------------------------------------------------------
 
 describe("textDocument/rangeFormatting", () => {
-  test("formats the whole document for a range request", async () => {
+  test("reindents the requested line and leaves the others alone", async () => {
     const uri = server.openDoc("file:///test/fmt-range.pike", MESSY);
 
     const edits = await server.client.sendRequest(
@@ -151,7 +155,34 @@ describe("textDocument/rangeFormatting", () => {
     ) as TextEdit[] | null;
 
     expect(edits).not.toBeNull();
-    expect(applyEdits(MESSY, edits!)).toBe(FORMATTED);
+    const applied = applyEdits(MESSY, edits!).split("\n");
+    const messy = MESSY.split("\n");
+    const formatted = FORMATTED.split("\n");
+    // Line 1 is reindented…
+    expect(applied[1]).toBe(formatted[1]);
+    // …and line 2, which was not requested, is untouched.
+    expect(applied[2]).toBe(messy[2]);
+  });
+
+  test("no edit falls outside the requested range", async () => {
+    const uri = server.openDoc("file:///test/fmt-range-scope.pike", MESSY);
+
+    const edits = await server.client.sendRequest(
+      "textDocument/rangeFormatting",
+      {
+        textDocument: { uri },
+        range: {
+          start: { line: 1, character: 0 },
+          end: { line: 1, character: 14 },
+        },
+        options: { tabSize: 2, insertSpaces: true },
+      },
+    ) as TextEdit[] | null;
+
+    for (const e of edits ?? []) {
+      expect(e.range.start.line).toBeGreaterThanOrEqual(1);
+      expect(e.range.end.line).toBeLessThanOrEqual(1);
+    }
   });
 
   test("returns null for a document the server has not opened", async () => {

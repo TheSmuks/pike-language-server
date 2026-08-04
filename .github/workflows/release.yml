@@ -63,6 +63,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
+
       - name: Build extension
         run: bun run build:extension
 
@@ -109,6 +112,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
 
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
+
       - name: Build binaries for every target
         run: bash scripts/build-binary.sh --all
 
@@ -142,6 +148,9 @@ jobs:
         with:
           node-version: '22'
       - run: bun install --frozen-lockfile
+
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
 
       - name: Verify release lineage
         run: bash scripts/check-release-lineage.sh "origin/main" "${{ github.event.release.tag_name }}"
@@ -188,6 +197,9 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
       - run: bun install --frozen-lockfile
+
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
 
       - name: Build and stage the npm package
         run: |

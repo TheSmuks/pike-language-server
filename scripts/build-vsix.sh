@@ -98,6 +98,15 @@ cp "$ROOT/server/src/data/"*.json "$STAGE/server/src/data/"
 mkdir -p "$STAGE/server/pike"
 cp "$ROOT/server/pike/worker.pike" "$STAGE/server/pike/"
 cp "$ROOT/server/pike/Common.pike" "$STAGE/server/pike/"
+# See build-standalone.sh: without the introspect module every `resolve` fails,
+# so stdlib hover and runtime member completion are dead in the packaged
+# extension. Inside the runtime dir, which is always on the worker's -M path.
+INTROSPECT_SRC="$ROOT/modules/pike_introspect/src/Introspect.pmod"
+if [ ! -d "$INTROSPECT_SRC" ]; then
+  echo "modules/pike_introspect missing — run 'pmp install' first" >&2
+  exit 1
+fi
+cp -RL "$INTROSPECT_SRC" "$STAGE/server/pike/"
 
 # Copy web-tree-sitter runtime WASM. Server only: it resolves relative to
 # server/dist/server.mjs → server/dist/web-tree-sitter.wasm.

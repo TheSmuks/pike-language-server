@@ -296,6 +296,20 @@ string foo(int x) {
     expect(unreachable).toHaveLength(0);
   });
 
+  test("does NOT carry a return across conditional-compilation branches", () => {
+    const src = `
+int foo() {
+#ifdef NEVER_DEFINED
+    return 1;
+#else
+    return 2;
+#endif
+}
+`;
+    const { unreachable } = buildAndLint(src);
+    expect(unreachable).toHaveLength(0);
+  });
+
   test("flags multiple unreachable statements", () => {
     const src = `
 int foo() {

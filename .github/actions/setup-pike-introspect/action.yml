@@ -1,0 +1,53 @@
+name: Setup Pike introspection dependency
+description: Build Pike and install the pmp module required by packaged runtimes.
+
+inputs:
+  pike-version:
+    description: Pike version to build.
+    required: false
+    default: 8.0.1116
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/cache@v6
+      id: cache-pike
+      with:
+        path: ~/.pike
+        key: pike-${{ inputs.pike-version }}-${{ runner.os }}
+
+    - name: Install Pike build dependencies
+      if: steps.cache-pike.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          make gcc g++ libgmp-dev nettle-dev bison \
+          libreadline-dev zlib1g-dev
+
+    - name: Build Pike
+      if: steps.cache-pike.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        curl -sL "https://pike.lysator.liu.se/pub/pike/all/${{ inputs.pike-version }}/Pike-v${{ inputs.pike-version }}.tar.gz" \
+          | tar xz
+        mkdir -p "Pike-v${{ inputs.pike-version }}/build"
+        cd "Pike-v${{ inputs.pike-version }}/build"
+        ../src/configure --prefix="$HOME/.pike" --without-debug --without-mysql
+        make -j"$(nproc)" || make
+        make install
+
+    - name: Install pmp module
+      shell: bash
+      run: |
+        pike_bin="$HOME/.pike/pike/${{ inputs.pike-version }}/bin"
+        test -x "$pike_bin/pike"
+        echo "$pike_bin" >> "$GITHUB_PATH"
+        export PATH="$pike_bin:$PATH"
+        "$pike_bin/pike" --version
+        curl -LsSf https://raw.githubusercontent.com/TheSmuks/pmp/v0.5.0/install.sh | PMP_VERSION=v0.5.0 sh
+        PATH="$pike_bin:$PATH" "$HOME/.pmp/bin/pmp" install
+        if [ -d modules/Introspect/src/Introspect.pmod ] && [ ! -e modules/pike_introspect ]; then
+          ln -s Introspect modules/pike_introspect
+        fi
+        test -d modules/pike_introspect/src/Introspect.pmod

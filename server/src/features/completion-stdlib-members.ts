@@ -146,9 +146,9 @@ export function addStdlibMembersByType(
  *
  * Fallback for types the static stdlib index doesn't cover (e.g. `Image.Image`,
  * `Protocols.HTTP.Session`) and for the fuller inherited member set introspect
- * enumerates. Only called when the static index yields nothing for the type, so
- * the common completion path never pays the subprocess round-trip. Members are
- * enriched with static-index docs when a matching FQN entry exists.
+ * enumerates. It supplements the static index so C-module inherits are not
+ * lost; members are enriched with static-index docs when a matching FQN entry
+ * exists.
  */
 export async function addResolvedMembers(
   typeName: string,

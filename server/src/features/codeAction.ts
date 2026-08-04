@@ -19,7 +19,8 @@ import type {
   WorkspaceEdit,
 } from "vscode-languageserver/node";
 
-import { organizeImports, extractVariable } from "./codeActionSourceActions";
+import { organizeImports, extractVariable, withoutOverlaps } from "./codeActionSourceActions";
+import { removeUnusedVariableEdits } from "./codeActionUnusedVariable";
 
 // Re-export source actions for backward compatibility
 export { organizeImports, extractVariable };
@@ -56,35 +57,6 @@ interface QuickFix {
 const MATCH_UNUSED_LOCAL: DiagnosticMatcher = (diag) =>
   diag.source === "pike" &&
   /^Unused local variable\b/.test(diag.message);
-
-/** Produce edit: delete the line containing the diagnostic. */
-function removeUnusedVariableLine(diag: Diagnostic, text: string, _ctx: CodeActionContext): TextEdit[] {
-  const line = diag.range.start.line;
-  const lines = text.split("\n");
-
-  if (line < 0 || line >= lines.length) return [];
-
-  // Delete from start of this line to start of next line (including newline).
-  // If this is the last line, delete from start to end.
-  if (line + 1 < lines.length) {
-    return [{
-      range: {
-        start: { line, character: 0 },
-        end: { line: line + 1, character: 0 },
-      },
-      newText: "",
-    }];
-  }
-
-  // Last line — delete from previous line's newline to end
-  return [{
-    range: {
-      start: { line: line - 1, character: lines[line - 1]?.length ?? 0 },
-      end: { line, character: lines[line].length },
-    },
-    newText: "",
-  }];
-}
 
 // ---------------------------------------------------------------------------
 // Built-in quick-fixes: add missing import
@@ -312,7 +284,7 @@ const QUICK_FIXES: QuickFix[] = [
   {
     title: "Remove unused variable",
     match: MATCH_UNUSED_LOCAL,
-    produceEdits: removeUnusedVariableLine,
+    produceEdits: (diag, text) => removeUnusedVariableEdits(diag, text),
     kind: "quickfix",
   },
   {
@@ -438,15 +410,20 @@ function collectFixAllActions(
   uri: string,
   actions: CodeAction[],
 ): void {
-  const allEdits: TextEdit[] = [];
+  const collected: TextEdit[] = [];
   for (const diag of diagnostics) {
     for (const fix of QUICK_FIXES) {
       if (fix.match(diag)) {
         const edits = fix.produceEdits(diag, text, ctx);
-        allEdits.push(...edits);
+        collected.push(...edits);
       }
     }
   }
+  // A WorkspaceEdit whose ranges overlap is invalid: clients either reject the
+  // whole thing or apply both and corrupt the text. Two unused declarators on
+  // one line produce edits that share the comma between them, so the fix-all
+  // batch has to drop the ones it cannot apply together.
+  const allEdits = withoutOverlaps(collected);
   if (allEdits.length > 0) {
     const changes: Record<string, TextEdit[]> = {};
     changes[uri] = allEdits;

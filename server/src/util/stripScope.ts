@@ -49,3 +49,26 @@ export function stripScopeWrapper(sig: string): string {
 
   return result;
 }
+
+/**
+ * Replace `__attribute__("name", TYPE)` annotations with their bare TYPE.
+ *
+ * Attribute types in the predef data are simple (string, mixed), so a
+ * paren-free inner match suffices; unmatched text is left as-is (fail-soft).
+ *
+ * Shared deliberately: hover had its own version that deleted
+ * `__attribute__("...",` and left the closing paren behind, so every efun whose
+ * type carries an attribute rendered an unbalanced signature — `sprintf` hovered
+ * as `sprintf(object|string), mixed) ... : string)) → mixed`. Two copies of one
+ * rule is how that drift happened.
+ */
+export function stripAttributes(text: string): string {
+  let out = text;
+  // Bounded: each pass removes one attribute; the data has at most a handful.
+  for (let i = 0; i < 16; i++) {
+    const next = out.replace(/__attribute__\("[^"]*",\s*([^()]*)\)/, "$1");
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}

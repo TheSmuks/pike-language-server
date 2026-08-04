@@ -62,6 +62,19 @@ describe("completion at column 0", () => {
   });
 });
 
+describe("completion in non-code text", () => {
+  test("does not offer code symbols in strings or comments", async () => {
+    const src = [
+      "int alpha = 1;",
+      'string message = "alpha";',
+      "// alpha",
+    ].join("\n");
+
+    expect(await completeAt(src, 1, 18)).toEqual([]);
+    expect(await completeAt(src, 2, 4)).toEqual([]);
+  });
+});
+
 describe("completion inside a call's argument list", () => {
   const src = [
     "int apply_fn(function(int:int) f, int val) {",
@@ -232,4 +245,3 @@ describe("completion after predef::", () => {
     expect(labels).toContain("upper_case");
   });
 });
-

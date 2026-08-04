@@ -142,7 +142,7 @@ mapping handle_diagnose(mapping params) {
     compiled_prog = compile_string(source, filepath, handler);
   };
 
-  array diagnostics = Common()->normalize_diagnostics(handler->errors, handler->warnings);
+  array diagnostics = Common()->normalize_diagnostics(handler->errors, handler->warnings, filepath);
 
   return ([ "diagnostics": diagnostics, "exit_code": compile_err ? 1 : 0 ]);
 }

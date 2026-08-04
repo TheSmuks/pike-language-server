@@ -20,7 +20,9 @@ import {
   type SymbolTable,
   getDefinitionAt,
   getReferencesTo,
+  getReferencesToDecl,
 } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import type { WorkspaceIndex } from "./workspaceIndex";
 import { resolveTypeName } from "./scope-helpers";
 import { resolveType } from "./typeResolver";
@@ -213,16 +215,26 @@ export async function getRenameLocations(
   index: WorkspaceIndex | null,
   protectedNames?: ProtectedNames,
 ): Promise<RenameResult | null> {
-  // Find the declaration at cursor
   const decl = getDefinitionAt(table, line, character);
-  if (!decl) {
-    return null;
-  }
+  if (!decl) return null;
+  if (!isRenameTarget(table, decl, line, character, protectedNames)) return null;
+
+  return collectRenameLocations(table, uri, decl, index);
+}
+
+/** Confirm that a destructive rename request names a local, mutable occurrence. */
+function isRenameTarget(
+  table: SymbolTable,
+  decl: Declaration,
+  line: number,
+  character: number,
+  protectedNames?: ProtectedNames,
+): boolean {
   // Also guarded here, not only in prepareRename: a client is free to send
   // textDocument/rename without ever calling prepareRename, and this request
   // is the destructive one.
   if (namesAnotherDeclaration(decl)) {
-    return null;
+    return false;
   }
   // The cursor must be ON an occurrence of the symbol being renamed. At
   // `inherit Zoinker;` getDefinitionAt resolves through to the class, whose
@@ -231,27 +243,50 @@ export async function getRenameLocations(
   // here; without this, the two requests disagree and a client that skips
   // prepareRename corrupts the file.
   if (!occurrenceAt(table, decl, line, character)) {
-    return null;
+    return false;
   }
 
   // Reject stdlib/predef symbols shadowed at file scope
   if (isProtectedFromRename(table, decl, protectedNames)) {
-    return null;
+    return false;
   }
+  return true;
+}
+
+/** Collect the declaration and same-/cross-file uses for a verified target. */
+async function collectRenameLocations(
+  table: SymbolTable,
+  uri: string,
+  decl: Declaration,
+  index: WorkspaceIndex | null,
+): Promise<RenameResult> {
   const locations: RenameLocation[] = [];
   const oldName = decl.name;
 
-  // Declaration site
+  // The declaration reached from this file may be WRITTEN in another one:
+  // #include'd and inherited declarations are cloned into this table carrying
+  // the coordinates they hold in THEIR file. Everything below is keyed off
+  // `decl.nameRange`, so anchoring on the open document emitted every edit at a
+  // foreign line and column of the wrong file — where an unrelated symbol
+  // happens to sit. `getReferencesTo` then resolved that position to that other
+  // symbol, and the whole rename set became a silent rewrite of it.
+  const ownerUri = isWrittenInFile(table, decl) ? uri : decl.sourceUri!;
+
+  // Declaration site, in the file that actually contains it.
   locations.push({
-    uri,
+    uri: ownerUri,
     line: decl.nameRange.start.line,
     character: decl.nameRange.start.character,
     length: oldName.length,
   });
 
-  // Collect cross-file and same-file references
-  if (index) await collectCrossFileReferences(locations, decl, table, uri, index);
-  await collectSameFileReferences(locations, decl, table, uri, index);
+  // Cross-file references are keyed by the declaration's own coordinates, so
+  // they must be looked up under the file those coordinates belong to.
+  if (index) await collectCrossFileReferences(locations, decl, table, ownerUri, index);
+  // Uses in the OPEN file are found by declaration IDENTITY rather than by
+  // position: a cloned declaration's id is valid in this table even though its
+  // line and column are not.
+  await collectSameFileReferences(locations, decl, table, uri, ownerUri, index);
 
   return { locations: dedupeLocations(locations), oldName };
 }
@@ -304,11 +339,17 @@ async function collectSameFileReferences(
   decl: Declaration,
   table: SymbolTable,
   uri: string,
+  ownerUri: string,
   index: WorkspaceIndex | null,
 ): Promise<void> {
-  const refs = getReferencesTo(table, decl.nameRange.start.line, decl.nameRange.start.character);
+  const refs = getReferencesToDecl(table, decl.id);
   for (const ref of refs) {
-    if (ref.loc.line === decl.nameRange.start.line && ref.loc.character === decl.nameRange.start.character) continue;
+    // Skip the declaration's own name, which is already emitted — but only in
+    // the file that actually holds it. In any other file those coordinates are
+    // a real reference that must still be renamed.
+    if (ownerUri === uri &&
+        ref.loc.line === decl.nameRange.start.line &&
+        ref.loc.character === decl.nameRange.start.character) continue;
 
     if ((ref.kind === 'arrow_access' || ref.kind === 'dot_access') && ref.lhsName && index) {
       if (!await isReceiverTypeMatch(table, uri, ref.lhsName, decl, table, index)) continue;

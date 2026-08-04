@@ -8,7 +8,8 @@ import type { Location as LspLocation } from "vscode-languageserver/node";
 import { existsSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 import type { NavigationContext } from "./navigationHandler";
-import { isWrittenInFile, type SymbolTable } from "./symbolTable";
+import { type SymbolTable } from "./symbolTable";
+import { isWrittenInFile } from "./query";
 import { modulePathAtPosition } from "./accessResolver";
 import { refineRuntimeTarget } from "./runtimeTargetRefine";
 import { declToLspLocation } from "./navigationLocation";
@@ -88,4 +89,3 @@ export async function resolveModulePathTarget(
 
   return null;
 }
-

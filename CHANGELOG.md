@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.65] — 2026-08-04
+
+### Fixed
+
+- **Cross-file navigation now reaches inherited classes in their defining file.** A class inherited from a sibling file could resolve to the local inheriting declaration instead of the inherited class, so go-to-definition stayed in the wrong document.
+- **Completion now reconciles Pike's runtime member set with bundled AutoDoc.** Static documentation remains available, while inherited C-module members such as `Stdio.File.write` and `Stdio.File.seek` are no longer omitted.
+- **Editor-only positions now behave as editor-only.** Completion is suppressed in comments and string literals, document symbols include anonymous enums, assignment targets receive write highlights, and signature help clamps variadic active parameters.
+- **Parsing and linting retain source boundaries.** Preprocessor branch state resets correctly, and call hierarchy resolution is isolated from workspace navigation without changing user-visible call targets.
+
 ## [0.8.64] — 2026-08-03
 
 ### Fixed
