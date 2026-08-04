@@ -90,9 +90,9 @@ describe("C1: runtime member resolution fallback", () => {
     expect(got).not.toContain("`&");
   });
 
-  it("does not invoke the resolver when the static index covers the type", async () => {
-    // Stdio.File has members in the static stdlib index, so the fast path
-    // must satisfy the request without a worker round-trip.
+  it("merges runtime members when the static index partially covers the type", async () => {
+    // Stdio.File has static documentation, but Pike's runtime also exposes
+    // inherited C-module members that the index cannot enumerate completely.
     const src = [
       "void test() {",
       "  Stdio.File f;",
@@ -107,8 +107,8 @@ describe("C1: runtime member resolution fallback", () => {
     const result = await getCompletions(table, tree, 2, colAfterArrow(src, 2), ctx);
     const got = labels(result);
 
-    expect(got).toContain("open");   // from the static index
-    expect(calls).toHaveLength(0);    // resolver never consulted
+    expect(got).toContain("open"); // static docs remain available
+    expect(calls).toEqual(["Stdio.File"]);
   });
 
   it("degrades gracefully when the resolver returns null", async () => {
