@@ -113,6 +113,8 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
       - name: Install VSCE
         run: bun add -g @vscode/vsce
       - run: bash scripts/smoke-test.sh
@@ -152,6 +154,8 @@ jobs:
           restore-keys: |
             bun-${{ runner.os }}-
       - run: bun install --frozen-lockfile
+      - name: Install Pike introspection dependency
+        uses: ./.github/actions/setup-pike-introspect
       # Only the vsix target packages with vsce (scripts/build-vsix.sh shells
       # out to it); the other three artifacts never touch it.
       - name: Install VSCE
