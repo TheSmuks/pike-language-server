@@ -155,6 +155,7 @@ but are not bugs. They are documented in code comments and here for completeness
 |------------|----------|------------|
 | pike-introspect availability | Low | CI installs it. Worker starts without it. Only `resolve` calls fail. |
 | pmp module path limitation | Low | Explicit `-M` path in spawn args (TheSmuks/pmp#42) |
+| pmp self-import warning | Low | `pmp install` warns that pike-introspect imports its own `Introspect` namespace. Tracked in [pike-introspect#11](https://github.com/TheSmuks/pike-introspect/issues/11). |
 
 ### pike-introspect Availability Dependency
 
@@ -163,10 +164,15 @@ The worker spawns with `-M modules/Introspect/src/` to find the module. If pike-
 installed, `resolve` calls will fail with an error message.
 
 **Mitigation**: The worker starts successfully without pike-introspect — only `resolve` calls fail.
-CI installs pike-introspect via `pmp install` after the pmp step in `.github/workflows/ci.yml`.
+CI and every release-artifact job install pike-introspect via `pmp install` before building.
 
 **pmp module path limitation**: pmp symlinks `modules/Introspect -> store-root` but Pike needs
 `-M modules/Introspect/src/`. Filed as TheSmuks/pmp#42. Workaround: explicit `-M` path in spawn args.
+
+**pmp self-import warning**: pmp currently warns that pike-introspect imports its own `Introspect`
+namespace without declaring it. The install still succeeds, but the warning is tracked upstream in
+[TheSmuks/pike-introspect#11](https://github.com/TheSmuks/pike-introspect/issues/11); remove this
+entry once the package declares or recognises the self-import.
 
 ### Current Upstream Issues
 
