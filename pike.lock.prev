@@ -1,0 +1,5 @@
+# pmp lockfile v1 — DO NOT EDIT
+# name	source	tag	commit_sha	content_sha256
+PUnit	github.com/TheSmuks/punit-tests	v1.3.0	8be32a55f685dfc32a07233dbd79c0b5c6ac53c6	263a3d4f74090fae83f7c1d7e122eec6f3db5618a375d22ccb935186414ae15e
+pike_introspect	github.com/TheSmuks/pike-introspect	v0.2.0	dbb06e72d73ac2375f2a66097225d6ac30562ed9	8ad00d4f81c9d5ff5b977c76099591b882727a1d254fdbce75363948809d7bba
+PUnit	github.com/TheSmuks/punit-tests	v1.3.0	8be32a55f685dfc32a07233dbd79c0b5c6ac53c6	263a3d4f74090fae83f7c1d7e122eec6f3db5618a375d22ccb935186414ae15e
